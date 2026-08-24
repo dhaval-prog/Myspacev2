@@ -28,15 +28,6 @@ export function DetailScreen({ viewId, onBack }: DetailScreenProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
 
-  // Let the rail's four options register for a beat before rolling into
-  // the pre-selected one — a quick orientation glance, not a wait.
-  React.useEffect(() => {
-    if (collapsed) return;
-    const timer = setTimeout(() => setCollapsed(true), 500);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const attentionEntries = useMemo(() => getAttentionEntries(items), [items]);
 
   const isFormView = viewId === 'rooms' || viewId === 'add';

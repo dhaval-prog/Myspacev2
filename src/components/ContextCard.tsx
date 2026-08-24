@@ -9,6 +9,9 @@ interface ContextCardProps {
   reduceMotion?: boolean;
 }
 
+/** Slower than the shared `duration.state` token — this card's fade-in is meant to read unhurried. */
+const FADE_IN_DURATION = 750;
+
 /**
  * The lightweight lime panel that answers "where am I / what's selected /
  * what happens next" — never a conventional CTA. It fades in the first
@@ -30,7 +33,7 @@ export function ContextCard({ label, title, onPress, reduceMotion }: ContextCard
       opacity.setValue(reduceMotion ? 1 : 0);
       Animated.timing(opacity, {
         toValue: 1,
-        duration: reduceMotion ? 0 : duration.state,
+        duration: reduceMotion ? 0 : FADE_IN_DURATION,
         easing: EASE,
         useNativeDriver: true,
       }).start();
@@ -54,7 +57,7 @@ export function ContextCard({ label, title, onPress, reduceMotion }: ContextCard
       setShown({ label, title });
       Animated.timing(opacity, {
         toValue: 1,
-        duration: duration.state,
+        duration: FADE_IN_DURATION,
         easing: EASE,
         useNativeDriver: true,
       }).start();
