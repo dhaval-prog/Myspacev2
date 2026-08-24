@@ -30,6 +30,7 @@ export function HomeScreen({ onOpenDetail }: HomeScreenProps) {
   const { rooms, items } = useSpace();
   const [query, setQuery] = useState('');
   const [activeViewId, setActiveViewId] = useState<ViewId>('rooms');
+  const [previewViewId, setPreviewViewId] = useState<ViewId>('rooms');
   const [activeNavId, setActiveNavId] = useState('home');
 
   const attentionEntries = useMemo(() => getAttentionEntries(items), [items]);
@@ -51,22 +52,28 @@ export function HomeScreen({ onOpenDetail }: HomeScreenProps) {
     return list;
   }, [rooms.length, items.length, showAttention, attentionEntries.length]);
 
-  // Ambient preview: while the user is just looking, the highlighted row
-  // (and the hero/context card that follow it) quietly cycles through
-  // every section on its own — a tour, not a demand. A real tap always
-  // navigates away immediately, so it never fights user intent. Off
-  // entirely when the OS asks for reduced motion.
+  // Ambient preview: while the user is just looking, the context card on
+  // its own quietly cycles through every section every 3s — a tour, not
+  // a demand. The row list above (and the hero line) stay put, showing
+  // whatever the user actually last selected, so nothing above the card
+  // appears to change on its own. A real tap always navigates away
+  // immediately. Off entirely when the OS asks for reduced motion.
   useEffect(() => {
     if (reduceMotion || rows.length <= 1) return;
     const ids = rows.map((r) => r.id);
     const timer = setInterval(() => {
-      setActiveViewId((current) => {
+      setPreviewViewId((current) => {
         const idx = ids.indexOf(current);
         return ids[idx === -1 ? 0 : (idx + 1) % ids.length] as ViewId;
       });
     }, 3000);
     return () => clearInterval(timer);
   }, [rows, reduceMotion]);
+
+  // Keep the preview aligned to a real selection whenever one happens.
+  useEffect(() => {
+    setPreviewViewId(activeViewId);
+  }, [activeViewId]);
 
   const heroLine =
     activeViewId === 'rooms'
@@ -78,11 +85,11 @@ export function HomeScreen({ onOpenDetail }: HomeScreenProps) {
         : 'Say it, scan it, or type it — it files itself.';
 
   const contextLabel =
-    activeViewId === 'rooms' ? VIEWS.rooms.tabLabel : activeViewId === 'add' ? VIEWS.add.tabLabel : 'Needs attention';
+    previewViewId === 'rooms' ? VIEWS.rooms.tabLabel : previewViewId === 'add' ? VIEWS.add.tabLabel : 'Needs attention';
   const contextTitle =
-    activeViewId === 'rooms'
+    previewViewId === 'rooms'
       ? VIEWS.rooms.items[1].title
-      : activeViewId === 'add'
+      : previewViewId === 'add'
         ? VIEWS.add.items[1].title
         : (attentionEntries[0]?.item.name ?? 'All caught up');
 
@@ -127,7 +134,7 @@ export function HomeScreen({ onOpenDetail }: HomeScreenProps) {
         <ContextCard
           label={contextLabel}
           title={contextTitle}
-          onPress={() => onOpenDetail(activeViewId)}
+          onPress={() => onOpenDetail(previewViewId)}
           reduceMotion={reduceMotion}
         />
 
