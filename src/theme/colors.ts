@@ -18,11 +18,16 @@ export const colors = {
   textMuted: 'rgba(22,33,12,0.60)',
   textFaint: 'rgba(22,33,12,0.45)',
   textDisabled: 'rgba(22,33,12,0.40)',
+  textLocked: 'rgba(22,33,12,0.28)',
   placeholder: 'rgba(22,33,12,0.42)',
 
   // Inactive circular badge (category count)
   badgeInactiveBg: 'rgba(22,33,12,0.12)',
   badgeInactiveFg: 'rgba(22,33,12,0.50)',
+
+  // Locked circular badge (gated until data exists)
+  badgeLockedBg: 'rgba(22,33,12,0.06)',
+  badgeLockedFg: 'rgba(22,33,12,0.30)',
 
   // Subtle press feedback wash
   pressWash: 'rgba(22,33,12,0.04)',

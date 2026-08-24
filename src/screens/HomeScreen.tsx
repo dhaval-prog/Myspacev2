@@ -2,32 +2,70 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
-import { categories } from '../data/categories';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useSpace } from '../context/SpaceContext';
+import { getAttentionEntries } from '../utils/attention';
+import { VIEWS, type ViewId } from '../data/views';
 import { Header } from '../components/Header';
 import { Hero } from '../components/Hero';
-import { CategoryNavigation } from '../components/CategoryNavigation';
+import { CategoryNavigation, type CategoryRowData } from '../components/CategoryNavigation';
 import { ContextCard } from '../components/ContextCard';
 import { BottomNavigation } from '../components/BottomNavigation';
 
+interface HomeScreenProps {
+  onOpenDetail: (viewId: ViewId) => void;
+}
+
 /**
- * MySpace V2 — Home.
- * Layered composition: lime background → quiet header → editorial hero →
- * pale content surface (organic top-left corner) holding the category
- * navigation, the context card, and the bottom navigation.
+ * MySpace V2 — Home, first-run state.
+ * A brand-new space only has two ways in: add a room, then add items to
+ * it. "Needs attention" only joins the list once an item has an expiry
+ * date that's due or coming up — it's an alarm, not a starting tab.
  */
-export function HomeScreen() {
+export function HomeScreen({ onOpenDetail }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
+  const { rooms, items } = useSpace();
   const [query, setQuery] = useState('');
-  const [activeCategoryId, setActiveCategoryId] = useState(categories[0].id);
+  const [activeViewId, setActiveViewId] = useState<ViewId>('rooms');
   const [activeNavId, setActiveNavId] = useState('home');
 
-  const activeCategory = useMemo(
-    () => categories.find((c) => c.id === activeCategoryId) ?? categories[0],
-    [activeCategoryId],
-  );
-  const selectedItem = activeCategory.items[0];
+  const attentionEntries = useMemo(() => getAttentionEntries(items), [items]);
+  const showAttention = attentionEntries.length > 0;
+
+  const rows: CategoryRowData[] = useMemo(() => {
+    const list: CategoryRowData[] = [
+      { id: 'rooms', label: VIEWS.rooms.tabLabel, count: rooms.length ? String(rooms.length) : '＋' },
+      {
+        id: 'add',
+        label: VIEWS.add.tabLabel,
+        count: rooms.length === 0 ? '⊘' : items.length ? String(items.length) : '＋',
+        locked: rooms.length === 0,
+      },
+    ];
+    if (showAttention) {
+      list.push({ id: 'attention', label: 'Needs attention', count: String(attentionEntries.length) });
+    }
+    return list;
+  }, [rooms.length, items.length, showAttention, attentionEntries.length]);
+
+  const heroLine =
+    activeViewId === 'rooms'
+      ? rooms.length
+        ? `${rooms.length} room${rooms.length === 1 ? '' : 's'} set up. Add the things next.`
+        : 'Start with a room. Add the things after.'
+      : activeViewId === 'attention'
+        ? 'Set an expiry date and we will nudge you here.'
+        : 'Say it, scan it, or type it — it files itself.';
+
+  const contextLabel =
+    activeViewId === 'rooms' ? VIEWS.rooms.tabLabel : activeViewId === 'add' ? VIEWS.add.tabLabel : 'Needs attention';
+  const contextTitle =
+    activeViewId === 'rooms'
+      ? VIEWS.rooms.items[1].title
+      : activeViewId === 'add'
+        ? VIEWS.add.items[1].title
+        : (attentionEntries[0]?.item.name ?? 'All caught up');
 
   return (
     <View style={styles.screen}>
@@ -37,7 +75,7 @@ export function HomeScreen() {
         <View style={styles.headerPad}>
           <Header query={query} onChangeQuery={setQuery} />
         </View>
-        <Hero line={activeCategory.heroLine} reduceMotion={reduceMotion} />
+        <Hero line={heroLine} reduceMotion={reduceMotion} />
       </View>
 
       <View style={styles.surface}>
@@ -48,14 +86,22 @@ export function HomeScreen() {
           bounces={false}
         >
           <CategoryNavigation
-            categories={categories}
-            activeId={activeCategoryId}
-            onSelect={setActiveCategoryId}
+            rows={rows}
+            activeId={activeViewId}
+            onSelect={(id) => {
+              setActiveViewId(id as ViewId);
+              onOpenDetail(id as ViewId);
+            }}
             reduceMotion={reduceMotion}
           />
         </ScrollView>
 
-        <ContextCard label={activeCategory.label} title={selectedItem.title} reduceMotion={reduceMotion} />
+        <ContextCard
+          label={contextLabel}
+          title={contextTitle}
+          onPress={() => onOpenDetail(activeViewId)}
+          reduceMotion={reduceMotion}
+        />
 
         <BottomNavigation
           activeId={activeNavId}

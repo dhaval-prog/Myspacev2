@@ -1,26 +1,33 @@
 import React from 'react';
 import { View } from 'react-native';
 import { CategoryRow } from './CategoryRow';
-import type { Category } from '../data/categories';
+
+export interface CategoryRowData {
+  id: string;
+  label: string;
+  count: string;
+  locked?: boolean;
+}
 
 interface CategoryNavigationProps {
-  categories: Category[];
+  rows: CategoryRowData[];
   activeId: string;
   onSelect: (id: string) => void;
   reduceMotion?: boolean;
 }
 
-/** Editorial list navigation — the Home screen's three ways in. */
-export function CategoryNavigation({ categories, activeId, onSelect, reduceMotion }: CategoryNavigationProps) {
+/** Editorial list navigation — the Home screen's ways in. */
+export function CategoryNavigation({ rows, activeId, onSelect, reduceMotion }: CategoryNavigationProps) {
   return (
     <View accessibilityRole="tablist">
-      {categories.map((category) => (
+      {rows.map((row) => (
         <CategoryRow
-          key={category.id}
-          count={category.count}
-          label={category.label}
-          active={category.id === activeId}
-          onPress={() => onSelect(category.id)}
+          key={row.id}
+          count={row.count}
+          label={row.label}
+          active={row.id === activeId}
+          locked={row.locked}
+          onPress={() => onSelect(row.id)}
           reduceMotion={reduceMotion}
         />
       ))}

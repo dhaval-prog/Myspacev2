@@ -123,5 +123,129 @@ export const typography = {
     fontSize: 10.5,
     color: colors.textPrimary,
   } satisfies TextStyle,
+
+  // --- Detail screen (rooms / items flows) ---
+
+  // Back button
+  backLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15.5,
+    color: colors.textPrimary,
+  } satisfies TextStyle,
+
+  // Rail tile caption
+  railLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 10,
+    lineHeight: 11,
+    letterSpacing: em(10, -0.005),
+    textAlign: 'center',
+  } satisfies TextStyle,
+
+  // Detail column title ("Which room are you adding?")
+  detailTitle: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 22,
+    lineHeight: 23.1,
+    letterSpacing: em(22, -0.03),
+    color: colors.textPrimary,
+  } satisfies TextStyle,
+
+  // Detail column supporting line
+  detailSubline: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 11.5,
+    lineHeight: 16.7,
+    color: colors.textSecondary,
+  } satisfies TextStyle,
+
+  // Uppercase mono form-section label ("Category (optional)")
+  formLabel: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 9,
+    letterSpacing: em(9, 0.16),
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+  } satisfies TextStyle,
+
+  // Room picker chip label
+  pickerLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 18.5,
+    letterSpacing: em(18.5, -0.01),
+    color: colors.textPrimary,
+  } satisfies TextStyle,
+
+  // Room list row label
+  roomLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15,
+    letterSpacing: em(15, -0.015),
+    color: colors.textPrimary,
+  } satisfies TextStyle,
+
+  // Item card title
+  itemTitle: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 14,
+    letterSpacing: em(14, -0.015),
+    color: colors.textPrimary,
+  } satisfies TextStyle,
+
+  // Item card subtitle (category · room)
+  itemSub: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 13,
+    color: colors.textSecondary,
+  } satisfies TextStyle,
+
+  // Item card expiry micro-line
+  itemExpiry: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 8,
+    color: colors.textSecondary,
+  } satisfies TextStyle,
+
+  // Dropdown / chip row label (category picker, form room chips)
+  chipLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 12.5,
+    color: colors.textPrimary,
+  } satisfies TextStyle,
+
+  // Primary action button label (Save / Add item)
+  buttonLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 14.5,
+    letterSpacing: em(14.5, -0.01),
+  } satisfies TextStyle,
+
+  // Bottom-sheet field input
+  sheetInput: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 17,
+    color: colors.textPrimary,
+  } satisfies TextStyle,
+
+  // Calendar month title
+  calendarTitle: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 12.5,
+    color: colors.textPrimary,
+  } satisfies TextStyle,
+
+  // Calendar day-of-week initials
+  calendarDow: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 8,
+    letterSpacing: em(8, 0.06),
+    color: colors.textFaint,
+  } satisfies TextStyle,
+
+  // Calendar day number
+  calendarDay: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 10.5,
+  } satisfies TextStyle,
 } as const;
 
