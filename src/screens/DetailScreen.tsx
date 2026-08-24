@@ -32,7 +32,7 @@ export function DetailScreen({ viewId, onBack }: DetailScreenProps) {
   // the pre-selected one — a quick orientation glance, not a wait.
   React.useEffect(() => {
     if (collapsed) return;
-    const timer = setTimeout(() => setCollapsed(true), 1000);
+    const timer = setTimeout(() => setCollapsed(true), 500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
