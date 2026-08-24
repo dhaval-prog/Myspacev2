@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
@@ -50,6 +50,23 @@ export function HomeScreen({ onOpenDetail }: HomeScreenProps) {
     }
     return list;
   }, [rooms.length, items.length, showAttention, attentionEntries.length]);
+
+  // Ambient preview: while the user is just looking, the highlighted row
+  // (and the hero/context card that follow it) quietly cycles through
+  // every section on its own — a tour, not a demand. A real tap always
+  // navigates away immediately, so it never fights user intent. Off
+  // entirely when the OS asks for reduced motion.
+  useEffect(() => {
+    if (reduceMotion || rows.length <= 1) return;
+    const ids = rows.map((r) => r.id);
+    const timer = setInterval(() => {
+      setActiveViewId((current) => {
+        const idx = ids.indexOf(current);
+        return ids[idx === -1 ? 0 : (idx + 1) % ids.length] as ViewId;
+      });
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [rows, reduceMotion]);
 
   const heroLine =
     activeViewId === 'rooms'

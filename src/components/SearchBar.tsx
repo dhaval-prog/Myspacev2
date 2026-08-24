@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Animated, StyleSheet, TextInput, View } from 'react-native';
-import { colors, radius, spacing, typography, EASE, duration } from '../theme';
+import { colors, radius, spacing, typography, EASE, duration, noOutline } from '../theme';
 
 interface SearchBarProps {
   value: string;
@@ -41,7 +41,7 @@ export function SearchBar({ value, onChangeText }: SearchBarProps) {
         onBlur={handleBlur}
         placeholder="Things, spends, people…"
         placeholderTextColor={colors.placeholder}
-        style={styles.input}
+        style={[styles.input, noOutline]}
         accessibilityLabel="Search your space"
         accessibilityHint="Search items, categories, locations, rooms, or tags"
         returnKeyType="search"

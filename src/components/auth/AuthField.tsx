@@ -1,6 +1,7 @@
 import React from 'react';
-import { StyleSheet, TextInput, TextInputProps, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../theme';
+import { Animated, StyleSheet, TextInput, TextInputProps, View } from 'react-native';
+import { colors, radius, spacing, typography, noOutline } from '../../theme';
+import { useFocusBorder } from '../../hooks/useFocusBorder';
 
 interface AuthFieldProps {
   icon: React.ReactNode;
@@ -34,15 +35,19 @@ export function AuthField({
   returnKeyType,
   onSubmitEditing,
 }: AuthFieldProps) {
+  const { borderColor, onFocus, onBlur } = useFocusBorder('rgba(22,33,12,0)', colors.ink);
+
   return (
-    <View style={styles.row}>
+    <Animated.View style={[styles.row, { borderColor }]}>
       <View style={styles.iconSlot}>{icon}</View>
       <TextInput
         value={value}
         onChangeText={onChangeText}
+        onFocus={onFocus}
+        onBlur={onBlur}
         placeholder={placeholder}
         placeholderTextColor={colors.placeholder}
-        style={[typography.authFieldText, styles.input, { color: colors.textPrimary }]}
+        style={[typography.authFieldText, styles.input, { color: colors.textPrimary }, noOutline]}
         accessibilityLabel={accessibilityLabel}
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
@@ -53,7 +58,7 @@ export function AuthField({
         onSubmitEditing={onSubmitEditing}
       />
       {rightAccessory && <View style={styles.iconSlot}>{rightAccessory}</View>}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -64,8 +69,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: colors.authFieldBg,
     borderRadius: radius.pill,
-    paddingVertical: spacing.xxl,
-    paddingHorizontal: spacing.huge,
+    borderWidth: 1.5,
+    paddingVertical: spacing.xxl - 1.5,
+    paddingHorizontal: spacing.huge - 1.5,
   },
   iconSlot: {
     width: 22,

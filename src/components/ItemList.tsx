@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../theme';
+import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { colors, radius, spacing, typography, noOutline } from '../theme';
+import { useFocusBorder } from '../hooks/useFocusBorder';
 import { Icon } from './Icon';
 import { CategoryPicker } from './CategoryPicker';
 import { Calendar } from './Calendar';
@@ -32,6 +33,10 @@ interface ItemListProps {
 export function ItemList({ items, rooms, mode, onDelete, onEditSave }: ItemListProps) {
   const [query, setQuery] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const { borderColor: searchBorder, onFocus: onSearchFocus, onBlur: onSearchBlur } = useFocusBorder(
+    'rgba(22,33,12,0)',
+    colors.ink,
+  );
 
   const q = query.trim().toLowerCase();
   const shown = useMemo(
@@ -44,14 +49,16 @@ export function ItemList({ items, rooms, mode, onDelete, onEditSave }: ItemListP
 
   return (
     <View style={{ flex: 1, gap: spacing.sm + 1 }}>
-      <View style={styles.searchRow}>
+      <Animated.View style={[styles.searchRow, { borderColor: searchBorder }]}>
         <Icon path={SEARCH_PATH} color="rgba(22,33,12,0.55)" size={15} strokeWidth={1.9} />
         <TextInput
           value={query}
           onChangeText={setQuery}
+          onFocus={onSearchFocus}
+          onBlur={onSearchBlur}
           placeholder="Search items, categories, rooms"
           placeholderTextColor={colors.textFaint}
-          style={styles.searchInput}
+          style={[styles.searchInput, noOutline]}
         />
         {q.length > 0 && (
           <Pressable
@@ -63,7 +70,7 @@ export function ItemList({ items, rooms, mode, onDelete, onEditSave }: ItemListP
             <Icon path={CLOSE_PATH} color={colors.textPrimary} size={11} strokeWidth={2.4} />
           </Pressable>
         )}
-      </View>
+      </Animated.View>
 
       {shown.length === 0 && (
         <Text style={styles.emptyText}>
@@ -166,6 +173,10 @@ function ItemEditForm({
   const [room, setRoom] = useState(item.room);
   const [expiry, setExpiry] = useState(item.expiry);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const { borderColor: editNameBorder, onFocus: onEditNameFocus, onBlur: onEditNameBlur } = useFocusBorder(
+    'rgba(22,33,12,0)',
+    colors.ink,
+  );
 
   return (
     <View style={styles.editWrap}>
@@ -173,7 +184,15 @@ function ItemEditForm({
 
       <View style={styles.editSection}>
         <Text style={typography.formLabel}>Item name</Text>
-        <TextInput value={name} onChangeText={setName} style={styles.editInput} />
+        <Animated.View style={[styles.editInputWrap, { borderColor: editNameBorder }]}>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            onFocus={onEditNameFocus}
+            onBlur={onEditNameBlur}
+            style={[styles.editInput, noOutline]}
+          />
+        </Animated.View>
       </View>
 
       <View style={styles.editSection}>
@@ -250,8 +269,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm - 1,
     backgroundColor: colors.pale,
     borderRadius: radius.md - 8,
-    paddingVertical: spacing.ms,
-    paddingHorizontal: spacing.md,
+    borderWidth: 1.5,
+    paddingVertical: spacing.ms - 1.5,
+    paddingHorizontal: spacing.md - 1.5,
   },
   searchInput: {
     flex: 1,
@@ -311,11 +331,14 @@ const styles = StyleSheet.create({
   editSection: {
     gap: spacing.xxs + 2,
   },
-  editInput: {
+  editInputWrap: {
     backgroundColor: colors.pale,
     borderRadius: 12,
-    paddingVertical: 11,
-    paddingHorizontal: spacing.ms,
+    borderWidth: 1.5,
+  },
+  editInput: {
+    paddingVertical: 11 - 1.5,
+    paddingHorizontal: spacing.ms - 1.5,
     fontFamily: typography.chipLabel.fontFamily,
     fontSize: 13.5,
     color: colors.textPrimary,

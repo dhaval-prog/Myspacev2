@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../theme';
+import { Animated, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { colors, radius, spacing, typography, noOutline } from '../theme';
+import { useFocusBorder } from '../hooks/useFocusBorder';
 
 interface RenameSheetProps {
   visible: boolean;
@@ -12,6 +13,7 @@ interface RenameSheetProps {
 /** Bottom sheet for renaming a room. */
 export function RenameSheet({ visible, initialValue, onCancel, onSave }: RenameSheetProps) {
   const [value, setValue] = useState(initialValue);
+  const { borderColor, onFocus, onBlur } = useFocusBorder(colors.border, colors.ink);
 
   React.useEffect(() => {
     if (visible) setValue(initialValue);
@@ -22,13 +24,17 @@ export function RenameSheet({ visible, initialValue, onCancel, onSave }: RenameS
       <Pressable style={styles.scrim} onPress={onCancel} accessibilityRole="button" accessibilityLabel="Dismiss" />
       <View style={styles.sheet}>
         <Text style={typography.monoLabel}>Rename room</Text>
-        <TextInput
-          value={value}
-          onChangeText={setValue}
-          style={[typography.sheetInput, styles.input]}
-          autoFocus
-          accessibilityLabel="Room name"
-        />
+        <Animated.View style={[styles.inputWrap, { borderColor }]}>
+          <TextInput
+            value={value}
+            onChangeText={setValue}
+            onFocus={onFocus}
+            onBlur={onBlur}
+            style={[typography.sheetInput, styles.input, noOutline]}
+            autoFocus
+            accessibilityLabel="Room name"
+          />
+        </Animated.View>
         <View style={styles.actions}>
           <Pressable onPress={onCancel} style={[styles.button, { backgroundColor: colors.pressWash }]}>
             <Text style={[typography.buttonLabel, { fontSize: 14, color: colors.textPrimary }]}>Cancel</Text>
@@ -54,13 +60,14 @@ const styles = StyleSheet.create({
     padding: spacing.xxxl,
     paddingBottom: spacing.huge + spacing.ms,
   },
-  input: {
+  inputWrap: {
     marginTop: spacing.ms,
     backgroundColor: colors.white,
     borderRadius: radius.md - 8,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+  },
+  input: {
+    padding: spacing.md - 1.5,
   },
   actions: {
     flexDirection: 'row',
