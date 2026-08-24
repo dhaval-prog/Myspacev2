@@ -31,6 +31,17 @@ export const colors = {
 
   // Subtle press feedback wash
   pressWash: 'rgba(22,33,12,0.04)',
+
+  // Destructive / alert accent (forgot-password link)
+  danger: '#D33243',
+
+  // --- Auth screens (Sign Up / Log In) ---
+  // Soft welcoming gradient, distinct from the flat lime of the main app
+  authGradient: ['#C6E9A8', '#DDEDDF', '#EDF2EA', '#F6F5DF'] as string[],
+  authGradientStops: [0, 0.26, 0.58, 1] as number[],
+  authFieldBg: 'rgba(255,255,255,0.86)',
+  authCtaShadowColor: '#7AA82C',
+  authCtaShadowOpacity: 0.32,
 } as const;
 
 export type ColorToken = keyof typeof colors;

@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAuth } from '../context/AuthContext';
 import { useSpace } from '../context/SpaceContext';
 import { getAttentionEntries } from '../utils/attention';
 import { VIEWS, type ViewId } from '../data/views';
@@ -25,6 +26,7 @@ interface HomeScreenProps {
 export function HomeScreen({ onOpenDetail }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
+  const { signOut } = useAuth();
   const { rooms, items } = useSpace();
   const [query, setQuery] = useState('');
   const [activeViewId, setActiveViewId] = useState<ViewId>('rooms');
@@ -73,7 +75,16 @@ export function HomeScreen({ onOpenDetail }: HomeScreenProps) {
 
       <View style={{ paddingTop: insets.top + spacing.md }}>
         <View style={styles.headerPad}>
-          <Header query={query} onChangeQuery={setQuery} />
+          <Header
+            query={query}
+            onChangeQuery={setQuery}
+            onAvatarPress={() =>
+              Alert.alert('Log out', 'Log out of MySpace?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Log out', style: 'destructive', onPress: signOut },
+              ])
+            }
+          />
         </View>
         <Hero line={heroLine} reduceMotion={reduceMotion} />
       </View>

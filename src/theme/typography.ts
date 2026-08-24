@@ -247,5 +247,72 @@ export const typography = {
     fontFamily: fontFamily.sans400,
     fontSize: 10.5,
   } satisfies TextStyle,
+
+  // --- Auth screens (Sign Up / Log In) ---
+
+  authTitle: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 33,
+    lineHeight: 36.3,
+    letterSpacing: em(33, -0.025),
+    color: colors.textPrimary,
+    textAlign: 'center',
+  } satisfies TextStyle,
+
+  authSubline: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 14,
+    lineHeight: 20.3,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  } satisfies TextStyle,
+
+  // Field placeholder / entered value
+  authFieldText: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 15.5,
+    color: colors.placeholder,
+  } satisfies TextStyle,
+
+  // Masked password dots
+  authFieldMono: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 15,
+    letterSpacing: em(15, 0.22),
+    color: colors.textSecondary,
+  } satisfies TextStyle,
+
+  authButtonLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 16.5,
+    color: colors.textPrimary,
+  } satisfies TextStyle,
+
+  // Inline bold link ("Log In", "Sign Up", "Terms of Service")
+  authLink: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 14,
+    color: colors.textPrimary,
+  } satisfies TextStyle,
+
+  authForgot: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 14,
+    color: colors.danger,
+  } satisfies TextStyle,
+
+  authFooter: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 13,
+    lineHeight: 20.8,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  } satisfies TextStyle,
+
+  authDivider: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 13,
+    color: colors.textSecondary,
+  } satisfies TextStyle,
 } as const;
 
