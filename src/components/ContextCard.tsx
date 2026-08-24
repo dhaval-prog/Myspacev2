@@ -11,16 +11,18 @@ interface ContextCardProps {
 
 /**
  * The lightweight lime panel that answers "where am I / what's selected /
- * what happens next" — never a conventional CTA. Content cross-fades
- * quietly whenever the selected category changes.
+ * what happens next" — never a conventional CTA. It fades in the first
+ * time it appears, and cross-fades quietly whenever the selected
+ * category changes afterward.
  */
 export function ContextCard({ label, title, onPress, reduceMotion }: ContextCardProps) {
-  const opacity = useRef(new Animated.Value(1)).current;
-  const prevLabel = useRef(label);
+  const opacity = useRef(new Animated.Value(0)).current;
+  const prevKey = useRef<string | null>(null);
 
   useEffect(() => {
-    if (prevLabel.current !== label) {
-      prevLabel.current = label;
+    const key = `${label}::${title}`;
+    if (prevKey.current !== key) {
+      prevKey.current = key;
       opacity.setValue(reduceMotion ? 1 : 0);
       Animated.timing(opacity, {
         toValue: 1,
@@ -29,7 +31,7 @@ export function ContextCard({ label, title, onPress, reduceMotion }: ContextCard
         useNativeDriver: true,
       }).start();
     }
-  }, [label, opacity, reduceMotion]);
+  }, [label, title, opacity, reduceMotion]);
 
   return (
     <Pressable
