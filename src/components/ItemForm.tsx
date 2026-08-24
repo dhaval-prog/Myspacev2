@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../theme';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { colors, radius, spacing, typography, noOutline } from '../theme';
+import { useFocusBorder } from '../hooks/useFocusBorder';
 import { Icon } from './Icon';
 import { CategoryPicker } from './CategoryPicker';
 import { Calendar } from './Calendar';
@@ -28,6 +29,11 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
   const [photoGal, setPhotoGal] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
+  const { borderColor: nameBorder, onFocus: onNameFocus, onBlur: onNameBlur } = useFocusBorder(
+    'rgba(22,33,12,0)',
+    colors.ink,
+  );
+
   const canSave = name.trim().length > 0;
 
   const handleSave = () => {
@@ -47,19 +53,21 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
 
   return (
     <ScrollView style={styles.wrap} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.nameRow}>
+      <Animated.View style={[styles.nameRow, { borderColor: nameBorder }]}>
         <View style={styles.nameIcon}>
           <Icon path={CATEGORY_ICON[category] || EMPTY_CATEGORY_ICON} color={colors.pale} size={26} />
         </View>
         <TextInput
           value={name}
           onChangeText={setName}
+          onFocus={onNameFocus}
+          onBlur={onNameBlur}
           placeholder="Item name"
           placeholderTextColor={colors.textFaint}
-          style={[typography.sheetInput, { fontSize: 15, flex: 1 }]}
+          style={[typography.sheetInput, { fontSize: 15, flex: 1 }, noOutline]}
           accessibilityLabel="Item name"
         />
-      </View>
+      </Animated.View>
 
       <View style={styles.section}>
         <Text style={typography.formLabel}>Category (optional)</Text>
@@ -179,7 +187,8 @@ const styles = StyleSheet.create({
     gap: spacing.ms,
     backgroundColor: colors.white,
     borderRadius: radius.md - 6,
-    padding: spacing.xs,
+    borderWidth: 1.5,
+    padding: spacing.xs - 1.5,
   },
   nameIcon: {
     width: 62,
