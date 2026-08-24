@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text } from 'react-native';
 import { colors, radius, spacing, typography, EASE, duration } from '../theme';
 
@@ -14,15 +14,19 @@ interface ContextCardProps {
  * what happens next" — never a conventional CTA. It fades in the first
  * time it appears, and cross-fades quietly whenever the selected
  * category changes afterward.
+ *
+ * The displayed text is its own state, swapped only at the bottom of the
+ * fade-out — never the raw props — so a change never flashes the new
+ * label in at full opacity before the animation has a chance to hide it.
  */
 export function ContextCard({ label, title, onPress, reduceMotion }: ContextCardProps) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const prevKey = useRef<string | null>(null);
+  const mounted = useRef(false);
+  const [shown, setShown] = useState({ label, title });
 
   useEffect(() => {
-    const key = `${label}::${title}`;
-    if (prevKey.current !== key) {
-      prevKey.current = key;
+    if (!mounted.current) {
+      mounted.current = true;
       opacity.setValue(reduceMotion ? 1 : 0);
       Animated.timing(opacity, {
         toValue: 1,
@@ -30,19 +34,45 @@ export function ContextCard({ label, title, onPress, reduceMotion }: ContextCard
         easing: EASE,
         useNativeDriver: true,
       }).start();
+      return;
     }
+
+    if (shown.label === label && shown.title === title) return;
+
+    if (reduceMotion) {
+      setShown({ label, title });
+      return;
+    }
+
+    Animated.timing(opacity, {
+      toValue: 0,
+      duration: duration.micro,
+      easing: EASE,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+      setShown({ label, title });
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: duration.state,
+        easing: EASE,
+        useNativeDriver: true,
+      }).start();
+    });
+    // shown intentionally excluded — it's the effect's own output, not an input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [label, title, opacity, reduceMotion]);
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Selected: ${label}, ${title}. Open on the right.`}
+      accessibilityLabel={`Selected: ${shown.label}, ${shown.title}. Open on the right.`}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
       <Animated.View style={{ opacity }}>
-        <Text style={typography.monoLabel}>{label}</Text>
-        <Text style={[typography.heading, styles.title]}>{title}</Text>
+        <Text style={typography.monoLabel}>{shown.label}</Text>
+        <Text style={[typography.heading, styles.title]}>{shown.title}</Text>
         <Text style={[typography.caption, styles.supporting]}>Open on the right →</Text>
       </Animated.View>
     </Pressable>
