@@ -42,6 +42,23 @@ export const colors = {
   authFieldBg: 'rgba(255,255,255,0.86)',
   authCtaShadowColor: '#7AA82C',
   authCtaShadowOpacity: 0.32,
+
+  // --- Expenses / wallet screens ---
+  // Deliberately dark, distinct from the rest of the app — a real wallet, not a lime panel
+  walletBg: '#060606',
+  walletSurface: '#161616',
+  walletBorder: 'rgba(255,255,255,0.1)',
+  walletTextPrimary: '#FFFFFF',
+  walletTextSecondary: 'rgba(255,255,255,0.45)',
+  walletSheetBg: '#FFFFFF',
+  walletSheetMuted: '#F3F3F0',
+  walletSheetFaint: '#F7F7F5',
+  walletSheetBorder: 'rgba(0,0,0,0.1)',
+  walletSheetTextPrimary: '#111111',
+  walletSheetTextSecondary: 'rgba(0,0,0,0.5)',
+  walletSheetTextFaint: 'rgba(0,0,0,0.42)',
+  walletAccentBlue: '#1668E8',
+  walletAccentRed: '#E8352A',
 } as const;
 
 export type ColorToken = keyof typeof colors;

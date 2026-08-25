@@ -10,12 +10,13 @@ import { SignUpScreen } from './src/screens/SignUpScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { DetailScreen } from './src/screens/DetailScreen';
+import { ExpensesScreen } from './src/screens/expenses/ExpensesScreen';
 import type { ViewId } from './src/data/views';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 type AuthScreen = 'login' | 'signup';
-type Screen = { name: 'home' } | { name: 'detail'; viewId: ViewId };
+type Screen = { name: 'home' } | { name: 'detail'; viewId: ViewId } | { name: 'expenses' };
 
 function AuthNavigator() {
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
@@ -32,7 +33,15 @@ function AppNavigator() {
   if (screen.name === 'detail') {
     return <DetailScreen viewId={screen.viewId} onBack={() => setScreen({ name: 'home' })} />;
   }
-  return <HomeScreen onOpenDetail={(viewId) => setScreen({ name: 'detail', viewId })} />;
+  if (screen.name === 'expenses') {
+    return <ExpensesScreen onHome={() => setScreen({ name: 'home' })} />;
+  }
+  return (
+    <HomeScreen
+      onOpenDetail={(viewId) => setScreen({ name: 'detail', viewId })}
+      onOpenExpenses={() => setScreen({ name: 'expenses' })}
+    />
+  );
 }
 
 function RootNavigator() {
