@@ -15,6 +15,7 @@ import { BottomNavigation } from '../components/BottomNavigation';
 
 interface HomeScreenProps {
   onOpenDetail: (viewId: ViewId) => void;
+  onOpenExpenses: () => void;
 }
 
 /**
@@ -23,7 +24,7 @@ interface HomeScreenProps {
  * it. "Needs attention" only joins the list once an item has an expiry
  * date that's due or coming up — it's an alarm, not a starting tab.
  */
-export function HomeScreen({ onOpenDetail }: HomeScreenProps) {
+export function HomeScreen({ onOpenDetail, onOpenExpenses }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { signOut } = useAuth();
@@ -140,7 +141,10 @@ export function HomeScreen({ onOpenDetail }: HomeScreenProps) {
 
         <BottomNavigation
           activeId={activeNavId}
-          onSelect={setActiveNavId}
+          onSelect={(id) => {
+            setActiveNavId(id);
+            if (id === 'expenses') onOpenExpenses();
+          }}
           bottomInset={insets.bottom}
           reduceMotion={reduceMotion}
         />
