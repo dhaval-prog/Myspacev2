@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   PanResponder,
   ScrollView,
   StyleSheet,
@@ -8,7 +9,7 @@ import {
   type GestureResponderEvent,
   type PanResponderGestureState,
 } from 'react-native';
-import { fontFamily } from '../../theme';
+import { EASE, fontFamily } from '../../theme';
 import { useExpenses } from '../../context/ExpensesContext';
 import { formatMoney, parseAmount } from '../../utils/expensesFormat';
 
@@ -16,20 +17,46 @@ const CARD_WIDTH = 326;
 const CARD_HEIGHT = 206;
 const SLOT_HEIGHT = 132;
 const OPEN_THRESHOLD = -64;
+/** Matches the 340ms delay ExpensesContext.openCard waits before swapping to the wallet screen. */
+const FLY_DURATION = 340;
+
+interface CardStackProps {
+  reduceMotion?: boolean;
+}
 
 /**
  * The card-browsing deck: scroll through an invisible tall list to fan
  * through the cards, drag the front card up (or tap it) to open its
  * wallet. Styles are computed per-frame from plain state, mirroring how
  * the reference itself drives this (imperative JS math, not CSS
- * transitions) rather than trying to force it through Animated nodes.
+ * transitions) rather than trying to force it through Animated nodes —
+ * except the tap/drag-to-open lift itself, which needs a real eased
+ * animation (see `flyProgress` below) rather than an instant snap to its
+ * end position held static for the rest of the 340ms.
  */
-export function CardStack() {
+export function CardStack({ reduceMotion }: CardStackProps) {
   const { deck, flyCard, openCard, expensesFor } = useExpenses();
   const [pickP, setPickP] = useState(0);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragY, setDragY] = useState(0);
   const moved = React.useRef(0);
+  // 0→1 over the same window ExpensesContext holds before swapping to the
+  // wallet screen, easing the tapped/dragged card's lift instead of
+  // snapping it straight to its end position and holding it there static.
+  const flyProgress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (flyCard === null) {
+      flyProgress.setValue(0);
+      return;
+    }
+    Animated.timing(flyProgress, {
+      toValue: 1,
+      duration: reduceMotion ? 0 : FLY_DURATION,
+      easing: EASE,
+      useNativeDriver: true,
+    }).start();
+  }, [flyCard, reduceMotion, flyProgress]);
   const scrollRef = React.useRef<ScrollView>(null);
   // Mirrors `pickP` so rapid same-tick wheel/drag events accumulate
   // correctly instead of each reading the same stale value from the
@@ -168,16 +195,26 @@ export function CardStack() {
             const ad = Math.min(3, Math.abs(d));
             const focused = ad < 0.5;
             const flying = flyCard === i;
-            const baseY = d >= 0 ? d * 46 - ad * ad * 4 : d * 62;
-            const scale = flying ? 1.06 : Math.max(0.78, 1 - ad * 0.06);
-            const opacity = flying ? 1 : Math.max(0.5, 1 - ad * 0.16);
+            // Computed the same way regardless of `flying`, so this is
+            // exactly the card's on-screen position the instant it started
+            // flying — the animation's start point, whether that's a tap
+            // from rest (d≈0) or a release mid-drag (baseY + dragY).
+            const restingY = (d >= 0 ? d * 46 - ad * ad * 4 : d * 62) + (held ? dragY : 0);
+            const restingScale = Math.max(0.78, 1 - ad * 0.06);
+            const restingOpacity = Math.max(0.5, 1 - ad * 0.16);
             const spent = expensesFor(card).reduce((s, x) => s + parseAmount(x.amt), 0);
             const remaining = Math.max(0, parseAmount(card.amount) - spent);
-            const translateY = flying ? -190 : baseY + (held ? dragY : 0);
+            const translateY = flying ? flyProgress.interpolate({ inputRange: [0, 1], outputRange: [restingY, -190] }) : restingY;
+            const scale = flying
+              ? flyProgress.interpolate({ inputRange: [0, 1], outputRange: [restingScale, 1.06] })
+              : restingScale;
+            const opacity = flying
+              ? flyProgress.interpolate({ inputRange: [0, 1], outputRange: [restingOpacity, 1] })
+              : restingOpacity;
             const responder = focused || held ? panResponderFor(card.rid, i) : null;
 
             return (
-              <View
+              <Animated.View
                 key={card.rid}
                 {...(responder ? responder.panHandlers : {})}
                 pointerEvents={focused || held ? 'auto' : 'none'}
@@ -187,7 +224,7 @@ export function CardStack() {
                     backgroundColor: card.bg,
                     zIndex: flying || held ? 60 : Math.round(40 - ad * 10),
                     opacity,
-                    transform: [{ translateY }, { scale: flying ? 1.06 : scale }],
+                    transform: [{ translateY }, { scale }],
                   },
                 ]}
               >
@@ -209,7 +246,7 @@ export function CardStack() {
                 </View>
                 <Text style={[styles.digits, { color: card.ink, opacity: focused ? 1 : 0 }]}>{card.digits}</Text>
                 <Text style={[styles.reset, { color: card.sub, opacity: focused ? 1 : 0 }]}>{card.exp}</Text>
-              </View>
+              </Animated.View>
             );
           })}
         </View>

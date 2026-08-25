@@ -1,7 +1,8 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fontFamily, spacing } from '../../theme';
+import { colors, EASE, fontFamily, spacing } from '../../theme';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Icon } from '../../components/Icon';
 import { WalletCarousel } from '../../components/expenses/WalletCarousel';
 import { ExpenseRow } from '../../components/expenses/ExpenseRow';
@@ -31,43 +32,66 @@ interface WalletScreenProps {
 
 export function WalletScreen({ onHome }: WalletScreenProps) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { focusedCard, backToPick, openSpend, askDelete, openHistory, openInvite, expensesFor } = useExpenses();
 
   const expenses = expensesFor(focusedCard);
 
+  // The pick screen's card lift ends with a hard component swap into this
+  // screen; fading it in (rather than popping in fully opaque) keeps that
+  // swap from reading as an abrupt cut.
+  const entrance = useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    Animated.timing(entrance, {
+      toValue: 1,
+      duration: reduceMotion ? 0 : 220,
+      easing: EASE,
+      useNativeDriver: true,
+    }).start();
+    // Runs once per mount — this screen remounts fresh each time a card opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.huge }]}>
-        <Pressable onPress={backToPick} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Text style={styles.backArrow}>←</Text>
-        </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {focusedCard?.label ?? ''}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <Animated.View
+        style={[
+          styles.content,
+          { opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] },
+        ]}
+      >
+        <View style={[styles.header, { paddingTop: insets.top + spacing.huge }]}>
+          <Pressable onPress={backToPick} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back">
+            <Text style={styles.backArrow}>←</Text>
+          </Pressable>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {focusedCard?.label ?? ''}
+          </Text>
+          <View style={{ width: 40 }} />
+        </View>
 
-      <View style={styles.carouselWrap}>
-        <WalletCarousel />
+        <View style={styles.carouselWrap}>
+          <WalletCarousel />
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
-          <ActionPill icon={ARROW_UP} label="Add Spend" onPress={openSpend} />
-          {focusedCard?.isOwner && <ActionPill icon={ARROW_DOWN} label="Delete" onPress={askDelete} />}
-          <ActionPill icon={HISTORY_ICON} label="History" onPress={openHistory} small />
-          {focusedCard?.isOwner && <ActionPill icon={INVITE_ICON} label="Invite" onPress={openInvite} small />}
-        </ScrollView>
-      </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
+            <ActionPill icon={ARROW_UP} label="Add Spend" onPress={openSpend} />
+            {focusedCard?.isOwner && <ActionPill icon={ARROW_DOWN} label="Delete" onPress={askDelete} />}
+            <ActionPill icon={HISTORY_ICON} label="History" onPress={openHistory} small />
+            {focusedCard?.isOwner && <ActionPill icon={INVITE_ICON} label="Invite" onPress={openInvite} small />}
+          </ScrollView>
+        </View>
 
-      <View style={styles.sheet}>
-        <Text style={styles.sheetTitle}>Expenses</Text>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetList}>
-          {expenses.length === 0 ? (
-            <Text style={styles.emptyText}>No spends on this card yet.{'\n'}Add one and it shows up here.</Text>
-          ) : (
-            expenses.map((expense, i) => <ExpenseRow key={`${expense.title}-${i}`} expense={expense} />)
-          )}
-        </ScrollView>
-      </View>
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>Expenses</Text>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetList}>
+            {expenses.length === 0 ? (
+              <Text style={styles.emptyText}>No spends on this card yet.{'\n'}Add one and it shows up here.</Text>
+            ) : (
+              expenses.map((expense, i) => <ExpenseRow key={`${expense.title}-${i}`} expense={expense} />)
+            )}
+          </ScrollView>
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -76,6 +100,9 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.walletBg,
+  },
+  content: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

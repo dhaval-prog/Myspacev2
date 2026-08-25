@@ -28,7 +28,7 @@ export function PickScreen({ onHome }: PickScreenProps) {
       </View>
 
       <View style={styles.stackArea}>
-        <CardStack />
+        <CardStack reduceMotion={reduceMotion} />
         <Pressable onPress={openNewCard} style={styles.addButton} accessibilityRole="button" accessibilityLabel="Add budget card">
           <Text style={styles.addPlus}>+</Text>
           <Text style={styles.addLabel}>ADD BUDGET CARD</Text>
