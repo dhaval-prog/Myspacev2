@@ -1,8 +1,19 @@
-import React, { createContext, useContext, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Expense, WalletCard } from '../types/expenses';
-import { NEW_CARD_PALETTE, seedDeck } from '../data/expensesSeed';
+import { CARD_PALETTE } from '../data/expensesSeed';
 import { SPEND_CATEGORY_MAP } from '../data/expenseCategories';
-import { formatMoney, longDateLabel, nextResetLabel, randomRid } from '../utils/expensesFormat';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
+import {
+  formatMoney,
+  longDateLabel,
+  maskRid,
+  nextResetLabel,
+  parseAmount,
+  parseDateOnly,
+  randomRid,
+  toDateOnly,
+} from '../utils/expensesFormat';
 
 type Page = 'pick' | 'wallet';
 
@@ -17,6 +28,62 @@ interface NewCardInput {
   name: string;
   amount: number;
   resetDay: string;
+}
+
+interface CardRow {
+  id: string;
+  owner_id: string;
+  label: string;
+  bg: string;
+  ink: string;
+  sub: string;
+  art_a: string;
+  art_b: string;
+  amount: number;
+  rid: string;
+  reset_day: string;
+}
+
+interface ExpenseRow {
+  id: string;
+  card_id: string;
+  title: string;
+  amount: number;
+  category: string;
+  spent_on: string;
+}
+
+function toWalletCard(row: CardRow, userId: string | null): WalletCard {
+  return {
+    id: row.id,
+    label: row.label,
+    bg: row.bg,
+    ink: row.ink,
+    sub: row.sub,
+    amount: formatMoney(row.amount),
+    rid: row.rid,
+    digits: maskRid(row.rid),
+    exp: nextResetLabel(row.reset_day),
+    expLabel: 'Resets on',
+    artA: row.art_a,
+    artB: row.art_b,
+    isOwner: row.owner_id === userId,
+  };
+}
+
+function toExpense(row: ExpenseRow): Expense {
+  const catDef = SPEND_CATEGORY_MAP[row.category] ?? SPEND_CATEGORY_MAP.Other;
+  return {
+    title: row.title,
+    date: longDateLabel(parseDateOnly(row.spent_on)),
+    amt: `-₹${Math.round(row.amount).toLocaleString('en-IN')}`,
+    tile: catDef.tile,
+    icon: catDef.icon,
+  };
+}
+
+function warn(action: string, error: { message: string } | null) {
+  if (error) console.warn(`[expenses] failed to ${action}:`, error.message);
 }
 
 interface ExpensesContextValue {
@@ -35,6 +102,7 @@ interface ExpensesContextValue {
   addExpense: (input: NewExpenseInput) => void;
   addCard: (input: NewCardInput) => void;
   deleteFocusedCard: () => void;
+  joinCard: (code: string) => Promise<{ error: string | null }>;
 
   spendOpen: boolean;
   openSpend: () => void;
@@ -51,39 +119,74 @@ interface ExpensesContextValue {
   newCardOpen: boolean;
   openNewCard: () => void;
   closeNewCard: () => void;
+  joinOpen: boolean;
+  openJoin: () => void;
+  closeJoin: () => void;
 }
 
 const ExpensesContext = createContext<ExpensesContextValue | null>(null);
 
 /**
  * State for the whole Expenses feature (card picker + per-card wallet).
- * Scoped to the Expenses screen subtree only — unlike SpaceContext this
- * never needs to be read outside it, so it's provided locally rather
- * than from App.tsx.
+ * Persisted to Supabase: a card's `budget_cards` row is only ever visible
+ * to its owner and to accounts that redeemed its join code (`card_members`,
+ * granted only through the `join_budget_card` RPC) — enforced by RLS, not
+ * just this client. A fresh account starts with zero cards.
  */
 export function ExpensesProvider({ children }: { children: React.ReactNode }) {
-  const seedsRef = useRef<WalletCard[] | null>(null);
-  if (!seedsRef.current) seedsRef.current = seedDeck();
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
 
-  const [seeds, setSeeds] = useState<WalletCard[]>(seedsRef.current);
-  const [newCards, setNewCards] = useState<WalletCard[]>([]);
+  const [cardRows, setCardRows] = useState<CardRow[]>([]);
+  const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
   const [page, setPage] = useState<Page>('pick');
   const [sel, setSel] = useState(0);
   const [dot, setDot] = useState(0);
   const [flyCard, setFlyCard] = useState<number | null>(null);
-  const [expensesByCard, setExpensesByCard] = useState<Record<string, Expense[]>>({});
 
   const [spendOpen, setSpendOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [newCardOpen, setNewCardOpen] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false);
 
-  const deck = useMemo(() => [...seeds, ...newCards], [seeds, newCards]);
+  const localRef = useRef({ cardSeq: 0, expenseSeq: 0 });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!userId || !isSupabaseConfigured) {
+      setCardRows([]);
+      setExpenseRows([]);
+      return;
+    }
+
+    (async () => {
+      const [cardsRes, expensesRes] = await Promise.all([
+        supabase.from('budget_cards').select('*').order('created_at', { ascending: true }),
+        supabase.from('card_expenses').select('*').order('created_at', { ascending: false }),
+      ]);
+      if (cancelled) return;
+
+      warn('load cards', cardsRes.error);
+      warn('load expenses', expensesRes.error);
+
+      setCardRows((cardsRes.data as CardRow[] | null) ?? []);
+      setExpenseRows((expensesRes.data as ExpenseRow[] | null) ?? []);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const deck = useMemo(() => cardRows.map((row) => toWalletCard(row, userId)), [cardRows, userId]);
   const focusedIdx = deck.length ? (sel + dot) % deck.length : 0;
   const focusedCard = deck[focusedIdx];
 
-  const expensesFor = (card: WalletCard | undefined) => (card ? (expensesByCard[card.rid] ?? []) : []);
+  const expensesFor = (card: WalletCard | undefined) =>
+    card ? expenseRows.filter((r) => r.card_id === card.id).map(toExpense) : [];
 
   const openCard = (i: number) => {
     setFlyCard(i);
@@ -99,45 +202,89 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
 
   const addExpense = ({ title, amount, category, date }: NewExpenseInput) => {
     if (!focusedCard || !title.trim() || amount <= 0) return;
-    const catDef = SPEND_CATEGORY_MAP[category] ?? SPEND_CATEGORY_MAP.Other;
-    const entry: Expense = {
-      title: title.trim(),
-      date: longDateLabel(date),
-      amt: `-₹${Math.round(amount).toLocaleString('en-IN')}`,
-      tile: catDef.tile,
-      icon: catDef.icon,
-    };
-    const key = focusedCard.rid;
-    setExpensesByCard((prev) => ({ ...prev, [key]: [entry, ...(prev[key] ?? [])] }));
+    const cardId = focusedCard.id;
+    const spentOn = toDateOnly(date);
+    const trimmedTitle = title.trim();
     setSpendOpen(false);
+
+    if (!userId || !isSupabaseConfigured) {
+      localRef.current.expenseSeq += 1;
+      setExpenseRows((prev) => [
+        { id: `local-expense-${localRef.current.expenseSeq}`, card_id: cardId, title: trimmedTitle, amount, category, spent_on: spentOn },
+        ...prev,
+      ]);
+      return;
+    }
+
+    supabase
+      .from('card_expenses')
+      .insert({ card_id: cardId, user_id: userId, title: trimmedTitle, amount, category, spent_on: spentOn })
+      .select('*')
+      .single()
+      .then(({ data, error }) => {
+        warn('add expense', error);
+        if (data) setExpenseRows((prev) => [data as ExpenseRow, ...prev]);
+      });
   };
 
   const addCard = ({ name, amount, resetDay }: NewCardInput) => {
-    if (!name.trim() || amount <= 0) return;
-    const skin = NEW_CARD_PALETTE[newCards.length % NEW_CARD_PALETTE.length];
+    const trimmedName = name.trim();
+    if (!trimmedName || amount <= 0) return;
+    const skin = CARD_PALETTE[cardRows.length % CARD_PALETTE.length];
     const rid = randomRid();
-    const card: WalletCard = {
-      ...skin,
-      label: name.trim(),
-      amount: formatMoney(amount),
-      digits: `*** **** ${rid.slice(7)}`,
-      rid,
-      exp: nextResetLabel(resetDay),
-      expLabel: 'Resets on',
-    };
-    setNewCards((prev) => [...prev, card]);
     setNewCardOpen(false);
+
+    if (!userId || !isSupabaseConfigured) {
+      localRef.current.cardSeq += 1;
+      setCardRows((prev) => [
+        ...prev,
+        {
+          id: `local-card-${localRef.current.cardSeq}`,
+          owner_id: userId ?? 'local',
+          label: trimmedName,
+          bg: skin.bg,
+          ink: skin.ink,
+          sub: skin.sub,
+          art_a: skin.artA,
+          art_b: skin.artB,
+          amount,
+          rid,
+          reset_day: resetDay,
+        },
+      ]);
+      return;
+    }
+
+    supabase
+      .from('budget_cards')
+      .insert({
+        owner_id: userId,
+        label: trimmedName,
+        bg: skin.bg,
+        ink: skin.ink,
+        sub: skin.sub,
+        art_a: skin.artA,
+        art_b: skin.artB,
+        amount,
+        rid,
+        reset_day: resetDay,
+      })
+      .select('*')
+      .single()
+      .then(({ data, error }) => {
+        warn('add card', error);
+        if (data) setCardRows((prev) => [...prev, data as CardRow]);
+      });
   };
 
   const deleteFocusedCard = () => {
-    if (!focusedCard) return;
+    if (!focusedCard || !focusedCard.isOwner) return;
     const idx = focusedIdx;
-    const isSeed = idx < seeds.length;
-    if (isSeed) {
-      setSeeds((prev) => prev.filter((c) => c.rid !== focusedCard.rid));
-    } else {
-      setNewCards((prev) => prev.filter((c) => c.rid !== focusedCard.rid));
-    }
+    const cardId = focusedCard.id;
+
+    setCardRows((prev) => prev.filter((c) => c.id !== cardId));
+    setExpenseRows((prev) => prev.filter((r) => r.card_id !== cardId));
+
     const nextLen = deck.length - 1;
     if (nextLen <= 0) {
       setPage('pick');
@@ -148,6 +295,37 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
       setDot(0);
     }
     setConfirmDeleteOpen(false);
+
+    if (userId && isSupabaseConfigured) {
+      supabase
+        .from('budget_cards')
+        .delete()
+        .eq('id', cardId)
+        .then(({ error }) => warn('delete card', error));
+    }
+  };
+
+  const joinCard = async (code: string): Promise<{ error: string | null }> => {
+    const rid = code.replace(/\D/g, '');
+    if (rid.length !== 11) return { error: 'Enter the full 11-digit code.' };
+    if (!userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+
+    const { data, error } = await supabase.rpc('join_budget_card', { p_rid: rid });
+    if (error) return { error: error.message.includes('Invalid join code') ? 'That code doesn’t match a card.' : error.message };
+
+    const row = data as CardRow;
+    setCardRows((prev) => (prev.some((c) => c.id === row.id) ? prev : [...prev, row]));
+
+    if (row.owner_id !== userId) {
+      const { data: expenseData, error: expenseError } = await supabase.from('card_expenses').select('*').eq('card_id', row.id);
+      warn('load joined card expenses', expenseError);
+      if (expenseData) {
+        setExpenseRows((prev) => [...prev.filter((r) => r.card_id !== row.id), ...(expenseData as ExpenseRow[])]);
+      }
+    }
+
+    setJoinOpen(false);
+    return { error: null };
   };
 
   const value: ExpensesContextValue = {
@@ -165,6 +343,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     addExpense,
     addCard,
     deleteFocusedCard,
+    joinCard,
     spendOpen,
     openSpend: () => setSpendOpen(true),
     closeSpend: () => setSpendOpen(false),
@@ -172,14 +351,21 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     openHistory: () => setHistoryOpen(true),
     closeHistory: () => setHistoryOpen(false),
     inviteOpen,
-    openInvite: () => setInviteOpen(true),
+    openInvite: () => {
+      if (focusedCard?.isOwner) setInviteOpen(true);
+    },
     closeInvite: () => setInviteOpen(false),
     confirmDeleteOpen,
-    askDelete: () => setConfirmDeleteOpen(true),
+    askDelete: () => {
+      if (focusedCard?.isOwner) setConfirmDeleteOpen(true);
+    },
     cancelDelete: () => setConfirmDeleteOpen(false),
     newCardOpen,
     openNewCard: () => setNewCardOpen(true),
     closeNewCard: () => setNewCardOpen(false),
+    joinOpen,
+    openJoin: () => setJoinOpen(true),
+    closeJoin: () => setJoinOpen(false),
   };
 
   return <ExpensesContext.Provider value={value}>{children}</ExpensesContext.Provider>;

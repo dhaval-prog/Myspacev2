@@ -43,7 +43,6 @@ export function WalletBottomNav({ onHome, onAdd, bottomInset }: WalletBottomNavP
         <NavItem icon={ICON.piggy} label="Piggy" />
         <NavItem icon={ICON.split} label="Split" />
       </View>
-      <View style={styles.homeIndicator} />
     </View>
   );
 }
@@ -80,14 +79,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#111',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  homeIndicator: {
-    alignSelf: 'center',
-    width: 140,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: '#111',
-    marginTop: 6,
-    marginBottom: 10,
   },
 });

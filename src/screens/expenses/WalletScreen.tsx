@@ -52,9 +52,9 @@ export function WalletScreen({ onHome }: WalletScreenProps) {
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
           <ActionPill icon={ARROW_UP} label="Add Spend" onPress={openSpend} />
-          <ActionPill icon={ARROW_DOWN} label="Delete" onPress={askDelete} />
+          {focusedCard?.isOwner && <ActionPill icon={ARROW_DOWN} label="Delete" onPress={askDelete} />}
           <ActionPill icon={HISTORY_ICON} label="History" onPress={openHistory} small />
-          <ActionPill icon={INVITE_ICON} label="Invite" onPress={openInvite} small />
+          {focusedCard?.isOwner && <ActionPill icon={INVITE_ICON} label="Invite" onPress={openInvite} small />}
         </ScrollView>
       </View>
 
