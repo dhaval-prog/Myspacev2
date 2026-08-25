@@ -2,8 +2,9 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CardStack } from '../../components/expenses/CardStack';
-import { WalletBottomNav } from '../../components/expenses/WalletBottomNav';
+import { BottomNav } from '../../components/BottomNav';
 import { useExpenses } from '../../context/ExpensesContext';
 
 interface PickScreenProps {
@@ -13,6 +14,7 @@ interface PickScreenProps {
 /** Scroll through your cards, pull one up (or tap it) to open its wallet. */
 export function PickScreen({ onHome }: PickScreenProps) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { openNewCard, openSpend, openJoin } = useExpenses();
 
   return (
@@ -36,7 +38,15 @@ export function PickScreen({ onHome }: PickScreenProps) {
         </Pressable>
       </View>
 
-      <WalletBottomNav onHome={onHome} onAdd={openSpend} bottomInset={insets.bottom} />
+      <BottomNav
+        activeId="expenses"
+        onSelect={(id) => {
+          if (id === 'home') onHome();
+        }}
+        onAdd={openSpend}
+        bottomInset={insets.bottom}
+        reduceMotion={reduceMotion}
+      />
     </View>
   );
 }
