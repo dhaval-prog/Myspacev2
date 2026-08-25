@@ -6,6 +6,7 @@ import { AddSpendSheet } from '../../components/expenses/AddSpendSheet';
 import { NewCardSheet } from '../../components/expenses/NewCardSheet';
 import { HistorySheet } from '../../components/expenses/HistorySheet';
 import { InviteSheet } from '../../components/expenses/InviteSheet';
+import { JoinCardSheet } from '../../components/expenses/JoinCardSheet';
 import { ConfirmDeleteModal } from '../../components/expenses/ConfirmDeleteModal';
 
 interface ExpensesScreenProps {
@@ -21,6 +22,7 @@ function ExpensesRoot({ onHome }: ExpensesScreenProps) {
       <NewCardSheet />
       <HistorySheet />
       <InviteSheet />
+      <JoinCardSheet />
       <ConfirmDeleteModal />
     </>
   );

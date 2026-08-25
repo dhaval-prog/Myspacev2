@@ -54,3 +54,22 @@ export function randomRid(): string {
 export function formatJoinId(rid: string): string {
   return `${rid.slice(0, 3)} ${rid.slice(3, 7)} ${rid.slice(7)}`;
 }
+
+/** Masked card number for display, e.g. "*** **** 0334". */
+export function maskRid(rid: string): string {
+  return `*** **** ${rid.slice(7)}`;
+}
+
+/** Parses a Postgres `date` string ("YYYY-MM-DD") as a local calendar date, avoiding UTC-midnight timezone shift. */
+export function parseDateOnly(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** Formats a Date as the "YYYY-MM-DD" string a Postgres `date` column expects. */
+export function toDateOnly(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}

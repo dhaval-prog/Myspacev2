@@ -13,7 +13,7 @@ interface PickScreenProps {
 /** Scroll through your cards, pull one up (or tap it) to open its wallet. */
 export function PickScreen({ onHome }: PickScreenProps) {
   const insets = useSafeAreaInsets();
-  const { openNewCard, openSpend } = useExpenses();
+  const { openNewCard, openSpend, openJoin } = useExpenses();
 
   return (
     <View style={styles.screen}>
@@ -30,6 +30,9 @@ export function PickScreen({ onHome }: PickScreenProps) {
         <Pressable onPress={openNewCard} style={styles.addButton} accessibilityRole="button" accessibilityLabel="Add budget card">
           <Text style={styles.addPlus}>+</Text>
           <Text style={styles.addLabel}>ADD BUDGET CARD</Text>
+        </Pressable>
+        <Pressable onPress={openJoin} style={styles.joinLink} accessibilityRole="button" accessibilityLabel="Join a budget card with an invite code">
+          <Text style={styles.joinLinkText}>Have an invite code?</Text>
         </Pressable>
       </View>
 
@@ -97,5 +100,19 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans600,
     fontSize: 15.5,
     color: '#111',
+  },
+  joinLink: {
+    position: 'absolute',
+    left: spacing.xxl,
+    right: spacing.xxl,
+    bottom: 84,
+    zIndex: 70,
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  joinLinkText: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 13,
+    color: 'rgba(255,255,255,.55)',
   },
 });

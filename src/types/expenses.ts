@@ -1,5 +1,6 @@
-/** A budget/wallet card — either a seeded default or one the user created. */
+/** A budget/wallet card — owned by one account, optionally shared with members. */
 export interface WalletCard {
+  id: string;
   label: string;
   bg: string;
   ink: string;
@@ -14,6 +15,8 @@ export interface WalletCard {
   expLabel?: string;
   artA: string;
   artB: string;
+  /** True when the signed-in account owns this card (vs. joined as a member). */
+  isOwner: boolean;
 }
 
 /** A single logged spend against a card. */

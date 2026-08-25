@@ -30,12 +30,28 @@ export function CardStack() {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragY, setDragY] = useState(0);
   const moved = React.useRef(0);
+  const scrollRef = React.useRef<ScrollView>(null);
+  // Mirrors `pickP` so rapid same-tick wheel events accumulate correctly
+  // instead of each reading the same stale value from the render closure.
+  const pickPRef = React.useRef(0);
 
   const n = Math.max(1, deck.length);
 
   const handleScroll = (e: { nativeEvent: { contentOffset: { y: number } } }) => {
     const p = Math.max(0, Math.min(n - 1, e.nativeEvent.contentOffset.y / SLOT_HEIGHT));
+    pickPRef.current = p;
     setPickP(p);
+  };
+
+  // Web-only: a mouse wheel over the focused card can't reach the invisible
+  // ScrollView behind it (it's pointer-events:auto so taps/drags work), so
+  // browsing the deck by wheel is driven here instead and mirrored onto the
+  // ScrollView's own offset to keep native touch-scroll in sync with it.
+  const handleWheel = (e: { deltaY: number }) => {
+    const next = Math.max(0, Math.min(n - 1, pickPRef.current + e.deltaY / SLOT_HEIGHT));
+    pickPRef.current = next;
+    setPickP(next);
+    scrollRef.current?.scrollTo({ y: next * SLOT_HEIGHT, animated: false });
   };
 
   const panResponderFor = (index: number) =>
@@ -63,9 +79,24 @@ export function CardStack() {
       },
     });
 
+  if (deck.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyTitle}>No budget cards yet</Text>
+        <Text style={styles.emptyBody}>Add one below to start tracking spend.</Text>
+      </View>
+    );
+  }
+
+  // onWheel is a react-native-web-only View prop, not modeled by RN core's
+  // types — spreading it (rather than a literal JSX attribute) sidesteps
+  // that gap the same way `noOutline` does for web-only style keys.
+  const wheelProps: Record<string, unknown> = { onWheel: handleWheel };
+
   return (
-    <View style={styles.area}>
+    <View style={styles.area} {...wheelProps}>
       <ScrollView
+        ref={scrollRef}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         style={StyleSheet.absoluteFill}
@@ -98,6 +129,7 @@ export function CardStack() {
               <View
                 key={card.rid}
                 {...(responder ? responder.panHandlers : {})}
+                pointerEvents={focused || held ? 'auto' : 'none'}
                 style={[
                   styles.card,
                   {
@@ -140,6 +172,24 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     position: 'relative',
+  },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15,
+    color: '#fff',
+  },
+  emptyBody: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 13,
+    color: 'rgba(255,255,255,.45)',
+    textAlign: 'center',
   },
   centerWrap: {
     position: 'absolute',
