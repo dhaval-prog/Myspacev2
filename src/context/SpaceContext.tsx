@@ -23,9 +23,9 @@ interface SpaceContextValue {
   items: Item[];
   /** True while the initial rooms/items fetch for the signed-in user is in flight. */
   loading: boolean;
-  toggleRoom: (label: string) => void;
-  renameRoom: (from: string, to: string) => void;
-  removeRoom: (label: string) => void;
+  addRoom: (category: string) => void;
+  renameRoom: (id: string, label: string) => void;
+  removeRoom: (id: string) => void;
   addItem: (input: NewItemInput) => void;
   editItem: (index: number, input: EditItemInput) => void;
   removeItem: (index: number) => void;
@@ -71,7 +71,7 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     (async () => {
       const [roomsRes, itemsRes] = await Promise.all([
-        supabase.from('rooms').select('label').eq('user_id', userId).order('created_at', { ascending: true }),
+        supabase.from('rooms').select('id,category,label').eq('user_id', userId).order('created_at', { ascending: true }),
         supabase
           .from('items')
           .select('id,name,category,room,expiry,mono')
@@ -83,7 +83,13 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
       warn('load rooms', roomsRes.error);
       warn('load items', itemsRes.error);
 
-      setRooms((roomsRes.data ?? []).map((r) => r.label as string));
+      setRooms(
+        (roomsRes.data ?? []).map((r) => ({
+          id: r.id as string,
+          category: r.category as string,
+          label: r.label as string,
+        })),
+      );
       setItemRows(
         (itemsRes.data ?? []).map((row) => ({
           id: row.id as string,
@@ -106,59 +112,85 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
 
   const items = useMemo(() => itemRows.map((r) => r.item), [itemRows]);
 
-  const toggleRoom = useCallback(
-    (label: string) => {
-      setRooms((prev) => {
-        const exists = prev.includes(label);
-        if (userId && isSupabaseConfigured) {
-          if (exists) {
-            supabase
-              .from('rooms')
-              .delete()
-              .eq('user_id', userId)
-              .eq('label', label)
-              .then(({ error }) => warn('remove room', error));
-          } else {
-            supabase
-              .from('rooms')
-              .insert({ user_id: userId, label })
-              .then(({ error }) => warn('add room', error));
-          }
-        }
-        return exists ? prev.filter((r) => r !== label) : [...prev, label];
-      });
+  const addRoom = useCallback(
+    (category: string) => {
+      // Defensive re-check: the picker already disables an occupied
+      // category's row, but this keeps the guarantee at the data layer too.
+      if (rooms.some((r) => r.category === category)) return;
+
+      if (!userId || !isSupabaseConfigured) {
+        setRooms((prev) => [...prev, { id: `local-${Date.now()}`, category, label: category }]);
+        return;
+      }
+
+      supabase
+        .from('rooms')
+        .insert({ user_id: userId, category, label: category })
+        .select('id')
+        .single()
+        .then(({ data, error }) => {
+          warn('add room', error);
+          if (data) setRooms((prev) => [...prev, { id: data.id as string, category, label: category }]);
+        });
     },
-    [userId],
+    [userId, rooms],
   );
 
   const renameRoom = useCallback(
-    (from: string, to: string) => {
-      setRooms((prev) => prev.map((r) => (r === from ? to : r)));
+    (id: string, label: string) => {
+      const target = rooms.find((r) => r.id === id);
+      if (!target) return;
+      const trimmed = label.trim() || target.label;
+      const fromLabel = target.label;
+
+      setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, label: trimmed } : r)));
+      // Every item that pointed at the old label follows the rename, so the
+      // new name is what shows up everywhere an item's room is displayed.
+      setItemRows((prev) =>
+        prev.map((r) => (r.item.room === fromLabel ? { ...r, item: { ...r.item, room: trimmed } } : r)),
+      );
       if (userId && isSupabaseConfigured) {
         supabase
           .from('rooms')
-          .update({ label: to })
-          .eq('user_id', userId)
-          .eq('label', from)
+          .update({ label: trimmed })
+          .eq('id', id)
           .then(({ error }) => warn('rename room', error));
+        supabase
+          .from('items')
+          .update({ room: trimmed })
+          .eq('user_id', userId)
+          .eq('room', fromLabel)
+          .then(({ error }) => warn('rename items room', error));
       }
     },
-    [userId],
+    [userId, rooms],
   );
 
   const removeRoom = useCallback(
-    (label: string) => {
-      setRooms((prev) => prev.filter((r) => r !== label));
+    (id: string) => {
+      const target = rooms.find((r) => r.id === id);
+      if (!target) return;
+      const { label } = target;
+
+      setRooms((prev) => prev.filter((r) => r.id !== id));
+      // Deleting a room deletes everything filed under it — the confirm
+      // dialog on the way here already warned the user this is permanent.
+      setItemRows((prev) => prev.filter((r) => r.item.room !== label));
       if (userId && isSupabaseConfigured) {
         supabase
           .from('rooms')
           .delete()
-          .eq('user_id', userId)
-          .eq('label', label)
+          .eq('id', id)
           .then(({ error }) => warn('remove room', error));
+        supabase
+          .from('items')
+          .delete()
+          .eq('user_id', userId)
+          .eq('room', label)
+          .then(({ error }) => warn('remove items in room', error));
       }
     },
-    [userId],
+    [userId, rooms],
   );
 
   const addItem = useCallback(
@@ -237,8 +269,8 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<SpaceContextValue>(
-    () => ({ rooms, items, loading, toggleRoom, renameRoom, removeRoom, addItem, editItem, removeItem }),
-    [rooms, items, loading, toggleRoom, renameRoom, removeRoom, addItem, editItem, removeItem],
+    () => ({ rooms, items, loading, addRoom, renameRoom, removeRoom, addItem, editItem, removeItem }),
+    [rooms, items, loading, addRoom, renameRoom, removeRoom, addItem, editItem, removeItem],
   );
 
   return <SpaceContext.Provider value={value}>{children}</SpaceContext.Provider>;

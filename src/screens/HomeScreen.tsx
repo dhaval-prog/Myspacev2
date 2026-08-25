@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
+import { ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -11,7 +11,8 @@ import { Header } from '../components/Header';
 import { Hero } from '../components/Hero';
 import { CategoryNavigation, type CategoryRowData } from '../components/CategoryNavigation';
 import { ContextCard } from '../components/ContextCard';
-import { BottomNavigation } from '../components/BottomNavigation';
+import { BottomNav } from '../components/BottomNav';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface HomeScreenProps {
   onOpenDetail: (viewId: ViewId) => void;
@@ -33,6 +34,7 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses }: HomeScreenProps) {
   const [activeViewId, setActiveViewId] = useState<ViewId>('rooms');
   const [previewViewId, setPreviewViewId] = useState<ViewId>('rooms');
   const [activeNavId, setActiveNavId] = useState('home');
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   const attentionEntries = useMemo(() => getAttentionEntries(items), [items]);
   const showAttention = attentionEntries.length > 0;
@@ -100,16 +102,7 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses }: HomeScreenProps) {
 
       <View style={{ paddingTop: insets.top + spacing.md }}>
         <View style={styles.headerPad}>
-          <Header
-            query={query}
-            onChangeQuery={setQuery}
-            onAvatarPress={() =>
-              Alert.alert('Log out', 'Log out of MySpace?', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Log out', style: 'destructive', onPress: signOut },
-              ])
-            }
-          />
+          <Header query={query} onChangeQuery={setQuery} onAvatarPress={() => setLogoutConfirmOpen(true)} />
         </View>
         <Hero line={heroLine} reduceMotion={reduceMotion} />
       </View>
@@ -139,16 +132,30 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses }: HomeScreenProps) {
           reduceMotion={reduceMotion}
         />
 
-        <BottomNavigation
+        <BottomNav
           activeId={activeNavId}
           onSelect={(id) => {
             setActiveNavId(id);
             if (id === 'expenses') onOpenExpenses();
           }}
+          onAdd={() => onOpenDetail('add')}
           bottomInset={insets.bottom}
           reduceMotion={reduceMotion}
         />
       </View>
+
+      <ConfirmDialog
+        visible={logoutConfirmOpen}
+        title="Log out"
+        message="Log out of MySpace?"
+        confirmLabel="Log out"
+        destructive
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={() => {
+          setLogoutConfirmOpen(false);
+          signOut();
+        }}
+      />
     </View>
   );
 }

@@ -1,0 +1,87 @@
+import React from 'react';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, radius, spacing, typography } from '../theme';
+
+interface ConfirmDialogProps {
+  visible: boolean;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+/**
+ * Centered confirm/cancel popup for actions that need a pause before
+ * committing. react-native-web's `Alert.alert` is a no-op on web (it never
+ * renders anything or invokes a button's callback), so this is used
+ * wherever a confirmation must actually work in the deployed web app.
+ */
+export function ConfirmDialog({
+  visible,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel = 'Cancel',
+  destructive,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.wrap}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessibilityRole="button" accessibilityLabel="Dismiss" />
+        <View style={styles.card}>
+          <Text style={[typography.detailTitle, styles.title]}>{title}</Text>
+          <Text style={[typography.body, styles.message]}>{message}</Text>
+          <View style={styles.actions}>
+            <Pressable onPress={onCancel} style={[styles.button, { backgroundColor: colors.pressWash }]}>
+              <Text style={[typography.buttonLabel, { fontSize: 14, color: colors.textPrimary }]}>{cancelLabel}</Text>
+            </Pressable>
+            <Pressable onPress={onConfirm} style={[styles.button, { backgroundColor: destructive ? colors.danger : colors.ink }]}>
+              <Text style={[typography.buttonLabel, { fontSize: 14, color: destructive ? colors.white : colors.lime }]}>
+                {confirmLabel}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.organic,
+    backgroundColor: 'rgba(22,33,12,0.35)',
+  },
+  card: {
+    width: '100%',
+    backgroundColor: colors.pale,
+    borderRadius: radius.lg,
+    padding: spacing.xxxl,
+    gap: spacing.sm,
+  },
+  title: {
+    textAlign: 'center',
+  },
+  message: {
+    textAlign: 'center',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  button: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: radius.md - 8,
+    alignItems: 'center',
+  },
+});

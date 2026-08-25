@@ -3,32 +3,34 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../theme';
 import { Icon } from './Icon';
 import { ROOM_MONO } from '../data/rooms';
+import type { Room } from '../types/space';
 
 const EDIT_PATH = 'M4 20h4L20 8l-4-4L4 16zM14.5 5.5l4 4';
 const DELETE_PATH = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 
 interface RoomListProps {
-  rooms: string[];
+  rooms: Room[];
   mode: 'view' | 'edit' | 'delete';
-  onEdit?: (label: string) => void;
-  onDelete?: (label: string) => void;
+  onEdit?: (room: Room) => void;
+  onDelete?: (room: Room) => void;
 }
 
 /** The room list — plain, or with an edit/delete action per row. */
 export function RoomList({ rooms, mode, onEdit, onDelete }: RoomListProps) {
   return (
     <View style={styles.wrap}>
-      {rooms.map((label) => (
-        <View key={label} style={styles.row}>
+      {rooms.map((room) => (
+        <View key={room.id} style={styles.row}>
           <View style={styles.mono}>
-            <Text style={styles.monoLabel}>{ROOM_MONO[label] || '⌂'}</Text>
+            {/* Keyed by category, not the editable label, so a rename never changes which glyph a room shows. */}
+            <Text style={styles.monoLabel}>{ROOM_MONO[room.category] || '⌂'}</Text>
           </View>
-          <Text style={[typography.roomLabel, styles.label]}>{label}</Text>
+          <Text style={[typography.roomLabel, styles.label]}>{room.label}</Text>
           {mode === 'edit' && (
             <Pressable
-              onPress={() => onEdit?.(label)}
+              onPress={() => onEdit?.(room)}
               accessibilityRole="button"
-              accessibilityLabel={`Rename ${label}`}
+              accessibilityLabel={`Rename ${room.label}`}
               style={[styles.action, { backgroundColor: colors.pressWash }]}
             >
               <Icon path={EDIT_PATH} color={colors.textPrimary} size={17} />
@@ -36,9 +38,9 @@ export function RoomList({ rooms, mode, onEdit, onDelete }: RoomListProps) {
           )}
           {mode === 'delete' && (
             <Pressable
-              onPress={() => onDelete?.(label)}
+              onPress={() => onDelete?.(room)}
               accessibilityRole="button"
-              accessibilityLabel={`Delete ${label}`}
+              accessibilityLabel={`Delete ${room.label}`}
               style={[styles.action, { backgroundColor: 'rgba(211,50,67,0.12)' }]}
             >
               <Icon path={DELETE_PATH} color="#D33243" size={17} />
