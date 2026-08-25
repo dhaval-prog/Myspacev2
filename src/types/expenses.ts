@@ -29,4 +29,13 @@ export interface Expense {
   tile: string;
   /** SVG path for the category icon. */
   icon: string;
+  /** Account that logged this spend — drives the per-member breakdown in History. */
+  userId: string;
+}
+
+/** One member's total spend on a card, for the History sheet's per-member breakdown. */
+export interface MemberSpend {
+  userId: string;
+  name: string;
+  total: number;
 }
