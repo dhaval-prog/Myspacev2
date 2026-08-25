@@ -3,14 +3,17 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, fontFamily, spacing } from '../../theme';
 import { BottomSheet } from './BottomSheet';
 import { ExpenseRow } from './ExpenseRow';
+import { MemberSpendBar } from './MemberSpendBar';
 import { useExpenses } from '../../context/ExpensesContext';
 import { parseAmount } from '../../utils/expensesFormat';
 
 /** Full spend history for the focused card. */
 export function HistorySheet() {
-  const { historyOpen, closeHistory, focusedCard, expensesFor } = useExpenses();
+  const { historyOpen, closeHistory, focusedCard, expensesFor, memberSpendsFor } = useExpenses();
   const expenses = expensesFor(focusedCard);
   const total = expenses.reduce((s, x) => s + parseAmount(x.amt), 0);
+  const members = memberSpendsFor(focusedCard);
+  const maxMemberTotal = Math.max(0, ...members.map((m) => m.total));
 
   return (
     <BottomSheet visible={historyOpen} onClose={closeHistory} maxHeightRatio={0.76}>
@@ -20,6 +23,14 @@ export function HistorySheet() {
           on {focusedCard?.label ?? ''}
         </Text>
       </View>
+
+      {members.length > 0 && (
+        <View style={styles.members}>
+          {members.map((member) => (
+            <MemberSpendBar key={member.userId} member={member} maxTotal={maxMemberTotal} />
+          ))}
+        </View>
+      )}
 
       <View style={styles.summary}>
         <Text style={styles.summaryCount}>
@@ -55,6 +66,9 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: colors.walletSheetTextSecondary,
     maxWidth: '44%',
+  },
+  members: {
+    gap: spacing.ms,
   },
   summary: {
     flexDirection: 'row',

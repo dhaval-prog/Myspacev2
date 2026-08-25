@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import type { Expense, WalletCard } from '../types/expenses';
+import type { Expense, MemberSpend, WalletCard } from '../types/expenses';
 import { CARD_PALETTE } from '../data/expensesSeed';
 import { SPEND_CATEGORY_MAP } from '../data/expenseCategories';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
@@ -47,6 +47,7 @@ interface CardRow {
 interface ExpenseRow {
   id: string;
   card_id: string;
+  user_id: string;
   title: string;
   amount: number;
   category: string;
@@ -79,6 +80,7 @@ function toExpense(row: ExpenseRow): Expense {
     amt: `-₹${Math.round(row.amount).toLocaleString('en-IN')}`,
     tile: catDef.tile,
     icon: catDef.icon,
+    userId: row.user_id,
   };
 }
 
@@ -99,6 +101,8 @@ interface ExpensesContextValue {
   focusedIdx: number;
   focusedCard: WalletCard | undefined;
   expensesFor: (card: WalletCard | undefined) => Expense[];
+  /** Per-member spend totals on a card, highest first — for History's breakdown. */
+  memberSpendsFor: (card: WalletCard | undefined) => MemberSpend[];
   addExpense: (input: NewExpenseInput) => void;
   addCard: (input: NewCardInput) => void;
   deleteFocusedCard: () => void;
@@ -139,6 +143,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
 
   const [cardRows, setCardRows] = useState<CardRow[]>([]);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
+  const [profileNames, setProfileNames] = useState<Record<string, string>>({});
   const [page, setPage] = useState<Page>('pick');
   const [sel, setSel] = useState(0);
   const [dot, setDot] = useState(0);
@@ -181,12 +186,51 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     };
   }, [userId]);
 
+  // Backfills display names for whoever logged an expense (self or a
+  // co-member on a shared card) — fetched lazily as new spenders show up,
+  // never refetching a name already in hand.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured) return;
+    const missing = Array.from(new Set(expenseRows.map((r) => r.user_id))).filter((id) => !(id in profileNames));
+    if (missing.length === 0) return;
+
+    supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', missing)
+      .then(({ data, error }) => {
+        warn('load profiles', error);
+        if (!data) return;
+        setProfileNames((prev) => {
+          const next = { ...prev };
+          for (const row of data as { id: string; full_name: string | null }[]) {
+            next[row.id] = row.full_name || 'Member';
+          }
+          return next;
+        });
+      });
+    // profileNames deliberately excluded — it's read to find gaps, not to retrigger on every fill.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expenseRows, userId]);
+
   const deck = useMemo(() => cardRows.map((row) => toWalletCard(row, userId)), [cardRows, userId]);
   const focusedIdx = deck.length ? (sel + dot) % deck.length : 0;
   const focusedCard = deck[focusedIdx];
 
   const expensesFor = (card: WalletCard | undefined) =>
     card ? expenseRows.filter((r) => r.card_id === card.id).map(toExpense) : [];
+
+  const memberSpendsFor = (card: WalletCard | undefined): MemberSpend[] => {
+    if (!card) return [];
+    const totals = new Map<string, number>();
+    for (const row of expenseRows) {
+      if (row.card_id !== card.id) continue;
+      totals.set(row.user_id, (totals.get(row.user_id) ?? 0) + row.amount);
+    }
+    return Array.from(totals.entries())
+      .map(([id, total]) => ({ userId: id, name: profileNames[id] ?? 'Member', total }))
+      .sort((a, b) => b.total - a.total);
+  };
 
   const openCard = (i: number) => {
     setFlyCard(i);
@@ -210,7 +254,15 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     if (!userId || !isSupabaseConfigured) {
       localRef.current.expenseSeq += 1;
       setExpenseRows((prev) => [
-        { id: `local-expense-${localRef.current.expenseSeq}`, card_id: cardId, title: trimmedTitle, amount, category, spent_on: spentOn },
+        {
+          id: `local-expense-${localRef.current.expenseSeq}`,
+          card_id: cardId,
+          user_id: userId ?? 'local',
+          title: trimmedTitle,
+          amount,
+          category,
+          spent_on: spentOn,
+        },
         ...prev,
       ]);
       return;
@@ -340,6 +392,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     focusedIdx,
     focusedCard,
     expensesFor,
+    memberSpendsFor,
     addExpense,
     addCard,
     deleteFocusedCard,
