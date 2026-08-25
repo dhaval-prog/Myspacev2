@@ -31,11 +31,28 @@ export function CardStack() {
   const [dragY, setDragY] = useState(0);
   const moved = React.useRef(0);
   const scrollRef = React.useRef<ScrollView>(null);
-  // Mirrors `pickP` so rapid same-tick wheel events accumulate correctly
-  // instead of each reading the same stale value from the render closure.
+  // Mirrors `pickP` so rapid same-tick wheel/drag events accumulate
+  // correctly instead of each reading the same stale value from the
+  // render closure.
   const pickPRef = React.useRef(0);
+  // `pickP` when the current drag gesture started, so a drag's cumulative
+  // `g.dy` maps onto an absolute pickP rather than compounding every frame.
+  const dragStartPickP = React.useRef(0);
+  // One PanResponder per card, cached for the card's lifetime (keyed by its
+  // stable rid, not its deck index). Calling PanResponder.create() fresh on
+  // every render — which a plain `panResponderFor(i)` call in the render
+  // body would do, since every state update it drives (setDragY, setPickP)
+  // triggers a re-render — hands react-native-web's DOM listeners a new
+  // callback identity mid-gesture and resets its internal responder
+  // bookkeeping, breaking the drag into disconnected few-pixel fragments.
+  const responderCache = React.useRef(new Map<string, { responder: ReturnType<typeof PanResponder.create>; indexRef: { current: number } }>());
 
   const n = Math.max(1, deck.length);
+
+  // Drop cached responders for cards that no longer exist (deleted).
+  for (const rid of responderCache.current.keys()) {
+    if (!deck.some((card) => card.rid === rid)) responderCache.current.delete(rid);
+  }
 
   const handleScroll = (e: { nativeEvent: { contentOffset: { y: number } } }) => {
     const p = Math.max(0, Math.min(n - 1, e.nativeEvent.contentOffset.y / SLOT_HEIGHT));
@@ -43,41 +60,69 @@ export function CardStack() {
     setPickP(p);
   };
 
+  /**
+   * Commits a new browse position. Deliberately does NOT also move the
+   * invisible ScrollView here — calling its scrollTo on every wheel/drag
+   * tick raced its own async onScroll echo against the next tick's write,
+   * intermittently stomping a just-set pickP back to a stale value. The
+   * ScrollView is instead resynced once, at the start of a real native
+   * scroll gesture (see onScrollBeginDrag below).
+   */
+  const movePickTo = (next: number) => {
+    const clamped = Math.max(0, Math.min(n - 1, next));
+    pickPRef.current = clamped;
+    setPickP(clamped);
+  };
+
+  const handleScrollBeginDrag = () => {
+    scrollRef.current?.scrollTo({ y: pickPRef.current * SLOT_HEIGHT, animated: false });
+  };
+
   // Web-only: a mouse wheel over the focused card can't reach the invisible
   // ScrollView behind it (it's pointer-events:auto so taps/drags work), so
   // browsing the deck by wheel is driven here instead and mirrored onto the
   // ScrollView's own offset to keep native touch-scroll in sync with it.
-  const handleWheel = (e: { deltaY: number }) => {
-    const next = Math.max(0, Math.min(n - 1, pickPRef.current + e.deltaY / SLOT_HEIGHT));
-    pickPRef.current = next;
-    setPickP(next);
-    scrollRef.current?.scrollTo({ y: next * SLOT_HEIGHT, animated: false });
-  };
+  const handleWheel = (e: { deltaY: number }) => movePickTo(pickPRef.current + e.deltaY / SLOT_HEIGHT);
 
-  const panResponderFor = (index: number) =>
-    PanResponder.create({
+  const panResponderFor = (rid: string, index: number) => {
+    const cache = responderCache.current;
+    const existing = cache.get(rid);
+    if (existing) {
+      existing.indexRef.current = index;
+      return existing.responder;
+    }
+
+    const indexRef = { current: index };
+    const responder = PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 2,
       onPanResponderGrant: () => {
         moved.current = 0;
-        setDragIdx(index);
+        dragStartPickP.current = pickPRef.current;
+        setDragIdx(indexRef.current);
         setDragY(0);
       },
       onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
         moved.current = Math.abs(g.dy);
         setDragY(Math.max(-190, Math.min(40, g.dy)));
+        // Dragging the focused card up/down also browses the deck — the
+        // held card keeps lifting free of the stack (dragY) on top of that.
+        movePickTo(dragStartPickP.current - g.dy / SLOT_HEIGHT);
       },
       onPanResponderRelease: (_e, g: PanResponderGestureState) => {
         setDragIdx(null);
         const finalDragY = Math.max(-190, Math.min(40, g.dy));
         setDragY(0);
-        if (moved.current < 6 || finalDragY < OPEN_THRESHOLD) openCard(index);
+        if (moved.current < 6 || finalDragY < OPEN_THRESHOLD) openCard(indexRef.current);
       },
       onPanResponderTerminate: () => {
         setDragIdx(null);
         setDragY(0);
       },
     });
+    cache.set(rid, { responder, indexRef });
+    return responder;
+  };
 
   if (deck.length === 0) {
     return (
@@ -98,6 +143,7 @@ export function CardStack() {
       <ScrollView
         ref={scrollRef}
         onScroll={handleScroll}
+        onScrollBeginDrag={handleScrollBeginDrag}
         scrollEventThrottle={16}
         style={StyleSheet.absoluteFill}
         contentContainerStyle={{ paddingBottom: 84 }}
@@ -112,18 +158,23 @@ export function CardStack() {
       <View style={styles.centerWrap} pointerEvents="box-none">
         <View style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}>
           {deck.map((card, i) => {
-            const d = i - pickP;
+            const held = dragIdx === i;
+            // The held card keeps its own pre-drag resting look (focused,
+            // full opacity/scale) so it never fades while you're actually
+            // holding it — only the rest of the stack reacts live as the
+            // drag also moves `pickP`, giving the "dragging browses too"
+            // feedback without disturbing the card under your finger.
+            const d = i - (held ? dragStartPickP.current : pickP);
             const ad = Math.min(3, Math.abs(d));
             const focused = ad < 0.5;
             const flying = flyCard === i;
-            const held = dragIdx === i;
             const baseY = d >= 0 ? d * 46 - ad * ad * 4 : d * 62;
             const scale = flying ? 1.06 : Math.max(0.78, 1 - ad * 0.06);
             const opacity = flying ? 1 : Math.max(0.5, 1 - ad * 0.16);
             const spent = expensesFor(card).reduce((s, x) => s + parseAmount(x.amt), 0);
             const remaining = Math.max(0, parseAmount(card.amount) - spent);
             const translateY = flying ? -190 : baseY + (held ? dragY : 0);
-            const responder = focused || held ? panResponderFor(i) : null;
+            const responder = focused || held ? panResponderFor(card.rid, i) : null;
 
             return (
               <View
