@@ -29,7 +29,7 @@ export function MemberSpendBar({ member, maxTotal }: { member: MemberSpend; maxT
         <Text style={styles.amount}>₹{Math.round(member.total).toLocaleString('en-IN')}</Text>
       </View>
       <View style={styles.track}>
-        <View style={[styles.fill, { width: `${pct}%`, backgroundColor: skin.bg }]} />
+        <View style={[styles.fill, { width: `${pct}%` }]} />
       </View>
     </View>
   );
@@ -77,5 +77,6 @@ const styles = StyleSheet.create({
   fill: {
     height: '100%',
     borderRadius: 3,
+    backgroundColor: '#3D3D3D',
   },
 });
