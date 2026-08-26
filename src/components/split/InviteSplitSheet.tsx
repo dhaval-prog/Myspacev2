@@ -5,26 +5,30 @@ import { colors, fontFamily, spacing } from '../../theme';
 import { BottomSheet } from '../expenses/BottomSheet';
 import { useSplit } from '../../context/SplitContext';
 import { formatJoinId } from '../../utils/expensesFormat';
+import type { SplitGroup } from '../../types/split';
 
 const QR_BOX = 196;
 
 interface InviteSplitSheetProps {
   visible: boolean;
   onClose: () => void;
+  /** Overrides the context's focused group — needed on the Create screen, which invites for a draft group before ever focusing it. */
+  group?: SplitGroup | null;
 }
 
 /** Owner-only invite sheet for a split group — a real, scannable QR encoding the group's join code. */
-export function InviteSplitSheet({ visible, onClose }: InviteSplitSheetProps) {
+export function InviteSplitSheet({ visible, onClose, group }: InviteSplitSheetProps) {
   const { focusedGroup } = useSplit();
-  const joinId = focusedGroup ? formatJoinId(focusedGroup.rid) : '—';
+  const target = group ?? focusedGroup;
+  const joinId = target ? formatJoinId(target.rid) : '—';
 
   return (
     <BottomSheet visible={visible} onClose={onClose}>
-      <Text style={styles.title}>Invite to {focusedGroup?.name ?? ''}</Text>
+      <Text style={styles.title}>Invite to {target?.name ?? ''}</Text>
       <Text style={styles.hint}>Scan this code to join this split instantly, or share the code below.</Text>
       <View style={styles.qrWrap}>
         <View style={styles.qrBox}>
-          <QRCode value={focusedGroup?.rid ?? '10000000001'} size={QR_BOX - spacing.ms * 2} color={colors.splitInk} backgroundColor="transparent" />
+          <QRCode value={target?.rid ?? '10000000001'} size={QR_BOX - spacing.ms * 2} color={colors.splitInk} backgroundColor="transparent" />
         </View>
         <Text style={styles.qrId}>{joinId}</Text>
       </View>
