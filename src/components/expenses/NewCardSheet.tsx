@@ -24,7 +24,7 @@ export function NewCardSheet() {
   }, [newCardOpen]);
 
   const amountNum = Number(amount || 0);
-  const valid = name.trim().length > 0 && amountNum > 0;
+  const valid = name.trim().length > 0 && amount.trim().length > 0 && amountNum >= 0;
 
   const submit = () => {
     if (!valid) return;

@@ -105,6 +105,8 @@ interface ExpensesContextValue {
   memberSpendsFor: (card: WalletCard | undefined) => MemberSpend[];
   addExpense: (input: NewExpenseInput) => void;
   addCard: (input: NewCardInput) => void;
+  /** Owner-only: tops up the focused card's budget total by `amount`. */
+  addMoney: (amount: number) => void;
   deleteFocusedCard: () => void;
   joinCard: (code: string) => Promise<{ error: string | null }>;
 
@@ -117,6 +119,9 @@ interface ExpensesContextValue {
   inviteOpen: boolean;
   openInvite: () => void;
   closeInvite: () => void;
+  addMoneyOpen: boolean;
+  openAddMoney: () => void;
+  closeAddMoney: () => void;
   confirmDeleteOpen: boolean;
   askDelete: () => void;
   cancelDelete: () => void;
@@ -152,6 +157,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
   const [spendOpen, setSpendOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [addMoneyOpen, setAddMoneyOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [newCardOpen, setNewCardOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
@@ -281,7 +287,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
 
   const addCard = ({ name, amount, resetDay }: NewCardInput) => {
     const trimmedName = name.trim();
-    if (!trimmedName || amount <= 0) return;
+    if (!trimmedName || amount < 0) return;
     const skin = CARD_PALETTE[cardRows.length % CARD_PALETTE.length];
     const rid = randomRid();
     setNewCardOpen(false);
@@ -327,6 +333,25 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
         warn('add card', error);
         if (data) setCardRows((prev) => [...prev, data as CardRow]);
       });
+  };
+
+  const addMoney = (amount: number) => {
+    if (!focusedCard || !focusedCard.isOwner || amount <= 0) return;
+    const cardId = focusedCard.id;
+    setAddMoneyOpen(false);
+
+    setCardRows((prev) => prev.map((c) => (c.id === cardId ? { ...c, amount: c.amount + amount } : c)));
+
+    if (userId && isSupabaseConfigured) {
+      const row = cardRows.find((c) => c.id === cardId);
+      if (row) {
+        supabase
+          .from('budget_cards')
+          .update({ amount: row.amount + amount })
+          .eq('id', cardId)
+          .then(({ error }) => warn('add money', error));
+      }
+    }
   };
 
   const deleteFocusedCard = () => {
@@ -395,6 +420,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     memberSpendsFor,
     addExpense,
     addCard,
+    addMoney,
     deleteFocusedCard,
     joinCard,
     spendOpen,
@@ -408,6 +434,11 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
       if (focusedCard?.isOwner) setInviteOpen(true);
     },
     closeInvite: () => setInviteOpen(false),
+    addMoneyOpen,
+    openAddMoney: () => {
+      if (focusedCard?.isOwner) setAddMoneyOpen(true);
+    },
+    closeAddMoney: () => setAddMoneyOpen(false),
     confirmDeleteOpen,
     askDelete: () => {
       if (focusedCard?.isOwner) setConfirmDeleteOpen(true);

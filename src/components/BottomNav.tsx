@@ -45,7 +45,13 @@ function NavButton({
   );
 }
 
-function Fab({ onPress, reduceMotion }: { onPress?: () => void; reduceMotion?: boolean }) {
+const FAB_ICON_DEFAULT = '#C3EA4F';
+const FAB_ICON_BY_TAB: Record<string, string> = {
+  expenses: '#fff',
+  split: '#DE3769',
+};
+
+function Fab({ onPress, reduceMotion, activeId }: { onPress?: () => void; reduceMotion?: boolean; activeId: string }) {
   const scale = useRef(new Animated.Value(1)).current;
   const animateTo = (v: number, dur: number) =>
     Animated.timing(scale, { toValue: v, duration: reduceMotion ? 0 : dur, easing: EASE, useNativeDriver: true }).start();
@@ -60,7 +66,7 @@ function Fab({ onPress, reduceMotion }: { onPress?: () => void; reduceMotion?: b
       hitSlop={6}
     >
       <Animated.View style={[styles.fab, { transform: [{ scale }] }]}>
-        <Icon path={PLUS_PATH} color="#C3EA4F" size={24} strokeWidth={2.2} />
+        <Icon path={PLUS_PATH} color={FAB_ICON_BY_TAB[activeId] ?? FAB_ICON_DEFAULT} size={24} strokeWidth={2.2} />
       </Animated.View>
     </Pressable>
   );
@@ -92,7 +98,7 @@ export function BottomNav({ activeId, onSelect, onAdd, bottomInset, reduceMotion
             reduceMotion={reduceMotion}
           />
         ))}
-        <Fab onPress={onAdd} reduceMotion={reduceMotion} />
+        <Fab onPress={onAdd} reduceMotion={reduceMotion} activeId={activeId} />
         {right.map((item) => (
           <NavButton
             key={item.id}

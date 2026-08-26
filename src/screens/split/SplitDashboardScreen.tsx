@@ -18,6 +18,7 @@ export function SplitDashboardScreen() {
   const insets = useSafeAreaInsets();
   const { focusedGroup, membersFor, expensesFor, balancesFor, goHome, goAdd, goItems, goSettle, goChat } = useSplit();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   if (!focusedGroup) return null;
 
@@ -58,10 +59,10 @@ export function SplitDashboardScreen() {
           <View style={styles.heroBlob} />
           {focusedGroup.isOwner && (
             <Pressable
-              onPress={() => setInviteOpen(true)}
+              onPress={() => setQrOpen(true)}
               style={styles.scanButton}
               accessibilityRole="button"
-              accessibilityLabel="Invite to this split"
+              accessibilityLabel="Show invite QR code"
             >
               <Icon path={SCAN_ICON} color="#fff" size={21} strokeWidth={1.9} />
             </Pressable>
@@ -172,6 +173,7 @@ export function SplitDashboardScreen() {
       </View>
 
       <InviteSplitSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <InviteSplitSheet visible={qrOpen} onClose={() => setQrOpen(false)} qrOnly />
     </View>
   );
 }
