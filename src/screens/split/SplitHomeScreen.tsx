@@ -69,6 +69,14 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
                   <Text style={styles.heroPeopleInitials}>{initialsOf(m.name)}</Text>
                 </View>
               ))}
+              <Pressable
+                onPress={() => setJoinOpen(true)}
+                style={[styles.heroPeopleTile, styles.heroPeopleTileStack, styles.heroPeoplePlus]}
+                accessibilityRole="button"
+                accessibilityLabel="Join a split with an invite code"
+              >
+                <Text style={styles.heroPeoplePlusLabel}>+</Text>
+              </Pressable>
             </View>
           )}
           <Pressable onPress={goCreate} style={({ pressed }) => [styles.heroCta, pressed && styles.heroCtaPressed]}>
@@ -286,6 +294,14 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans600,
     fontSize: 12.5,
     color: colors.splitInk,
+  },
+  heroPeoplePlus: {
+    backgroundColor: colors.splitAccent,
+  },
+  heroPeoplePlusLabel: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 18,
+    color: '#fff',
   },
   heroCta: {
     marginTop: 2,

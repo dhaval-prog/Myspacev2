@@ -132,7 +132,9 @@ export function SplitDashboardScreen() {
                     <Text style={styles.personName}>{b.name}</Text>
                     <Text style={[styles.personNote, owed ? styles.notePositive : styles.noteNegative]}>{owed ? 'owes you' : 'you owe'}</Text>
                   </View>
-                  <Text style={styles.personAmt}>₹{Math.round(Math.abs(b.net)).toLocaleString('en-IN')}</Text>
+                  <Text style={[styles.personAmt, owed ? styles.notePositive : styles.noteNegative]}>
+                    ₹{Math.round(Math.abs(b.net)).toLocaleString('en-IN')}
+                  </Text>
                 </Pressable>
               );
             })
