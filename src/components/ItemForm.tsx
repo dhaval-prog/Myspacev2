@@ -13,10 +13,6 @@ interface ItemFormProps {
   onSubmit: (input: { name: string; category: string; room: string; expiry: string }) => void;
 }
 
-const PHOTO_ADD_PATH = 'M12 5v14M5 12h14';
-const PHOTO_CAM_PATH = 'M4 8h3l1.5-2h7L17 8h3v12H4z';
-const PHOTO_GAL_PATH = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4L15 13l5 5';
-
 /** "What are you putting away?" — the add-item form. */
 export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
   const [name, setName] = useState('');
@@ -24,9 +20,6 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
   const [room, setRoom] = useState('');
   const [expiry, setExpiry] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [photoAdd, setPhotoAdd] = useState(false);
-  const [photoCam, setPhotoCam] = useState(false);
-  const [photoGal, setPhotoGal] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
   const { borderColor: nameBorder, onFocus: onNameFocus, onBlur: onNameBlur } = useFocusBorder(
@@ -44,9 +37,6 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
     setRoom('');
     setExpiry('');
     setCalendarOpen(false);
-    setPhotoAdd(false);
-    setPhotoCam(false);
-    setPhotoGal(false);
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1400);
   };
@@ -123,36 +113,6 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={typography.formLabel}>Photos (optional)</Text>
-        <View style={styles.photoRow}>
-          <Pressable
-            onPress={() => setPhotoAdd((v) => !v)}
-            accessibilityRole="button"
-            accessibilityLabel="Add photo"
-            style={[styles.photoButton, { backgroundColor: photoAdd ? colors.ink : colors.pale }]}
-          >
-            <Icon path={PHOTO_ADD_PATH} color={photoAdd ? colors.lime : colors.textPrimary} size={19} />
-          </Pressable>
-          <Pressable
-            onPress={() => setPhotoCam((v) => !v)}
-            accessibilityRole="button"
-            accessibilityLabel="Take photo"
-            style={[styles.photoButton, { backgroundColor: photoCam ? colors.ink : colors.pale }]}
-          >
-            <Icon path={PHOTO_CAM_PATH} color={photoCam ? colors.lime : colors.textPrimary} size={19} />
-          </Pressable>
-          <Pressable
-            onPress={() => setPhotoGal((v) => !v)}
-            accessibilityRole="button"
-            accessibilityLabel="Upload from gallery"
-            style={[styles.photoButton, { backgroundColor: photoGal ? colors.ink : colors.pale }]}
-          >
-            <Icon path={PHOTO_GAL_PATH} color={photoGal ? colors.lime : colors.textPrimary} size={19} />
-          </Pressable>
-        </View>
-      </View>
-
       <Pressable
         onPress={handleSave}
         disabled={!canSave && !savedFlash}
@@ -219,17 +179,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: spacing.ms,
     paddingHorizontal: spacing.md,
-  },
-  photoRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  photoButton: {
-    width: 52,
-    height: 52,
-    borderRadius: radius.md - 8,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   saveButton: {
     borderRadius: radius.md - 6,

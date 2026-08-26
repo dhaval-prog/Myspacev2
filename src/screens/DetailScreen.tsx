@@ -18,15 +18,16 @@ import type { Room } from '../types/space';
 
 interface DetailScreenProps {
   viewId: ViewId;
+  initialIndex?: number;
   onBack: () => void;
 }
 
-export function DetailScreen({ viewId, onBack }: DetailScreenProps) {
+export function DetailScreen({ viewId, initialIndex, onBack }: DetailScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { rooms, items, addRoom, renameRoom, removeRoom, addItem, editItem, removeItem } = useSpace();
 
-  const [railIndex, setRailIndex] = useState(1);
+  const [railIndex, setRailIndex] = useState(initialIndex ?? 1);
   const [collapsed, setCollapsed] = useState(false);
   const [renameTarget, setRenameTarget] = useState<Room | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Room | null>(null);

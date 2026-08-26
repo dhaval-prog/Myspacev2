@@ -3,11 +3,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useAuth } from '../../context/AuthContext';
 import { CardStack } from '../../components/expenses/CardStack';
 import { BottomNav } from '../../components/BottomNav';
+import { AccountBadge } from '../../components/AccountBadge';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useExpenses } from '../../context/ExpensesContext';
-import { useAuth } from '../../context/AuthContext';
 
 interface PickScreenProps {
   onHome: () => void;
@@ -18,26 +19,24 @@ interface PickScreenProps {
 export function PickScreen({ onHome, onOpenSplit }: PickScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { openNewCard, openJoin } = useExpenses();
   const { signOut } = useAuth();
+  const { openNewCard, openJoin } = useExpenses();
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.huge }]}>
-        <Pressable
-          onPress={() => setLogoutConfirmOpen(true)}
-          style={[styles.accountButton, { top: insets.top + spacing.huge }]}
-          accessibilityRole="button"
-          accessibilityLabel="Account"
-        >
-          <Text style={styles.accountIcon}>◎</Text>
-        </Pressable>
-        <View style={styles.wordmark}>
-          <Text style={styles.sparkle}>✻</Text>
-          <Text style={styles.wordmarkText}>myspace</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.headerSpacer} />
+          <View style={styles.headerCenter}>
+            <View style={styles.wordmark}>
+              <Text style={styles.sparkle}>✻</Text>
+              <Text style={styles.wordmarkText}>myspace</Text>
+            </View>
+            <Text style={styles.subtitle}>Scroll through your cards · pull one up to open</Text>
+          </View>
+          <AccountBadge onPress={() => setLogoutConfirmOpen(true)} bg="#111" tint="#fff" />
         </View>
-        <Text style={styles.subtitle}>Scroll through your cards · pull one up to open</Text>
       </View>
 
       <View style={styles.stackArea}>
@@ -84,24 +83,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.walletBg,
   },
   header: {
+    paddingHorizontal: spacing.xxxl,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerSpacer: {
+    width: 44,
+  },
+  headerCenter: {
+    flex: 1,
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.xxxl,
-    position: 'relative',
-  },
-  accountButton: {
-    position: 'absolute',
-    right: spacing.xxxl,
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: '#111',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  accountIcon: {
-    fontSize: 15,
-    color: '#fff',
   },
   wordmark: {
     flexDirection: 'row',

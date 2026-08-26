@@ -1,6 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../theme';
+import { StyleSheet, Text, View } from 'react-native';
+import { colors, spacing, typography } from '../theme';
+import { AccountBadge } from './AccountBadge';
 import { SearchBar } from './SearchBar';
 
 interface HeaderProps {
@@ -14,15 +15,7 @@ export function Header({ onSearchPress, onAvatarPress }: HeaderProps) {
     <View style={styles.row}>
       <Text style={typography.logo}>myspace</Text>
       <SearchBar onPress={onSearchPress} />
-      <Pressable
-        onPress={onAvatarPress}
-        accessibilityRole="button"
-        accessibilityLabel="Profile"
-        style={({ pressed }) => [styles.avatar, pressed && styles.avatarPressed]}
-        hitSlop={4}
-      >
-        <Text style={styles.avatarIcon}>◎</Text>
-      </Pressable>
+      <AccountBadge onPress={onAvatarPress} bg="#111" tint={colors.lime} />
     </View>
   );
 }
@@ -32,21 +25,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.ms,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.sm,
-    backgroundColor: '#111',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  avatarPressed: {
-    opacity: 0.85,
-  },
-  avatarIcon: {
-    fontSize: 15,
-    color: colors.lime,
   },
 });

@@ -16,7 +16,7 @@ import { BottomNav } from '../components/BottomNav';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface HomeScreenProps {
-  onOpenDetail: (viewId: ViewId) => void;
+  onOpenDetail: (viewId: ViewId, initialIndex?: number) => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
 }
@@ -181,6 +181,7 @@ const styles = StyleSheet.create({
   },
   headerPad: {
     paddingHorizontal: spacing.xxxl,
+    zIndex: 20,
   },
   surface: {
     flex: 1,
