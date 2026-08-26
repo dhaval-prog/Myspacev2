@@ -256,9 +256,15 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
                 if (isRevealed) closeRevealed();
                 else openGroup(g.id);
               };
+              const handleLongPress = g.isOwner ? () => setDeleteTarget({ id: g.id, name: g.name }) : undefined;
 
               const cardBody = featured ? (
-                <Pressable onPress={handlePress} style={({ pressed }) => [pressed && !reduceMotion && styles.cardPressed]}>
+                <Pressable
+                  onPress={handlePress}
+                  onLongPress={handleLongPress}
+                  delayLongPress={450}
+                  style={({ pressed }) => [pressed && !reduceMotion && styles.cardPressed]}
+                >
                   <LinearGradient
                     colors={colors.splitGradient as [string, string, ...string[]]}
                     start={{ x: 0, y: 0 }}
@@ -271,6 +277,8 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
               ) : (
                 <Pressable
                   onPress={handlePress}
+                  onLongPress={handleLongPress}
+                  delayLongPress={450}
                   style={({ pressed }) => [styles.card, styles.cardPlain, pressed && !reduceMotion && styles.cardPressed]}
                 >
                   {content}
