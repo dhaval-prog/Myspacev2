@@ -132,6 +132,8 @@ interface SplitContextValue {
 
   createGroup: (input: NewGroupInput) => Promise<void>;
   joinGroup: (code: string) => Promise<{ error: string | null }>;
+  /** Owner-only: permanently deletes the group and everything filed under it (expenses, shares, settlements, chat, locations, members). No-op for non-owners. */
+  deleteGroup: (groupId: string) => Promise<void>;
   addExpense: (input: NewExpenseInput) => Promise<void>;
   addItemizedExpense: (input: NewItemizedInput) => Promise<void>;
   settleUp: (toUserId: string, amount: number) => Promise<void>;
@@ -414,6 +416,38 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   };
 
+  const deleteGroup = async (groupId: string) => {
+    const group = groupRows.find((g) => g.id === groupId);
+    if (!group || group.owner_id !== userId) return;
+
+    const expenseIds = expenseRows.filter((e) => e.group_id === groupId).map((e) => e.id);
+
+    if (isSupabaseConfigured && userId) {
+      if (expenseIds.length > 0) {
+        warn('delete expense shares', (await supabase.from('split_expense_shares').delete().in('expense_id', expenseIds)).error);
+      }
+      warn('delete expenses', (await supabase.from('split_expenses').delete().eq('group_id', groupId)).error);
+      warn('delete settlements', (await supabase.from('split_settlements').delete().eq('group_id', groupId)).error);
+      warn('delete chat', (await supabase.from('split_chat_messages').delete().eq('group_id', groupId)).error);
+      warn('delete locations', (await supabase.from('split_locations').delete().eq('group_id', groupId)).error);
+      warn('delete members', (await supabase.from('split_members').delete().eq('group_id', groupId)).error);
+      warn('delete group', (await supabase.from('split_groups').delete().eq('id', groupId).eq('owner_id', userId)).error);
+    }
+
+    const expenseIdSet = new Set(expenseIds);
+    setGroupRows((prev) => prev.filter((g) => g.id !== groupId));
+    setExpenseRows((prev) => prev.filter((e) => e.group_id !== groupId));
+    setShareRows((prev) => prev.filter((s) => !expenseIdSet.has(s.expense_id)));
+    setSettlementRows((prev) => prev.filter((s) => s.group_id !== groupId));
+    setChatRows((prev) => prev.filter((m) => m.group_id !== groupId));
+    setLocationRows((prev) => prev.filter((l) => l.group_id !== groupId));
+    setMemberRows((prev) => prev.filter((m) => m.group_id !== groupId));
+    if (focusedGroupId === groupId) {
+      setFocusedGroupId(null);
+      setPage('home');
+    }
+  };
+
   const addExpense = async ({ title, amount, category, paidBy, shares }: NewExpenseInput) => {
     if (!focusedGroup || !title.trim() || amount <= 0 || shares.length === 0) return;
     const groupId = focusedGroup.id;
@@ -666,6 +700,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     goChat,
     createGroup,
     joinGroup,
+    deleteGroup,
     addExpense,
     addItemizedExpense,
     settleUp,
