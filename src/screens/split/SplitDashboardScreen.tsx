@@ -11,13 +11,12 @@ import { SPLIT_EXPENSE_ICON_DEFAULT, SPLIT_EXPENSE_ICON_MAP } from '../../data/s
 
 const SCAN_ICON = 'M4 8V5.6A1.6 1.6 0 0 1 5.6 4H8M16 4h2.4A1.6 1.6 0 0 1 20 5.6V8M20 16v2.4a1.6 1.6 0 0 1-1.6 1.6H16M8 20H5.6A1.6 1.6 0 0 1 4 18.4V16M7 12h10';
 const BACK_ICON = 'M15 5l-7 7 7 7';
-const LOCATION_ICON = 'M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11zM12 8a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z';
 const CHAT_ICON = 'M4 4h16v12H8l-4 4z';
 
 /** One split group's dashboard: totals, balances, recent expenses. */
 export function SplitDashboardScreen() {
   const insets = useSafeAreaInsets();
-  const { focusedGroup, membersFor, expensesFor, balancesFor, goHome, goAdd, goItems, goSettle, goLocation, goChat } = useSplit();
+  const { focusedGroup, membersFor, expensesFor, balancesFor, goHome, goAdd, goItems, goSettle, goChat } = useSplit();
   const [inviteOpen, setInviteOpen] = useState(false);
 
   if (!focusedGroup) return null;
@@ -44,9 +43,6 @@ export function SplitDashboardScreen() {
             {members.length} {members.length === 1 ? 'person' : 'people'} · {focusedGroup.category || 'Split'}
           </Text>
         </View>
-        <Pressable onPress={goLocation} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Live location">
-          <Icon path={LOCATION_ICON} color={colors.splitInk} size={18} strokeWidth={1.8} />
-        </Pressable>
         <Pressable onPress={goChat} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Chat">
           <Icon path={CHAT_ICON} color={colors.splitInk} size={18} strokeWidth={1.8} />
         </Pressable>
@@ -85,9 +81,6 @@ export function SplitDashboardScreen() {
         </LinearGradient>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          <Pressable onPress={goLocation} style={styles.chip}>
-            <Text style={styles.chipLabel}>Live Location</Text>
-          </Pressable>
           <Pressable onPress={goChat} style={styles.chip}>
             <Text style={styles.chipLabel}>Chat</Text>
           </Pressable>

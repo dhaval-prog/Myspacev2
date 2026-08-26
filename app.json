@@ -34,12 +34,6 @@
         {
           "photosPermission": "MySpace uses your photos to read a join QR code from an image."
         }
-      ],
-      [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "MySpace uses your location to show it to other members of a Split you're sharing it with."
-        }
       ]
     ]
   }

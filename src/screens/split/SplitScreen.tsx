@@ -5,7 +5,6 @@ import { SplitDashboardScreen } from './SplitDashboardScreen';
 import { AddExpenseScreen } from './AddExpenseScreen';
 import { ItemSplitScreen } from './ItemSplitScreen';
 import { SettleUpScreen } from './SettleUpScreen';
-import { LiveLocationScreen } from './LiveLocationScreen';
 import { SplitChatScreen } from './SplitChatScreen';
 import { CreateSplitScreen } from './CreateSplitScreen';
 
@@ -25,8 +24,6 @@ function SplitRoot({ onHome, onOpenExpenses }: SplitScreenProps) {
       return <ItemSplitScreen />;
     case 'settle':
       return <SettleUpScreen />;
-    case 'location':
-      return <LiveLocationScreen />;
     case 'chat':
       return <SplitChatScreen />;
     case 'create':
