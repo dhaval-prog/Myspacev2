@@ -115,6 +115,8 @@ interface SplitContextValue {
   createGroup: (input: NewGroupInput) => Promise<SplitGroup | null>;
   updateGroup: (id: string, input: NewGroupInput) => Promise<void>;
   joinGroup: (code: string) => Promise<{ error: string | null }>;
+  /** Owner-only: adds someone already known from another split/card directly to this group, no invite code needed. */
+  addKnownMember: (groupId: string, userId: string) => Promise<{ error: string | null }>;
   /** Owner-only: permanently deletes the group and everything filed under it (expenses, shares, settlements, chat, members). No-op for non-owners. */
   deleteGroup: (groupId: string) => Promise<void>;
   addExpense: (input: NewExpenseInput) => Promise<void>;
@@ -420,6 +422,16 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   };
 
+  const addKnownMember = async (groupId: string, targetUserId: string): Promise<{ error: string | null }> => {
+    if (!userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    const { error } = await supabase.rpc('add_split_member', { p_group_id: groupId, p_user_id: targetUserId });
+    if (error) return { error: error.message };
+    setMemberRows((prev) =>
+      prev.some((m) => m.group_id === groupId && m.user_id === targetUserId) ? prev : [...prev, { group_id: groupId, user_id: targetUserId }],
+    );
+    return { error: null };
+  };
+
   const deleteGroup = async (groupId: string) => {
     const group = groupRows.find((g) => g.id === groupId);
     if (!group || group.owner_id !== userId) return;
@@ -615,6 +627,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     createGroup,
     updateGroup,
     joinGroup,
+    addKnownMember,
     deleteGroup,
     addExpense,
     settleUp,
