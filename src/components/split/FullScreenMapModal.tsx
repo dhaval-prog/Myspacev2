@@ -12,7 +12,11 @@ import { SPOT_ICON_DEFAULT, SPOT_ICON_MAP } from '../../data/spotIcons';
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 const PLUS_ICON = 'M12 5v14M5 12h14';
 const MINUS_ICON = 'M5 12h14';
-const MIN_SCALE = 1;
+// Below 1, the canvas shrinks inside the frame with empty margin around it —
+// that's what makes "zoom all the way out" actually show the whole map
+// instead of bottoming out at the same edge-to-edge crop it opened with.
+const MIN_SCALE = 0.5;
+const DEFAULT_SCALE = 1;
 const MAX_SCALE = 4;
 const LONG_PRESS_MS = 480;
 const TAP_SLOP = 10;
@@ -35,7 +39,10 @@ function touchDistance(touches: GestureResponderEvent['nativeEvent']['touches'])
 }
 
 function maxOffsetFor(scale: number): { x: number; y: number } {
-  return { x: ((scale - 1) * SCREEN_W) / 2 + 40, y: ((scale - 1) * SCREEN_H) / 2 + 40 };
+  // Clamp to 0 so a scale below 1 (shrinking the canvas to show the whole
+  // map) never produces a negative bound, which would make clamp()'s
+  // min > max and silently break panning.
+  return { x: Math.max(0, ((scale - 1) * SCREEN_W) / 2) + 40, y: Math.max(0, ((scale - 1) * SCREEN_H) / 2) + 40 };
 }
 
 /** Deterministic pseudo-position on the stylized map area, purely decorative (not a real projection). */
@@ -108,7 +115,7 @@ export function FullScreenMapModal({ visible, onClose, members, locations, spots
 
   useEffect(() => {
     if (visible) {
-      applyScale(1);
+      applyScale(DEFAULT_SCALE);
       applyTranslate({ x: 0, y: 0 });
     }
     return clearLongPressTimer;
