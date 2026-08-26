@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Dimensions, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { GestureResponderEvent, PanResponderGestureState } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,8 +10,12 @@ import type { LocationShare, PlannedSpot, SplitMember } from '../../types/split'
 import { SPOT_ICON_DEFAULT, SPOT_ICON_MAP } from '../../data/spotIcons';
 
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
+const PLUS_ICON = 'M12 5v14M5 12h14';
+const MINUS_ICON = 'M5 12h14';
 const MIN_SCALE = 1;
 const MAX_SCALE = 4;
+const LONG_PRESS_MS = 480;
+const TAP_SLOP = 10;
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 const GRADIENT_PROPS = {
@@ -30,6 +34,10 @@ function touchDistance(touches: GestureResponderEvent['nativeEvent']['touches'])
   return Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY);
 }
 
+function maxOffsetFor(scale: number): { x: number; y: number } {
+  return { x: ((scale - 1) * SCREEN_W) / 2 + 40, y: ((scale - 1) * SCREEN_H) / 2 + 40 };
+}
+
 /** Deterministic pseudo-position on the stylized map area, purely decorative (not a real projection). */
 function pinPosition(userId: string): { left: `${number}%`; top: `${number}%` } {
   let hash = 0;
@@ -46,64 +54,165 @@ interface FullScreenMapModalProps {
   locations: LocationShare[];
   spots: PlannedSpot[];
   userId: string | null;
+  /** Fired on a long-press over the canvas with the tapped position as a 0-100 percentage, for precise pre-spotting while zoomed in. */
+  onAddSpotAt?: (posX: number, posY: number) => void;
 }
 
 /** Full-screen pinch-zoom + pan view of the trip's stylized map canvas — same pins as the dashboard card, just bigger. No real map tiles, by design. */
-export function FullScreenMapModal({ visible, onClose, members, locations, spots, userId }: FullScreenMapModalProps) {
+export function FullScreenMapModal({ visible, onClose, members, locations, spots, userId, onAddSpotAt }: FullScreenMapModalProps) {
   const insets = useSafeAreaInsets();
-  const [scale, setScale] = useState(1);
-  const [translate, setTranslate] = useState({ x: 0, y: 0 });
-  const gesture = useRef({ startScale: 1, startTranslate: { x: 0, y: 0 }, startDistance: 0 }).current;
+  const [scale, setScaleState] = useState(1);
+  const [translate, setTranslateState] = useState({ x: 0, y: 0 });
+
+  // Gesture handlers below read/write these refs (never the state above) so every
+  // gesture always starts from the *current* zoom/pan — closing over the state
+  // values directly would freeze them at whatever they were on the render that
+  // first created the PanResponder, making pinch/pan appear to do nothing after
+  // the very first touch.
+  const scaleRef = useRef(1);
+  const translateRef = useRef({ x: 0, y: 0 });
+  const canvasRef = useRef<View>(null);
+  const canvasClipRef = useRef<View>(null);
+  const gesture = useRef({
+    startScale: 1,
+    startTranslate: { x: 0, y: 0 },
+    startDistance: 0,
+    startPage: { x: 0, y: 0 },
+    moved: false,
+    longPressFired: false,
+  }).current;
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const applyScale = (next: number) => {
+    scaleRef.current = next;
+    setScaleState(next);
+  };
+  const applyTranslate = (next: { x: number; y: number }) => {
+    translateRef.current = next;
+    setTranslateState(next);
+  };
+
+  const zoomBy = (factor: number) => {
+    const next = clamp(scaleRef.current * factor, MIN_SCALE, MAX_SCALE);
+    applyScale(next);
+    const bound = maxOffsetFor(next);
+    applyTranslate({ x: clamp(translateRef.current.x, -bound.x, bound.x), y: clamp(translateRef.current.y, -bound.y, bound.y) });
+  };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
 
   useEffect(() => {
     if (visible) {
-      setScale(1);
-      setTranslate({ x: 0, y: 0 });
+      applyScale(1);
+      applyTranslate({ x: 0, y: 0 });
     }
+    return clearLongPressTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  const responder = useRef(
-    PanResponder.create({
+  // Trackpad pinch and mouse-wheel zoom — desktop browsers never fire the
+  // multi-touch events PanResponder needs for pinch, so web needs its own path.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !visible) return;
+    const node = canvasClipRef.current as unknown as HTMLElement | null;
+    if (!node) return;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      zoomBy(Math.exp(-e.deltaY * 0.01));
+    };
+    node.addEventListener('wheel', handleWheel, { passive: false });
+    return () => node.removeEventListener('wheel', handleWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  const dropSpotAt = (pageX: number, pageY: number) => {
+    if (!onAddSpotAt) return;
+    (canvasRef.current as unknown as { measure?: (cb: (x: number, y: number, w: number, h: number, px: number, py: number) => void) => void })?.measure?.(
+      (_x, _y, width, height, canvasPageX, canvasPageY) => {
+        if (!width || !height) return;
+        const posX = clamp(((pageX - canvasPageX) / width) * 100, 0, 100);
+        const posY = clamp(((pageY - canvasPageY) / height) * 100, 0, 100);
+        onAddSpotAt(posX, posY);
+      },
+    );
+  };
+
+  const responderRef = useRef<ReturnType<typeof PanResponder.create> | null>(null);
+  if (!responderRef.current) {
+    responderRef.current = PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
-        gesture.startScale = scale;
-        gesture.startTranslate = translate;
+        gesture.startScale = scaleRef.current;
+        gesture.startTranslate = translateRef.current;
         gesture.startDistance = touchDistance(evt.nativeEvent.touches);
+        gesture.moved = false;
+        gesture.longPressFired = false;
+        const touch = evt.nativeEvent.touches[0] ?? evt.nativeEvent;
+        gesture.startPage = { x: touch.pageX, y: touch.pageY };
+
+        clearLongPressTimer();
+        if (onAddSpotAt && evt.nativeEvent.touches.length <= 1) {
+          longPressTimer.current = setTimeout(() => {
+            if (!gesture.moved) {
+              gesture.longPressFired = true;
+              dropSpotAt(gesture.startPage.x, gesture.startPage.y);
+            }
+          }, LONG_PRESS_MS);
+        }
       },
       onPanResponderMove: (evt, g: PanResponderGestureState) => {
         const touches = evt.nativeEvent.touches;
+        if (Math.abs(g.dx) > TAP_SLOP || Math.abs(g.dy) > TAP_SLOP) {
+          gesture.moved = true;
+          clearLongPressTimer();
+        }
+
         if (touches.length >= 2) {
+          clearLongPressTimer();
           const dist = touchDistance(touches);
+          if (gesture.startDistance === 0) gesture.startDistance = dist;
           if (gesture.startDistance > 0) {
             const next = clamp(gesture.startScale * (dist / gesture.startDistance), MIN_SCALE, MAX_SCALE);
-            setScale(next);
-            const maxX = ((next - 1) * SCREEN_W) / 2 + 40;
-            const maxY = ((next - 1) * SCREEN_H) / 2 + 40;
-            setTranslate((prev) => ({ x: clamp(prev.x, -maxX, maxX), y: clamp(prev.y, -maxY, maxY) }));
+            applyScale(next);
+            const bound = maxOffsetFor(next);
+            applyTranslate({
+              x: clamp(translateRef.current.x, -bound.x, bound.x),
+              y: clamp(translateRef.current.y, -bound.y, bound.y),
+            });
           }
         } else {
-          const maxX = ((gesture.startScale - 1) * SCREEN_W) / 2 + 40;
-          const maxY = ((gesture.startScale - 1) * SCREEN_H) / 2 + 40;
-          setTranslate({
-            x: clamp(gesture.startTranslate.x + g.dx, -maxX, maxX),
-            y: clamp(gesture.startTranslate.y + g.dy, -maxY, maxY),
+          const bound = maxOffsetFor(gesture.startScale);
+          applyTranslate({
+            x: clamp(gesture.startTranslate.x + g.dx, -bound.x, bound.x),
+            y: clamp(gesture.startTranslate.y + g.dy, -bound.y, bound.y),
           });
         }
       },
       onPanResponderRelease: () => {
+        clearLongPressTimer();
         gesture.startDistance = 0;
       },
-    }),
-  ).current;
+      onPanResponderTerminate: () => {
+        clearLongPressTimer();
+        gesture.startDistance = 0;
+      },
+    });
+  }
+  const responder = responderRef.current;
 
   if (!visible) return null;
 
   return (
     <Modal visible transparent={false} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.wrap}>
-        <View style={styles.canvasClip} {...responder.panHandlers}>
-          <View style={[styles.canvas, { transform: [{ translateX: translate.x }, { translateY: translate.y }, { scale }] }]}>
+        <View ref={canvasClipRef} style={styles.canvasClip} {...responder.panHandlers}>
+          <View ref={canvasRef} style={[styles.canvas, { transform: [{ translateX: translate.x }, { translateY: translate.y }, { scale }] }]}>
             <View style={styles.roadA} />
             <View style={styles.roadB} />
             <View style={styles.roadC} />
@@ -146,7 +255,20 @@ export function FullScreenMapModal({ visible, onClose, members, locations, spots
         >
           <Icon path={CLOSE_ICON} color="#fff" size={18} strokeWidth={2.2} />
         </Pressable>
-        <Text style={[styles.hint, { bottom: insets.bottom + spacing.lg }]}>Pinch to zoom · Drag to pan</Text>
+
+        <View style={[styles.zoomStack, { bottom: insets.bottom + spacing.xxxl + 34 }]}>
+          <Pressable onPress={() => zoomBy(1.5)} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel="Zoom in">
+            <Icon path={PLUS_ICON} color="#fff" size={16} strokeWidth={2.4} />
+          </Pressable>
+          <View style={styles.zoomDivider} />
+          <Pressable onPress={() => zoomBy(1 / 1.5)} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel="Zoom out">
+            <Icon path={MINUS_ICON} color="#fff" size={16} strokeWidth={2.4} />
+          </Pressable>
+        </View>
+
+        <Text style={[styles.hint, { bottom: insets.bottom + spacing.lg }]}>
+          {onAddSpotAt ? 'Pinch or scroll to zoom · Hold to drop a pin' : 'Pinch or scroll to zoom · Drag to pan'}
+        </Text>
       </View>
     </Modal>
   );
@@ -263,6 +385,23 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,.14)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  zoomStack: {
+    position: 'absolute',
+    right: spacing.xxxl,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,.14)',
+    overflow: 'hidden',
+  },
+  zoomButton: {
+    width: 44,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,.18)',
   },
   hint: {
     position: 'absolute',

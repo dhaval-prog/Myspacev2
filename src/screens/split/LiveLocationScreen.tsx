@@ -51,6 +51,7 @@ export function LiveLocationScreen() {
   const [addSpotOpen, setAddSpotOpen] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
   const [deleteSpotTarget, setDeleteSpotTarget] = useState<PlannedSpot | null>(null);
+  const [pickedSpotPosition, setPickedSpotPosition] = useState<{ posX: number; posY: number } | null>(null);
 
   if (!focusedGroup) return null;
 
@@ -244,7 +245,15 @@ export function LiveLocationScreen() {
         </View>
       </ScrollView>
 
-      <AddSpotSheet visible={addSpotOpen} onClose={() => setAddSpotOpen(false)} nextIndex={spots.length} />
+      <AddSpotSheet
+        visible={addSpotOpen}
+        onClose={() => {
+          setAddSpotOpen(false);
+          setPickedSpotPosition(null);
+        }}
+        nextIndex={spots.length}
+        position={pickedSpotPosition}
+      />
 
       <FullScreenMapModal
         visible={mapExpanded}
@@ -253,6 +262,10 @@ export function LiveLocationScreen() {
         locations={locations}
         spots={spots}
         userId={user?.id ?? null}
+        onAddSpotAt={(posX, posY) => {
+          setPickedSpotPosition({ posX, posY });
+          setAddSpotOpen(true);
+        }}
       />
 
       <Modal visible={!!deleteSpotTarget} transparent animationType="fade" onRequestClose={() => setDeleteSpotTarget(null)}>

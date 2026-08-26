@@ -9,8 +9,10 @@ import { SPOT_ICONS } from '../../data/spotIcons';
 interface AddSpotSheetProps {
   visible: boolean;
   onClose: () => void;
-  /** Position in the planned-spots list this new spot will land at — spreads pins across the map canvas. */
+  /** Position in the planned-spots list this new spot will land at — spreads pins across the map canvas, ignored when `position` is set. */
   nextIndex: number;
+  /** An exact 0-100 position picked by long-pressing the full-screen map, overriding the grid spread. */
+  position?: { posX: number; posY: number } | null;
 }
 
 const GRID_COLS = 3;
@@ -23,7 +25,7 @@ function gridPosition(index: number): { posX: number; posY: number } {
 }
 
 /** Add a planned spot to the trip map — name, icon, optional note. */
-export function AddSpotSheet({ visible, onClose, nextIndex }: AddSpotSheetProps) {
+export function AddSpotSheet({ visible, onClose, nextIndex, position }: AddSpotSheetProps) {
   const { addPlannedSpot } = useSplit();
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
@@ -44,7 +46,7 @@ export function AddSpotSheet({ visible, onClose, nextIndex }: AddSpotSheetProps)
   const submit = async () => {
     if (!valid || submitting) return;
     setSubmitting(true);
-    const { posX, posY } = gridPosition(nextIndex);
+    const { posX, posY } = position ?? gridPosition(nextIndex);
     await addPlannedSpot({ name, icon, note, posX, posY });
     setSubmitting(false);
     onClose();
@@ -53,7 +55,7 @@ export function AddSpotSheet({ visible, onClose, nextIndex }: AddSpotSheetProps)
   return (
     <BottomSheet visible={visible} onClose={onClose}>
       <Text style={styles.title}>Add a planned spot</Text>
-      <Text style={styles.hint}>Pin a place the group wants to hit on this trip.</Text>
+      <Text style={styles.hint}>{position ? 'Pinning at the spot you picked on the map.' : 'Pin a place the group wants to hit on this trip.'}</Text>
 
       <TextInput
         value={name}
