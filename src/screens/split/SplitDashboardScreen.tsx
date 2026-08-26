@@ -84,6 +84,21 @@ export function SplitDashboardScreen() {
           </View>
         </LinearGradient>
 
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+          <Pressable onPress={goLocation} style={styles.chip}>
+            <Text style={styles.chipLabel}>Live Location</Text>
+          </Pressable>
+          <Pressable onPress={goChat} style={styles.chip}>
+            <Text style={styles.chipLabel}>Chat</Text>
+          </Pressable>
+          <Pressable style={[styles.chip, styles.chipActive]}>
+            <Text style={[styles.chipLabel, styles.chipLabelActive]}>Let's Split</Text>
+          </Pressable>
+          <Pressable onPress={() => setInviteOpen(true)} style={styles.chip}>
+            <Text style={styles.chipLabel}>Invite</Text>
+          </Pressable>
+        </ScrollView>
+
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>People</Text>
           <Pressable onPress={goSettle} accessibilityRole="button" accessibilityLabel="Settle up">
@@ -258,6 +273,34 @@ const styles = StyleSheet.create({
   heroTileValue: {
     fontFamily: fontFamily.sans700,
     fontSize: 19,
+    color: '#fff',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  chip: {
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 999,
+    backgroundColor: colors.splitSurface,
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 1,
+  },
+  chipActive: {
+    backgroundColor: colors.splitInk,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  chipLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 12.5,
+    color: colors.splitInkFaint5,
+  },
+  chipLabelActive: {
     color: '#fff',
   },
   sectionHeaderRow: {
