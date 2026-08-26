@@ -1,13 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, noOutline, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
-import { MemberAvatar } from '../../components/split/MemberAvatar';
+import { initialsOf } from '../../components/split/MemberAvatar';
 import { useSplit } from '../../context/SplitContext';
+import { SPLIT_EXPENSE_CATEGORIES } from '../../data/splitExpenseCategories';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const PLUS_ICON = 'M12 6v12M6 12h12';
+
+const GRADIENT_PROPS = {
+  colors: colors.splitGradient as [string, string, ...string[]],
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 1 },
+};
+
+const CATEGORY_LABELS = SPLIT_EXPENSE_CATEGORIES.map((c) => c.label);
 
 interface Line {
   id: string;
@@ -16,13 +26,14 @@ interface Line {
   assigned: Set<string>;
 }
 
-/** Line-by-line "Smart Split" — assign each item on the bill to whoever shares it. */
+/** Line-by-line "Smart Split" — pick which expense category this bill falls under, then assign each line to whoever shares it. */
 export function ItemSplitScreen() {
   const insets = useSafeAreaInsets();
   const { focusedGroup, membersFor, addItemizedExpense, goDashboard } = useSplit();
   const members = focusedGroup ? membersFor(focusedGroup.id) : [];
   const allIds = useMemo(() => new Set(members.map((m) => m.userId)), [members]);
 
+  const [category, setCategory] = useState<string | null>(null);
   const [lines, setLines] = useState<Line[]>([{ id: 'l1', name: '', amount: '', assigned: new Set(allIds) }]);
 
   const addLine = () => setLines((prev) => [...prev, { id: `l${prev.length + 1}-${Date.now()}`, name: '', amount: '', assigned: new Set(allIds) }]);
@@ -58,12 +69,13 @@ export function ItemSplitScreen() {
   }, [lines, members]);
 
   const maxShare = Math.max(1, ...shareRows.map((r) => r.amount));
-  const canSave = total > 0 && lines.some((l) => (Number(l.amount) || 0) > 0 && l.assigned.size > 0);
+  const canSave = Boolean(category) && total > 0 && lines.some((l) => (Number(l.amount) || 0) > 0 && l.assigned.size > 0);
 
   const save = () => {
-    if (!canSave || !focusedGroup) return;
+    if (!canSave || !focusedGroup || !category) return;
     addItemizedExpense({
       paidBy: members[0]?.userId ?? '',
+      category,
       lines: lines
         .filter((l) => (Number(l.amount) || 0) > 0 && l.assigned.size > 0)
         .map((l) => ({ name: l.name.trim() || 'Item', amount: Number(l.amount), assignedUserIds: Array.from(l.assigned) })),
@@ -80,11 +92,33 @@ export function ItemSplitScreen() {
         </Pressable>
         <View>
           <Text style={styles.headerTitle}>Smart Split</Text>
-          <Text style={styles.headerMeta}>₹{Math.round(total).toLocaleString('en-IN')} · assign each line</Text>
+          <Text style={styles.headerMeta}>
+            {category ? `${category} · ` : ''}₹{Math.round(total).toLocaleString('en-IN')} · assign each line
+          </Text>
         </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <View style={styles.categoryRow}>
+          {CATEGORY_LABELS.map((label) => {
+            const on = category === label;
+            if (on) {
+              return (
+                <Pressable key={label} onPress={() => setCategory(label)} style={styles.categoryPillShape}>
+                  <LinearGradient {...GRADIENT_PROPS} style={styles.categoryPillFill}>
+                    <Text style={[styles.categoryPillLabel, styles.categoryPillLabelOn]}>{label}</Text>
+                  </LinearGradient>
+                </Pressable>
+              );
+            }
+            return (
+              <Pressable key={label} onPress={() => setCategory(label)} style={[styles.categoryPillShape, styles.categoryPillFill, styles.categoryPillOff]}>
+                <Text style={styles.categoryPillLabel}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         <View style={styles.lines}>
           {lines.map((line) => (
             <View key={line.id} style={styles.lineCard}>
@@ -106,19 +140,32 @@ export function ItemSplitScreen() {
                 />
               </View>
               <View style={styles.lineAssignRow}>
-                {members.map((m) => (
-                  <MemberAvatar
-                    key={m.userId}
-                    userId={m.userId}
-                    name={m.name}
-                    size={30}
-                    selected={line.assigned.has(m.userId)}
-                    onPress={() => toggleAssign(line.id, m.userId)}
-                  />
-                ))}
-                {line.assigned.size > 0 && Number(line.amount) > 0 && (
-                  <Text style={styles.lineEach}>₹{Math.round(Number(line.amount) / line.assigned.size).toLocaleString('en-IN')} each</Text>
-                )}
+                {members.map((m) => {
+                  const on = line.assigned.has(m.userId);
+                  if (on) {
+                    return (
+                      <Pressable key={m.userId} onPress={() => toggleAssign(line.id, m.userId)} style={styles.lineChipShape}>
+                        <LinearGradient {...GRADIENT_PROPS} style={styles.lineChipFill}>
+                          <Text style={[styles.lineChipLabel, styles.lineChipLabelOn]}>{initialsOf(m.name)}</Text>
+                        </LinearGradient>
+                      </Pressable>
+                    );
+                  }
+                  return (
+                    <Pressable
+                      key={m.userId}
+                      onPress={() => toggleAssign(line.id, m.userId)}
+                      style={[styles.lineChipShape, styles.lineChipFill, styles.lineChipOff]}
+                    >
+                      <Text style={styles.lineChipLabel}>{initialsOf(m.name)}</Text>
+                    </Pressable>
+                  );
+                })}
+                <Text style={[styles.lineEach, line.assigned.size === 0 && styles.lineEachEmpty]}>
+                  {line.assigned.size > 0
+                    ? `₹${Math.round((Number(line.amount) || 0) / line.assigned.size).toLocaleString('en-IN')} each`
+                    : 'unassigned'}
+                </Text>
               </View>
             </View>
           ))}
@@ -136,13 +183,16 @@ export function ItemSplitScreen() {
           ) : (
             shareRows.map((r) => (
               <View key={r.userId} style={styles.shareRow}>
-                <MemberAvatar userId={r.userId} name={r.name} size={36} />
+                <View style={styles.shareTile}>
+                  <Text style={styles.shareTileText}>{initialsOf(r.name)}</Text>
+                </View>
                 <Text style={styles.shareName} numberOfLines={1}>
                   {r.name}
                 </Text>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: `${Math.max(6, (r.amount / maxShare) * 100)}%` }]} />
-                </View>
+                <LinearGradient
+                  {...GRADIENT_PROPS}
+                  style={[styles.barFill, { width: Math.max(6, Math.round((r.amount / maxShare) * 78)) }]}
+                />
                 <Text style={styles.shareAmt}>₹{Math.round(r.amount).toLocaleString('en-IN')}</Text>
               </View>
             ))
@@ -151,8 +201,10 @@ export function ItemSplitScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <Pressable onPress={save} disabled={!canSave} style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}>
-          <Text style={styles.saveLabel}>Save split</Text>
+        <Pressable onPress={save} disabled={!canSave} style={[styles.saveButtonShape, !canSave && styles.saveButtonDisabled]}>
+          <LinearGradient {...GRADIENT_PROPS} style={styles.saveButtonFill}>
+            <Text style={styles.saveLabel}>Save split</Text>
+          </LinearGradient>
         </Pressable>
       </View>
     </View>
@@ -178,6 +230,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.splitSurface,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 2,
   },
   headerTitle: {
     fontFamily: fontFamily.sans700,
@@ -195,14 +252,46 @@ const styles = StyleSheet.create({
     paddingBottom: 140,
     gap: spacing.ms,
   },
+  categoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  categoryPillShape: {
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  categoryPillFill: {
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryPillOff: {
+    backgroundColor: colors.splitSurface,
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 1,
+  },
+  categoryPillLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 13.5,
+    color: colors.splitInkFaint55,
+  },
+  categoryPillLabelOn: {
+    color: '#fff',
+  },
   lines: {
     gap: spacing.xs,
   },
   lineCard: {
     backgroundColor: colors.splitSurface,
     borderRadius: 24,
-    padding: spacing.lg,
-    gap: spacing.md,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    gap: 12,
   },
   lineTopRow: {
     flexDirection: 'row',
@@ -231,10 +320,36 @@ const styles = StyleSheet.create({
     gap: 7,
     flexWrap: 'wrap',
   },
-  lineEach: {
-    fontFamily: fontFamily.sans500,
+  lineChipShape: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    overflow: 'hidden',
+  },
+  lineChipFill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lineChipOff: {
+    backgroundColor: '#F2F2F7',
+  },
+  lineChipLabel: {
+    fontFamily: fontFamily.sans700,
     fontSize: 12,
-    color: colors.splitInkFaint45,
+    color: 'rgba(27,42,99,.4)',
+  },
+  lineChipLabelOn: {
+    color: '#fff',
+  },
+  lineEach: {
+    marginLeft: 'auto',
+    fontFamily: fontFamily.sans600,
+    fontSize: 12.5,
+    color: colors.splitInkFaint5,
+  },
+  lineEachEmpty: {
+    color: colors.splitDangerFg,
   },
   addLineButton: {
     flexDirection: 'row',
@@ -269,35 +384,42 @@ const styles = StyleSheet.create({
   shareRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.ms,
+    gap: 14,
     backgroundColor: colors.splitSurface,
     borderRadius: 20,
-    paddingVertical: 11,
-    paddingHorizontal: spacing.md,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
   },
-  shareName: {
-    width: 74,
-    fontFamily: fontFamily.sans600,
-    fontSize: 14,
+  shareTile: {
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    borderRadius: 14,
+    backgroundColor: '#E9EAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareTileText: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 12.5,
     color: colors.splitInk,
   },
-  barTrack: {
+  shareName: {
     flex: 1,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.splitInkFaint08,
-    overflow: 'hidden',
+    fontFamily: fontFamily.sans600,
+    fontSize: 15,
+    color: colors.splitInk,
   },
   barFill: {
-    height: '100%',
-    borderRadius: 4,
-    backgroundColor: colors.splitAccent,
+    height: 7,
+    borderRadius: 999,
+    flexShrink: 0,
   },
   shareAmt: {
-    minWidth: 70,
+    minWidth: 74,
     textAlign: 'right',
     fontFamily: fontFamily.sans700,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.splitInk,
   },
   footer: {
@@ -305,14 +427,21 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     backgroundColor: colors.splitBg,
   },
-  saveButton: {
+  saveButtonShape: {
     borderRadius: 999,
-    backgroundColor: colors.splitAccent,
-    paddingVertical: 19,
-    alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: colors.splitAccent,
+    shadowOpacity: 0.34,
+    shadowOffset: { width: 0, height: 16 },
+    shadowRadius: 34,
+    elevation: 4,
   },
   saveButtonDisabled: {
-    backgroundColor: 'rgba(250,46,110,.4)',
+    opacity: 0.55,
+  },
+  saveButtonFill: {
+    paddingVertical: 20,
+    alignItems: 'center',
   },
   saveLabel: {
     fontFamily: fontFamily.sans700,
