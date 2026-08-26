@@ -10,6 +10,7 @@ import { useExpenses } from '../../context/ExpensesContext';
 
 const ARROW_UP = 'M12 19V5M6 11l6-6 6 6';
 const ARROW_DOWN = 'M12 5v14M6 13l6 6 6-6';
+const PLUS_ICON = 'M12 5v14M5 12h14';
 const HISTORY_ICON = 'M4 6h16M4 12h16M4 18h16';
 const INVITE_ICON = 'M12 3v12M7 8l5-5 5 5M5 21h14';
 
@@ -33,7 +34,7 @@ interface WalletScreenProps {
 export function WalletScreen({ onHome }: WalletScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { focusedCard, backToPick, openSpend, askDelete, openHistory, openInvite, expensesFor } = useExpenses();
+  const { focusedCard, backToPick, openSpend, openAddMoney, askDelete, openHistory, openInvite, expensesFor } = useExpenses();
 
   const expenses = expensesFor(focusedCard);
 
@@ -75,6 +76,7 @@ export function WalletScreen({ onHome }: WalletScreenProps) {
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
             <ActionPill icon={ARROW_UP} label="Add Spend" onPress={openSpend} />
+            {focusedCard?.isOwner && <ActionPill icon={PLUS_ICON} label="Add Money" onPress={openAddMoney} />}
             {focusedCard?.isOwner && <ActionPill icon={ARROW_DOWN} label="Delete" onPress={askDelete} />}
             <ActionPill icon={HISTORY_ICON} label="History" onPress={openHistory} small />
             {focusedCard?.isOwner && <ActionPill icon={INVITE_ICON} label="Invite" onPress={openInvite} small />}

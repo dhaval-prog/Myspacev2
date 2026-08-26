@@ -3,6 +3,7 @@ import { ExpensesProvider, useExpenses } from '../../context/ExpensesContext';
 import { PickScreen } from './PickScreen';
 import { WalletScreen } from './WalletScreen';
 import { AddSpendSheet } from '../../components/expenses/AddSpendSheet';
+import { AddMoneySheet } from '../../components/expenses/AddMoneySheet';
 import { NewCardSheet } from '../../components/expenses/NewCardSheet';
 import { HistorySheet } from '../../components/expenses/HistorySheet';
 import { InviteSheet } from '../../components/expenses/InviteSheet';
@@ -20,6 +21,7 @@ function ExpensesRoot({ onHome, onOpenSplit }: ExpensesScreenProps) {
     <>
       {page === 'wallet' ? <WalletScreen onHome={onHome} /> : <PickScreen onHome={onHome} onOpenSplit={onOpenSplit} />}
       <AddSpendSheet />
+      <AddMoneySheet />
       <NewCardSheet />
       <HistorySheet />
       <InviteSheet />
