@@ -9,10 +9,11 @@ import { useExpenses } from '../../context/ExpensesContext';
 
 interface PickScreenProps {
   onHome: () => void;
+  onOpenSplit: () => void;
 }
 
 /** Scroll through your cards, pull one up (or tap it) to open its wallet. */
-export function PickScreen({ onHome }: PickScreenProps) {
+export function PickScreen({ onHome, onOpenSplit }: PickScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { openNewCard, openJoin } = useExpenses();
@@ -42,6 +43,7 @@ export function PickScreen({ onHome }: PickScreenProps) {
         activeId="expenses"
         onSelect={(id) => {
           if (id === 'home') onHome();
+          if (id === 'split') onOpenSplit();
         }}
         onAdd={openNewCard}
         bottomInset={insets.bottom}

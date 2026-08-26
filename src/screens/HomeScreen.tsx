@@ -17,6 +17,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 interface HomeScreenProps {
   onOpenDetail: (viewId: ViewId) => void;
   onOpenExpenses: () => void;
+  onOpenSplit: () => void;
 }
 
 /**
@@ -25,7 +26,7 @@ interface HomeScreenProps {
  * it. "Needs attention" only joins the list once an item has an expiry
  * date that's due or coming up — it's an alarm, not a starting tab.
  */
-export function HomeScreen({ onOpenDetail, onOpenExpenses }: HomeScreenProps) {
+export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { signOut } = useAuth();
@@ -137,6 +138,7 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses }: HomeScreenProps) {
           onSelect={(id) => {
             setActiveNavId(id);
             if (id === 'expenses') onOpenExpenses();
+            if (id === 'split') onOpenSplit();
           }}
           onAdd={() => onOpenDetail('add')}
           bottomInset={insets.bottom}
