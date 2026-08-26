@@ -18,7 +18,7 @@ function paletteFor(userId: string) {
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
 
-function initialsOf(name: string) {
+export function initialsOf(name: string) {
   return name.trim().slice(0, 2).toUpperCase() || '??';
 }
 

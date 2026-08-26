@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
-import { MemberAvatar } from '../../components/split/MemberAvatar';
+import { initialsOf } from '../../components/split/MemberAvatar';
 import { InviteSplitSheet } from '../../components/split/InviteSplitSheet';
 import { useSplit } from '../../context/SplitContext';
 import { SPLIT_EXPENSE_ICON_DEFAULT, SPLIT_EXPENSE_ICON_MAP } from '../../data/splitExpenseCategories';
@@ -110,18 +110,32 @@ export function SplitDashboardScreen() {
           {balances.length === 0 ? (
             <Text style={styles.emptyNote}>Everyone's settled up.</Text>
           ) : (
-            balances.map((b) => (
-              <Pressable key={b.userId} onPress={goSettle} style={styles.personRow}>
-                <MemberAvatar userId={b.userId} name={b.name} size={40} />
-                <View style={styles.personTextCol}>
-                  <Text style={styles.personName}>{b.name}</Text>
-                  <Text style={[styles.personNote, b.net > 0 ? styles.notePositive : styles.noteNegative]}>
-                    {b.net > 0 ? 'owes you' : 'you owe'}
-                  </Text>
-                </View>
-                <Text style={styles.personAmt}>₹{Math.round(Math.abs(b.net)).toLocaleString('en-IN')}</Text>
-              </Pressable>
-            ))
+            balances.map((b) => {
+              const owed = b.net > 0;
+              return (
+                <Pressable key={b.userId} onPress={goSettle} style={styles.personRow}>
+                  {owed ? (
+                    <LinearGradient
+                      colors={colors.splitGradient as [string, string, ...string[]]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.personTile}
+                    >
+                      <Text style={[styles.personTileText, styles.personTileTextOn]}>{initialsOf(b.name)}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={[styles.personTile, styles.personTileOff]}>
+                      <Text style={styles.personTileText}>{initialsOf(b.name)}</Text>
+                    </View>
+                  )}
+                  <View style={styles.personTextCol}>
+                    <Text style={styles.personName}>{b.name}</Text>
+                    <Text style={[styles.personNote, owed ? styles.notePositive : styles.noteNegative]}>{owed ? 'owes you' : 'you owe'}</Text>
+                  </View>
+                  <Text style={styles.personAmt}>₹{Math.round(Math.abs(b.net)).toLocaleString('en-IN')}</Text>
+                </Pressable>
+              );
+            })
           )}
         </View>
 
@@ -332,10 +346,28 @@ const styles = StyleSheet.create({
   personRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.ms,
+    gap: 14,
     backgroundColor: colors.splitSurface,
     borderRadius: 22,
     padding: spacing.md,
+  },
+  personTile: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  personTileOff: {
+    backgroundColor: '#E9EAFB',
+  },
+  personTileText: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 13.5,
+    color: colors.splitInk,
+  },
+  personTileTextOn: {
+    color: '#fff',
   },
   personTextCol: {
     flex: 1,
