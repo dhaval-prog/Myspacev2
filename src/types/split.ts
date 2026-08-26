@@ -5,7 +5,7 @@ export interface SplitGroup {
   description: string;
   category: string;
   currency: string;
-  splitMode: 'equal' | 'percentage' | 'custom';
+  splitMode: 'equal' | 'percentage' | 'custom' | 'shares';
   whoCanAdd: 'anyone' | 'owner';
   remindSettlements: boolean;
   rid: string;

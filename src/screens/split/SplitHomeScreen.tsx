@@ -209,7 +209,7 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
               const total = expensesFor(g.id).reduce((s, e) => s + e.amount, 0);
               const net = balancesFor(g.id).reduce((s, b) => s + b.net, 0);
               const memberCount = membersFor(g.id).length;
-              const cat = SPLIT_CATEGORY_MAP[g.category] ?? SPLIT_CATEGORY_MAP.Other;
+              const cat = SPLIT_CATEGORY_MAP[g.category] ?? SPLIT_CATEGORY_MAP.Custom;
               const statusLabel =
                 net > 0.5 ? `You are owed ₹${Math.round(net).toLocaleString('en-IN')}` : net < -0.5 ? `You owe ₹${Math.round(-net).toLocaleString('en-IN')}` : 'All square';
 

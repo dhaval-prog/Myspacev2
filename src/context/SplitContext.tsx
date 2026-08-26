@@ -14,7 +14,7 @@ interface GroupRow {
   description: string;
   category: string;
   currency: string;
-  split_mode: 'equal' | 'percentage' | 'custom';
+  split_mode: 'equal' | 'percentage' | 'custom' | 'shares';
   who_can_add: 'anyone' | 'owner';
   remind_settlements: boolean;
   rid: string;
@@ -107,12 +107,12 @@ function toGroup(row: GroupRow, userId: string | null): SplitGroup {
   };
 }
 
-interface NewGroupInput {
+export interface NewGroupInput {
   name: string;
   description: string;
   category: string;
   currency: string;
-  splitMode: 'equal' | 'percentage' | 'custom';
+  splitMode: 'equal' | 'percentage' | 'custom' | 'shares';
   whoCanAdd: 'anyone' | 'owner';
   remindSettlements: boolean;
 }
@@ -154,7 +154,8 @@ interface SplitContextValue {
   goLocation: () => void;
   goChat: () => void;
 
-  createGroup: (input: NewGroupInput) => Promise<void>;
+  createGroup: (input: NewGroupInput) => Promise<SplitGroup | null>;
+  updateGroup: (id: string, input: NewGroupInput) => Promise<void>;
   joinGroup: (code: string) => Promise<{ error: string | null }>;
   /** Owner-only: permanently deletes the group and everything filed under it (expenses, shares, settlements, chat, locations, members). No-op for non-owners. */
   deleteGroup: (groupId: string) => Promise<void>;
@@ -390,29 +391,33 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
   const goLocation = () => setPage('location');
   const goChat = () => setPage('chat');
 
-  const createGroup = async (input: NewGroupInput) => {
-    if (!input.name.trim()) return;
+  /**
+   * Creates the group but deliberately does NOT navigate — the create
+   * screen needs a real group (and its join code) as soon as the user
+   * wants to invite someone, even before they've finished the rest of the
+   * form. Callers that mean "create and go" (the final "Create Split" tap)
+   * call `openGroup` themselves once this resolves.
+   */
+  const createGroup = async (input: NewGroupInput): Promise<SplitGroup | null> => {
+    if (!input.name.trim()) return null;
     const rid = randomRid();
 
     if (!userId || !isSupabaseConfigured) {
       const id = `local-group-${Date.now()}`;
-      setGroupRows((prev) => [
-        ...prev,
-        {
-          id,
-          owner_id: userId ?? 'local',
-          name: input.name.trim(),
-          description: input.description,
-          category: input.category,
-          currency: input.currency,
-          split_mode: input.splitMode,
-          who_can_add: input.whoCanAdd,
-          remind_settlements: input.remindSettlements,
-          rid,
-        },
-      ]);
-      openGroup(id);
-      return;
+      const row: GroupRow = {
+        id,
+        owner_id: userId ?? 'local',
+        name: input.name.trim(),
+        description: input.description,
+        category: input.category,
+        currency: input.currency,
+        split_mode: input.splitMode,
+        who_can_add: input.whoCanAdd,
+        remind_settlements: input.remindSettlements,
+        rid,
+      };
+      setGroupRows((prev) => [...prev, row]);
+      return toGroup(row, userId);
     }
 
     const { data, error } = await supabase
@@ -431,11 +436,45 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
       .select('*')
       .single();
     warn('create group', error);
-    if (data) {
-      const row = data as GroupRow;
-      setGroupRows((prev) => [...prev, row]);
-      openGroup(row.id);
-    }
+    if (!data) return null;
+    const row = data as GroupRow;
+    setGroupRows((prev) => [...prev, row]);
+    return toGroup(row, userId);
+  };
+
+  /** Finalizes a group's fields — used when the create screen already made a draft group (to get an invite code) before the user finished filling out the rest of the form. */
+  const updateGroup = async (id: string, input: NewGroupInput): Promise<void> => {
+    if (!input.name.trim()) return;
+    setGroupRows((prev) =>
+      prev.map((g) =>
+        g.id === id
+          ? {
+              ...g,
+              name: input.name.trim(),
+              description: input.description,
+              category: input.category,
+              currency: input.currency,
+              split_mode: input.splitMode,
+              who_can_add: input.whoCanAdd,
+              remind_settlements: input.remindSettlements,
+            }
+          : g,
+      ),
+    );
+    if (!userId || !isSupabaseConfigured) return;
+    const { error } = await supabase
+      .from('split_groups')
+      .update({
+        name: input.name.trim(),
+        description: input.description,
+        category: input.category,
+        currency: input.currency,
+        split_mode: input.splitMode,
+        who_can_add: input.whoCanAdd,
+        remind_settlements: input.remindSettlements,
+      })
+      .eq('id', id);
+    warn('update group', error);
   };
 
   const joinGroup = async (code: string): Promise<{ error: string | null }> => {
@@ -746,6 +785,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     goLocation,
     goChat,
     createGroup,
+    updateGroup,
     joinGroup,
     deleteGroup,
     addExpense,
