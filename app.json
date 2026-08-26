@@ -21,6 +21,20 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MySpace uses your camera to scan a card's join QR code."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MySpace uses your photos to read a join QR code from an image."
+        }
+      ]
+    ]
   }
 }

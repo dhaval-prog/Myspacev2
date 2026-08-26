@@ -15,7 +15,7 @@ interface PickScreenProps {
 export function PickScreen({ onHome }: PickScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { openNewCard, openSpend, openJoin } = useExpenses();
+  const { openNewCard, openJoin } = useExpenses();
 
   return (
     <View style={styles.screen}>
@@ -43,7 +43,7 @@ export function PickScreen({ onHome }: PickScreenProps) {
         onSelect={(id) => {
           if (id === 'home') onHome();
         }}
-        onAdd={openSpend}
+        onAdd={openNewCard}
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
       />
