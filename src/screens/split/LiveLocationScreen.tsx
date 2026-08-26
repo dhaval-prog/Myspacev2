@@ -1,15 +1,22 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { initialsOf } from '../../components/split/MemberAvatar';
+import { AddSpotSheet } from '../../components/split/AddSpotSheet';
+import { FullScreenMapModal } from '../../components/split/FullScreenMapModal';
 import { useSplit } from '../../context/SplitContext';
 import { relativeDateLabel } from '../../utils/expensesFormat';
 import { useAuth } from '../../context/AuthContext';
+import { SPOT_ICON_DEFAULT, SPOT_ICON_MAP } from '../../data/spotIcons';
+import type { PlannedSpot } from '../../types/split';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
+const PLUS_ICON = 'M12 6v12M6 12h12';
+const EXPAND_ICON = 'M4 10V4h6M20 14v6h-6M4 4l6.5 6.5M20 20l-6.5-6.5';
+const TRASH_ICON = 'M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13';
 
 const GRADIENT_PROPS = {
   colors: colors.splitGradient as [string, string, ...string[]],
@@ -39,7 +46,11 @@ function pinPosition(userId: string): { left: `${number}%`; top: `${number}%` } 
 export function LiveLocationScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { focusedGroup, membersFor, locationsFor, locationSharing, toggleLocationSharing, goDashboard } = useSplit();
+  const { focusedGroup, membersFor, locationsFor, spotsFor, deleteSpot, toggleSpotVisited, locationSharing, toggleLocationSharing, goDashboard } =
+    useSplit();
+  const [addSpotOpen, setAddSpotOpen] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(false);
+  const [deleteSpotTarget, setDeleteSpotTarget] = useState<PlannedSpot | null>(null);
 
   if (!focusedGroup) return null;
 
@@ -48,6 +59,13 @@ export function LiveLocationScreen() {
   const locations = locationsFor(focusedGroup.id);
   const sharedLocations = locations.filter((l) => l.shared && l.lat !== null && l.lng !== null);
   const myLoc = locations.find((l) => l.userId === user?.id && l.shared && l.lat !== null && l.lng !== null);
+  const spots = spotsFor(focusedGroup.id);
+
+  const confirmDeleteSpot = async () => {
+    if (!deleteSpotTarget) return;
+    await deleteSpot(deleteSpotTarget.id);
+    setDeleteSpotTarget(null);
+  };
 
   return (
     <View style={styles.screen}>
@@ -66,6 +84,14 @@ export function LiveLocationScreen() {
           <View style={styles.roadA} />
           <View style={styles.roadB} />
         </View>
+        <Pressable
+          onPress={() => setMapExpanded(true)}
+          style={styles.expandButton}
+          accessibilityRole="button"
+          accessibilityLabel="View full map"
+        >
+          <Icon path={EXPAND_ICON} color={colors.splitInk} size={16} strokeWidth={2} />
+        </Pressable>
         <View style={styles.mapBadge}>
           <Text style={styles.mapBadgeText}>Live · updated moments ago</Text>
         </View>
@@ -87,6 +113,14 @@ export function LiveLocationScreen() {
             </View>
           );
         })}
+        {spots.map((s) => (
+          <View key={s.id} style={[styles.spotPin, { left: `${s.posX}%`, top: `${s.posY}%` }]}>
+            <View style={styles.spotPinTile}>
+              <Icon path={SPOT_ICON_MAP[s.icon] ?? SPOT_ICON_DEFAULT} color={colors.splitAccent} size={13} strokeWidth={1.8} />
+            </View>
+            <View style={styles.spotPinTail} />
+          </View>
+        ))}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -111,6 +145,58 @@ export function LiveLocationScreen() {
               </View>
             )}
           </Pressable>
+        </View>
+
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Planned spots</Text>
+          <Pressable onPress={() => setAddSpotOpen(true)} style={styles.addSpotButton} accessibilityRole="button" accessibilityLabel="Add a planned spot">
+            <Icon path={PLUS_ICON} color={colors.splitAccent} size={14} strokeWidth={2.4} />
+            <Text style={styles.addSpotLabel}>Add spot</Text>
+          </Pressable>
+        </View>
+        <View style={styles.rows}>
+          {spots.length === 0 ? (
+            <Text style={styles.emptyNote}>No spots planned yet — add the first place you want to hit.</Text>
+          ) : (
+            spots.map((s) => {
+              const canDelete = s.createdBy === user?.id || focusedGroup.isOwner;
+              return (
+                <View key={s.id} style={styles.spotRow}>
+                  <View style={styles.spotIconTile}>
+                    <Icon path={SPOT_ICON_MAP[s.icon] ?? SPOT_ICON_DEFAULT} color={colors.splitAccent} size={18} strokeWidth={1.8} />
+                  </View>
+                  <View style={styles.spotTextCol}>
+                    <Text style={styles.spotName} numberOfLines={1}>
+                      {s.name}
+                    </Text>
+                    {s.note ? (
+                      <Text style={styles.spotNote} numberOfLines={1}>
+                        {s.note}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Pressable
+                    onPress={() => toggleSpotVisited(s.id)}
+                    style={[styles.visitedPill, s.visited && styles.visitedPillOn]}
+                    accessibilityRole="button"
+                    accessibilityLabel={s.visited ? 'Mark not visited' : 'Mark visited'}
+                  >
+                    <Text style={[styles.visitedPillLabel, s.visited && styles.visitedPillLabelOn]}>{s.visited ? 'Visited' : 'Mark visited'}</Text>
+                  </Pressable>
+                  {canDelete && (
+                    <Pressable
+                      onPress={() => setDeleteSpotTarget(s)}
+                      style={styles.spotDeleteButton}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${s.name}`}
+                    >
+                      <Icon path={TRASH_ICON} color={colors.splitInkFaint45} size={15} strokeWidth={1.8} />
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })
+          )}
         </View>
 
         <Text style={styles.sectionTitle}>Who's where</Text>
@@ -157,6 +243,35 @@ export function LiveLocationScreen() {
           )}
         </View>
       </ScrollView>
+
+      <AddSpotSheet visible={addSpotOpen} onClose={() => setAddSpotOpen(false)} nextIndex={spots.length} />
+
+      <FullScreenMapModal
+        visible={mapExpanded}
+        onClose={() => setMapExpanded(false)}
+        members={allMembers}
+        locations={locations}
+        spots={spots}
+        userId={user?.id ?? null}
+      />
+
+      <Modal visible={!!deleteSpotTarget} transparent animationType="fade" onRequestClose={() => setDeleteSpotTarget(null)}>
+        <View style={styles.deleteModalWrap}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDeleteSpotTarget(null)} accessibilityRole="button" accessibilityLabel="Dismiss" />
+          <View style={styles.deleteModalCard}>
+            <Text style={styles.deleteModalTitle}>Delete {deleteSpotTarget?.name}?</Text>
+            <Text style={styles.deleteModalBody}>This spot will be removed from the trip map for everyone.</Text>
+            <View style={styles.deleteModalActions}>
+              <Pressable onPress={() => setDeleteSpotTarget(null)} style={styles.deleteModalCancel}>
+                <Text style={styles.deleteModalCancelLabel}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={confirmDeleteSpot} style={styles.deleteModalConfirm}>
+                <Text style={styles.deleteModalConfirmLabel}>Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -240,6 +355,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.splitInkFaint5,
   },
+  expandButton: {
+    position: 'absolute',
+    left: 18,
+    top: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.14,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 3,
+  },
   pin: {
     position: 'absolute',
   },
@@ -264,6 +395,36 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans700,
     fontSize: 12,
     color: '#fff',
+  },
+  spotPin: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  spotPinTile: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: colors.splitSurface,
+    borderWidth: 2,
+    borderColor: colors.splitAccent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 5 },
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  spotPinTail: {
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+    backgroundColor: colors.splitSurface,
+    borderRightWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: colors.splitAccent,
+    transform: [{ rotate: '45deg' }],
+    marginTop: -4,
   },
   scroll: {
     paddingHorizontal: spacing.xxxl,
@@ -324,8 +485,86 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: colors.splitInk,
   },
+  sectionHeaderRow: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  addSpotButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 13,
+    borderRadius: 999,
+    backgroundColor: colors.splitAccentSoftBg,
+  },
+  addSpotLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 12.5,
+    color: colors.splitAccent,
+  },
   rows: {
     gap: spacing.xs,
+  },
+  spotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.ms,
+    backgroundColor: colors.splitSurface,
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.lg,
+  },
+  spotIconTile: {
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    borderRadius: 14,
+    backgroundColor: colors.splitAccentSoftBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spotTextCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  spotName: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15,
+    color: colors.splitInk,
+  },
+  spotNote: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 12,
+    color: colors.splitInkFaint45,
+  },
+  visitedPill: {
+    flexShrink: 0,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#F2F2F7',
+  },
+  visitedPillOn: {
+    backgroundColor: colors.splitPositiveBg,
+  },
+  visitedPillLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 11.5,
+    color: colors.splitInkFaint5,
+  },
+  visitedPillLabelOn: {
+    color: colors.splitPositiveFg,
+  },
+  spotDeleteButton: {
+    flexShrink: 0,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyNote: {
     fontFamily: fontFamily.sans400,
@@ -382,5 +621,61 @@ const styles = StyleSheet.create({
   },
   locDistHere: {
     color: colors.splitPositiveFg,
+  },
+  deleteModalWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.organic,
+    backgroundColor: 'rgba(27,42,99,.35)',
+  },
+  deleteModalCard: {
+    width: '100%',
+    backgroundColor: colors.splitBg,
+    borderRadius: 28,
+    padding: spacing.xxl,
+    gap: spacing.ms,
+  },
+  deleteModalTitle: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 18,
+    color: colors.splitInk,
+    textAlign: 'center',
+  },
+  deleteModalBody: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: colors.splitInkFaint55,
+    textAlign: 'center',
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.xxs,
+  },
+  deleteModalCancel: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: 'rgba(27,42,99,.06)',
+  },
+  deleteModalCancelLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15,
+    color: colors.splitInk,
+  },
+  deleteModalConfirm: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: colors.splitDangerFg,
+  },
+  deleteModalConfirmLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15,
+    color: '#fff',
   },
 });
