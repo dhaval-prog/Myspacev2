@@ -1,27 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { colors, fontFamily, noOutline, spacing } from '../../theme';
 import { BottomSheet } from './BottomSheet';
 import { useExpenses } from '../../context/ExpensesContext';
-import { generateQrCells, QR_GRID_SIZE } from '../../utils/fakeQr';
 import { formatJoinId } from '../../utils/expensesFormat';
 
 type Tab = 'QR code' | 'Email' | 'Join ID';
 const TABS: Tab[] = ['QR code', 'Email', 'Join ID'];
 
 const QR_BOX = 196;
-const QR_CELL = QR_BOX / QR_GRID_SIZE;
-
-function QrGrid({ seed }: { seed: string }) {
-  const cells = generateQrCells(seed);
-  return (
-    <View style={styles.qrGrid}>
-      {cells.map((on, i) => (
-        <View key={i} style={{ width: QR_CELL, height: QR_CELL, backgroundColor: on ? '#111' : 'transparent' }} />
-      ))}
-    </View>
-  );
-}
 
 /** Invite sheet — QR code / email / join-ID tabs for adding someone to a card. */
 export function InviteSheet() {
@@ -69,7 +57,9 @@ export function InviteSheet() {
       {tab === 'QR code' && (
         <View style={styles.qrWrap}>
           <Text style={styles.qrHint}>Scan this code to join this card instantly.</Text>
-          <QrGrid seed={focusedCard?.rid ?? '10000000001'} />
+          <View style={styles.qrBox}>
+            <QRCode value={focusedCard?.rid ?? '10000000001'} size={QR_BOX - spacing.ms * 2} color="#111" backgroundColor="transparent" />
+          </View>
           <Text style={styles.qrId}>{joinId}</Text>
         </View>
       )}
@@ -163,11 +153,11 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: colors.walletSheetTextSecondary,
   },
-  qrGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  qrBox: {
     width: QR_BOX,
     height: QR_BOX,
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: spacing.ms,
     backgroundColor: colors.walletSheetFaint,
     borderRadius: 20,
