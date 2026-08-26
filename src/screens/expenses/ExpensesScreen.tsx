@@ -13,13 +13,14 @@ import { ConfirmDeleteModal } from '../../components/expenses/ConfirmDeleteModal
 interface ExpensesScreenProps {
   onHome: () => void;
   onOpenSplit: () => void;
+  onOpenAccount: () => void;
 }
 
-function ExpensesRoot({ onHome, onOpenSplit }: ExpensesScreenProps) {
+function ExpensesRoot({ onHome, onOpenSplit, onOpenAccount }: ExpensesScreenProps) {
   const { page } = useExpenses();
   return (
     <>
-      {page === 'wallet' ? <WalletScreen onHome={onHome} /> : <PickScreen onHome={onHome} onOpenSplit={onOpenSplit} />}
+      {page === 'wallet' ? <WalletScreen onHome={onHome} /> : <PickScreen onHome={onHome} onOpenSplit={onOpenSplit} onOpenAccount={onOpenAccount} />}
       <AddSpendSheet />
       <AddMoneySheet />
       <NewCardSheet />
@@ -32,10 +33,10 @@ function ExpensesRoot({ onHome, onOpenSplit }: ExpensesScreenProps) {
 }
 
 /** Card-stack picker + per-card wallet, plus every modal it can open. */
-export function ExpensesScreen({ onHome, onOpenSplit }: ExpensesScreenProps) {
+export function ExpensesScreen({ onHome, onOpenSplit, onOpenAccount }: ExpensesScreenProps) {
   return (
     <ExpensesProvider>
-      <ExpensesRoot onHome={onHome} onOpenSplit={onOpenSplit} />
+      <ExpensesRoot onHome={onHome} onOpenSplit={onOpenSplit} onOpenAccount={onOpenAccount} />
     </ExpensesProvider>
   );
 }

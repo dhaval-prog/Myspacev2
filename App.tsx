@@ -12,6 +12,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { DetailScreen } from './src/screens/DetailScreen';
 import { ExpensesScreen } from './src/screens/expenses/ExpensesScreen';
 import { SplitScreen } from './src/screens/split/SplitScreen';
+import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
 import type { ViewId } from './src/data/views';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -21,7 +22,8 @@ type Screen =
   | { name: 'home' }
   | { name: 'detail'; viewId: ViewId; initialIndex?: number }
   | { name: 'expenses' }
-  | { name: 'split' };
+  | { name: 'split' }
+  | { name: 'account'; from: 'home' | 'expenses' | 'split' };
 
 function AuthNavigator() {
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
@@ -45,16 +47,32 @@ function AppNavigator() {
     );
   }
   if (screen.name === 'expenses') {
-    return <ExpensesScreen onHome={() => setScreen({ name: 'home' })} onOpenSplit={() => setScreen({ name: 'split' })} />;
+    return (
+      <ExpensesScreen
+        onHome={() => setScreen({ name: 'home' })}
+        onOpenSplit={() => setScreen({ name: 'split' })}
+        onOpenAccount={() => setScreen({ name: 'account', from: 'expenses' })}
+      />
+    );
   }
   if (screen.name === 'split') {
-    return <SplitScreen onHome={() => setScreen({ name: 'home' })} onOpenExpenses={() => setScreen({ name: 'expenses' })} />;
+    return (
+      <SplitScreen
+        onHome={() => setScreen({ name: 'home' })}
+        onOpenExpenses={() => setScreen({ name: 'expenses' })}
+        onOpenAccount={() => setScreen({ name: 'account', from: 'split' })}
+      />
+    );
+  }
+  if (screen.name === 'account') {
+    return <AccountSettingsScreen onBack={() => setScreen({ name: screen.from } as Screen)} />;
   }
   return (
     <HomeScreen
       onOpenDetail={(viewId, initialIndex) => setScreen({ name: 'detail', viewId, initialIndex })}
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
       onOpenSplit={() => setScreen({ name: 'split' })}
+      onOpenAccount={() => setScreen({ name: 'account', from: 'home' })}
     />
   );
 }

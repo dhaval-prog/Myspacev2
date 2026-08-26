@@ -3,7 +3,6 @@ import { ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { useAuth } from '../context/AuthContext';
 import { useSpace } from '../context/SpaceContext';
 import { getAttentionEntries } from '../utils/attention';
 import { VIEWS, type ViewId } from '../data/views';
@@ -13,12 +12,12 @@ import { Hero } from '../components/Hero';
 import { CategoryNavigation, type CategoryRowData } from '../components/CategoryNavigation';
 import { ContextCard } from '../components/ContextCard';
 import { BottomNav } from '../components/BottomNav';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface HomeScreenProps {
   onOpenDetail: (viewId: ViewId, initialIndex?: number) => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
+  onOpenAccount: () => void;
 }
 
 /**
@@ -27,15 +26,13 @@ interface HomeScreenProps {
  * it. "Needs attention" only joins the list once an item has an expiry
  * date that's due or coming up — it's an alarm, not a starting tab.
  */
-export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit }: HomeScreenProps) {
+export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenAccount }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { signOut } = useAuth();
   const { rooms, items } = useSpace();
   const [activeViewId, setActiveViewId] = useState<ViewId>('rooms');
   const [previewViewId, setPreviewViewId] = useState<ViewId>('rooms');
   const [activeNavId, setActiveNavId] = useState('home');
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
   const attentionEntries = useMemo(() => getAttentionEntries(items), [items]);
@@ -104,7 +101,7 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit }: HomeSc
 
       <View style={{ paddingTop: insets.top + spacing.md }}>
         <View style={styles.headerPad}>
-          <Header onSearchPress={() => setSearchOpen(true)} onAvatarPress={() => setLogoutConfirmOpen(true)} />
+          <Header onSearchPress={() => setSearchOpen(true)} onAvatarPress={onOpenAccount} />
         </View>
         <Hero line={heroLine} reduceMotion={reduceMotion} />
       </View>
@@ -146,19 +143,6 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit }: HomeSc
           reduceMotion={reduceMotion}
         />
       </View>
-
-      <ConfirmDialog
-        visible={logoutConfirmOpen}
-        title="Log out"
-        message="Log out of MySpace?"
-        confirmLabel="Log out"
-        destructive
-        onCancel={() => setLogoutConfirmOpen(false)}
-        onConfirm={() => {
-          setLogoutConfirmOpen(false);
-          signOut();
-        }}
-      />
 
       <SearchOverlay
         visible={searchOpen}

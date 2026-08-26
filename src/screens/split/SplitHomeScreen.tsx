@@ -19,20 +19,20 @@ const REVEAL_WIDTH = 84;
 interface SplitHomeScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
+  onOpenAccount: () => void;
 }
 
 /** The Split home: total balance across every split, then the list of your splits. */
-export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps) {
+export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount }: SplitHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const { groups, membersFor, expensesFor, balancesFor, goCreate, openGroup, deleteGroup } = useSplit();
   const [joinOpen, setJoinOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [friendsTab, setFriendsTab] = useState<'nearby' | 'recent'>('nearby');
   const [revealedGroupId, setRevealedGroupId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const revealedGroupIdRef = useRef<string | null>(null);
   const dragXMap = useRef(new Map<string, Animated.Value>()).current;
   const responderCache = useRef(new Map<string, ReturnType<typeof PanResponder.create>>()).current;
@@ -117,7 +117,7 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
             <Icon path="M6 8v8M12 5v14M18 9v6" color={colors.splitInk} size={20} strokeWidth={2} />
           </Pressable>
           <Pressable
-            onPress={() => setLogoutConfirmOpen(true)}
+            onPress={onOpenAccount}
             style={styles.meAvatar}
             accessibilityRole="button"
             accessibilityLabel="Account"
@@ -342,35 +342,6 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
               </Pressable>
               <Pressable onPress={confirmDelete} style={styles.deleteModalConfirm}>
                 <Text style={styles.deleteModalConfirmLabel}>Delete</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={logoutConfirmOpen} transparent animationType="fade" onRequestClose={() => setLogoutConfirmOpen(false)}>
-        <View style={styles.deleteModalWrap}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setLogoutConfirmOpen(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss"
-          />
-          <View style={styles.deleteModalCard}>
-            <Text style={styles.deleteModalTitle}>Log out</Text>
-            <Text style={styles.deleteModalBody}>Log out of MySpace?</Text>
-            <View style={styles.deleteModalActions}>
-              <Pressable onPress={() => setLogoutConfirmOpen(false)} style={styles.deleteModalCancel}>
-                <Text style={styles.deleteModalCancelLabel}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setLogoutConfirmOpen(false);
-                  signOut();
-                }}
-                style={styles.deleteModalConfirm}
-              >
-                <Text style={styles.deleteModalConfirmLabel}>Log out</Text>
               </Pressable>
             </View>
           </View>
