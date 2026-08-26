@@ -1,27 +1,24 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { useAuth } from '../../context/AuthContext';
 import { CardStack } from '../../components/expenses/CardStack';
 import { BottomNav } from '../../components/BottomNav';
 import { AccountBadge } from '../../components/AccountBadge';
-import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useExpenses } from '../../context/ExpensesContext';
 
 interface PickScreenProps {
   onHome: () => void;
   onOpenSplit: () => void;
+  onOpenAccount: () => void;
 }
 
 /** Scroll through your cards, pull one up (or tap it) to open its wallet. */
-export function PickScreen({ onHome, onOpenSplit }: PickScreenProps) {
+export function PickScreen({ onHome, onOpenSplit, onOpenAccount }: PickScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { signOut } = useAuth();
   const { openNewCard, openJoin } = useExpenses();
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   return (
     <View style={styles.screen}>
@@ -35,7 +32,7 @@ export function PickScreen({ onHome, onOpenSplit }: PickScreenProps) {
             </View>
             <Text style={styles.subtitle}>Scroll through your cards · pull one up to open</Text>
           </View>
-          <AccountBadge onPress={() => setLogoutConfirmOpen(true)} bg="#111" tint="#fff" />
+          <AccountBadge onPress={onOpenAccount} bg="#111" tint="#fff" />
         </View>
       </View>
 
@@ -59,19 +56,6 @@ export function PickScreen({ onHome, onOpenSplit }: PickScreenProps) {
         onAdd={openNewCard}
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
-      />
-
-      <ConfirmDialog
-        visible={logoutConfirmOpen}
-        title="Log out"
-        message="Log out of MySpace?"
-        confirmLabel="Log out"
-        destructive
-        onCancel={() => setLogoutConfirmOpen(false)}
-        onConfirm={() => {
-          setLogoutConfirmOpen(false);
-          signOut();
-        }}
       />
     </View>
   );

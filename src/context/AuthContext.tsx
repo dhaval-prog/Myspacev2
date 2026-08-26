@@ -15,8 +15,11 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<AuthResult>;
   /** Redirects the browser to the provider's login — only resolves (with an error) if that redirect itself fails, e.g. the provider isn't enabled on the Supabase project yet. */
   signInWithOAuth: (provider: 'facebook' | 'google' | 'apple') => Promise<AuthResult>;
-  signOut: () => Promise<void>;
+  /** `scope` mirrors Supabase's session scopes: 'local' (this device, default), 'others' (every other device), 'global' (everywhere including this device). */
+  signOut: (scope?: 'local' | 'others' | 'global') => Promise<void>;
   resetPassword: (email: string) => Promise<AuthResult>;
+  updatePassword: (newPassword: string) => Promise<AuthResult>;
+  updateProfileName: (fullName: string) => Promise<AuthResult>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -70,13 +73,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         return { error: error?.message ?? null };
       },
-      signOut: async () => {
+      signOut: async (scope = 'local') => {
         if (!isSupabaseConfigured) return;
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope });
       },
       resetPassword: async (email) => {
         if (!isSupabaseConfigured) return { error: NOT_CONFIGURED_ERROR };
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+        return { error: error?.message ?? null };
+      },
+      updatePassword: async (newPassword) => {
+        if (!isSupabaseConfigured) return { error: NOT_CONFIGURED_ERROR };
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        return { error: error?.message ?? null };
+      },
+      updateProfileName: async (fullName) => {
+        if (!isSupabaseConfigured) return { error: NOT_CONFIGURED_ERROR };
+        const { error } = await supabase.auth.updateUser({ data: { full_name: fullName.trim() } });
         return { error: error?.message ?? null };
       },
     }),

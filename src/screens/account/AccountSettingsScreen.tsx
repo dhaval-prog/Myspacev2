@@ -1,0 +1,1119 @@
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import { colors, fontFamily, radius, spacing, typography } from '../../theme';
+import { Icon } from '../../components/Icon';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { ActionButton, Card, InlineError, InlineNote, Row, SectionLabel, TextField } from '../../components/account/rows';
+import { useAuth } from '../../context/AuthContext';
+import { useSpace } from '../../context/SpaceContext';
+import { supabase } from '../../lib/supabase';
+import { downloadCsv, downloadJson } from '../../utils/accountExport';
+
+const BACK_ICON = 'M15 5l-7 7 7 7';
+const CAMERA_ICON = 'M4 8h3l1.5-2h7L17 8h3v11H4V8z M12 12.5a2.8 2.8 0 100 5.6 2.8 2.8 0 000-5.6z';
+
+interface ProfileRow {
+  full_name: string | null;
+  username: string | null;
+  phone: string | null;
+  date_of_birth: string | null;
+  avatar_url: string | null;
+  profile_visibility: 'only_me' | 'space_members';
+}
+
+type NotificationPrefs = Record<string, { push: boolean; email: boolean; inApp: boolean }>;
+
+const NOTIFICATION_CATEGORIES: { key: string; label: string }[] = [
+  { key: 'expiring_items', label: 'Expiring items' },
+  { key: 'item_reminders', label: 'Item reminders' },
+  { key: 'budget_alerts', label: 'Budget alerts' },
+  { key: 'budget_reset', label: 'Budget reset reminders' },
+  { key: 'piggy_goals', label: 'Piggy goal updates' },
+  { key: 'split_activity', label: 'Split expense activity' },
+  { key: 'invitations', label: 'New invitations' },
+  { key: 'shared_space_activity', label: 'Shared space activity' },
+];
+const CHANNELS: { key: 'push' | 'email' | 'inApp'; label: string }[] = [
+  { key: 'push', label: 'Push' },
+  { key: 'email', label: 'Email' },
+  { key: 'inApp', label: 'In-app' },
+];
+
+function defaultPrefs(): NotificationPrefs {
+  const prefs: NotificationPrefs = {};
+  for (const c of NOTIFICATION_CATEGORIES) prefs[c.key] = { push: true, email: true, inApp: true };
+  return prefs;
+}
+
+function mergePrefs(stored: Partial<NotificationPrefs> | null | undefined): NotificationPrefs {
+  const base = defaultPrefs();
+  if (!stored) return base;
+  for (const c of NOTIFICATION_CATEGORIES) {
+    const s = stored[c.key];
+    if (s) base[c.key] = { push: s.push ?? true, email: s.email ?? true, inApp: s.inApp ?? true };
+  }
+  return base;
+}
+
+interface SharedGroup {
+  id: string;
+  name: string;
+  rid: string;
+  isOwner: boolean;
+  whoCanAdd: 'anyone' | 'owner';
+  memberCount: number;
+}
+
+interface SharedCard {
+  id: string;
+  label: string;
+  rid: string;
+  isOwner: boolean;
+  memberCount: number;
+}
+
+function initials(fullName?: string | null, email?: string | null): string {
+  const name = fullName?.trim();
+  if (name) {
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    if (parts[0]) return parts[0].slice(0, 2).toUpperCase();
+  }
+  const local = email?.split('@')[0]?.trim();
+  return local ? local.slice(0, 2).toUpperCase() : '••';
+}
+
+const IDENTITY_LABELS: Record<string, string> = {
+  email: 'Email & password',
+  google: 'Google',
+  apple: 'Apple',
+  facebook: 'Facebook',
+};
+
+interface AccountSettingsScreenProps {
+  onBack: () => void;
+}
+
+/**
+ * Full account settings: profile, security, notifications, shared spaces,
+ * data & privacy, and a visually-separated danger zone at the bottom.
+ * Reachable from Home, Expenses, and Split alike, so it uses a neutral
+ * (lime/pale/ink) treatment rather than any one section's own theme.
+ */
+export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
+  const insets = useSafeAreaInsets();
+  const { user, signOut, updatePassword, updateProfileName } = useAuth();
+  const { rooms, items } = useSpace();
+  const userId = user?.id ?? null;
+
+  const [loading, setLoading] = useState(true);
+
+  // --- Profile ---
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [phone, setPhone] = useState('');
+  const [dob, setDob] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+
+  // --- Security ---
+  const [passwordSheetOpen, setPasswordSheetOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [logoutOthersConfirm, setLogoutOthersConfirm] = useState(false);
+  const [logoutAllConfirm, setLogoutAllConfirm] = useState(false);
+
+  // --- Notifications ---
+  const [prefs, setPrefs] = useState<NotificationPrefs>(defaultPrefs());
+
+  // --- Shared spaces ---
+  const [sharedGroups, setSharedGroups] = useState<SharedGroup[]>([]);
+  const [sharedCards, setSharedCards] = useState<SharedCard[]>([]);
+
+  // --- Data & privacy ---
+  const [exportingKey, setExportingKey] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<'only_me' | 'space_members'>('space_members');
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
+
+  // --- Danger zone ---
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
+  const [deleteDataModal, setDeleteDataModal] = useState(false);
+  const [deleteDataPassword, setDeleteDataPassword] = useState('');
+  const [deleteDataPhrase, setDeleteDataPhrase] = useState('');
+  const [deleteDataSaving, setDeleteDataSaving] = useState(false);
+  const [deleteDataError, setDeleteDataError] = useState<string | null>(null);
+  const [deleteAccountModal, setDeleteAccountModal] = useState(false);
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+  const [deleteAccountPhrase, setDeleteAccountPhrase] = useState('');
+  const [deleteAccountSaving, setDeleteAccountSaving] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+    (async () => {
+      const [profileRes, settingsRes, groupsRes, cardsRes] = await Promise.all([
+        supabase.from('profiles').select('full_name,username,phone,date_of_birth,avatar_url,profile_visibility').eq('id', userId).maybeSingle(),
+        supabase.from('user_settings').select('notification_prefs').eq('user_id', userId).maybeSingle(),
+        supabase.from('split_groups').select('id,name,rid,owner_id,who_can_add'),
+        supabase.from('budget_cards').select('id,label,rid,owner_id'),
+      ]);
+      if (cancelled) return;
+
+      const p = profileRes.data as ProfileRow | null;
+      if (p) {
+        setProfile(p);
+        setFullName(p.full_name ?? '');
+        setUsername(p.username ?? '');
+        setPhone(p.phone ?? '');
+        setDob(p.date_of_birth ?? '');
+        setVisibility(p.profile_visibility ?? 'space_members');
+      }
+      setPrefs(mergePrefs((settingsRes.data?.notification_prefs as Partial<NotificationPrefs>) ?? null));
+
+      const groups = (groupsRes.data as { id: string; name: string; rid: string; owner_id: string; who_can_add: 'anyone' | 'owner' }[] | null) ?? [];
+      const cards = (cardsRes.data as { id: string; label: string; rid: string; owner_id: string }[] | null) ?? [];
+
+      const [membersRes, cardMembersRes] = await Promise.all([
+        groups.length ? supabase.from('split_members').select('group_id').in('group_id', groups.map((g) => g.id)) : Promise.resolve({ data: [] as { group_id: string }[] }),
+        cards.length ? supabase.from('card_members').select('card_id').in('card_id', cards.map((c) => c.id)) : Promise.resolve({ data: [] as { card_id: string }[] }),
+      ]);
+      if (cancelled) return;
+
+      const memberRows = (membersRes.data as { group_id: string }[] | null) ?? [];
+      const cardMemberRows = (cardMembersRes.data as { card_id: string }[] | null) ?? [];
+
+      setSharedGroups(
+        groups.map((g) => ({
+          id: g.id,
+          name: g.name,
+          rid: g.rid,
+          isOwner: g.owner_id === userId,
+          whoCanAdd: g.who_can_add,
+          // +1 for the owner, who isn't a row in split_members.
+          memberCount: memberRows.filter((m) => m.group_id === g.id).length + 1,
+        })),
+      );
+      setSharedCards(
+        cards.map((c) => ({
+          id: c.id,
+          label: c.label,
+          rid: c.rid,
+          isOwner: c.owner_id === userId,
+          memberCount: cardMemberRows.filter((m) => m.card_id === c.id).length + 1,
+        })),
+      );
+
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const saveProfile = async () => {
+    if (!userId) return;
+    setProfileSaving(true);
+    setProfileError(null);
+
+    const dobTrim = dob.trim();
+    if (dobTrim && !/^\d{4}-\d{2}-\d{2}$/.test(dobTrim)) {
+      setProfileError('Date of birth must be in YYYY-MM-DD format.');
+      setProfileSaving(false);
+      return;
+    }
+    const usernameTrim = username.trim().toLowerCase();
+    if (usernameTrim && !/^[a-z0-9_]{3,20}$/.test(usernameTrim)) {
+      setProfileError('Username must be 3–20 characters: letters, numbers, underscores.');
+      setProfileSaving(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        full_name: fullName.trim() || null,
+        username: usernameTrim || null,
+        phone: phone.trim() || null,
+        date_of_birth: dobTrim || null,
+      })
+      .eq('id', userId);
+
+    if (error) {
+      setProfileError(error.code === '23505' ? 'That username is already taken.' : error.message);
+      setProfileSaving(false);
+      return;
+    }
+
+    await updateProfileName(fullName.trim());
+    setProfile((p) => (p ? { ...p, full_name: fullName.trim(), username: usernameTrim, phone: phone.trim(), date_of_birth: dobTrim } : p));
+    setProfileSaving(false);
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 2000);
+  };
+
+  const pickAvatar = async () => {
+    if (!userId) return;
+    setAvatarError(null);
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setAvatarError('Photo library permission was denied.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8, allowsEditing: true, aspect: [1, 1] });
+    if (result.canceled || !result.assets || !result.assets[0]) return;
+
+    setAvatarUploading(true);
+    try {
+      const asset = result.assets[0];
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      const ext = (asset.uri.split('.').pop() || 'jpg').split('?')[0].toLowerCase();
+      const path = `${userId}/avatar.${ext}`;
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: blob.type || 'image/jpeg' });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+      const publicUrl = `${pub.publicUrl}?t=${Date.now()}`;
+      const { error: profErr } = await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
+      if (profErr) throw profErr;
+      setProfile((p) => (p ? { ...p, avatar_url: publicUrl } : p));
+    } catch (e) {
+      setAvatarError(e instanceof Error ? e.message : 'Could not update your photo.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const changePassword = async () => {
+    setPasswordError(null);
+    if (newPassword.length < 8) {
+      setPasswordError('Use at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords don’t match.');
+      return;
+    }
+    setPasswordSaving(true);
+    const { error } = await updatePassword(newPassword);
+    setPasswordSaving(false);
+    if (error) {
+      setPasswordError(error);
+      return;
+    }
+    setPasswordSuccess(true);
+    setNewPassword('');
+    setConfirmPassword('');
+    setTimeout(() => {
+      setPasswordSuccess(false);
+      setPasswordSheetOpen(false);
+    }, 1200);
+  };
+
+  const togglePref = (categoryKey: string, channel: 'push' | 'email' | 'inApp') => {
+    if (!userId) return;
+    setPrefs((prev) => {
+      const next = { ...prev, [categoryKey]: { ...prev[categoryKey], [channel]: !prev[categoryKey][channel] } };
+      supabase
+        .from('user_settings')
+        .upsert({ user_id: userId, notification_prefs: next }, { onConflict: 'user_id' })
+        .then(({ error }) => {
+          if (error) console.warn('[account] failed to save notification prefs:', error.message);
+        });
+      return next;
+    });
+  };
+
+  const toggleWhoCanAdd = (groupId: string, anyoneCanAdd: boolean) => {
+    const next: 'anyone' | 'owner' = anyoneCanAdd ? 'anyone' : 'owner';
+    setSharedGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, whoCanAdd: next } : g)));
+    supabase
+      .from('split_groups')
+      .update({ who_can_add: next })
+      .eq('id', groupId)
+      .then(({ error }) => {
+        if (error) console.warn('[account] failed to update who_can_add:', error.message);
+      });
+  };
+
+  const saveVisibility = (next: 'only_me' | 'space_members') => {
+    if (!userId || next === visibility) return;
+    setVisibility(next);
+    setVisibilitySaving(true);
+    supabase
+      .from('profiles')
+      .update({ profile_visibility: next })
+      .eq('id', userId)
+      .then(({ error }) => {
+        if (error) console.warn('[account] failed to update visibility:', error.message);
+        setVisibilitySaving(false);
+      });
+  };
+
+  const exportInventory = () => {
+    setExportingKey('inventory');
+    downloadCsv('myspace-inventory.csv', items.map((it) => ({ name: it.name, category: it.category, room: it.room, expiry: it.expiry || '' })));
+    setExportingKey(null);
+  };
+
+  const exportBudgets = async () => {
+    setExportingKey('budgets');
+    try {
+      const cardIds = sharedCards.map((c) => c.id);
+      const rows = cardIds.length ? ((await supabase.from('card_expenses').select('card_id,title,amount,category,spent_on').in('card_id', cardIds)).data as Record<string, unknown>[] | null) ?? [] : [];
+      const cardById = new Map(sharedCards.map((c) => [c.id, c.label]));
+      downloadCsv(
+        'myspace-budgets.csv',
+        rows.map((e) => ({ card: cardById.get(e.card_id as string) ?? '', title: e.title, amount: e.amount, category: e.category, date: e.spent_on })),
+      );
+    } finally {
+      setExportingKey(null);
+    }
+  };
+
+  const exportExpenseHistory = async () => {
+    setExportingKey('expenses');
+    try {
+      const groupIds = sharedGroups.map((g) => g.id);
+      const rows = groupIds.length ? ((await supabase.from('split_expenses').select('group_id,title,amount,category,paid_by,created_at').in('group_id', groupIds)).data as Record<string, unknown>[] | null) ?? [] : [];
+      const groupById = new Map(sharedGroups.map((g) => [g.id, g.name]));
+      downloadCsv(
+        'myspace-split-expenses.csv',
+        rows.map((e) => ({ split: groupById.get(e.group_id as string) ?? '', title: e.title, amount: e.amount, category: e.category, paidBy: e.paid_by, date: e.created_at })),
+      );
+    } finally {
+      setExportingKey(null);
+    }
+  };
+
+  const downloadAllData = async () => {
+    setExportingKey('all');
+    try {
+      const cardIds = sharedCards.map((c) => c.id);
+      const groupIds = sharedGroups.map((g) => g.id);
+      const [cardExpensesRes, splitExpensesRes, settlementsRes] = await Promise.all([
+        cardIds.length ? supabase.from('card_expenses').select('*').in('card_id', cardIds) : Promise.resolve({ data: [] as unknown[] }),
+        groupIds.length ? supabase.from('split_expenses').select('*').in('group_id', groupIds) : Promise.resolve({ data: [] as unknown[] }),
+        groupIds.length ? supabase.from('split_settlements').select('*').in('group_id', groupIds) : Promise.resolve({ data: [] as unknown[] }),
+      ]);
+      downloadJson('myspace-my-data.json', {
+        exportedAt: new Date().toISOString(),
+        profile,
+        email: user?.email,
+        rooms,
+        items,
+        budgetCards: sharedCards,
+        cardExpenses: cardExpensesRes.data ?? [],
+        splitGroups: sharedGroups,
+        splitExpenses: splitExpensesRes.data ?? [],
+        splitSettlements: settlementsRes.data ?? [],
+      });
+    } finally {
+      setExportingKey(null);
+    }
+  };
+
+  const runDangerAction = async (
+    password: string,
+    setError: (e: string | null) => void,
+    setSaving: (v: boolean) => void,
+    rpcName: 'delete_own_data' | 'delete_own_account',
+    onSuccess: () => void,
+  ) => {
+    if (!user?.email) return;
+    setError(null);
+    setSaving(true);
+    const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password });
+    if (authError) {
+      setError('Incorrect password.');
+      setSaving(false);
+      return;
+    }
+    const { error } = await supabase.rpc(rpcName);
+    setSaving(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    onSuccess();
+  };
+
+  const confirmDeleteData = () =>
+    runDangerAction(deleteDataPassword, setDeleteDataError, setDeleteDataSaving, 'delete_own_data', () => {
+      setDeleteDataModal(false);
+      setDeleteDataPassword('');
+      setDeleteDataPhrase('');
+      if (typeof window !== 'undefined') window.location.reload();
+    });
+
+  const confirmDeleteAccount = () =>
+    runDangerAction(deleteAccountPassword, setDeleteAccountError, setDeleteAccountSaving, 'delete_own_account', () => {
+      signOut('local');
+    });
+
+  const identities = Array.from(new Set((user?.identities ?? []).map((i) => i.provider)));
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, styles.loadingWrap]}>
+        <ActivityIndicator color={colors.textPrimary} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.screen}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        <Pressable onPress={onBack} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back">
+          <Icon path={BACK_ICON} color={colors.textPrimary} size={19} strokeWidth={2} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Account settings</Text>
+        <View style={styles.backButton} />
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.huge }]}>
+        {/* Profile */}
+        <View style={styles.profileCard}>
+          <Pressable onPress={pickAvatar} accessibilityRole="button" accessibilityLabel="Change profile photo" style={styles.avatarWrap}>
+            {profile?.avatar_url ? (
+              <View style={styles.avatarImageWrap}>
+                <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+              </View>
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Text style={styles.avatarFallbackText}>{initials(fullName, user?.email)}</Text>
+              </View>
+            )}
+            <View style={styles.avatarBadge}>
+              {avatarUploading ? <ActivityIndicator size="small" color="#fff" /> : <Icon path={CAMERA_ICON} color="#fff" size={13} strokeWidth={2} />}
+            </View>
+          </Pressable>
+          <Text style={styles.profileName}>{fullName || 'Add your name'}</Text>
+          <Text style={styles.profileEmail}>{user?.email}</Text>
+          <InlineError>{avatarError}</InlineError>
+        </View>
+
+        <SectionLabel>Profile</SectionLabel>
+        <Card>
+          <TextField label="Full name" value={fullName} onChangeText={setFullName} placeholder="Your name" autoCapitalize="words" />
+          <TextField label="Username / MySpace ID" value={username} onChangeText={setUsername} placeholder="username" />
+          <TextField label="Email address" value={user?.email ?? ''} editable={false} />
+          <TextField label="Phone number (optional)" value={phone} onChangeText={setPhone} placeholder="+91 …" keyboardType="phone-pad" />
+          <TextField label="Date of birth (optional)" value={dob} onChangeText={setDob} placeholder="YYYY-MM-DD" />
+          <View style={styles.saveRow}>
+            <InlineError>{profileError}</InlineError>
+            {profileSaved ? <InlineNote>Saved.</InlineNote> : null}
+            <ActionButton label="Save changes" onPress={saveProfile} loading={profileSaving} />
+          </View>
+        </Card>
+        <Card style={styles.cardSpaced}>
+          <Row label="Change password" onPress={() => setPasswordSheetOpen(true)} last={identities.length === 0} />
+          {identities.length > 0 ? (
+            <View style={styles.identityRow}>
+              <Text style={styles.identityLabel}>Connected login methods</Text>
+              <View style={styles.identityChips}>
+                {identities.map((p) => (
+                  <View key={p} style={styles.identityChip}>
+                    <Text style={styles.identityChipText}>{IDENTITY_LABELS[p] ?? p}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+        </Card>
+
+        {/* Security & Login */}
+        <SectionLabel>Security & login</SectionLabel>
+        <Card>
+          <Row label="Change password" onPress={() => setPasswordSheetOpen(true)} />
+          <Row label="Biometric login" sublabel="Face ID / Touch ID / Fingerprint" badge="Coming soon" />
+          <Row label="Two-factor authentication" badge="Coming soon" />
+          <Row label="Active devices" badge="Coming soon" />
+          <Row label="Log out of other devices" sublabel="Keeps you signed in here" onPress={() => setLogoutOthersConfirm(true)} />
+          <Row label="Log out of all devices" sublabel="Including this one" destructive onPress={() => setLogoutAllConfirm(true)} last />
+        </Card>
+
+        {/* Notifications */}
+        <SectionLabel>Notifications</SectionLabel>
+        <Card>
+          <View style={styles.notifLegend}>
+            <Text style={styles.notifLegendText}>P · Push   E · Email   I · In-app</Text>
+          </View>
+          {NOTIFICATION_CATEGORIES.map((c, i) => (
+            <View key={c.key} style={[styles.notifRow, i !== NOTIFICATION_CATEGORIES.length - 1 && styles.notifRowDivider]}>
+              <Text style={styles.notifLabel}>{c.label}</Text>
+              <View style={styles.notifChips}>
+                {CHANNELS.map((ch) => {
+                  const active = prefs[c.key]?.[ch.key] ?? true;
+                  return (
+                    <Pressable
+                      key={ch.key}
+                      onPress={() => togglePref(c.key, ch.key)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${c.label} — ${ch.label}`}
+                      style={[styles.notifChip, active && styles.notifChipActive]}
+                    >
+                      <Text style={[styles.notifChipText, active && styles.notifChipTextActive]}>{ch.label[0]}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+        </Card>
+
+        {/* Shared Spaces & Invitations */}
+        <SectionLabel>Shared spaces & invitations</SectionLabel>
+        <Card>
+          <Text style={styles.subHeading}>Split groups</Text>
+          {sharedGroups.length === 0 ? (
+            <Text style={styles.emptyText}>No splits yet.</Text>
+          ) : (
+            sharedGroups.map((g) => (
+              <View key={g.id} style={styles.spaceItem}>
+                <View style={styles.spaceItemHeader}>
+                  <Text style={styles.spaceItemTitle} numberOfLines={1}>
+                    {g.name}
+                  </Text>
+                  <View style={[styles.rolePill, g.isOwner && styles.rolePillOwner]}>
+                    <Text style={[styles.rolePillText, g.isOwner && styles.rolePillTextOwner]}>{g.isOwner ? 'Owner' : 'Member'}</Text>
+                  </View>
+                </View>
+                <Text style={styles.spaceItemMeta}>
+                  {g.memberCount} {g.memberCount === 1 ? 'member' : 'members'} · Invite code {g.rid}
+                </Text>
+                {g.isOwner ? (
+                  <View style={styles.spacePermRow}>
+                    <Text style={styles.spacePermLabel}>Anyone can add expenses</Text>
+                    <Switch
+                      value={g.whoCanAdd === 'anyone'}
+                      onValueChange={(v) => toggleWhoCanAdd(g.id, v)}
+                      trackColor={{ false: colors.badgeInactiveBg, true: colors.ink }}
+                      thumbColor={colors.white}
+                    />
+                  </View>
+                ) : null}
+              </View>
+            ))
+          )}
+
+          <Text style={[styles.subHeading, styles.subHeadingSpaced]}>Budget cards</Text>
+          {sharedCards.length === 0 ? (
+            <Text style={styles.emptyText}>No budget cards yet.</Text>
+          ) : (
+            sharedCards.map((c) => (
+              <View key={c.id} style={styles.spaceItem}>
+                <View style={styles.spaceItemHeader}>
+                  <Text style={styles.spaceItemTitle} numberOfLines={1}>
+                    {c.label}
+                  </Text>
+                  <View style={[styles.rolePill, c.isOwner && styles.rolePillOwner]}>
+                    <Text style={[styles.rolePillText, c.isOwner && styles.rolePillTextOwner]}>{c.isOwner ? 'Owner' : 'Member'}</Text>
+                  </View>
+                </View>
+                <Text style={styles.spaceItemMeta}>
+                  {c.memberCount} {c.memberCount === 1 ? 'member' : 'members'} · Invite code {c.rid}
+                </Text>
+              </View>
+            ))
+          )}
+          <InlineNote>
+            Finer-grained edit / delete / invite permissions per member are coming soon — for now, whoever owns a space controls it.
+          </InlineNote>
+        </Card>
+
+        {/* Data & Privacy */}
+        <SectionLabel>Data & privacy</SectionLabel>
+        <Card>
+          <Row label="Download my data" sublabel="Everything below, as one JSON file" value={exportingKey === 'all' ? 'Preparing…' : undefined} onPress={downloadAllData} />
+          <Row label="Export inventory" sublabel="Rooms & items, CSV" value={exportingKey === 'inventory' ? 'Preparing…' : undefined} onPress={exportInventory} />
+          <Row label="Export budgets" sublabel="Budget card spending, CSV" value={exportingKey === 'budgets' ? 'Preparing…' : undefined} onPress={exportBudgets} />
+          <Row label="Export expense history" sublabel="Split expenses, CSV" value={exportingKey === 'expenses' ? 'Preparing…' : undefined} onPress={exportExpenseHistory} />
+          <Row
+            label="Data usage"
+            value={`${rooms.length} rooms · ${items.length} items · ${sharedCards.length} cards · ${sharedGroups.length} splits`}
+            last
+          />
+        </Card>
+        <Card style={styles.cardSpaced}>
+          <Text style={styles.subHeading}>Profile visibility</Text>
+          <Text style={styles.emptyText}>Who can see your profile on spaces you share.</Text>
+          <View style={styles.segmented}>
+            <Pressable
+              onPress={() => saveVisibility('only_me')}
+              style={[styles.segment, visibility === 'only_me' && styles.segmentActive]}
+              accessibilityRole="button"
+              accessibilityLabel="Only me"
+            >
+              <Text style={[styles.segmentText, visibility === 'only_me' && styles.segmentTextActive]}>Only me</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => saveVisibility('space_members')}
+              style={[styles.segment, visibility === 'space_members' && styles.segmentActive]}
+              accessibilityRole="button"
+              accessibilityLabel="People in my shared spaces"
+            >
+              <Text style={[styles.segmentText, visibility === 'space_members' && styles.segmentTextActive]}>People in my spaces</Text>
+            </Pressable>
+          </View>
+          {visibilitySaving ? <InlineNote>Saving…</InlineNote> : null}
+        </Card>
+
+        {/* Danger Zone */}
+        <SectionLabel>Danger zone</SectionLabel>
+        <Card style={styles.dangerCard}>
+          <Row label="Log out" onPress={() => setLogoutConfirm(true)} />
+          <Row label="Delete all my data" sublabel="Rooms, items, budgets, splits — keeps your account" destructive onPress={() => setDeleteDataModal(true)} />
+          <Row label="Delete MySpace account" sublabel="Permanently removes everything" destructive onPress={() => setDeleteAccountModal(true)} last />
+        </Card>
+      </ScrollView>
+
+      {/* Change password */}
+      <Modal visible={passwordSheetOpen} transparent animationType="fade" onRequestClose={() => setPasswordSheetOpen(false)}>
+        <View style={styles.modalWrap}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPasswordSheetOpen(false)} accessibilityRole="button" accessibilityLabel="Dismiss" />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Change password</Text>
+            <TextField label="New password" value={newPassword} onChangeText={setNewPassword} secureTextEntry placeholder="At least 8 characters" />
+            <TextField label="Confirm new password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry placeholder="Repeat password" />
+            <InlineError>{passwordError}</InlineError>
+            {passwordSuccess ? <InlineNote>Password updated.</InlineNote> : null}
+            <View style={styles.modalActions}>
+              <View style={styles.modalActionFlex}>
+                <ActionButton label="Cancel" variant="secondary" onPress={() => setPasswordSheetOpen(false)} />
+              </View>
+              <View style={styles.modalActionFlex}>
+                <ActionButton label="Update" onPress={changePassword} loading={passwordSaving} />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <ConfirmDialog
+        visible={logoutOthersConfirm}
+        title="Log out of other devices"
+        message="You'll stay signed in here, but every other device will need to sign in again."
+        confirmLabel="Log out others"
+        destructive
+        onCancel={() => setLogoutOthersConfirm(false)}
+        onConfirm={() => {
+          setLogoutOthersConfirm(false);
+          signOut('others');
+        }}
+      />
+      <ConfirmDialog
+        visible={logoutAllConfirm}
+        title="Log out of all devices"
+        message="This signs you out here too — you'll need to log in again."
+        confirmLabel="Log out everywhere"
+        destructive
+        onCancel={() => setLogoutAllConfirm(false)}
+        onConfirm={() => {
+          setLogoutAllConfirm(false);
+          signOut('global');
+        }}
+      />
+      <ConfirmDialog
+        visible={logoutConfirm}
+        title="Log out"
+        message="Log out of MySpace?"
+        confirmLabel="Log out"
+        destructive
+        onCancel={() => setLogoutConfirm(false)}
+        onConfirm={() => {
+          setLogoutConfirm(false);
+          signOut('local');
+        }}
+      />
+
+      {/* Delete all data */}
+      <Modal visible={deleteDataModal} transparent animationType="fade" onRequestClose={() => setDeleteDataModal(false)}>
+        <View style={styles.modalWrap}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDeleteDataModal(false)} accessibilityRole="button" accessibilityLabel="Dismiss" />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete all my data</Text>
+            <Text style={styles.modalBody}>
+              This permanently deletes every room, item, budget card, and split you own — for everyone they're shared with. Your
+              account itself stays active. This can't be undone.
+            </Text>
+            <TextField label="Password" value={deleteDataPassword} onChangeText={setDeleteDataPassword} secureTextEntry placeholder="Confirm your password" />
+            <TextField label='Type "DELETE" to confirm' value={deleteDataPhrase} onChangeText={setDeleteDataPhrase} placeholder="DELETE" autoCapitalize="none" />
+            <InlineError>{deleteDataError}</InlineError>
+            <View style={styles.modalActions}>
+              <View style={styles.modalActionFlex}>
+                <ActionButton label="Cancel" variant="secondary" onPress={() => setDeleteDataModal(false)} />
+              </View>
+              <View style={styles.modalActionFlex}>
+                <ActionButton
+                  label="Delete data"
+                  variant="destructive"
+                  disabled={deleteDataPhrase !== 'DELETE' || !deleteDataPassword}
+                  loading={deleteDataSaving}
+                  onPress={confirmDeleteData}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete account */}
+      <Modal visible={deleteAccountModal} transparent animationType="fade" onRequestClose={() => setDeleteAccountModal(false)}>
+        <View style={styles.modalWrap}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDeleteAccountModal(false)} accessibilityRole="button" accessibilityLabel="Dismiss" />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete MySpace account</Text>
+            <Text style={styles.modalBody}>
+              This will permanently remove your spaces, items, budgets, and associated data, and delete your account. This can't be
+              undone.
+            </Text>
+            <TextField label="Password" value={deleteAccountPassword} onChangeText={setDeleteAccountPassword} secureTextEntry placeholder="Confirm your password" />
+            <TextField
+              label='Type "DELETE MY ACCOUNT" to confirm'
+              value={deleteAccountPhrase}
+              onChangeText={setDeleteAccountPhrase}
+              placeholder="DELETE MY ACCOUNT"
+              autoCapitalize="none"
+            />
+            <InlineError>{deleteAccountError}</InlineError>
+            <View style={styles.modalActions}>
+              <View style={styles.modalActionFlex}>
+                <ActionButton label="Cancel" variant="secondary" onPress={() => setDeleteAccountModal(false)} />
+              </View>
+              <View style={styles.modalActionFlex}>
+                <ActionButton
+                  label="Delete account"
+                  variant="destructive"
+                  disabled={deleteAccountPhrase !== 'DELETE MY ACCOUNT' || !deleteAccountPassword}
+                  loading={deleteAccountSaving}
+                  onPress={confirmDeleteAccount}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.pale,
+  },
+  loadingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: spacing.md,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 17,
+    color: colors.textPrimary,
+  },
+  scroll: {
+    paddingHorizontal: spacing.xxl,
+    gap: spacing.ms,
+  },
+  profileCard: {
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: spacing.lg,
+  },
+  avatarWrap: {
+    position: 'relative',
+    marginBottom: spacing.xs,
+  },
+  avatarImageWrap: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    overflow: 'hidden',
+    backgroundColor: colors.badgeInactiveBg,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarFallback: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarFallbackText: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 26,
+    color: colors.lime,
+  },
+  avatarBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: colors.pale,
+  },
+  profileName: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 18,
+    color: colors.textPrimary,
+  },
+  profileEmail: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 12.5,
+    color: colors.textFaint,
+  },
+  cardSpaced: {
+    marginTop: spacing.xs,
+  },
+  saveRow: {
+    gap: spacing.xs,
+    paddingTop: spacing.ms,
+    paddingBottom: spacing.sm,
+  },
+  identityRow: {
+    paddingVertical: 14,
+    gap: spacing.xs,
+  },
+  identityLabel: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 9.5,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+  },
+  identityChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  identityChip: {
+    backgroundColor: colors.pressWash,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  identityChipText: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 12,
+    color: colors.textPrimary,
+  },
+  notifLegend: {
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+    marginBottom: 4,
+  },
+  notifLegendText: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 9.5,
+    letterSpacing: 0.6,
+    color: colors.textFaint,
+  },
+  notifRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.ms,
+    paddingVertical: 12,
+  },
+  notifRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  notifLabel: {
+    flex: 1,
+    fontFamily: fontFamily.sans500,
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  notifChips: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  notifChip: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.badgeInactiveBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifChipActive: {
+    backgroundColor: colors.ink,
+  },
+  notifChipText: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 11,
+    color: colors.badgeInactiveFg,
+  },
+  notifChipTextActive: {
+    color: colors.lime,
+  },
+  subHeading: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 13.5,
+    color: colors.textPrimary,
+    paddingTop: spacing.xs,
+  },
+  subHeadingSpaced: {
+    marginTop: spacing.ms,
+    paddingTop: spacing.ms,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  emptyText: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 12.5,
+    color: colors.textFaint,
+    paddingVertical: 6,
+  },
+  spaceItem: {
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+    gap: 4,
+  },
+  spaceItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  spaceItemTitle: {
+    flex: 1,
+    fontFamily: fontFamily.sans600,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  rolePill: {
+    backgroundColor: colors.badgeInactiveBg,
+    borderRadius: radius.pill,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  rolePillOwner: {
+    backgroundColor: colors.lime,
+  },
+  rolePillText: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 10,
+    color: colors.badgeInactiveFg,
+  },
+  rolePillTextOwner: {
+    color: colors.ink,
+  },
+  spaceItemMeta: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 12,
+    color: colors.textFaint,
+  },
+  spacePermRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  spacePermLabel: {
+    fontFamily: fontFamily.sans500,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+  },
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: colors.pressWash,
+    borderRadius: radius.pill,
+    padding: 4,
+    marginTop: spacing.xs,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+  },
+  segmentActive: {
+    backgroundColor: colors.ink,
+  },
+  segmentText: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+  },
+  segmentTextActive: {
+    color: colors.lime,
+  },
+  dangerCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(211,50,67,0.25)',
+    marginBottom: spacing.xxl,
+  },
+  modalWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.organic,
+    backgroundColor: 'rgba(22,33,12,0.35)',
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: colors.pale,
+    borderRadius: radius.lg,
+    padding: spacing.xxl,
+    gap: 2,
+  },
+  modalTitle: {
+    ...typography.detailTitle,
+    marginBottom: spacing.sm,
+  },
+  modalBody: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  modalActionFlex: {
+    flex: 1,
+  },
+});

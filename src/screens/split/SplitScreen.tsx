@@ -11,9 +11,10 @@ import { CreateSplitScreen } from './CreateSplitScreen';
 interface SplitScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
+  onOpenAccount: () => void;
 }
 
-function SplitRoot({ onHome, onOpenExpenses }: SplitScreenProps) {
+function SplitRoot({ onHome, onOpenExpenses, onOpenAccount }: SplitScreenProps) {
   const { page } = useSplit();
   switch (page) {
     case 'dashboard':
@@ -29,15 +30,15 @@ function SplitRoot({ onHome, onOpenExpenses }: SplitScreenProps) {
     case 'create':
       return <CreateSplitScreen />;
     default:
-      return <SplitHomeScreen onHome={onHome} onOpenExpenses={onOpenExpenses} />;
+      return <SplitHomeScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenAccount={onOpenAccount} />;
   }
 }
 
 /** The Split feature: spaces list, per-split dashboard, and every screen it opens. */
-export function SplitScreen({ onHome, onOpenExpenses }: SplitScreenProps) {
+export function SplitScreen({ onHome, onOpenExpenses, onOpenAccount }: SplitScreenProps) {
   return (
     <SplitProvider>
-      <SplitRoot onHome={onHome} onOpenExpenses={onOpenExpenses} />
+      <SplitRoot onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenAccount={onOpenAccount} />
     </SplitProvider>
   );
 }
