@@ -1,29 +1,21 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { spacing, typography } from '../theme';
+import { colors, spacing, typography } from '../theme';
 import { AccountBadge } from './AccountBadge';
-import { SearchBar, type SearchSuggestion } from './SearchBar';
+import { SearchBar } from './SearchBar';
 
 interface HeaderProps {
-  query: string;
-  onChangeQuery: (text: string) => void;
+  onSearchPress: () => void;
   onAvatarPress?: () => void;
-  suggestions?: SearchSuggestion[];
-  onSelectSuggestion?: (suggestion: SearchSuggestion) => void;
 }
 
 /** Quiet top area: wordmark, integrated search, profile action. */
-export function Header({ query, onChangeQuery, onAvatarPress, suggestions, onSelectSuggestion }: HeaderProps) {
+export function Header({ onSearchPress, onAvatarPress }: HeaderProps) {
   return (
     <View style={styles.row}>
       <Text style={typography.logo}>myspace</Text>
-      <SearchBar
-        value={query}
-        onChangeText={onChangeQuery}
-        suggestions={suggestions}
-        onSelectSuggestion={onSelectSuggestion}
-      />
-      <AccountBadge onPress={onAvatarPress} />
+      <SearchBar onPress={onSearchPress} />
+      <AccountBadge onPress={onAvatarPress} bg="#111" tint={colors.lime} />
     </View>
   );
 }

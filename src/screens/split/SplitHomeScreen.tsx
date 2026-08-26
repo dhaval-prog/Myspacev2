@@ -377,14 +377,14 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 16,
-    backgroundColor: colors.splitAccentSoftBg,
+    backgroundColor: '#111',
     alignItems: 'center',
     justifyContent: 'center',
   },
   meAvatarText: {
     fontFamily: fontFamily.sans700,
     fontSize: 15,
-    color: colors.splitInk,
+    color: '#b32b4d',
   },
   hero: {
     borderRadius: 34,

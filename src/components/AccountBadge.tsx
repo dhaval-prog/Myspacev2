@@ -18,10 +18,14 @@ function initialsFor(fullName?: string | null, email?: string | null): string {
 interface AccountBadgeProps {
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
+  /** Overrides the default lavender fill — each section tints this to match its own "+" accent. */
+  bg?: string;
+  /** Overrides the default ink initials color, paired with `bg`. */
+  tint?: string;
 }
 
-/** Rounded-square initials badge — the account entry point on Home and Expenses. */
-export function AccountBadge({ onPress, style }: AccountBadgeProps) {
+/** Rounded-square initials badge — the account entry point on Home, Expenses, and Split. */
+export function AccountBadge({ onPress, style, bg, tint }: AccountBadgeProps) {
   const { user } = useAuth();
   const initials = initialsFor(user?.user_metadata?.full_name as string | undefined, user?.email);
 
@@ -31,9 +35,9 @@ export function AccountBadge({ onPress, style }: AccountBadgeProps) {
       accessibilityRole="button"
       accessibilityLabel="Account"
       hitSlop={4}
-      style={({ pressed }) => [styles.badge, pressed && styles.pressed, style]}
+      style={({ pressed }) => [styles.badge, bg ? { backgroundColor: bg } : null, pressed && styles.pressed, style]}
     >
-      <Text style={styles.initials}>{initials}</Text>
+      <Text style={[styles.initials, tint ? { color: tint } : null]}>{initials}</Text>
     </Pressable>
   );
 }

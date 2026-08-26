@@ -35,7 +35,7 @@ export function PickScreen({ onHome, onOpenSplit }: PickScreenProps) {
             </View>
             <Text style={styles.subtitle}>Scroll through your cards · pull one up to open</Text>
           </View>
-          <AccountBadge onPress={() => setLogoutConfirmOpen(true)} />
+          <AccountBadge onPress={() => setLogoutConfirmOpen(true)} bg="#111" tint="#fff" />
         </View>
       </View>
 

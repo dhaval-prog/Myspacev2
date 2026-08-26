@@ -8,7 +8,7 @@ import { useSpace } from '../context/SpaceContext';
 import { getAttentionEntries } from '../utils/attention';
 import { VIEWS, type ViewId } from '../data/views';
 import { Header } from '../components/Header';
-import type { SearchSuggestion } from '../components/SearchBar';
+import { SearchOverlay } from '../components/SearchOverlay';
 import { Hero } from '../components/Hero';
 import { CategoryNavigation, type CategoryRowData } from '../components/CategoryNavigation';
 import { ContextCard } from '../components/ContextCard';
@@ -32,11 +32,11 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit }: HomeSc
   const reduceMotion = useReducedMotion();
   const { signOut } = useAuth();
   const { rooms, items } = useSpace();
-  const [query, setQuery] = useState('');
   const [activeViewId, setActiveViewId] = useState<ViewId>('rooms');
   const [previewViewId, setPreviewViewId] = useState<ViewId>('rooms');
   const [activeNavId, setActiveNavId] = useState('home');
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const attentionEntries = useMemo(() => getAttentionEntries(items), [items]);
   const showAttention = attentionEntries.length > 0;
@@ -98,62 +98,13 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit }: HomeSc
         ? VIEWS.add.items[1].title
         : (attentionEntries[0]?.item.name ?? 'All caught up');
 
-  // Empty query: quick shortcuts to the same sections as the row list below.
-  // Non-empty query: live matches against rooms and filed items — picking
-  // one jumps straight to its "view all" list rather than the add form.
-  const searchSuggestions: SearchSuggestion[] = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) {
-      const list: SearchSuggestion[] = [
-        { id: 'shortcut-rooms', label: VIEWS.rooms.tabLabel, meta: rooms.length ? `${rooms.length} set up` : 'Get started' },
-      ];
-      if (rooms.length > 0) {
-        list.push({ id: 'shortcut-add', label: VIEWS.add.tabLabel, meta: items.length ? `${items.length} filed` : 'Get started' });
-      }
-      if (showAttention) {
-        list.push({
-          id: 'shortcut-attention',
-          label: 'Needs attention',
-          meta: `${attentionEntries.length} item${attentionEntries.length === 1 ? '' : 's'}`,
-        });
-      }
-      return list;
-    }
-    const roomMatches: SearchSuggestion[] = rooms
-      .filter((r) => r.label.toLowerCase().includes(q))
-      .map((r) => ({ id: `room-${r.id}`, label: r.label, meta: 'Room' }));
-    const itemMatches: SearchSuggestion[] = items
-      .filter((it) => it.name.toLowerCase().includes(q))
-      .map((it, i) => ({
-        id: `item-${i}-${it.name}`,
-        label: it.name,
-        meta: [it.category, it.room].filter(Boolean).join(' · ') || 'Item',
-      }));
-    return [...roomMatches, ...itemMatches].slice(0, 6);
-  }, [query, rooms, items, showAttention, attentionEntries.length]);
-
-  const handleSelectSuggestion = (s: SearchSuggestion) => {
-    setQuery('');
-    if (s.id === 'shortcut-rooms') onOpenDetail('rooms', 1);
-    else if (s.id === 'shortcut-add') onOpenDetail('add', 1);
-    else if (s.id === 'shortcut-attention') onOpenDetail('attention', 0);
-    else if (s.id.startsWith('room-')) onOpenDetail('rooms', 0);
-    else if (s.id.startsWith('item-')) onOpenDetail('add', 0);
-  };
-
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.lime} />
 
       <View style={{ paddingTop: insets.top + spacing.md }}>
         <View style={styles.headerPad}>
-          <Header
-            query={query}
-            onChangeQuery={setQuery}
-            onAvatarPress={() => setLogoutConfirmOpen(true)}
-            suggestions={searchSuggestions}
-            onSelectSuggestion={handleSelectSuggestion}
-          />
+          <Header onSearchPress={() => setSearchOpen(true)} onAvatarPress={() => setLogoutConfirmOpen(true)} />
         </View>
         <Hero line={heroLine} reduceMotion={reduceMotion} />
       </View>
@@ -207,6 +158,17 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit }: HomeSc
           setLogoutConfirmOpen(false);
           signOut();
         }}
+      />
+
+      <SearchOverlay
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        rooms={rooms}
+        items={items}
+        onOpenHome={() => onOpenDetail('rooms')}
+        onOpenExpenses={onOpenExpenses}
+        onOpenSplit={onOpenSplit}
+        reduceMotion={reduceMotion}
       />
     </View>
   );
