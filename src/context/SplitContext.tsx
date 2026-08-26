@@ -99,6 +99,7 @@ interface NewExpenseInput {
 
 interface NewItemizedInput {
   paidBy: string;
+  category: string;
   lines: { name: string; amount: number; assignedUserIds: string[] }[];
 }
 
@@ -482,7 +483,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     setPage('dashboard');
   };
 
-  const addItemizedExpense = async ({ paidBy, lines }: NewItemizedInput) => {
+  const addItemizedExpense = async ({ paidBy, category, lines }: NewItemizedInput) => {
     if (!focusedGroup || lines.length === 0) return;
     const groupId = focusedGroup.id;
     const total = lines.reduce((s, l) => s + l.amount, 0);
@@ -499,7 +500,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     if (!userId || !isSupabaseConfigured) {
       const id = `local-expense-${Date.now()}`;
       setExpenseRows((prev) => [
-        { id, group_id: groupId, paid_by: paidBy, title: 'Smart Split', amount: total, category: '', split_mode: 'items', created_at: new Date().toISOString() },
+        { id, group_id: groupId, paid_by: paidBy, title: 'Smart Split', amount: total, category, split_mode: 'items', created_at: new Date().toISOString() },
         ...prev,
       ]);
       setShareRows((prev) => [...prev, ...shares.map((s) => ({ expense_id: id, user_id: s.userId, share_amount: s.amount }))]);
@@ -509,7 +510,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
 
     const { data, error } = await supabase
       .from('split_expenses')
-      .insert({ group_id: groupId, paid_by: paidBy, title: 'Smart Split', amount: total, category: '', split_mode: 'items' })
+      .insert({ group_id: groupId, paid_by: paidBy, title: 'Smart Split', amount: total, category, split_mode: 'items' })
       .select('*')
       .single();
     warn('add itemized expense', error);
