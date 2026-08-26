@@ -7,7 +7,7 @@ import { Icon } from '../../components/Icon';
 import { MemberAvatar } from '../../components/split/MemberAvatar';
 import { InviteSplitSheet } from '../../components/split/InviteSplitSheet';
 import { useSplit } from '../../context/SplitContext';
-import { SPEND_CATEGORY_MAP } from '../../data/expenseCategories';
+import { SPLIT_EXPENSE_ICON_DEFAULT, SPLIT_EXPENSE_ICON_MAP } from '../../data/splitExpenseCategories';
 
 const SCAN_ICON = 'M4 8V5.6A1.6 1.6 0 0 1 5.6 4H8M16 4h2.4A1.6 1.6 0 0 1 20 5.6V8M20 16v2.4a1.6 1.6 0 0 1-1.6 1.6H16M8 20H5.6A1.6 1.6 0 0 1 4 18.4V16M7 12h10';
 const BACK_ICON = 'M15 5l-7 7 7 7';
@@ -131,11 +131,11 @@ export function SplitDashboardScreen() {
             <Text style={styles.emptyNote}>No expenses yet. Add the first one below.</Text>
           ) : (
             recent.map((e) => {
-              const cat = SPEND_CATEGORY_MAP[e.category] ?? SPEND_CATEGORY_MAP.Other;
+              const iconPath = SPLIT_EXPENSE_ICON_MAP[e.category] ?? SPLIT_EXPENSE_ICON_DEFAULT;
               return (
                 <View key={e.id} style={styles.expenseRow}>
-                  <View style={[styles.expenseIcon, { backgroundColor: cat.tile }]}>
-                    <Icon path={cat.icon} color={colors.splitAccent} size={18} strokeWidth={1.8} />
+                  <View style={styles.expenseIcon}>
+                    <Icon path={iconPath} color={colors.splitAccent} size={18} strokeWidth={1.8} />
                   </View>
                   <View style={styles.expenseTextCol}>
                     <Text style={styles.expenseTitle} numberOfLines={1}>
@@ -374,6 +374,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 16,
+    backgroundColor: colors.splitAccentSoftBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
