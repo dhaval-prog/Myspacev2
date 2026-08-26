@@ -4,7 +4,7 @@ import { fontFamily, spacing, EASE, duration } from '../theme';
 import { Icon } from './Icon';
 import { navItems } from '../data/navItems';
 
-const INACTIVE = 'rgba(17,17,17,.32)';
+const INACTIVE = 'rgba(255,255,255,.45)';
 const PLUS_PATH = 'M12 6v12M6 12h12';
 
 function NavButton({
@@ -36,8 +36,8 @@ function NavButton({
       hitSlop={6}
     >
       <Animated.View style={[styles.itemInner, { transform: [{ scale }] }]}>
-        <Icon path={path} color={active ? '#111' : INACTIVE} size={22} strokeWidth={active ? 2 : 1.7} />
-        <Text style={[styles.label, { color: active ? '#111' : INACTIVE, fontFamily: active ? fontFamily.sans700 : fontFamily.sans500 }]}>
+        <Icon path={path} color={active ? '#fff' : INACTIVE} size={20} strokeWidth={active ? 2 : 1.7} />
+        <Text style={[styles.label, { color: active ? '#fff' : INACTIVE, fontFamily: active ? fontFamily.sans700 : fontFamily.sans500 }]}>
           {label}
         </Text>
       </Animated.View>
@@ -80,35 +80,28 @@ interface BottomNavProps {
   reduceMotion?: boolean;
 }
 
-/** The white pill nav bar shared by every screen (Home, Expenses). */
+/**
+ * Floating nav dock shared by every screen (Home, Expenses, Split): a dark
+ * pill grouping Home/Expenses/Split on the left, and a separate circular
+ * "+" action to its right — two distinct floating shapes, not one bar.
+ */
 export function BottomNav({ activeId, onSelect, onAdd, bottomInset, reduceMotion }: BottomNavProps) {
-  const left = navItems.filter((n) => n.align === 'left');
-  const right = navItems.filter((n) => n.align === 'right');
-
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(bottomInset, spacing.md) }]}>
       <View style={styles.row}>
-        {left.map((item) => (
-          <NavButton
-            key={item.id}
-            path={item.icon}
-            label={item.label}
-            active={item.id === activeId}
-            onPress={() => onSelect(item.id)}
-            reduceMotion={reduceMotion}
-          />
-        ))}
+        <View style={styles.pill}>
+          {navItems.map((item) => (
+            <NavButton
+              key={item.id}
+              path={item.icon}
+              label={item.label}
+              active={item.id === activeId}
+              onPress={() => onSelect(item.id)}
+              reduceMotion={reduceMotion}
+            />
+          ))}
+        </View>
         <Fab onPress={onAdd} reduceMotion={reduceMotion} activeId={activeId} />
-        {right.map((item) => (
-          <NavButton
-            key={item.id}
-            path={item.icon}
-            label={item.label}
-            active={item.id === activeId}
-            onPress={() => onSelect(item.id)}
-            reduceMotion={reduceMotion}
-          />
-        ))}
       </View>
     </View>
   );
@@ -116,15 +109,22 @@ export function BottomNav({ activeId, onSelect, onAdd, bottomInset, reduceMotion
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.ms,
+    paddingTop: spacing.sm,
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  pill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(17,17,17,0.92)',
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
   },
   item: {
     flex: 1,
@@ -135,18 +135,16 @@ const styles = StyleSheet.create({
   },
   itemInner: {
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   label: {
-    fontSize: 12,
+    fontSize: 10.5,
   },
   fab: {
     width: 58,
     height: 58,
     borderRadius: 29,
-    marginHorizontal: 4,
-    marginBottom: 8,
-    backgroundColor: '#111',
+    backgroundColor: 'rgba(17,17,17,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
   },
