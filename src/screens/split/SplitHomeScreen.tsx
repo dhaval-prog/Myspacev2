@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Icon } from '../../components/Icon';
-import { MemberAvatar } from '../../components/split/MemberAvatar';
+import { initialsOf } from '../../components/split/MemberAvatar';
 import { JoinSplitSheet } from '../../components/split/JoinSplitSheet';
 import { BottomNav } from '../../components/BottomNav';
 import { useAuth } from '../../context/AuthContext';
@@ -64,8 +64,10 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
           </View>
           {people.length > 0 && (
             <View style={styles.heroPeople}>
-              {people.map((m) => (
-                <MemberAvatar key={m.userId} userId={m.userId} name={m.name} size={34} style={styles.heroPeopleTile} />
+              {people.map((m, i) => (
+                <View key={m.userId} style={[styles.heroPeopleTile, i > 0 && styles.heroPeopleTileStack]}>
+                  <Text style={styles.heroPeopleInitials}>{initialsOf(m.name)}</Text>
+                </View>
               ))}
             </View>
           )}
@@ -88,43 +90,74 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
           </View>
         ) : (
           <View style={styles.list}>
-            {groups.map((g) => {
+            {groups.map((g, i) => {
+              const featured = i === 0;
               const total = expensesFor(g.id).reduce((s, e) => s + e.amount, 0);
               const net = balancesFor(g.id).reduce((s, b) => s + b.net, 0);
               const memberCount = membersFor(g.id).length;
               const cat = SPLIT_CATEGORY_MAP[g.category] ?? SPLIT_CATEGORY_MAP.Other;
-              const statusLabel = net > 0.5 ? `You're owed ₹${Math.round(net).toLocaleString('en-IN')}` : net < -0.5 ? `You owe ₹${Math.round(-net).toLocaleString('en-IN')}` : 'Settled up';
-              return (
-                <Pressable
-                  key={g.id}
-                  onPress={() => openGroup(g.id)}
-                  style={({ pressed }) => [styles.card, pressed && !reduceMotion && styles.cardPressed]}
-                >
+              const statusLabel =
+                net > 0.5 ? `You are owed ₹${Math.round(net).toLocaleString('en-IN')}` : net < -0.5 ? `You owe ₹${Math.round(-net).toLocaleString('en-IN')}` : 'All square';
+
+              const content = (
+                <>
                   <View style={styles.cardTopRow}>
-                    <View style={[styles.cardIcon, { backgroundColor: cat.tile }]}>
-                      <Icon path={cat.icon} color={colors.splitInk} size={18} strokeWidth={1.8} />
+                    <View style={[styles.cardIcon, featured ? styles.cardIconOn : styles.cardIconOff]}>
+                      <Icon path={cat.icon} color={featured ? '#fff' : colors.splitAccent} size={20} strokeWidth={1.8} />
                     </View>
-                    <Text style={styles.cardName} numberOfLines={1}>
+                    <Text style={[styles.cardName, featured && styles.cardNameOn]} numberOfLines={1}>
                       {g.name}
                     </Text>
-                    <View style={styles.cardBadge}>
-                      <Text style={styles.cardBadgeText}>{memberCount}</Text>
+                    <View style={[styles.cardBadge, featured && styles.cardBadgeOn]}>
+                      <Text style={[styles.cardBadgeText, featured && styles.cardBadgeTextOn]}>
+                        {memberCount} {memberCount === 1 ? 'member' : 'members'}
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.cardBottomRow}>
                     <View>
-                      <Text style={styles.cardCaption}>Total spent</Text>
-                      <Text style={styles.cardTotal}>₹{Math.round(total).toLocaleString('en-IN')}</Text>
+                      <Text style={[styles.cardCaption, featured && styles.cardCaptionOn]}>Total spent</Text>
+                      <Text style={[styles.cardTotal, featured && styles.cardTotalOn]}>₹{Math.round(total).toLocaleString('en-IN')}</Text>
                     </View>
                     <Text
                       style={[
                         styles.cardStatus,
-                        net > 0.5 ? styles.cardStatusPositive : net < -0.5 ? styles.cardStatusNegative : styles.cardStatusNeutral,
+                        featured
+                          ? styles.cardStatusOn
+                          : net > 0.5
+                            ? styles.cardStatusPositive
+                            : net < -0.5
+                              ? styles.cardStatusNegative
+                              : styles.cardStatusNeutral,
                       ]}
                     >
                       {statusLabel}
                     </Text>
                   </View>
+                </>
+              );
+
+              if (featured) {
+                return (
+                  <Pressable key={g.id} onPress={() => openGroup(g.id)} style={({ pressed }) => [pressed && !reduceMotion && styles.cardPressed]}>
+                    <LinearGradient
+                      colors={colors.splitGradient as [string, string, ...string[]]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[styles.card, styles.cardFeatured]}
+                    >
+                      {content}
+                    </LinearGradient>
+                  </Pressable>
+                );
+              }
+              return (
+                <Pressable
+                  key={g.id}
+                  onPress={() => openGroup(g.id)}
+                  style={({ pressed }) => [styles.card, styles.cardPlain, pressed && !reduceMotion && styles.cardPressed]}
+                >
+                  {content}
                 </Pressable>
               );
             })}
@@ -237,9 +270,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   heroPeopleTile: {
-    marginLeft: -10,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,.5)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,.92)',
+    borderWidth: 2.5,
+    borderColor: colors.splitAccent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroPeopleTileStack: {
+    marginLeft: -13,
+  },
+  heroPeopleInitials: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 12.5,
+    color: colors.splitInk,
   },
   heroCta: {
     marginTop: 2,
@@ -295,15 +341,26 @@ const styles = StyleSheet.create({
     gap: spacing.ms,
   },
   card: {
-    borderRadius: 24,
+    borderRadius: 28,
+    paddingVertical: 20,
+    paddingHorizontal: 22,
+    gap: 14,
+    overflow: 'hidden',
+  },
+  cardPlain: {
     backgroundColor: colors.splitSurface,
-    padding: spacing.lg,
-    gap: spacing.ms,
     shadowColor: colors.splitInk,
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 16,
-    elevation: 1,
+    shadowOpacity: 0.07,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 26,
+    elevation: 2,
+  },
+  cardFeatured: {
+    shadowColor: colors.splitAccent,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 18 },
+    shadowRadius: 38,
+    elevation: 6,
   },
   cardPressed: {
     opacity: 0.85,
@@ -314,33 +371,50 @@ const styles = StyleSheet.create({
     gap: spacing.ms,
   },
   cardIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  cardIconOff: {
+    backgroundColor: colors.splitAccentSoftBg,
+  },
+  cardIconOn: {
+    backgroundColor: 'rgba(255,255,255,.24)',
+  },
   cardName: {
     flex: 1,
-    fontFamily: fontFamily.sans600,
-    fontSize: 15.5,
+    fontFamily: fontFamily.sans700,
+    fontSize: 19,
+    letterSpacing: -0.2,
     color: colors.splitInk,
+  },
+  cardNameOn: {
+    color: '#fff',
   },
   cardBadge: {
     borderRadius: 999,
-    backgroundColor: colors.splitInkFaint08,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+  cardBadgeOn: {
+    backgroundColor: 'rgba(255,255,255,.24)',
   },
   cardBadgeText: {
-    fontFamily: fontFamily.sans600,
+    fontFamily: fontFamily.sans500,
     fontSize: 11.5,
-    color: colors.splitInkFaint6,
+    color: colors.splitInkFaint5,
+  },
+  cardBadgeTextOn: {
+    color: '#fff',
   },
   cardBottomRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
+    gap: spacing.ms,
   },
   cardCaption: {
     fontFamily: fontFamily.sans500,
@@ -348,22 +422,40 @@ const styles = StyleSheet.create({
     color: colors.splitInkFaint45,
     marginBottom: 2,
   },
+  cardCaptionOn: {
+    color: 'rgba(255,255,255,.8)',
+  },
   cardTotal: {
     fontFamily: fontFamily.sans700,
-    fontSize: 17,
+    fontSize: 24,
+    letterSpacing: -0.2,
     color: colors.splitInk,
+  },
+  cardTotalOn: {
+    color: '#fff',
   },
   cardStatus: {
     fontFamily: fontFamily.sans600,
     fontSize: 12.5,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  cardStatusOn: {
+    backgroundColor: 'rgba(255,255,255,.22)',
+    color: '#fff',
   },
   cardStatusPositive: {
+    backgroundColor: colors.splitPositiveBg,
     color: colors.splitPositiveFg,
   },
   cardStatusNegative: {
+    backgroundColor: colors.splitAccentSoftBg,
     color: colors.splitDangerFg,
   },
   cardStatusNeutral: {
-    color: colors.splitInkFaint45,
+    backgroundColor: '#F2F2F7',
+    color: colors.splitInkFaint5,
   },
 });

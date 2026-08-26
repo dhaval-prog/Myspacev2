@@ -172,15 +172,17 @@ export function AddExpenseScreen() {
           {members.map((m) => {
             const on = selected.has(m.userId);
             return (
-              <Pressable key={m.userId} onPress={() => toggleMember(m.userId)} style={[styles.betweenRow, !on && styles.betweenRowOff]}>
-                {on ? (
-                  <LinearGradient {...GRADIENT_PROPS} style={styles.checkbox}>
-                    <Icon path="M5 12.5l4.5 4.5L19 7" color="#fff" size={13} strokeWidth={3} />
-                  </LinearGradient>
-                ) : (
-                  <View style={[styles.checkbox, styles.checkboxOff]} />
-                )}
-                <Text style={styles.betweenName}>{m.name}</Text>
+              <View key={m.userId} style={[styles.betweenRow, !on && styles.betweenRowOff]}>
+                <Pressable onPress={() => toggleMember(m.userId)} style={styles.betweenRowMain}>
+                  {on ? (
+                    <LinearGradient {...GRADIENT_PROPS} style={styles.checkbox}>
+                      <Icon path="M5 12.5l4.5 4.5L19 7" color="#fff" size={13} strokeWidth={3} />
+                    </LinearGradient>
+                  ) : (
+                    <View style={[styles.checkbox, styles.checkboxOff]} />
+                  )}
+                  <Text style={styles.betweenName}>{m.name}</Text>
+                </Pressable>
                 {mode === 'equal' || !on ? (
                   <Text style={[styles.betweenShare, !on && styles.betweenShareOff]}>
                     {on ? `₹${Math.round(equalShare).toLocaleString('en-IN')}` : '—'}
@@ -195,7 +197,7 @@ export function AddExpenseScreen() {
                     style={[styles.betweenInput, noOutline]}
                   />
                 )}
-              </Pressable>
+              </View>
             );
           })}
         </View>
@@ -370,6 +372,12 @@ const styles = StyleSheet.create({
   },
   betweenRowOff: {
     opacity: 0.55,
+  },
+  betweenRowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
   },
   checkbox: {
     width: 24,
