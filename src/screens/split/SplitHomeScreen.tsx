@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Animated, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { PanResponderGestureState } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
@@ -12,6 +13,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useSplit } from '../../context/SplitContext';
 import { SPLIT_CATEGORY_MAP } from '../../data/splitCategories';
 
+const DELETE_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
+const REVEAL_WIDTH = 84;
+
 interface SplitHomeScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
@@ -22,10 +26,75 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
-  const { groups, membersFor, expensesFor, balancesFor, goCreate, openGroup } = useSplit();
+  const { groups, membersFor, expensesFor, balancesFor, goCreate, openGroup, deleteGroup } = useSplit();
   const [joinOpen, setJoinOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [friendsTab, setFriendsTab] = useState<'nearby' | 'recent'>('nearby');
+  const [revealedGroupId, setRevealedGroupId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const revealedGroupIdRef = useRef<string | null>(null);
+  const dragXMap = useRef(new Map<string, Animated.Value>()).current;
+  const responderCache = useRef(new Map<string, ReturnType<typeof PanResponder.create>>()).current;
+
+  const dragXFor = (id: string) => {
+    let v = dragXMap.get(id);
+    if (!v) {
+      v = new Animated.Value(0);
+      dragXMap.set(id, v);
+    }
+    return v;
+  };
+
+  const closeRevealed = () => {
+    if (revealedGroupIdRef.current) {
+      Animated.spring(dragXFor(revealedGroupIdRef.current), { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+    }
+    revealedGroupIdRef.current = null;
+    setRevealedGroupId(null);
+  };
+
+  /** One PanResponder per group, cached for its lifetime so a re-render never hands react-native-web a fresh callback mid-gesture. */
+  const panResponderFor = (id: string) => {
+    const cached = responderCache.get(id);
+    if (cached) return cached;
+
+    let startValue = 0;
+    const responder = PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_e, g: PanResponderGestureState) => Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderGrant: () => {
+        if (revealedGroupIdRef.current && revealedGroupIdRef.current !== id) {
+          Animated.spring(dragXFor(revealedGroupIdRef.current), { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+        }
+        dragXFor(id).stopAnimation((v) => {
+          startValue = v;
+        });
+      },
+      onPanResponderMove: (_e, g: PanResponderGestureState) => {
+        dragXFor(id).setValue(Math.min(0, Math.max(-REVEAL_WIDTH, startValue + g.dx)));
+      },
+      onPanResponderRelease: (_e, g: PanResponderGestureState) => {
+        const next = Math.min(0, Math.max(-REVEAL_WIDTH, startValue + g.dx));
+        const reveal = next < -REVEAL_WIDTH / 2;
+        Animated.spring(dragXFor(id), { toValue: reveal ? -REVEAL_WIDTH : 0, useNativeDriver: true, bounciness: 0 }).start();
+        revealedGroupIdRef.current = reveal ? id : null;
+        setRevealedGroupId(reveal ? id : null);
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(dragXFor(id), { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+      },
+    });
+    responderCache.set(id, responder);
+    return responder;
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const { id } = deleteTarget;
+    setDeleteTarget(null);
+    closeRevealed();
+    await deleteGroup(id);
+  };
 
   const meInitials = (user?.user_metadata?.full_name ?? user?.email ?? 'You').trim().slice(0, 2).toUpperCase();
 
@@ -123,8 +192,8 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
 
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Your splits</Text>
-          <Pressable onPress={() => setJoinOpen(true)} accessibilityRole="button" accessibilityLabel="Join a split with an invite code">
-            <Text style={styles.joinLink}>Have an invite code?</Text>
+          <Pressable onPress={() => setJoinOpen(true)} accessibilityRole="button" accessibilityLabel="Join a split with an invite code or scan a QR code">
+            <Text style={styles.joinLink}>Have an invite code / Scan code?</Text>
           </Pressable>
         </View>
 
@@ -182,28 +251,51 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
                 </>
               );
 
-              if (featured) {
-                return (
-                  <Pressable key={g.id} onPress={() => openGroup(g.id)} style={({ pressed }) => [pressed && !reduceMotion && styles.cardPressed]}>
-                    <LinearGradient
-                      colors={colors.splitGradient as [string, string, ...string[]]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={[styles.card, styles.cardFeatured]}
-                    >
-                      {content}
-                    </LinearGradient>
-                  </Pressable>
-                );
-              }
-              return (
+              const isRevealed = revealedGroupId === g.id;
+              const handlePress = () => {
+                if (isRevealed) closeRevealed();
+                else openGroup(g.id);
+              };
+
+              const cardBody = featured ? (
+                <Pressable onPress={handlePress} style={({ pressed }) => [pressed && !reduceMotion && styles.cardPressed]}>
+                  <LinearGradient
+                    colors={colors.splitGradient as [string, string, ...string[]]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.card, styles.cardFeatured]}
+                  >
+                    {content}
+                  </LinearGradient>
+                </Pressable>
+              ) : (
                 <Pressable
-                  key={g.id}
-                  onPress={() => openGroup(g.id)}
+                  onPress={handlePress}
                   style={({ pressed }) => [styles.card, styles.cardPlain, pressed && !reduceMotion && styles.cardPressed]}
                 >
                   {content}
                 </Pressable>
+              );
+
+              if (!g.isOwner) {
+                return <View key={g.id}>{cardBody}</View>;
+              }
+
+              return (
+                <View key={g.id} style={styles.swipeWrap}>
+                  <Pressable
+                    onPress={() => setDeleteTarget({ id: g.id, name: g.name })}
+                    style={styles.swipeDelete}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${g.name}`}
+                  >
+                    <Icon path={DELETE_ICON} color="#fff" size={19} strokeWidth={2} />
+                    <Text style={styles.swipeDeleteLabel}>Delete</Text>
+                  </Pressable>
+                  <Animated.View style={{ transform: [{ translateX: dragXFor(g.id) }] }} {...panResponderFor(g.id).panHandlers}>
+                    {cardBody}
+                  </Animated.View>
+                </View>
               );
             })}
           </View>
@@ -221,6 +313,26 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
         reduceMotion={reduceMotion}
       />
       <JoinSplitSheet visible={joinOpen} onClose={() => setJoinOpen(false)} />
+
+      <Modal visible={!!deleteTarget} transparent animationType="fade" onRequestClose={() => setDeleteTarget(null)}>
+        <View style={styles.deleteModalWrap}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDeleteTarget(null)} accessibilityRole="button" accessibilityLabel="Dismiss" />
+          <View style={styles.deleteModalCard}>
+            <Text style={styles.deleteModalTitle}>Delete {deleteTarget?.name}?</Text>
+            <Text style={styles.deleteModalBody}>
+              All expenses, chat, and history in this split will be deleted permanently for everyone. This can't be undone.
+            </Text>
+            <View style={styles.deleteModalActions}>
+              <Pressable onPress={() => setDeleteTarget(null)} style={styles.deleteModalCancel}>
+                <Text style={styles.deleteModalCancelLabel}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={confirmDelete} style={styles.deleteModalConfirm}>
+                <Text style={styles.deleteModalConfirmLabel}>Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -584,5 +696,83 @@ const styles = StyleSheet.create({
   cardStatusNeutral: {
     backgroundColor: '#F2F2F7',
     color: colors.splitInkFaint5,
+  },
+  swipeWrap: {
+    position: 'relative',
+  },
+  swipeDelete: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 28,
+    backgroundColor: colors.splitDangerFg,
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 4,
+    paddingRight: 26,
+  },
+  swipeDeleteLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 12,
+    color: '#fff',
+  },
+  deleteModalWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.organic,
+    backgroundColor: 'rgba(27,42,99,.35)',
+  },
+  deleteModalCard: {
+    width: '100%',
+    backgroundColor: colors.splitBg,
+    borderRadius: 28,
+    padding: spacing.xxl,
+    gap: spacing.ms,
+  },
+  deleteModalTitle: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 18,
+    color: colors.splitInk,
+    textAlign: 'center',
+  },
+  deleteModalBody: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: colors.splitInkFaint55,
+    textAlign: 'center',
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.xxs,
+  },
+  deleteModalCancel: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: 'rgba(27,42,99,.06)',
+  },
+  deleteModalCancelLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15,
+    color: colors.splitInk,
+  },
+  deleteModalConfirm: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: colors.splitDangerFg,
+  },
+  deleteModalConfirmLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15,
+    color: '#fff',
   },
 });
