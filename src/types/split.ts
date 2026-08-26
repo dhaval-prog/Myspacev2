@@ -53,33 +53,9 @@ export interface ChatMessage {
   createdAt: string;
 }
 
-export interface LocationShare {
-  groupId: string;
-  userId: string;
-  lat: number | null;
-  lng: number | null;
-  place: string;
-  shared: boolean;
-  updatedAt: string;
-}
-
 /** One member's net position in a group: positive = owed to them, negative = they owe. */
 export interface Balance {
   userId: string;
   name: string;
   net: number;
-}
-
-/** A place the group is planning to go, pinned on the trip map. */
-export interface PlannedSpot {
-  id: string;
-  groupId: string;
-  createdBy: string;
-  name: string;
-  icon: string;
-  note: string;
-  posX: number;
-  posY: number;
-  visited: boolean;
-  createdAt: string;
 }
