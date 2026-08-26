@@ -69,3 +69,17 @@ export interface Balance {
   name: string;
   net: number;
 }
+
+/** A place the group is planning to go, pinned on the trip map. */
+export interface PlannedSpot {
+  id: string;
+  groupId: string;
+  createdBy: string;
+  name: string;
+  icon: string;
+  note: string;
+  posX: number;
+  posY: number;
+  visited: boolean;
+  createdAt: string;
+}

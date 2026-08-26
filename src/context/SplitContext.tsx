@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as Location from 'expo-location';
-import type { Balance, ChatMessage, ExpenseShare, LocationShare, Settlement, SplitExpense, SplitGroup, SplitMember } from '../types/split';
+import type { Balance, ChatMessage, ExpenseShare, LocationShare, PlannedSpot, Settlement, SplitExpense, SplitGroup, SplitMember } from '../types/split';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { randomRid } from '../utils/expensesFormat';
@@ -64,6 +64,34 @@ interface LocationRow {
   updated_at: string;
 }
 
+interface PlannedSpotRow {
+  id: string;
+  group_id: string;
+  created_by: string;
+  name: string;
+  icon: string;
+  note: string;
+  pos_x: number;
+  pos_y: number;
+  visited: boolean;
+  created_at: string;
+}
+
+function toPlannedSpot(row: PlannedSpotRow): PlannedSpot {
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    createdBy: row.created_by,
+    name: row.name,
+    icon: row.icon,
+    note: row.note,
+    posX: row.pos_x,
+    posY: row.pos_y,
+    visited: row.visited,
+    createdAt: row.created_at,
+  };
+}
+
 function toGroup(row: GroupRow, userId: string | null): SplitGroup {
   return {
     id: row.id,
@@ -110,6 +138,7 @@ interface SplitContextValue {
   settlementsFor: (groupId: string) => Settlement[];
   chatFor: (groupId: string) => ChatMessage[];
   locationsFor: (groupId: string) => LocationShare[];
+  spotsFor: (groupId: string) => PlannedSpot[];
   /** Net balance of every OTHER member relative to the signed-in account — positive = they owe you. */
   balancesFor: (groupId: string) => Balance[];
   nameFor: (userId: string) => string;
@@ -136,6 +165,11 @@ interface SplitContextValue {
   locationSharing: boolean;
   toggleLocationSharing: () => Promise<void>;
 
+  /** Owner or creator only for delete; any member may add or mark visited. */
+  addPlannedSpot: (input: { name: string; icon: string; note: string; posX: number; posY: number }) => Promise<void>;
+  toggleSpotVisited: (spotId: string) => Promise<void>;
+  deleteSpot: (spotId: string) => Promise<void>;
+
   addMembersOpen: boolean;
   openAddMembers: () => void;
   closeAddMembers: () => void;
@@ -160,6 +194,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
   const [settlementRows, setSettlementRows] = useState<SettlementRow[]>([]);
   const [chatRows, setChatRows] = useState<ChatRow[]>([]);
   const [locationRows, setLocationRows] = useState<LocationRow[]>([]);
+  const [plannedSpotRows, setPlannedSpotRows] = useState<PlannedSpotRow[]>([]);
   const [memberRows, setMemberRows] = useState<{ group_id: string; user_id: string }[]>([]);
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
 
@@ -178,16 +213,18 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
       setSettlementRows([]);
       setMemberRows([]);
       setLocationRows([]);
+      setPlannedSpotRows([]);
       return;
     }
 
     (async () => {
-      const [groupsRes, expensesRes, membersRes, settlementsRes, locationsRes] = await Promise.all([
+      const [groupsRes, expensesRes, membersRes, settlementsRes, locationsRes, spotsRes] = await Promise.all([
         supabase.from('split_groups').select('*').order('created_at', { ascending: true }),
         supabase.from('split_expenses').select('*').order('created_at', { ascending: false }),
         supabase.from('split_members').select('group_id,user_id'),
         supabase.from('split_settlements').select('*').order('created_at', { ascending: false }),
         supabase.from('split_locations').select('*'),
+        supabase.from('split_planned_spots').select('*').order('created_at', { ascending: true }),
       ]);
       if (cancelled) return;
 
@@ -196,6 +233,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
       warn('load members', membersRes.error);
       warn('load settlements', settlementsRes.error);
       warn('load locations', locationsRes.error);
+      warn('load planned spots', spotsRes.error);
 
       const groups = (groupsRes.data as GroupRow[] | null) ?? [];
       setGroupRows(groups);
@@ -204,6 +242,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
       setMemberRows((membersRes.data as { group_id: string; user_id: string }[] | null) ?? []);
       setSettlementRows((settlementsRes.data as SettlementRow[] | null) ?? []);
       setLocationRows((locationsRes.data as LocationRow[] | null) ?? []);
+      setPlannedSpotRows((spotsRes.data as PlannedSpotRow[] | null) ?? []);
 
       if (expenses.length > 0) {
         const sharesRes = await supabase
@@ -297,6 +336,9 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     locationRows
       .filter((l) => l.group_id === groupId)
       .map((l) => ({ groupId: l.group_id, userId: l.user_id, lat: l.lat, lng: l.lng, place: l.place, shared: l.shared, updatedAt: l.updated_at }));
+
+  const spotsFor = (groupId: string): PlannedSpot[] =>
+    plannedSpotRows.filter((s) => s.group_id === groupId).map(toPlannedSpot);
 
   /**
    * Pairwise ledger: for every expense, each non-payer owes the payer their
@@ -424,6 +466,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
       warn('delete settlements', (await supabase.from('split_settlements').delete().eq('group_id', groupId)).error);
       warn('delete chat', (await supabase.from('split_chat_messages').delete().eq('group_id', groupId)).error);
       warn('delete locations', (await supabase.from('split_locations').delete().eq('group_id', groupId)).error);
+      warn('delete planned spots', (await supabase.from('split_planned_spots').delete().eq('group_id', groupId)).error);
       warn('delete members', (await supabase.from('split_members').delete().eq('group_id', groupId)).error);
       warn('delete group', (await supabase.from('split_groups').delete().eq('id', groupId).eq('owner_id', userId)).error);
     }
@@ -435,6 +478,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     setSettlementRows((prev) => prev.filter((s) => s.group_id !== groupId));
     setChatRows((prev) => prev.filter((m) => m.group_id !== groupId));
     setLocationRows((prev) => prev.filter((l) => l.group_id !== groupId));
+    setPlannedSpotRows((prev) => prev.filter((s) => s.group_id !== groupId));
     setMemberRows((prev) => prev.filter((m) => m.group_id !== groupId));
     if (focusedGroupId === groupId) {
       setFocusedGroupId(null);
@@ -628,6 +672,58 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => () => watchRef.current?.remove(), []);
 
+  const addPlannedSpot = async (input: { name: string; icon: string; note: string; posX: number; posY: number }) => {
+    if (!focusedGroup || !userId || !input.name.trim()) return;
+    const groupId = focusedGroup.id;
+
+    if (!isSupabaseConfigured) {
+      setPlannedSpotRows((prev) => [
+        ...prev,
+        {
+          id: `local-spot-${Date.now()}`,
+          group_id: groupId,
+          created_by: userId,
+          name: input.name.trim(),
+          icon: input.icon,
+          note: input.note.trim(),
+          pos_x: input.posX,
+          pos_y: input.posY,
+          visited: false,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('split_planned_spots')
+      .insert({ group_id: groupId, created_by: userId, name: input.name.trim(), icon: input.icon, note: input.note.trim(), pos_x: input.posX, pos_y: input.posY })
+      .select('*')
+      .single();
+    warn('add planned spot', error);
+    if (data) setPlannedSpotRows((prev) => [...prev, data as PlannedSpotRow]);
+  };
+
+  const toggleSpotVisited = async (spotId: string) => {
+    const spot = plannedSpotRows.find((s) => s.id === spotId);
+    if (!spot) return;
+    const next = !spot.visited;
+    setPlannedSpotRows((prev) => prev.map((s) => (s.id === spotId ? { ...s, visited: next } : s)));
+    if (isSupabaseConfigured) {
+      warn('toggle spot visited', (await supabase.from('split_planned_spots').update({ visited: next }).eq('id', spotId)).error);
+    }
+  };
+
+  const deleteSpot = async (spotId: string) => {
+    const spot = plannedSpotRows.find((s) => s.id === spotId);
+    if (!spot || !userId) return;
+    if (spot.created_by !== userId && !focusedGroup?.isOwner) return;
+    setPlannedSpotRows((prev) => prev.filter((s) => s.id !== spotId));
+    if (isSupabaseConfigured) {
+      warn('delete planned spot', (await supabase.from('split_planned_spots').delete().eq('id', spotId)).error);
+    }
+  };
+
   const value: SplitContextValue = {
     page,
     groups,
@@ -637,6 +733,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     settlementsFor,
     chatFor,
     locationsFor,
+    spotsFor,
     balancesFor,
     nameFor,
     goHome,
@@ -656,6 +753,9 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     sendChat,
     locationSharing,
     toggleLocationSharing,
+    addPlannedSpot,
+    toggleSpotVisited,
+    deleteSpot,
     addMembersOpen,
     openAddMembers: () => setAddMembersOpen(true),
     closeAddMembers: () => setAddMembersOpen(false),
