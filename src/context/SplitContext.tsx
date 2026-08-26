@@ -97,12 +97,6 @@ interface NewExpenseInput {
   shares: ExpenseShare[];
 }
 
-interface NewItemizedInput {
-  paidBy: string;
-  category: string;
-  lines: { name: string; amount: number; assignedUserIds: string[] }[];
-}
-
 function warn(action: string, error: { message: string } | null) {
   if (error) console.warn(`[split] failed to ${action}:`, error.message);
 }
@@ -137,7 +131,6 @@ interface SplitContextValue {
   /** Owner-only: permanently deletes the group and everything filed under it (expenses, shares, settlements, chat, locations, members). No-op for non-owners. */
   deleteGroup: (groupId: string) => Promise<void>;
   addExpense: (input: NewExpenseInput) => Promise<void>;
-  addItemizedExpense: (input: NewItemizedInput) => Promise<void>;
   settleUp: (toUserId: string, amount: number) => Promise<void>;
   sendChat: (text: string) => Promise<void>;
 
@@ -522,50 +515,6 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     setPage('dashboard');
   };
 
-  const addItemizedExpense = async ({ paidBy, category, lines }: NewItemizedInput) => {
-    if (!focusedGroup || lines.length === 0) return;
-    const groupId = focusedGroup.id;
-    const total = lines.reduce((s, l) => s + l.amount, 0);
-    if (total <= 0) return;
-
-    const shareTotals = new Map<string, number>();
-    for (const line of lines) {
-      if (line.assignedUserIds.length === 0) continue;
-      const each = line.amount / line.assignedUserIds.length;
-      for (const uid of line.assignedUserIds) shareTotals.set(uid, (shareTotals.get(uid) ?? 0) + each);
-    }
-    const shares: ExpenseShare[] = Array.from(shareTotals.entries()).map(([userId2, amt]) => ({ userId: userId2, amount: amt }));
-
-    if (!userId || !isSupabaseConfigured) {
-      const id = `local-expense-${Date.now()}`;
-      setExpenseRows((prev) => [
-        { id, group_id: groupId, paid_by: paidBy, title: 'Smart Split', amount: total, category, split_mode: 'items', created_at: new Date().toISOString() },
-        ...prev,
-      ]);
-      setShareRows((prev) => [...prev, ...shares.map((s) => ({ expense_id: id, user_id: s.userId, share_amount: s.amount }))]);
-      setPage('dashboard');
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('split_expenses')
-      .insert({ group_id: groupId, paid_by: paidBy, title: 'Smart Split', amount: total, category, split_mode: 'items' })
-      .select('*')
-      .single();
-    warn('add itemized expense', error);
-    if (!data) return;
-    const row = data as ExpenseRow;
-    setExpenseRows((prev) => [row, ...prev]);
-
-    const { data: shareData, error: shareError } = await supabase
-      .from('split_expense_shares')
-      .insert(shares.map((s) => ({ expense_id: row.id, user_id: s.userId, share_amount: s.amount })))
-      .select('*');
-    warn('add itemized shares', shareError);
-    if (shareData) setShareRows((prev) => [...prev, ...(shareData as ShareRow[])]);
-    setPage('dashboard');
-  };
-
   const settleUp = async (toUserId: string, amount: number) => {
     if (!focusedGroup || !userId || amount <= 0) return;
     const groupId = focusedGroup.id;
@@ -743,7 +692,6 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     joinGroup,
     deleteGroup,
     addExpense,
-    addItemizedExpense,
     settleUp,
     sendChat,
     locationSharing,
