@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CardStack } from '../../components/expenses/CardStack';
 import { BottomNav } from '../../components/BottomNav';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useExpenses } from '../../context/ExpensesContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface PickScreenProps {
   onHome: () => void;
@@ -17,10 +19,20 @@ export function PickScreen({ onHome, onOpenSplit }: PickScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { openNewCard, openJoin } = useExpenses();
+  const { signOut } = useAuth();
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.huge }]}>
+        <Pressable
+          onPress={() => setLogoutConfirmOpen(true)}
+          style={[styles.accountButton, { top: insets.top + spacing.huge }]}
+          accessibilityRole="button"
+          accessibilityLabel="Account"
+        >
+          <Text style={styles.accountIcon}>◎</Text>
+        </Pressable>
         <View style={styles.wordmark}>
           <Text style={styles.sparkle}>✻</Text>
           <Text style={styles.wordmarkText}>myspace</Text>
@@ -49,6 +61,19 @@ export function PickScreen({ onHome, onOpenSplit }: PickScreenProps) {
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
       />
+
+      <ConfirmDialog
+        visible={logoutConfirmOpen}
+        title="Log out"
+        message="Log out of MySpace?"
+        confirmLabel="Log out"
+        destructive
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={() => {
+          setLogoutConfirmOpen(false);
+          signOut();
+        }}
+      />
     </View>
   );
 }
@@ -62,6 +87,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.xxxl,
+    position: 'relative',
+  },
+  accountButton: {
+    position: 'absolute',
+    right: spacing.xxxl,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: '#111',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountIcon: {
+    fontSize: 15,
+    color: '#fff',
   },
   wordmark: {
     flexDirection: 'row',

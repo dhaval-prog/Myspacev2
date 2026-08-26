@@ -1,52 +1,32 @@
-import React, { useRef, useState } from 'react';
-import { Animated, StyleSheet, TextInput, View } from 'react-native';
-import { colors, radius, spacing, typography, EASE, duration, noOutline } from '../theme';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, radius, spacing, typography } from '../theme';
 
 interface SearchBarProps {
-  value: string;
-  onChangeText: (text: string) => void;
+  onPress: () => void;
 }
 
 /**
  * Search integrated into the header composition — a hairline field, not a
- * generic Material search bar. The border quietly deepens on focus.
+ * generic Material search bar. Tapping it doesn't focus an inline input;
+ * it launches the full search popup (spanning Home, Expenses, and Split),
+ * so this is a static trigger rather than a live TextInput.
  */
-export function SearchBar({ value, onChangeText }: SearchBarProps) {
-  const [focused, setFocused] = useState(false);
-  const borderAnim = useRef(new Animated.Value(0)).current;
-
-  const handleFocus = () => {
-    setFocused(true);
-    Animated.timing(borderAnim, { toValue: 1, duration: duration.micro, easing: EASE, useNativeDriver: false }).start();
-  };
-  const handleBlur = () => {
-    setFocused(false);
-    Animated.timing(borderAnim, { toValue: 0, duration: duration.state, easing: EASE, useNativeDriver: false }).start();
-  };
-
-  const borderColor = borderAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [colors.border, colors.ink],
-  });
-
+export function SearchBar({ onPress }: SearchBarProps) {
   return (
-    <Animated.View style={[styles.field, { borderColor }]}>
-      <Animated.Text style={[styles.icon, { opacity: focused ? 1 : 0.5 }]} accessibilityElementsHidden importantForAccessibility="no">
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.field, pressed && styles.fieldPressed]}
+      accessibilityRole="button"
+      accessibilityLabel="Search Home, Expenses, and Split"
+    >
+      <Text style={styles.icon} accessibilityElementsHidden importantForAccessibility="no">
         ⌕
-      </Animated.Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        placeholder="Things, spends, people…"
-        placeholderTextColor={colors.placeholder}
-        style={[styles.input, noOutline]}
-        accessibilityLabel="Search your space"
-        accessibilityHint="Search items, categories, locations, rooms, or tags"
-        returnKeyType="search"
-      />
-    </Animated.View>
+      </Text>
+      <Text style={styles.placeholder} numberOfLines={1}>
+        Things, spends, splits…
+      </Text>
+    </Pressable>
   );
 }
 
@@ -57,19 +37,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     height: 44,
   },
+  fieldPressed: {
+    borderColor: colors.ink,
+  },
   icon: {
     fontSize: 14,
     color: colors.textPrimary,
+    opacity: 0.5,
   },
-  input: {
+  placeholder: {
     flex: 1,
-    padding: 0,
-    height: 20,
     ...typography.searchPlaceholder,
-    color: colors.textPrimary,
+    color: colors.placeholder,
   },
 });

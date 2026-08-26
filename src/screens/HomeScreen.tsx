@@ -8,6 +8,7 @@ import { useSpace } from '../context/SpaceContext';
 import { getAttentionEntries } from '../utils/attention';
 import { VIEWS, type ViewId } from '../data/views';
 import { Header } from '../components/Header';
+import { SearchOverlay } from '../components/SearchOverlay';
 import { Hero } from '../components/Hero';
 import { CategoryNavigation, type CategoryRowData } from '../components/CategoryNavigation';
 import { ContextCard } from '../components/ContextCard';
@@ -31,11 +32,11 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit }: HomeSc
   const reduceMotion = useReducedMotion();
   const { signOut } = useAuth();
   const { rooms, items } = useSpace();
-  const [query, setQuery] = useState('');
   const [activeViewId, setActiveViewId] = useState<ViewId>('rooms');
   const [previewViewId, setPreviewViewId] = useState<ViewId>('rooms');
   const [activeNavId, setActiveNavId] = useState('home');
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const attentionEntries = useMemo(() => getAttentionEntries(items), [items]);
   const showAttention = attentionEntries.length > 0;
@@ -103,7 +104,7 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit }: HomeSc
 
       <View style={{ paddingTop: insets.top + spacing.md }}>
         <View style={styles.headerPad}>
-          <Header query={query} onChangeQuery={setQuery} onAvatarPress={() => setLogoutConfirmOpen(true)} />
+          <Header onSearchPress={() => setSearchOpen(true)} onAvatarPress={() => setLogoutConfirmOpen(true)} />
         </View>
         <Hero line={heroLine} reduceMotion={reduceMotion} />
       </View>
@@ -157,6 +158,17 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit }: HomeSc
           setLogoutConfirmOpen(false);
           signOut();
         }}
+      />
+
+      <SearchOverlay
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        rooms={rooms}
+        items={items}
+        onOpenHome={() => onOpenDetail('rooms')}
+        onOpenExpenses={onOpenExpenses}
+        onOpenSplit={onOpenSplit}
+        reduceMotion={reduceMotion}
       />
     </View>
   );

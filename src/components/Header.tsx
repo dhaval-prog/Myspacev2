@@ -4,17 +4,16 @@ import { colors, radius, spacing, typography } from '../theme';
 import { SearchBar } from './SearchBar';
 
 interface HeaderProps {
-  query: string;
-  onChangeQuery: (text: string) => void;
+  onSearchPress: () => void;
   onAvatarPress?: () => void;
 }
 
 /** Quiet top area: wordmark, integrated search, profile action. */
-export function Header({ query, onChangeQuery, onAvatarPress }: HeaderProps) {
+export function Header({ onSearchPress, onAvatarPress }: HeaderProps) {
   return (
     <View style={styles.row}>
       <Text style={typography.logo}>myspace</Text>
-      <SearchBar value={query} onChangeText={onChangeQuery} />
+      <SearchBar onPress={onSearchPress} />
       <Pressable
         onPress={onAvatarPress}
         accessibilityRole="button"
@@ -37,8 +36,8 @@ const styles = StyleSheet.create({
   avatar: {
     width: 40,
     height: 40,
-    borderRadius: radius.pill,
-    backgroundColor: colors.pale,
+    borderRadius: radius.sm,
+    backgroundColor: '#111',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -48,6 +47,6 @@ const styles = StyleSheet.create({
   },
   avatarIcon: {
     fontSize: 15,
-    color: colors.textPrimary,
+    color: colors.lime,
   },
 });
