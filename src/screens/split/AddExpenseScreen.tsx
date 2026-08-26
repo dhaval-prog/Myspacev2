@@ -1,25 +1,52 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, noOutline, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
-import { MemberAvatar } from '../../components/split/MemberAvatar';
 import { useSplit } from '../../context/SplitContext';
-import { SPEND_CATEGORIES } from '../../data/expenseCategories';
 
-const BACK_ICON = 'M6 6l12 12M18 6L6 18';
-const CHECK_ICON = 'M5 12.5l4.5 4.5L19 7';
+const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 
-const TITLE_PRESETS = [SPEND_CATEGORIES[0], SPEND_CATEGORIES[6], SPEND_CATEGORIES[3], SPEND_CATEGORIES[7]]; // Groceries, Food, Personal (cab-ish), Other
+const TITLE_PRESETS = ['Dinner', 'Stay', 'Travel', 'Drinks'];
 
 type SplitMode = 'equal' | 'percentage' | 'custom';
 const MODE_LABELS: { key: SplitMode; label: string }[] = [
-  { key: 'equal', label: 'Equally' },
+  { key: 'equal', label: 'Equal' },
   { key: 'percentage', label: 'Percentage' },
-  { key: 'custom', label: 'Custom' },
+  { key: 'custom', label: 'Exact' },
 ];
 
-const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
+const KEY_ROWS = [
+  ['1', '2', '3'],
+  ['4', '5', '6'],
+  ['7', '8', '9'],
+  ['00', '0', '⌫'],
+];
+
+const GRADIENT_PROPS = {
+  colors: colors.splitGradient as [string, string, ...string[]],
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 1 },
+};
+
+/** A pill that fills with the split gradient when active, plain white otherwise — used for both the quick-title and paid-by chips. */
+function Pill({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  if (on) {
+    return (
+      <Pressable onPress={onPress} style={styles.pillShape}>
+        <LinearGradient {...GRADIENT_PROPS} style={styles.pillFill}>
+          <Text style={styles.pillLabelOn}>{label}</Text>
+        </LinearGradient>
+      </Pressable>
+    );
+  }
+  return (
+    <Pressable onPress={onPress} style={[styles.pillShape, styles.pillFill, styles.pillOff]}>
+      <Text style={styles.pillLabel}>{label}</Text>
+    </Pressable>
+  );
+}
 
 /** Add an expense to the focused split — amount, who paid, and how it's shared. */
 export function AddExpenseScreen() {
@@ -27,12 +54,33 @@ export function AddExpenseScreen() {
   const { focusedGroup, membersFor, addExpense, goDashboard } = useSplit();
   const members = focusedGroup ? membersFor(focusedGroup.id) : [];
 
-  const [amountStr, setAmountStr] = useState('0');
-  const [titleIdx, setTitleIdx] = useState<number | null>(null);
+  const [amountStr, setAmountStr] = useState('');
+  const [title, setTitle] = useState<string | null>(null);
   const [paidBy, setPaidBy] = useState(members[0]?.userId ?? '');
   const [selected, setSelected] = useState<Set<string>>(() => new Set(members.map((m) => m.userId)));
   const [mode, setMode] = useState<SplitMode>('equal');
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
+
+  // Members can finish loading (invite accepted, realtime membership fetch)
+  // after this screen has already mounted with an empty/incomplete list —
+  // keep paidBy and the default split-between selection in sync as they arrive.
+  const memberKey = members.map((m) => m.userId).sort().join(',');
+  useEffect(() => {
+    if (members.length === 0) return;
+    setPaidBy((prev) => (prev && members.some((m) => m.userId === prev) ? prev : members[0].userId));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const m of members) {
+        if (!next.has(m.userId)) {
+          next.add(m.userId);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberKey]);
 
   const amount = Number(amountStr) || 0;
   const selectedIds = Array.from(selected);
@@ -40,15 +88,10 @@ export function AddExpenseScreen() {
 
   const pressKey = (k: string) => {
     if (k === '⌫') {
-      setAmountStr((s) => (s.length <= 1 ? '0' : s.slice(0, -1)));
+      setAmountStr((s) => s.slice(0, -1));
       return;
     }
-    if (k === '.' && amountStr.includes('.')) return;
-    setAmountStr((s) => {
-      if (s === '0' && k !== '.') return k;
-      if (s.length > 9) return s;
-      return s + k;
-    });
+    setAmountStr((s) => (s + k).slice(0, 7));
   };
 
   const toggleMember = (id: string) => {
@@ -67,25 +110,27 @@ export function AddExpenseScreen() {
   };
 
   const assignedTotal = selectedIds.reduce((s, id) => s + shareFor(id), 0);
-  const shareNote = mode === 'equal' ? `₹${Math.round(equalShare).toLocaleString('en-IN')} each` : `₹${Math.round(assignedTotal).toLocaleString('en-IN')} of ₹${Math.round(amount).toLocaleString('en-IN')}`;
+  const modeLabel = MODE_LABELS.find((m) => m.key === mode)?.label ?? 'Equal';
+  const shareNote =
+    selectedIds.length === 0
+      ? 'Pick at least one'
+      : mode === 'equal'
+        ? `Equal · ₹${Math.round(equalShare).toLocaleString('en-IN')} each`
+        : `${modeLabel} · ₹${Math.round(assignedTotal).toLocaleString('en-IN')} of ₹${Math.round(amount).toLocaleString('en-IN')}`;
 
   const canSave = useMemo(() => {
-    if (!titleIdx && titleIdx !== 0) return false;
+    if (!title) return false;
     if (amount <= 0 || selectedIds.length === 0 || !paidBy) return false;
     if (mode !== 'equal' && Math.abs(assignedTotal - amount) > 0.5) return false;
     return true;
-  }, [titleIdx, amount, selectedIds.length, paidBy, mode, assignedTotal]);
+  }, [title, amount, selectedIds.length, paidBy, mode, assignedTotal]);
+
+  const saveLabel = amount && title ? `Save ₹${Math.round(amount).toLocaleString('en-IN')} · ${title}` : 'Enter an amount';
 
   const save = () => {
-    if (!canSave || !focusedGroup) return;
+    if (!canSave || !focusedGroup || !title) return;
     const shares = selectedIds.map((userId) => ({ userId, amount: Math.round(shareFor(userId) * 100) / 100 }));
-    addExpense({
-      title: titleIdx !== null ? TITLE_PRESETS[titleIdx].label : 'Expense',
-      amount,
-      category: titleIdx !== null ? TITLE_PRESETS[titleIdx].label : '',
-      paidBy,
-      shares,
-    });
+    addExpense({ title, amount, category: title, paidBy, shares });
   };
 
   if (!focusedGroup) return null;
@@ -94,7 +139,7 @@ export function AddExpenseScreen() {
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <Pressable onPress={goDashboard} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Close">
-          <Icon path={BACK_ICON} color={colors.splitInk} size={19} strokeWidth={2} />
+          <Icon path={CLOSE_ICON} color={colors.splitInk} size={19} strokeWidth={2} />
         </Pressable>
         <Text style={styles.headerTitle}>Add expense</Text>
       </View>
@@ -102,30 +147,20 @@ export function AddExpenseScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.amountBlock}>
           <Text style={styles.amountLabel}>AMOUNT</Text>
-          <Text style={styles.amount}>₹{amount.toLocaleString('en-IN')}</Text>
+          <Text style={[styles.amount, !amount && styles.amountEmpty]}>₹{amount.toLocaleString('en-IN')}</Text>
         </View>
 
         <View style={styles.chipRow}>
-          {TITLE_PRESETS.map((t, i) => {
-            const on = titleIdx === i;
-            return (
-              <Pressable key={t.label} onPress={() => setTitleIdx(i)} style={[styles.chip, on && styles.chipOn]}>
-                <Text style={[styles.chipLabel, on && styles.chipLabelOn]}>{t.label}</Text>
-              </Pressable>
-            );
-          })}
+          {TITLE_PRESETS.map((label) => (
+            <Pill key={label} label={label} on={title === label} onPress={() => setTitle(label)} />
+          ))}
         </View>
 
         <Text style={styles.label}>PAID BY</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.payerRow}>
-          {members.map((m) => {
-            const on = paidBy === m.userId;
-            return (
-              <Pressable key={m.userId} onPress={() => setPaidBy(m.userId)} style={[styles.payerChip, on && styles.payerChipOn]}>
-                <Text style={[styles.payerChipLabel, on && styles.payerChipLabelOn]}>{m.name}</Text>
-              </Pressable>
-            );
-          })}
+          {members.map((m) => (
+            <Pill key={m.userId} label={m.name} on={paidBy === m.userId} onPress={() => setPaidBy(m.userId)} />
+          ))}
         </ScrollView>
 
         <View style={styles.betweenHeader}>
@@ -136,15 +171,20 @@ export function AddExpenseScreen() {
           {members.map((m) => {
             const on = selected.has(m.userId);
             return (
-              <View key={m.userId} style={[styles.betweenRow, !on && styles.betweenRowOff]}>
-                <Pressable onPress={() => toggleMember(m.userId)} style={styles.betweenRowMain}>
-                  <View style={[styles.checkbox, on && styles.checkboxOn]}>
-                    {on && <Icon path={CHECK_ICON} color="#fff" size={13} strokeWidth={3} />}
-                  </View>
-                  <Text style={styles.betweenName}>{m.name}</Text>
-                </Pressable>
-                {on && mode === 'equal' && <Text style={styles.betweenShare}>₹{Math.round(equalShare).toLocaleString('en-IN')}</Text>}
-                {on && mode !== 'equal' && (
+              <Pressable key={m.userId} onPress={() => toggleMember(m.userId)} style={[styles.betweenRow, !on && styles.betweenRowOff]}>
+                {on ? (
+                  <LinearGradient {...GRADIENT_PROPS} style={styles.checkbox}>
+                    <Icon path="M5 12.5l4.5 4.5L19 7" color="#fff" size={13} strokeWidth={3} />
+                  </LinearGradient>
+                ) : (
+                  <View style={[styles.checkbox, styles.checkboxOff]} />
+                )}
+                <Text style={styles.betweenName}>{m.name}</Text>
+                {mode === 'equal' || !on ? (
+                  <Text style={[styles.betweenShare, !on && styles.betweenShareOff]}>
+                    {on ? `₹${Math.round(equalShare).toLocaleString('en-IN')}` : '—'}
+                  </Text>
+                ) : (
                   <TextInput
                     value={customValues[m.userId] ?? ''}
                     onChangeText={(v) => setCustomValues((prev) => ({ ...prev, [m.userId]: v.replace(/[^0-9.]/g, '') }))}
@@ -154,7 +194,7 @@ export function AddExpenseScreen() {
                     style={[styles.betweenInput, noOutline]}
                   />
                 )}
-              </View>
+              </Pressable>
             );
           })}
         </View>
@@ -163,9 +203,18 @@ export function AddExpenseScreen() {
         <View style={styles.modeTabs}>
           {MODE_LABELS.map((m) => {
             const on = mode === m.key;
+            if (on) {
+              return (
+                <Pressable key={m.key} onPress={() => setMode(m.key)} style={styles.modeTabShape}>
+                  <LinearGradient {...GRADIENT_PROPS} style={styles.modeTabFill}>
+                    <Text style={[styles.modeTabLabel, styles.modeTabLabelOn]}>{m.label}</Text>
+                  </LinearGradient>
+                </Pressable>
+              );
+            }
             return (
-              <Pressable key={m.key} onPress={() => setMode(m.key)} style={[styles.modeTab, on && styles.modeTabOn]}>
-                <Text style={[styles.modeTabLabel, on && styles.modeTabLabelOn]}>{m.label}</Text>
+              <Pressable key={m.key} onPress={() => setMode(m.key)} style={[styles.modeTabShape, styles.modeTabFill]}>
+                <Text style={styles.modeTabLabel}>{m.label}</Text>
               </Pressable>
             );
           })}
@@ -174,14 +223,20 @@ export function AddExpenseScreen() {
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <View style={styles.keypad}>
-          {KEYS.map((k) => (
-            <Pressable key={k} onPress={() => pressKey(k)} style={styles.key}>
-              <Text style={styles.keyLabel}>{k}</Text>
-            </Pressable>
+          {KEY_ROWS.map((row, i) => (
+            <View key={i} style={styles.keyRow}>
+              {row.map((k) => (
+                <Pressable key={k} onPress={() => pressKey(k)} style={styles.key}>
+                  <Text style={[styles.keyLabel, k === '⌫' && styles.keyLabelFaint]}>{k}</Text>
+                </Pressable>
+              ))}
+            </View>
           ))}
         </View>
-        <Pressable onPress={save} disabled={!canSave} style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}>
-          <Text style={styles.saveLabel}>Save expense</Text>
+        <Pressable onPress={save} disabled={!canSave} style={[styles.saveButtonShape, !canSave && styles.saveButtonDisabled]}>
+          <LinearGradient {...GRADIENT_PROPS} style={styles.saveButtonFill}>
+            <Text style={styles.saveLabel}>{saveLabel}</Text>
+          </LinearGradient>
         </Pressable>
       </View>
     </View>
@@ -196,7 +251,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.ms,
+    gap: 14,
     paddingHorizontal: spacing.xxxl,
     paddingBottom: spacing.md,
   },
@@ -207,6 +262,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.splitSurface,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 2,
   },
   headerTitle: {
     fontFamily: fontFamily.sans700,
@@ -216,12 +276,12 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: spacing.xxxl,
-    gap: spacing.ms,
   },
   amountBlock: {
     alignItems: 'center',
     gap: 6,
-    paddingVertical: spacing.md,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
   amountLabel: {
     fontFamily: fontFamily.sans500,
@@ -231,64 +291,64 @@ const styles = StyleSheet.create({
   },
   amount: {
     fontFamily: fontFamily.sans700,
-    fontSize: 40,
+    fontSize: 44,
     letterSpacing: -1,
     color: colors.splitInk,
+  },
+  amountEmpty: {
+    color: colors.splitInkFaint30,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
   },
-  chip: {
+  pillShape: {
     borderRadius: 999,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
+    overflow: 'hidden',
+  },
+  pillFill: {
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillOff: {
     backgroundColor: colors.splitSurface,
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 1,
   },
-  chipOn: {
-    backgroundColor: colors.splitInk,
-  },
-  chipLabel: {
+  pillLabel: {
     fontFamily: fontFamily.sans600,
-    fontSize: 13,
-    color: colors.splitInk,
+    fontSize: 13.5,
+    color: colors.splitInkFaint55,
   },
-  chipLabelOn: {
+  pillLabelOn: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 13.5,
     color: '#fff',
   },
   label: {
-    marginTop: spacing.md,
+    marginTop: 20,
+    marginBottom: 8,
     fontFamily: fontFamily.sans600,
-    fontSize: 12.5,
+    fontSize: 13,
     letterSpacing: 0.8,
     color: colors.splitInkFaint5,
   },
   payerRow: {
     gap: spacing.xs,
-    paddingVertical: spacing.xs,
-  },
-  payerChip: {
-    borderRadius: 999,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: colors.splitSurface,
-  },
-  payerChipOn: {
-    backgroundColor: colors.splitInk,
-  },
-  payerChipLabel: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 13.5,
-    color: colors.splitInk,
-  },
-  payerChipLabelOn: {
-    color: '#fff',
+    paddingBottom: 4,
   },
   betweenHeader: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 8,
   },
   shareNote: {
     fontFamily: fontFamily.sans600,
@@ -301,33 +361,24 @@ const styles = StyleSheet.create({
   betweenRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.ms,
+    gap: 13,
     backgroundColor: colors.splitSurface,
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
   betweenRowOff: {
     opacity: 0.55,
   },
-  betweenRowMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.ms,
-  },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    borderWidth: 1.5,
-    borderColor: colors.splitInkFaint30,
+    width: 24,
+    height: 24,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxOn: {
-    backgroundColor: colors.splitAccent,
-    borderColor: colors.splitAccent,
+  checkboxOff: {
+    backgroundColor: '#EDEDF3',
   },
   betweenName: {
     flex: 1,
@@ -337,8 +388,11 @@ const styles = StyleSheet.create({
   },
   betweenShare: {
     fontFamily: fontFamily.sans600,
-    fontSize: 13.5,
-    color: colors.splitInkFaint6,
+    fontSize: 14,
+    color: colors.splitInk,
+  },
+  betweenShareOff: {
+    color: colors.splitInkFaint30,
   },
   betweenInput: {
     width: 64,
@@ -355,19 +409,19 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 5,
   },
-  modeTab: {
+  modeTabShape: {
     flex: 1,
     borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
+    overflow: 'hidden',
   },
-  modeTabOn: {
-    backgroundColor: colors.splitInk,
+  modeTabFill: {
+    paddingVertical: 12,
+    alignItems: 'center',
   },
   modeTabLabel: {
     fontFamily: fontFamily.sans600,
     fontSize: 12.5,
-    color: colors.splitInkFaint6,
+    color: colors.splitInkFaint5,
   },
   modeTabLabelOn: {
     color: '#fff',
@@ -378,28 +432,48 @@ const styles = StyleSheet.create({
     backgroundColor: colors.splitBg,
   },
   keypad: {
+    gap: 6,
+  },
+  keyRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    gap: 6,
   },
   key: {
-    width: '33.333%',
-    paddingVertical: 12,
+    flex: 1,
+    paddingVertical: 15,
     alignItems: 'center',
+    borderRadius: 18,
+    backgroundColor: colors.splitSurface,
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 1,
   },
   keyLabel: {
     fontFamily: fontFamily.sans600,
     fontSize: 21,
     color: colors.splitInk,
   },
-  saveButton: {
-    marginTop: 8,
+  keyLabelFaint: {
+    color: colors.splitInkFaint45,
+  },
+  saveButtonShape: {
+    marginTop: 10,
     borderRadius: 999,
-    backgroundColor: colors.splitAccent,
-    paddingVertical: 19,
-    alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: colors.splitAccent,
+    shadowOpacity: 0.34,
+    shadowOffset: { width: 0, height: 14 },
+    shadowRadius: 30,
+    elevation: 4,
   },
   saveButtonDisabled: {
-    backgroundColor: 'rgba(250,46,110,.4)',
+    opacity: 0.55,
+  },
+  saveButtonFill: {
+    paddingVertical: 19,
+    alignItems: 'center',
   },
   saveLabel: {
     fontFamily: fontFamily.sans700,

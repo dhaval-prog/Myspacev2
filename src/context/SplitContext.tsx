@@ -410,6 +410,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
 
     const row = data as GroupRow;
     setGroupRows((prev) => (prev.some((g) => g.id === row.id) ? prev : [...prev, row]));
+    setMemberRows((prev) => (prev.some((m) => m.group_id === row.id && m.user_id === userId) ? prev : [...prev, { group_id: row.id, user_id: userId }]));
     return { error: null };
   };
 
@@ -555,6 +556,42 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
         (payload) => {
           const row = payload.new as ChatRow;
           setChatRows((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [focusedGroupId, userId]);
+
+  // Re-fetch + subscribe to membership for the focused group only — the
+  // initial load effect only fetches members once at sign-in, so without
+  // this, a member who joins via invite code while someone else already
+  // has the dashboard open (or the joiner's own first visit) would show
+  // a stale, undercounted People list until a full app reload.
+  useEffect(() => {
+    if (!focusedGroupId || !userId || !isSupabaseConfigured) return;
+    let cancelled = false;
+    supabase
+      .from('split_members')
+      .select('group_id,user_id')
+      .eq('group_id', focusedGroupId)
+      .then(({ data, error }) => {
+        warn('load members', error);
+        if (cancelled || !data) return;
+        setMemberRows((prev) => [...prev.filter((m) => m.group_id !== focusedGroupId), ...(data as { group_id: string; user_id: string }[])]);
+      });
+
+    const channel = supabase
+      .channel(`split-members-${focusedGroupId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'split_members', filter: `group_id=eq.${focusedGroupId}` },
+        (payload) => {
+          const row = payload.new as { group_id: string; user_id: string };
+          setMemberRows((prev) => (prev.some((m) => m.group_id === row.group_id && m.user_id === row.user_id) ? prev : [...prev, row]));
         },
       )
       .subscribe();
