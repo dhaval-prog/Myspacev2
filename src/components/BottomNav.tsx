@@ -109,7 +109,7 @@ export function BottomNav({ activeId, onSelect, onAdd, bottomInset, reduceMotion
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
   },
   row: {

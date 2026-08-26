@@ -13,6 +13,8 @@ interface AuthContextValue {
   initializing: boolean;
   signUp: (fullName: string, email: string, password: string) => Promise<AuthResult>;
   signIn: (email: string, password: string) => Promise<AuthResult>;
+  /** Redirects the browser to the provider's login — only resolves (with an error) if that redirect itself fails, e.g. the provider isn't enabled on the Supabase project yet. */
+  signInWithOAuth: (provider: 'facebook' | 'google' | 'apple') => Promise<AuthResult>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<AuthResult>;
 }
@@ -58,6 +60,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn: async (email, password) => {
         if (!isSupabaseConfigured) return { error: NOT_CONFIGURED_ERROR };
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        return { error: error?.message ?? null };
+      },
+      signInWithOAuth: async (provider) => {
+        if (!isSupabaseConfigured) return { error: NOT_CONFIGURED_ERROR };
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: { redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined },
+        });
         return { error: error?.message ?? null };
       },
       signOut: async () => {

@@ -1,6 +1,7 @@
-import React from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { colors } from '../../theme';
+import { useAuth } from '../../context/AuthContext';
 import { AppleIcon, FacebookIcon, GoogleIcon } from './icons';
 
 const PROVIDERS = [
@@ -9,15 +10,26 @@ const PROVIDERS = [
   { id: 'apple', label: 'Continue with Apple', bg: colors.ink, render: () => <AppleIcon /> },
 ] as const;
 
-/**
- * Facebook / Google / Apple sign-in. No OAuth provider is configured on the
- * Supabase project yet, so these are wired but surface that plainly rather
- * than silently failing — swap the alert for a real signInWithOAuth call
- * once the providers are set up in the Supabase dashboard.
- */
-export function SocialAuthRow() {
-  const handlePress = (label: string) => {
-    Alert.alert('Not set up yet', `${label} isn't configured on this project yet.`);
+interface SocialAuthRowProps {
+  /** Surfaces a failed OAuth redirect (e.g. the provider isn't enabled on the Supabase project yet) — the caller renders it the same way as its own form errors. */
+  onError: (message: string) => void;
+}
+
+/** Facebook / Google / Apple sign-in — redirects to the provider via Supabase OAuth. */
+export function SocialAuthRow({ onError }: SocialAuthRowProps) {
+  const { signInWithOAuth } = useAuth();
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  const handlePress = async (id: (typeof PROVIDERS)[number]['id']) => {
+    if (pendingId) return;
+    setPendingId(id);
+    const { error } = await signInWithOAuth(id);
+    // On success the browser is already navigating away; only a failure to
+    // even start that redirect (e.g. provider not enabled) resolves here.
+    if (error) {
+      onError(error);
+      setPendingId(null);
+    }
   };
 
   return (
@@ -25,10 +37,16 @@ export function SocialAuthRow() {
       {PROVIDERS.map((p) => (
         <Pressable
           key={p.id}
-          onPress={() => handlePress(p.label)}
+          onPress={() => handlePress(p.id)}
+          disabled={pendingId !== null}
           accessibilityRole="button"
           accessibilityLabel={p.label}
-          style={({ pressed }) => [styles.button, { backgroundColor: p.bg }, pressed && styles.buttonPressed]}
+          style={({ pressed }) => [
+            styles.button,
+            { backgroundColor: p.bg },
+            pressed && styles.buttonPressed,
+            pendingId !== null && pendingId !== p.id && styles.buttonDisabled,
+          ]}
         >
           {p.render()}
         </Pressable>
@@ -57,5 +75,8 @@ const styles = StyleSheet.create({
   },
   buttonPressed: {
     opacity: 0.85,
+  },
+  buttonDisabled: {
+    opacity: 0.4,
   },
 });
