@@ -25,13 +25,14 @@ interface SplitHomeScreenProps {
 export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { groups, membersFor, expensesFor, balancesFor, goCreate, openGroup, deleteGroup } = useSplit();
   const [joinOpen, setJoinOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [friendsTab, setFriendsTab] = useState<'nearby' | 'recent'>('nearby');
   const [revealedGroupId, setRevealedGroupId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const revealedGroupIdRef = useRef<string | null>(null);
   const dragXMap = useRef(new Map<string, Animated.Value>()).current;
   const responderCache = useRef(new Map<string, ReturnType<typeof PanResponder.create>>()).current;
@@ -115,9 +116,14 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
           <Pressable style={styles.roundButton} accessibilityRole="button" accessibilityLabel="Notifications">
             <Icon path="M6 8v8M12 5v14M18 9v6" color={colors.splitInk} size={20} strokeWidth={2} />
           </Pressable>
-          <View style={styles.meAvatar}>
+          <Pressable
+            onPress={() => setLogoutConfirmOpen(true)}
+            style={styles.meAvatar}
+            accessibilityRole="button"
+            accessibilityLabel="Account"
+          >
             <Text style={styles.meAvatarText}>{meInitials}</Text>
-          </View>
+          </Pressable>
         </View>
 
         <LinearGradient
@@ -341,6 +347,35 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
           </View>
         </View>
       </Modal>
+
+      <Modal visible={logoutConfirmOpen} transparent animationType="fade" onRequestClose={() => setLogoutConfirmOpen(false)}>
+        <View style={styles.deleteModalWrap}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setLogoutConfirmOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss"
+          />
+          <View style={styles.deleteModalCard}>
+            <Text style={styles.deleteModalTitle}>Log out</Text>
+            <Text style={styles.deleteModalBody}>Log out of MySpace?</Text>
+            <View style={styles.deleteModalActions}>
+              <Pressable onPress={() => setLogoutConfirmOpen(false)} style={styles.deleteModalCancel}>
+                <Text style={styles.deleteModalCancelLabel}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setLogoutConfirmOpen(false);
+                  signOut();
+                }}
+                style={styles.deleteModalConfirm}
+              >
+                <Text style={styles.deleteModalConfirmLabel}>Log out</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -376,7 +411,7 @@ const styles = StyleSheet.create({
   meAvatar: {
     width: 50,
     height: 50,
-    borderRadius: 16,
+    borderRadius: 25,
     backgroundColor: '#111',
     alignItems: 'center',
     justifyContent: 'center',

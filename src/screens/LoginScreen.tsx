@@ -128,7 +128,12 @@ export function LoginScreen({ onSwitchToSignUp }: LoginScreenProps) {
       </View>
 
       <View style={styles.socialSpacer}>
-        <SocialAuthRow />
+        <SocialAuthRow
+          onError={(message) => {
+            setNotice(null);
+            setError(message);
+          }}
+        />
       </View>
 
       <View style={styles.flexSpacer} />

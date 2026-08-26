@@ -59,11 +59,15 @@ export function EyeOffIcon({ size = 21, color }: StrokeIconProps) {
   );
 }
 
-/** Facebook mark. */
-export function FacebookIcon({ size = 30 }: { size?: number }) {
+/** Facebook mark — the real brand glyph: white "f" on the Facebook blue circle. */
+export function FacebookIcon({ size = 32 }: { size?: number }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="#0A0A0A">
-      <Path d="M14.6 21v-7.5h2.6l.4-3h-3V8.7c0-.9.3-1.5 1.5-1.5h1.6V4.5c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.5-4 4.1v2.9H8.5v3h2.4V21h3.7z" />
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Circle cx={12} cy={12} r={12} fill="#1877F2" />
+      <Path
+        d="M15.4 12.5l.4-2.6h-2.5V8.2c0-.71.35-1.4 1.47-1.4h1.14V4.6s-1.03-.18-2.02-.18c-2.06 0-3.4 1.25-3.4 3.5v1.98H8.3v2.6h2.23V19h2.76v-6.5h2.1z"
+        fill="#fff"
+      />
     </Svg>
   );
 }
