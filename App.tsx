@@ -11,12 +11,13 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { DetailScreen } from './src/screens/DetailScreen';
 import { ExpensesScreen } from './src/screens/expenses/ExpensesScreen';
+import { SplitScreen } from './src/screens/split/SplitScreen';
 import type { ViewId } from './src/data/views';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 type AuthScreen = 'login' | 'signup';
-type Screen = { name: 'home' } | { name: 'detail'; viewId: ViewId } | { name: 'expenses' };
+type Screen = { name: 'home' } | { name: 'detail'; viewId: ViewId } | { name: 'expenses' } | { name: 'split' };
 
 function AuthNavigator() {
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
@@ -34,12 +35,16 @@ function AppNavigator() {
     return <DetailScreen viewId={screen.viewId} onBack={() => setScreen({ name: 'home' })} />;
   }
   if (screen.name === 'expenses') {
-    return <ExpensesScreen onHome={() => setScreen({ name: 'home' })} />;
+    return <ExpensesScreen onHome={() => setScreen({ name: 'home' })} onOpenSplit={() => setScreen({ name: 'split' })} />;
+  }
+  if (screen.name === 'split') {
+    return <SplitScreen onHome={() => setScreen({ name: 'home' })} onOpenExpenses={() => setScreen({ name: 'expenses' })} />;
   }
   return (
     <HomeScreen
       onOpenDetail={(viewId) => setScreen({ name: 'detail', viewId })}
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
+      onOpenSplit={() => setScreen({ name: 'split' })}
     />
   );
 }

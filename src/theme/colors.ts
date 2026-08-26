@@ -59,6 +59,29 @@ export const colors = {
   walletSheetTextFaint: 'rgba(0,0,0,0.42)',
   walletAccentBlue: '#1668E8',
   walletAccentRed: '#E8352A',
+
+  // --- Split screens ---
+  // Warm coral-to-magenta gradient over a soft lavender-white surface,
+  // distinct from both the lime home and the dark wallet.
+  splitBg: '#F7F7FB',
+  splitSurface: '#FFFFFF',
+  splitInk: '#1B2A63',
+  splitInkFaint30: 'rgba(27,42,99,0.3)',
+  splitInkFaint42: 'rgba(27,42,99,0.42)',
+  splitInkFaint45: 'rgba(27,42,99,0.45)',
+  splitInkFaint5: 'rgba(27,42,99,0.5)',
+  splitInkFaint55: 'rgba(27,42,99,0.55)',
+  splitInkFaint6: 'rgba(27,42,99,0.6)',
+  splitInkFaint07: 'rgba(27,42,99,0.07)',
+  splitInkFaint08: 'rgba(27,42,99,0.08)',
+  splitInkFaint09: 'rgba(27,42,99,0.09)',
+  splitGradient: ['#FF6A5A', '#FA2E6E', '#F0186B'] as string[],
+  splitAccent: '#FA2E6E',
+  splitAccentSoftBg: '#FDE8EE',
+  splitPositiveBg: '#E6F6EC',
+  splitPositiveFg: '#1F9254',
+  splitDangerBg: 'rgba(211,50,67,0.12)',
+  splitDangerFg: '#D33243',
 } as const;
 
 export type ColorToken = keyof typeof colors;
