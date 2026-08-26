@@ -24,6 +24,8 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
   const { user } = useAuth();
   const { groups, membersFor, expensesFor, balancesFor, goCreate, openGroup } = useSplit();
   const [joinOpen, setJoinOpen] = useState(false);
+  const [friendsOpen, setFriendsOpen] = useState(false);
+  const [friendsTab, setFriendsTab] = useState<'nearby' | 'recent'>('nearby');
 
   const meInitials = (user?.user_metadata?.full_name ?? user?.email ?? 'You').trim().slice(0, 2).toUpperCase();
 
@@ -31,9 +33,8 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
 
   const peopleIds = new Set<string>();
   for (const g of groups) for (const m of membersFor(g.id)) if (m.userId !== user?.id) peopleIds.add(m.userId);
-  const people = Array.from(peopleIds)
-    .slice(0, 5)
-    .map((id) => groups.flatMap((g) => membersFor(g.id)).find((m) => m.userId === id)!);
+  const allPeople = Array.from(peopleIds).map((id) => groups.flatMap((g) => membersFor(g.id)).find((m) => m.userId === id)!);
+  const people = allPeople.slice(0, 5);
 
   return (
     <View style={styles.screen}>
@@ -70,10 +71,10 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
                 </View>
               ))}
               <Pressable
-                onPress={() => setJoinOpen(true)}
+                onPress={() => setFriendsOpen((v) => !v)}
                 style={[styles.heroPeopleTile, styles.heroPeopleTileStack, styles.heroPeoplePlus]}
                 accessibilityRole="button"
-                accessibilityLabel="Join a split with an invite code"
+                accessibilityLabel="Show members in this space"
               >
                 <Text style={styles.heroPeoplePlusLabel}>+</Text>
               </Pressable>
@@ -83,6 +84,42 @@ export function SplitHomeScreen({ onHome, onOpenExpenses }: SplitHomeScreenProps
             <Text style={styles.heroCtaLabel}>Let's Split</Text>
           </Pressable>
         </LinearGradient>
+
+        {friendsOpen && (
+          <View style={styles.friendsSection}>
+            <View style={styles.friendsTabs}>
+              <Pressable onPress={() => setFriendsTab('nearby')} accessibilityRole="button" accessibilityLabel="Member's In this Space">
+                <Text style={[styles.friendsTab, friendsTab === 'nearby' && styles.friendsTabActive]}>Member's In this Space</Text>
+              </Pressable>
+              <Pressable onPress={() => setFriendsTab('recent')} accessibilityRole="button" accessibilityLabel="Recent">
+                <Text style={[styles.friendsTab, friendsTab === 'recent' && styles.friendsTabActive]}>Recent</Text>
+              </Pressable>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendsRow}>
+              <Pressable
+                onPress={() => setJoinOpen(true)}
+                style={styles.friendItem}
+                accessibilityRole="button"
+                accessibilityLabel="Join a split with an invite code"
+              >
+                <View style={styles.friendAddTile}>
+                  <Icon path="M12 6v12M6 12h12" color={colors.splitInk} size={26} strokeWidth={2} />
+                </View>
+                <Text style={styles.friendAddLabel}>Add</Text>
+              </Pressable>
+              {allPeople.map((m, i) => (
+                <View key={m.userId} style={styles.friendItem}>
+                  <View style={[styles.friendTile, i % 2 ? styles.friendTileB : styles.friendTileA]}>
+                    <Text style={styles.friendTileText}>{initialsOf(m.name)}</Text>
+                  </View>
+                  <Text style={styles.friendName} numberOfLines={2}>
+                    {m.name}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Your splits</Text>
@@ -318,6 +355,80 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans600,
     fontSize: 16,
     color: '#fff',
+  },
+  friendsSection: {
+    gap: 14,
+  },
+  friendsTabs: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 20,
+  },
+  friendsTab: {
+    fontFamily: fontFamily.sans500,
+    fontSize: 16,
+    letterSpacing: -0.16,
+    color: 'rgba(27,42,99,.38)',
+  },
+  friendsTabActive: {
+    fontFamily: fontFamily.sans700,
+    color: colors.splitInk,
+  },
+  friendsRow: {
+    gap: 12,
+    paddingBottom: 4,
+  },
+  friendItem: {
+    flexShrink: 0,
+    alignItems: 'center',
+    gap: 8,
+    width: 84,
+  },
+  friendAddTile: {
+    width: 84,
+    height: 84,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(27,42,99,.28)',
+    backgroundColor: 'rgba(255,255,255,.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  friendAddLabel: {
+    fontFamily: fontFamily.sans500,
+    fontSize: 13,
+    color: colors.splitInkFaint6,
+  },
+  friendTile: {
+    width: 84,
+    height: 84,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.09,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 26,
+    elevation: 2,
+  },
+  friendTileA: {
+    backgroundColor: colors.splitAccentSoftBg,
+  },
+  friendTileB: {
+    backgroundColor: '#E9EAFB',
+  },
+  friendTileText: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 20,
+    color: colors.splitInk,
+  },
+  friendName: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 13,
+    lineHeight: 17,
+    color: colors.splitInk,
+    textAlign: 'center',
   },
   sectionHeaderRow: {
     flexDirection: 'row',

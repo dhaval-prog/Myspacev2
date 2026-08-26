@@ -1,14 +1,21 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
-import { MemberAvatar } from '../../components/split/MemberAvatar';
+import { initialsOf } from '../../components/split/MemberAvatar';
 import { useSplit } from '../../context/SplitContext';
 import { relativeDateLabel } from '../../utils/expensesFormat';
 import { useAuth } from '../../context/AuthContext';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
+
+const GRADIENT_PROPS = {
+  colors: colors.splitGradient as [string, string, ...string[]],
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 1 },
+};
 
 /** Haversine distance in km between two lat/lng points. */
 function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -36,7 +43,8 @@ export function LiveLocationScreen() {
 
   if (!focusedGroup) return null;
 
-  const members = membersFor(focusedGroup.id).filter((m) => m.userId !== user?.id);
+  const allMembers = membersFor(focusedGroup.id);
+  const orderedMembers = [...allMembers.filter((m) => m.userId === user?.id), ...allMembers.filter((m) => m.userId !== user?.id)];
   const locations = locationsFor(focusedGroup.id);
   const sharedLocations = locations.filter((l) => l.shared && l.lat !== null && l.lng !== null);
   const myLoc = locations.find((l) => l.userId === user?.id && l.shared && l.lat !== null && l.lng !== null);
@@ -62,12 +70,20 @@ export function LiveLocationScreen() {
           <Text style={styles.mapBadgeText}>Live · updated moments ago</Text>
         </View>
         {sharedLocations.map((l) => {
-          if (l.userId === user?.id) return null;
-          const member = membersFor(focusedGroup.id).find((m) => m.userId === l.userId);
+          const member = allMembers.find((m) => m.userId === l.userId);
           if (!member) return null;
+          const isSelf = l.userId === user?.id;
           return (
             <View key={l.userId} style={[styles.pin, pinPosition(l.userId)]}>
-              <MemberAvatar userId={l.userId} name={member.name} size={34} />
+              {isSelf ? (
+                <LinearGradient {...GRADIENT_PROPS} style={styles.pinTile}>
+                  <Text style={styles.pinInitials}>{initialsOf(member.name)}</Text>
+                </LinearGradient>
+              ) : (
+                <View style={[styles.pinTile, styles.pinTileOff]}>
+                  <Text style={styles.pinInitials}>{initialsOf(member.name)}</Text>
+                </View>
+              )}
             </View>
           );
         })}
@@ -77,40 +93,64 @@ export function LiveLocationScreen() {
         <View style={styles.shareRow}>
           <View style={styles.shareTextCol}>
             <Text style={styles.shareTitle}>Share my location</Text>
-            <Text style={styles.shareNote}>Only inside this split</Text>
+            <Text style={styles.shareNote}>Only inside this trip space</Text>
           </View>
           <Pressable
             onPress={toggleLocationSharing}
-            style={[styles.toggleTrack, locationSharing && styles.toggleTrackOn]}
+            style={styles.toggleTrackShape}
             accessibilityRole="switch"
             accessibilityState={{ checked: locationSharing }}
           >
-            <View style={[styles.toggleKnob, locationSharing && styles.toggleKnobOn]} />
+            {locationSharing ? (
+              <LinearGradient {...GRADIENT_PROPS} style={[styles.toggleTrack, styles.toggleTrackOn]}>
+                <View style={styles.toggleKnob} />
+              </LinearGradient>
+            ) : (
+              <View style={styles.toggleTrack}>
+                <View style={styles.toggleKnob} />
+              </View>
+            )}
           </Pressable>
         </View>
 
         <Text style={styles.sectionTitle}>Who's where</Text>
         <View style={styles.rows}>
-          {members.length === 0 ? (
+          {orderedMembers.length === 0 ? (
             <Text style={styles.emptyNote}>No one else has joined this split yet.</Text>
           ) : (
-            members.map((m) => {
+            orderedMembers.map((m) => {
+              const isSelf = m.userId === user?.id;
               const loc = locations.find((l) => l.userId === m.userId);
               const isSharing = Boolean(loc?.shared && loc.lat !== null && loc.lng !== null);
-              const dist =
-                isSharing && myLoc
+              const place = isSharing ? 'Sharing live location' : 'Location off';
+              const dist = isSelf
+                ? isSharing
+                  ? 'here'
+                  : '—'
+                : isSharing && myLoc
                   ? `${distanceKm({ lat: myLoc.lat!, lng: myLoc.lng! }, { lat: loc!.lat!, lng: loc!.lng! }).toFixed(1)} km`
                   : isSharing
                     ? relativeDateLabel(new Date(loc!.updatedAt))
                     : 'Not sharing';
               return (
                 <View key={m.userId} style={styles.locRow}>
-                  <MemberAvatar userId={m.userId} name={m.name} size={40} />
+                  {isSelf ? (
+                    <LinearGradient {...GRADIENT_PROPS} style={styles.locTile}>
+                      <Text style={[styles.locTileText, styles.locTileTextOn]}>{initialsOf(m.name)}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={[styles.locTile, styles.locTileOff]}>
+                      <Text style={styles.locTileText}>{initialsOf(m.name)}</Text>
+                    </View>
+                  )}
                   <View style={styles.locTextCol}>
                     <Text style={styles.locName}>{m.name}</Text>
-                    <Text style={styles.locPlace}>{isSharing ? 'Sharing live location' : 'Location off'}</Text>
+                    <Text style={styles.locPlace}>
+                      {place}
+                      {isSelf ? ' · you' : ''}
+                    </Text>
                   </View>
-                  <Text style={[styles.locDist, !isSharing && styles.locDistOff]}>{dist}</Text>
+                  <Text style={[styles.locDist, isSelf && isSharing && styles.locDistHere]}>{dist}</Text>
                 </View>
               );
             })
@@ -140,6 +180,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.splitSurface,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 2,
   },
   headerTitle: {
     fontFamily: fontFamily.sans700,
@@ -198,6 +243,28 @@ const styles = StyleSheet.create({
   pin: {
     position: 'absolute',
   },
+  pinTile: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 4,
+  },
+  pinTileOff: {
+    backgroundColor: colors.splitInk,
+  },
+  pinInitials: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 12,
+    color: '#fff',
+  },
   scroll: {
     paddingHorizontal: spacing.xxxl,
     paddingTop: spacing.lg,
@@ -210,7 +277,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: colors.splitSurface,
     borderRadius: 22,
-    padding: spacing.lg,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
   },
   shareTextCol: {
     gap: 3,
@@ -225,25 +293,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.splitInkFaint45,
   },
-  toggleTrack: {
-    width: 46,
-    height: 27,
+  toggleTrackShape: {
     borderRadius: 999,
-    backgroundColor: colors.splitInkFaint09,
+  },
+  toggleTrack: {
+    width: 52,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: '#E7E7EF',
     padding: 3,
     justifyContent: 'center',
   },
   toggleTrackOn: {
-    backgroundColor: colors.splitAccent,
+    alignItems: 'flex-end',
   },
   toggleKnob: {
-    width: 21,
-    height: 21,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: '#fff',
-  },
-  toggleKnobOn: {
-    transform: [{ translateX: 19 }],
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
   },
   sectionTitle: {
     marginTop: spacing.md,
@@ -266,7 +339,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.splitSurface,
     borderRadius: 20,
     paddingVertical: 13,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  locTile: {
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locTileOff: {
+    backgroundColor: '#E9EAFB',
+  },
+  locTileText: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 12.5,
+    color: colors.splitInk,
+  },
+  locTileTextOn: {
+    color: '#fff',
   },
   locTextCol: {
     flex: 1,
@@ -286,9 +378,9 @@ const styles = StyleSheet.create({
   locDist: {
     fontFamily: fontFamily.sans600,
     fontSize: 13,
-    color: colors.splitAccent,
+    color: colors.splitInkFaint5,
   },
-  locDistOff: {
-    color: colors.splitInkFaint45,
+  locDistHere: {
+    color: colors.splitPositiveFg,
   },
 });
