@@ -25,17 +25,28 @@ function timeLabel(iso: string): string {
 export function SplitChatScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { focusedGroup, membersFor, chatFor, sendChat, nameFor, goDashboard, goAdd } = useSplit();
+  const { focusedGroup, membersFor, chatFor, expensesFor, sendChat, nameFor, goDashboard, goAdd } = useSplit();
   const [text, setText] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
   if (!focusedGroup) return null;
   const messages = chatFor(focusedGroup.id);
+  const expenses = expensesFor(focusedGroup.id);
   const memberCount = membersFor(focusedGroup.id).length;
+
+  // A single timeline mixing real chat messages with "added an expense"
+  // activity — the split's log of what happened, not just what was said.
+  const timeline: (
+    | { kind: 'message'; id: string; createdAt: string; message: (typeof messages)[number] }
+    | { kind: 'expense'; id: string; createdAt: string; expense: (typeof expenses)[number] }
+  )[] = [
+    ...messages.map((m) => ({ kind: 'message' as const, id: m.id, createdAt: m.createdAt, message: m })),
+    ...expenses.map((e) => ({ kind: 'expense' as const, id: e.id, createdAt: e.createdAt, expense: e })),
+  ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
-  }, [messages.length]);
+  }, [timeline.length]);
 
   const submit = () => {
     if (!text.trim()) return;
@@ -58,13 +69,25 @@ export function SplitChatScreen() {
       </View>
 
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {messages.length === 0 ? (
+        {timeline.length === 0 ? (
           <Text style={styles.emptyNote}>No messages yet. Say hi.</Text>
         ) : (
-          messages.map((m) => {
+          timeline.map((entry) => {
+            if (entry.kind === 'expense') {
+              const e = entry.expense;
+              return (
+                <View key={`expense-${entry.id}`} style={styles.activityPill}>
+                  <Text style={styles.activityText}>
+                    {nameFor(e.paidBy)} added {e.title} · ₹{Math.round(e.amount).toLocaleString('en-IN')}
+                  </Text>
+                  <Text style={styles.activityMeta}>Let's Split · {timeLabel(e.createdAt)}</Text>
+                </View>
+              );
+            }
+            const m = entry.message;
             const mine = m.userId === user?.id;
             return (
-              <View key={m.id} style={[styles.msgWrap, mine ? styles.msgWrapMine : styles.msgWrapTheirs]}>
+              <View key={`message-${entry.id}`} style={[styles.msgWrap, mine ? styles.msgWrapMine : styles.msgWrapTheirs]}>
                 {mine ? (
                   <LinearGradient {...GRADIENT_PROPS} style={[styles.bubble, styles.bubbleMine]}>
                     <Text style={[styles.bubbleText, styles.bubbleTextMine]}>{m.text}</Text>
@@ -156,6 +179,26 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans400,
     fontSize: 13.5,
     color: colors.splitInkFaint45,
+  },
+  activityPill: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.splitAccentSoftBg,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    gap: 4,
+  },
+  activityText: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 14.5,
+    lineHeight: 20,
+    color: colors.splitAccent,
+  },
+  activityMeta: {
+    fontFamily: fontFamily.sans500,
+    fontSize: 11.5,
+    color: colors.splitAccent,
+    opacity: 0.7,
   },
   msgWrap: {
     maxWidth: '78%',
