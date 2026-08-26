@@ -1,19 +1,18 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, noOutline, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { MemberAvatar } from '../../components/split/MemberAvatar';
-import { InviteSplitSheet } from '../../components/split/InviteSplitSheet';
+import { AddKnownMembersSheet } from '../../components/split/AddKnownMembersSheet';
 import { useSplit } from '../../context/SplitContext';
 import { useAuth } from '../../context/AuthContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { SPLIT_CATEGORIES } from '../../data/splitCategories';
 import type { SplitGroup } from '../../types/split';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
-const LINK_ICON = 'M9 15l6-6M10 7l1.3-1.3a3.5 3.5 0 0 1 5 5L15 12M14 17l-1.3 1.3a3.5 3.5 0 0 1-5-5L9 12';
-const QR_ICON = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM15 15h2v2h-2zM19 15h1v1M15 19h1v1M19 19h1v1';
 const PLUS_ICON = 'M12 6v12M6 12h12';
 
 type SplitMode = 'equal' | 'percentage' | 'custom' | 'shares';
@@ -24,11 +23,6 @@ const MODE_CARDS: { key: SplitMode; label: string; note: string }[] = [
   { key: 'shares', label: 'Shares', note: '1 share, 2 shares…' },
 ];
 
-const CURRENCIES = [
-  { symbol: '₹', code: 'INR' },
-  { symbol: '$', code: 'USD' },
-  { symbol: '€', code: 'EUR' },
-];
 const WHO_OPTIONS: { key: 'anyone' | 'owner'; label: string }[] = [
   { key: 'anyone', label: 'Everyone' },
   { key: 'owner', label: 'Admin only' },
@@ -37,6 +31,7 @@ const WHO_OPTIONS: { key: 'anyone' | 'owner'; label: string }[] = [
 /** Create a new split group — name, category, members, default split rule, and preferences. */
 export function CreateSplitScreen() {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const { createGroup, updateGroup, openGroup, membersFor, goHome } = useSplit();
 
@@ -44,12 +39,12 @@ export function CreateSplitScreen() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState(SPLIT_CATEGORIES[0].label);
   const [splitMode, setSplitMode] = useState<SplitMode>('equal');
-  const [currency, setCurrency] = useState('₹');
+  const currency = '₹';
   const [whoCanAdd, setWhoCanAdd] = useState<'anyone' | 'owner'>('anyone');
   const [remind, setRemind] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draftGroup, setDraftGroup] = useState<SplitGroup | null>(null);
-  const [inviteOpen, setInviteOpen] = useState(false);
+  const [addMembersOpen, setAddMembersOpen] = useState(false);
 
   const canCreate = name.trim().length > 0 && !saving;
   const catDef = SPLIT_CATEGORIES.find((c) => c.label === category) ?? SPLIT_CATEGORIES[0];
@@ -64,9 +59,9 @@ export function CreateSplitScreen() {
     return group;
   };
 
-  const openInvite = async () => {
+  const openAddMembers = async () => {
     const group = await ensureDraftGroup();
-    if (group) setInviteOpen(true);
+    if (group) setAddMembersOpen(true);
   };
 
   const create = async () => {
@@ -170,7 +165,7 @@ export function CreateSplitScreen() {
             );
           })}
           <Pressable
-            onPress={openInvite}
+            onPress={openAddMembers}
             disabled={!name.trim()}
             style={[styles.addMemberChip, !name.trim() && styles.addMemberChipDisabled]}
             accessibilityRole="button"
@@ -180,55 +175,9 @@ export function CreateSplitScreen() {
             <Text style={styles.addMemberLabel}>Add</Text>
           </Pressable>
         </View>
-        <View style={styles.inviteRow}>
-          <Pressable
-            onPress={openInvite}
-            disabled={!name.trim()}
-            style={[styles.inviteButton, !name.trim() && styles.inviteButtonDisabled]}
-            accessibilityRole="button"
-            accessibilityLabel="Invite link"
-          >
-            <Icon path={LINK_ICON} color={colors.splitAccent} size={17} strokeWidth={1.8} />
-            <Text style={styles.inviteButtonLabel}>Invite link</Text>
-          </Pressable>
-          <Pressable
-            onPress={openInvite}
-            disabled={!name.trim()}
-            style={[styles.inviteButton, !name.trim() && styles.inviteButtonDisabled]}
-            accessibilityRole="button"
-            accessibilityLabel="QR code"
-          >
-            <Icon path={QR_ICON} color={colors.splitAccent} size={17} strokeWidth={1.8} />
-            <Text style={styles.inviteButtonLabel}>QR code</Text>
-          </Pressable>
-        </View>
 
         <Text style={styles.label}>DEFAULT SPLIT</Text>
-        <View style={styles.modeGrid}>
-          {MODE_CARDS.map((m) => {
-            const on = splitMode === m.key;
-            const content = (
-              <>
-                <View style={styles.modeCardTop}>
-                  <View style={[styles.modeDot, on && styles.modeDotOn]} />
-                  <Text style={[styles.modeCardLabel, on && styles.modeCardLabelOn]}>{m.label}</Text>
-                </View>
-                <Text style={[styles.modeCardNote, on && styles.modeCardNoteOn]}>{m.note}</Text>
-              </>
-            );
-            return on ? (
-              <Pressable key={m.key} onPress={() => setSplitMode(m.key)} style={styles.modeCardWrap}>
-                <LinearGradient colors={colors.splitGradient as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.modeCard}>
-                  {content}
-                </LinearGradient>
-              </Pressable>
-            ) : (
-              <Pressable key={m.key} onPress={() => setSplitMode(m.key)} style={[styles.modeCardWrap, styles.modeCard, styles.modeCardOff]}>
-                {content}
-              </Pressable>
-            );
-          })}
-        </View>
+        <SplitModeSlider value={splitMode} onChange={setSplitMode} reduceMotion={reduceMotion} />
 
         <View style={styles.previewCard}>
           <View style={styles.previewHeader}>
@@ -252,27 +201,7 @@ export function CreateSplitScreen() {
 
         <Text style={styles.label}>PREFERENCES</Text>
         <View style={styles.prefsCard}>
-          <View style={styles.prefRow}>
-            <Text style={styles.prefLabel}>Currency</Text>
-            <View style={styles.prefChips}>
-              {CURRENCIES.map((c) => {
-                const on = currency === c.symbol;
-                const label = `${c.symbol} ${c.code}`;
-                return on ? (
-                  <Pressable key={c.code} onPress={() => setCurrency(c.symbol)}>
-                    <LinearGradient colors={colors.splitGradient as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.miniChip}>
-                      <Text style={[styles.miniChipLabel, styles.miniChipLabelOn]}>{label}</Text>
-                    </LinearGradient>
-                  </Pressable>
-                ) : (
-                  <Pressable key={c.code} onPress={() => setCurrency(c.symbol)} style={styles.miniChip}>
-                    <Text style={styles.miniChipLabel}>{label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-          <View style={[styles.prefRow, styles.prefRowBorder]}>
+          <View style={[styles.prefRow, styles.prefRowBottomBorder]}>
             <Text style={styles.prefLabel}>Who can add expenses</Text>
             <View style={styles.prefChips}>
               {WHO_OPTIONS.map((w) => {
@@ -326,7 +255,62 @@ export function CreateSplitScreen() {
         </Pressable>
       </View>
 
-      <InviteSplitSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} group={draftGroup} />
+      <AddKnownMembersSheet visible={addMembersOpen} onClose={() => setAddMembersOpen(false)} groupId={draftGroup?.id ?? null} />
+    </View>
+  );
+}
+
+interface SplitModeSliderProps {
+  value: SplitMode;
+  onChange: (mode: SplitMode) => void;
+  reduceMotion?: boolean;
+}
+
+/** Animated 2-column toggle for the four split modes — a highlight pill slides to whichever card is tapped. */
+function SplitModeSlider({ value, onChange, reduceMotion }: SplitModeSliderProps) {
+  const [gridWidth, setGridWidth] = useState(0);
+  const colWidth = gridWidth > 0 ? (gridWidth - spacing.xs) / 2 : 0;
+  const rowHeight = 78;
+  const activeIndex = MODE_CARDS.findIndex((m) => m.key === value);
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!colWidth) return;
+    const col = activeIndex % 2;
+    const row = Math.floor(activeIndex / 2);
+    Animated.parallel([
+      Animated.timing(translateX, { toValue: col * (colWidth + spacing.xs), duration: reduceMotion ? 0 : 260, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: row * (rowHeight + spacing.xs), duration: reduceMotion ? 0 : 260, useNativeDriver: true }),
+    ]).start();
+  }, [activeIndex, colWidth, reduceMotion, translateX, translateY]);
+
+  return (
+    <View style={styles.modeGrid} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
+      {colWidth > 0 && (
+        <Animated.View
+          style={[
+            styles.modeHighlight,
+            { width: colWidth, height: rowHeight, transform: [{ translateX }, { translateY }] },
+          ]}
+        >
+          <LinearGradient colors={colors.splitGradient as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        </Animated.View>
+      )}
+      {MODE_CARDS.map((m) => {
+        const on = value === m.key;
+        return (
+          <Pressable key={m.key} onPress={() => onChange(m.key)} style={[styles.modeCardWrap, { width: colWidth || '48%', height: rowHeight }]}>
+            <View style={[styles.modeCard, on && styles.modeCardOn]}>
+              <View style={styles.modeCardTop}>
+                <View style={[styles.modeDot, on && styles.modeDotOn]} />
+                <Text style={[styles.modeCardLabel, on && styles.modeCardLabelOn]}>{m.label}</Text>
+              </View>
+              <Text style={[styles.modeCardNote, on && styles.modeCardNoteOn]}>{m.note}</Text>
+            </View>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -482,45 +466,31 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: colors.splitAccent,
   },
-  inviteRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  inviteButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    borderRadius: 999,
-    backgroundColor: colors.splitSurface,
-    paddingVertical: 13,
-  },
-  inviteButtonDisabled: {
-    opacity: 0.4,
-  },
-  inviteButtonLabel: {
-    fontFamily: fontFamily.sans700,
-    fontSize: 13.5,
-    color: colors.splitAccent,
-  },
   modeGrid: {
+    position: 'relative',
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
   },
+  modeHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
   modeCardWrap: {
-    flexBasis: '48%',
-    flexGrow: 1,
+    borderRadius: 18,
   },
   modeCard: {
+    flex: 1,
     borderRadius: 18,
     padding: spacing.md,
     gap: 4,
-  },
-  modeCardOff: {
     backgroundColor: colors.splitSurface,
+  },
+  modeCardOn: {
+    backgroundColor: 'transparent',
   },
   modeCardTop: {
     flexDirection: 'row',
@@ -612,8 +582,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 14,
   },
-  prefRowBorder: {
-    borderTopWidth: 1,
+  prefRowBottomBorder: {
     borderBottomWidth: 1,
     borderColor: colors.splitInkFaint07,
   },
