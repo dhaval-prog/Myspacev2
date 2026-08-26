@@ -17,7 +17,11 @@ import type { ViewId } from './src/data/views';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 type AuthScreen = 'login' | 'signup';
-type Screen = { name: 'home' } | { name: 'detail'; viewId: ViewId } | { name: 'expenses' } | { name: 'split' };
+type Screen =
+  | { name: 'home' }
+  | { name: 'detail'; viewId: ViewId; initialIndex?: number }
+  | { name: 'expenses' }
+  | { name: 'split' };
 
 function AuthNavigator() {
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
@@ -32,7 +36,13 @@ function AppNavigator() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
 
   if (screen.name === 'detail') {
-    return <DetailScreen viewId={screen.viewId} onBack={() => setScreen({ name: 'home' })} />;
+    return (
+      <DetailScreen
+        viewId={screen.viewId}
+        initialIndex={screen.initialIndex}
+        onBack={() => setScreen({ name: 'home' })}
+      />
+    );
   }
   if (screen.name === 'expenses') {
     return <ExpensesScreen onHome={() => setScreen({ name: 'home' })} onOpenSplit={() => setScreen({ name: 'split' })} />;
@@ -42,7 +52,7 @@ function AppNavigator() {
   }
   return (
     <HomeScreen
-      onOpenDetail={(viewId) => setScreen({ name: 'detail', viewId })}
+      onOpenDetail={(viewId, initialIndex) => setScreen({ name: 'detail', viewId, initialIndex })}
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
       onOpenSplit={() => setScreen({ name: 'split' })}
     />

@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useAuth } from '../../context/AuthContext';
 import { CardStack } from '../../components/expenses/CardStack';
 import { BottomNav } from '../../components/BottomNav';
+import { AccountBadge } from '../../components/AccountBadge';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useExpenses } from '../../context/ExpensesContext';
 
 interface PickScreenProps {
@@ -16,16 +19,24 @@ interface PickScreenProps {
 export function PickScreen({ onHome, onOpenSplit }: PickScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
+  const { signOut } = useAuth();
   const { openNewCard, openJoin } = useExpenses();
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.huge }]}>
-        <View style={styles.wordmark}>
-          <Text style={styles.sparkle}>✻</Text>
-          <Text style={styles.wordmarkText}>myspace</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.headerSpacer} />
+          <View style={styles.headerCenter}>
+            <View style={styles.wordmark}>
+              <Text style={styles.sparkle}>✻</Text>
+              <Text style={styles.wordmarkText}>myspace</Text>
+            </View>
+            <Text style={styles.subtitle}>Scroll through your cards · pull one up to open</Text>
+          </View>
+          <AccountBadge onPress={() => setLogoutConfirmOpen(true)} />
         </View>
-        <Text style={styles.subtitle}>Scroll through your cards · pull one up to open</Text>
       </View>
 
       <View style={styles.stackArea}>
@@ -49,6 +60,19 @@ export function PickScreen({ onHome, onOpenSplit }: PickScreenProps) {
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
       />
+
+      <ConfirmDialog
+        visible={logoutConfirmOpen}
+        title="Log out"
+        message="Log out of MySpace?"
+        confirmLabel="Log out"
+        destructive
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={() => {
+          setLogoutConfirmOpen(false);
+          signOut();
+        }}
+      />
     </View>
   );
 }
@@ -59,9 +83,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.walletBg,
   },
   header: {
+    paddingHorizontal: spacing.xxxl,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerSpacer: {
+    width: 44,
+  },
+  headerCenter: {
+    flex: 1,
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.xxxl,
   },
   wordmark: {
     flexDirection: 'row',
