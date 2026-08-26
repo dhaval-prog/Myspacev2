@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
-import { MemberAvatar } from '../../components/split/MemberAvatar';
+import { initialsOf } from '../../components/split/MemberAvatar';
 import { useSplit } from '../../context/SplitContext';
 import { relativeDateLabel } from '../../utils/expensesFormat';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const CHECK_ICON = 'M5 12.5l4.5 4.5L19 7';
+
+const GRADIENT_PROPS = {
+  colors: colors.splitGradient as [string, string, ...string[]],
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 1 },
+};
 
 /** Settle balances one person at a time, and see the settlement history for this split. */
 export function SettleUpScreen() {
@@ -47,22 +54,28 @@ export function SettleUpScreen() {
               return (
                 <View key={b.userId} style={styles.card}>
                   <View style={styles.cardTopRow}>
-                    <MemberAvatar userId={b.userId} name={b.name} size={40} />
+                    {youOwe ? (
+                      <View style={[styles.cardTile, styles.cardTileOff]}>
+                        <Text style={styles.cardTileText}>{initialsOf(b.name)}</Text>
+                      </View>
+                    ) : (
+                      <LinearGradient {...GRADIENT_PROPS} style={styles.cardTile}>
+                        <Text style={[styles.cardTileText, styles.cardTileTextOn]}>{initialsOf(b.name)}</Text>
+                      </LinearGradient>
+                    )}
                     <View style={styles.cardTextCol}>
-                      <Text style={styles.cardLine}>
-                        {youOwe ? `You owe ${b.name}` : `${b.name} owes you`}
-                      </Text>
+                      <Text style={styles.cardLine}>{youOwe ? `You pay ${b.name}` : `${b.name} pays you`}</Text>
                       <Text style={styles.cardNote}>{youOwe ? 'Settle to clear this' : 'Waiting for them to settle'}</Text>
                     </View>
-                    <Text style={styles.cardAmt}>₹{Math.round(amount).toLocaleString('en-IN')}</Text>
+                    <Text style={[styles.cardAmt, youOwe ? styles.cardAmtOut : styles.cardAmtIn]}>
+                      ₹{Math.round(amount).toLocaleString('en-IN')}
+                    </Text>
                   </View>
                   {youOwe && (
-                    <Pressable
-                      onPress={() => handleSettle(b.userId, amount)}
-                      disabled={settling === b.userId}
-                      style={styles.settleButton}
-                    >
-                      <Text style={styles.settleButtonLabel}>{settling === b.userId ? 'Settling…' : 'Mark as paid'}</Text>
+                    <Pressable onPress={() => handleSettle(b.userId, amount)} disabled={settling === b.userId} style={styles.settleButtonShape}>
+                      <LinearGradient {...GRADIENT_PROPS} style={styles.settleButtonFill}>
+                        <Text style={styles.settleButtonLabel}>{settling === b.userId ? 'Settling…' : 'Mark as settled'}</Text>
+                      </LinearGradient>
                     </Pressable>
                   )}
                 </View>
@@ -113,6 +126,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.splitSurface,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 2,
   },
   headerTitle: {
     fontFamily: fontFamily.sans700,
@@ -136,14 +154,40 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.splitSurface,
-    borderRadius: 22,
-    padding: spacing.md,
-    gap: spacing.ms,
+    borderRadius: 26,
+    paddingTop: 18,
+    paddingHorizontal: 18,
+    paddingBottom: 16,
+    gap: 14,
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.07,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 26,
+    elevation: 2,
   },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.ms,
+  },
+  cardTile: {
+    width: 46,
+    height: 46,
+    flexShrink: 0,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTileOff: {
+    backgroundColor: '#E9EAFB',
+  },
+  cardTileText: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 13.5,
+    color: colors.splitInk,
+  },
+  cardTileTextOn: {
+    color: '#fff',
   },
   cardTextCol: {
     flex: 1,
@@ -151,13 +195,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   cardLine: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 15,
+    fontFamily: fontFamily.sans700,
+    fontSize: 15.5,
     color: colors.splitInk,
   },
   cardNote: {
     fontFamily: fontFamily.sans400,
-    fontSize: 11.5,
+    fontSize: 12,
     color: colors.splitInkFaint45,
   },
   cardAmt: {
@@ -165,15 +209,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.splitInk,
   },
-  settleButton: {
+  cardAmtIn: {
+    color: colors.splitPositiveFg,
+  },
+  cardAmtOut: {
+    color: colors.splitDangerFg,
+  },
+  settleButtonShape: {
     borderRadius: 999,
-    backgroundColor: colors.splitInk,
-    paddingVertical: 12,
+    overflow: 'hidden',
+  },
+  settleButtonFill: {
+    paddingVertical: 14,
     alignItems: 'center',
   },
   settleButtonLabel: {
     fontFamily: fontFamily.sans600,
-    fontSize: 13.5,
+    fontSize: 14,
     color: '#fff',
   },
   sectionTitle: {
