@@ -5,10 +5,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, noOutline, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { useSplit } from '../../context/SplitContext';
+import { SPLIT_EXPENSE_CATEGORIES } from '../../data/splitExpenseCategories';
 
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 
-const TITLE_PRESETS = ['Dinner', 'Stay', 'Travel', 'Drinks'];
+const TITLE_PRESETS = SPLIT_EXPENSE_CATEGORIES.map((c) => c.label);
 
 type SplitMode = 'equal' | 'percentage' | 'custom';
 const MODE_LABELS: { key: SplitMode; label: string }[] = [
