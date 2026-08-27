@@ -150,6 +150,7 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenAc
         rooms={rooms}
         items={items}
         onOpenHome={() => onOpenDetail('rooms')}
+        onOpenDetail={onOpenDetail}
         onOpenExpenses={onOpenExpenses}
         onOpenSplit={onOpenSplit}
         reduceMotion={reduceMotion}

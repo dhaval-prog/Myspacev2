@@ -36,7 +36,6 @@ export function CreateSplitScreen() {
   const { createGroup, updateGroup, openGroup, membersFor, goHome } = useSplit();
 
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [category, setCategory] = useState(SPLIT_CATEGORIES[0].label);
   const [splitMode, setSplitMode] = useState<SplitMode>('equal');
   const currency = '₹';
@@ -48,13 +47,15 @@ export function CreateSplitScreen() {
 
   const canCreate = name.trim().length > 0 && !saving;
   const catDef = SPLIT_CATEGORIES.find((c) => c.label === category) ?? SPLIT_CATEGORIES[0];
-  const formInput = { name, description, category, currency, splitMode, whoCanAdd, remindSettlements: remind };
+  const formInput = { name, description: '', category, currency, splitMode, whoCanAdd, remindSettlements: remind };
   const members = draftGroup ? membersFor(draftGroup.id) : [{ userId: user?.id ?? 'you', name: 'You' }];
 
+  // Members can be picked before the split is named — the draft group gets
+  // a placeholder name that "Create Split" overwrites with whatever the
+  // user actually typed.
   const ensureDraftGroup = async (): Promise<SplitGroup | null> => {
     if (draftGroup) return draftGroup;
-    if (!name.trim()) return null;
-    const group = await createGroup(formInput);
+    const group = await createGroup({ ...formInput, name: name.trim() || 'Untitled split' });
     if (group) setDraftGroup(group);
     return group;
   };
@@ -112,13 +113,6 @@ export function CreateSplitScreen() {
               placeholderTextColor={colors.splitInkFaint45}
               style={[styles.nameInput, noOutline]}
             />
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Add a description (optional)"
-              placeholderTextColor={colors.splitInkFaint45}
-              style={[styles.descInput, noOutline]}
-            />
           </View>
         </View>
 
@@ -166,8 +160,7 @@ export function CreateSplitScreen() {
           })}
           <Pressable
             onPress={openAddMembers}
-            disabled={!name.trim()}
-            style={[styles.addMemberChip, !name.trim() && styles.addMemberChipDisabled]}
+            style={styles.addMemberChip}
             accessibilityRole="button"
             accessibilityLabel="Add a member"
           >
@@ -383,12 +376,6 @@ const styles = StyleSheet.create({
     color: colors.splitInk,
     paddingVertical: 2,
   },
-  descInput: {
-    fontFamily: fontFamily.sans400,
-    fontSize: 12.5,
-    color: colors.splitInkFaint55,
-    paddingVertical: 2,
-  },
   catRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -457,9 +444,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.4,
     borderColor: colors.splitInkFaint30,
     borderStyle: 'dashed',
-  },
-  addMemberChipDisabled: {
-    opacity: 0.4,
   },
   addMemberLabel: {
     fontFamily: fontFamily.sans600,
