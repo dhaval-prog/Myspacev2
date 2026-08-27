@@ -135,7 +135,7 @@ export function DetailScreen({ viewId, initialIndex, onBack }: DetailScreenProps
           {viewId === 'attention' && attentionEntries[ri] && (
             <AttentionDetail
               entry={attentionEntries[ri]}
-              onResolve={() => removeItem(attentionEntries[ri].index)}
+              onResolve={() => editItem(attentionEntries[ri].index, { expiry: '' })}
               onRemove={() => removeItem(attentionEntries[ri].index)}
             />
           )}

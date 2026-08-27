@@ -9,8 +9,9 @@ import { parseAmount } from '../../utils/expensesFormat';
 
 /** Full spend history for the focused card. */
 export function HistorySheet() {
-  const { historyOpen, closeHistory, focusedCard, expensesFor, memberSpendsFor } = useExpenses();
+  const { historyOpen, closeHistory, focusedCard, expensesFor, historyFor, memberSpendsFor } = useExpenses();
   const expenses = expensesFor(focusedCard);
+  const history = historyFor(focusedCard);
   const total = expenses.reduce((s, x) => s + parseAmount(x.amt), 0);
   const members = memberSpendsFor(focusedCard);
   const maxMemberTotal = Math.max(0, ...members.map((m) => m.total));
@@ -40,10 +41,10 @@ export function HistorySheet() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-        {expenses.length === 0 ? (
-          <Text style={styles.emptyText}>No spends on this card yet.{'\n'}Add one and it shows up here.</Text>
+        {history.length === 0 ? (
+          <Text style={styles.emptyText}>Nothing on this card yet.{'\n'}Spends and Add Money show up here.</Text>
         ) : (
-          expenses.map((expense, i) => <ExpenseRow key={`${expense.title}-${i}`} expense={expense} />)
+          history.map((expense, i) => <ExpenseRow key={`${expense.title}-${i}`} expense={expense} />)
         )}
       </ScrollView>
     </BottomSheet>

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import type { Expense, MemberSpend, WalletCard } from '../types/expenses';
 import { CARD_PALETTE } from '../data/expensesSeed';
 import { SPEND_CATEGORY_MAP } from '../data/expenseCategories';
+import { colors } from '../theme';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import {
@@ -14,6 +15,8 @@ import {
   randomRid,
   toDateOnly,
 } from '../utils/expensesFormat';
+
+const TOPUP_ICON = 'M12 6v12M6 12h12';
 
 type Page = 'pick' | 'wallet';
 
@@ -54,6 +57,14 @@ interface ExpenseRow {
   spent_on: string;
 }
 
+interface TopupRow {
+  id: string;
+  card_id: string;
+  user_id: string;
+  amount: number;
+  created_at: string;
+}
+
 function toWalletCard(row: CardRow, userId: string | null): WalletCard {
   return {
     id: row.id,
@@ -84,6 +95,17 @@ function toExpense(row: ExpenseRow): Expense {
   };
 }
 
+function toTopupExpense(row: TopupRow): Expense {
+  return {
+    title: 'Added money',
+    date: longDateLabel(new Date(row.created_at)),
+    amt: `+₹${Math.round(row.amount).toLocaleString('en-IN')}`,
+    tile: colors.walletAccentBlueSoftBg,
+    icon: TOPUP_ICON,
+    userId: row.user_id,
+  };
+}
+
 function warn(action: string, error: { message: string } | null) {
   if (error) console.warn(`[expenses] failed to ${action}:`, error.message);
 }
@@ -101,6 +123,8 @@ interface ExpensesContextValue {
   focusedIdx: number;
   focusedCard: WalletCard | undefined;
   expensesFor: (card: WalletCard | undefined) => Expense[];
+  /** Spends and Add Money top-ups on a card, merged and time-sorted — for History's list. */
+  historyFor: (card: WalletCard | undefined) => Expense[];
   /** Per-member spend totals on a card, highest first — for History's breakdown. */
   memberSpendsFor: (card: WalletCard | undefined) => MemberSpend[];
   addExpense: (input: NewExpenseInput) => void;
@@ -148,6 +172,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
 
   const [cardRows, setCardRows] = useState<CardRow[]>([]);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
+  const [topupRows, setTopupRows] = useState<TopupRow[]>([]);
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
   const [page, setPage] = useState<Page>('pick');
   const [sel, setSel] = useState(0);
@@ -170,21 +195,25 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     if (!userId || !isSupabaseConfigured) {
       setCardRows([]);
       setExpenseRows([]);
+      setTopupRows([]);
       return;
     }
 
     (async () => {
-      const [cardsRes, expensesRes] = await Promise.all([
+      const [cardsRes, expensesRes, topupsRes] = await Promise.all([
         supabase.from('budget_cards').select('*').order('created_at', { ascending: true }),
         supabase.from('card_expenses').select('*').order('created_at', { ascending: false }),
+        supabase.from('card_topups').select('*').order('created_at', { ascending: false }),
       ]);
       if (cancelled) return;
 
       warn('load cards', cardsRes.error);
       warn('load expenses', expensesRes.error);
+      warn('load topups', topupsRes.error);
 
       setCardRows((cardsRes.data as CardRow[] | null) ?? []);
       setExpenseRows((expensesRes.data as ExpenseRow[] | null) ?? []);
+      setTopupRows((topupsRes.data as TopupRow[] | null) ?? []);
     })();
 
     return () => {
@@ -225,6 +254,17 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
 
   const expensesFor = (card: WalletCard | undefined) =>
     card ? expenseRows.filter((r) => r.card_id === card.id).map(toExpense) : [];
+
+  const historyFor = (card: WalletCard | undefined): Expense[] => {
+    if (!card) return [];
+    const spends = expenseRows
+      .filter((r) => r.card_id === card.id)
+      .map((r) => ({ ts: parseDateOnly(r.spent_on).getTime(), expense: toExpense(r) }));
+    const topups = topupRows
+      .filter((r) => r.card_id === card.id)
+      .map((r) => ({ ts: new Date(r.created_at).getTime(), expense: toTopupExpense(r) }));
+    return [...spends, ...topups].sort((a, b) => b.ts - a.ts).map((entry) => entry.expense);
+  };
 
   const memberSpendsFor = (card: WalletCard | undefined): MemberSpend[] => {
     if (!card) return [];
@@ -342,16 +382,33 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
 
     setCardRows((prev) => prev.map((c) => (c.id === cardId ? { ...c, amount: c.amount + amount } : c)));
 
-    if (userId && isSupabaseConfigured) {
-      const row = cardRows.find((c) => c.id === cardId);
-      if (row) {
-        supabase
-          .from('budget_cards')
-          .update({ amount: row.amount + amount })
-          .eq('id', cardId)
-          .then(({ error }) => warn('add money', error));
-      }
+    if (!userId || !isSupabaseConfigured) {
+      localRef.current.expenseSeq += 1;
+      setTopupRows((prev) => [
+        { id: `local-topup-${localRef.current.expenseSeq}`, card_id: cardId, user_id: userId ?? 'local', amount, created_at: new Date().toISOString() },
+        ...prev,
+      ]);
+      return;
     }
+
+    const row = cardRows.find((c) => c.id === cardId);
+    if (row) {
+      supabase
+        .from('budget_cards')
+        .update({ amount: row.amount + amount })
+        .eq('id', cardId)
+        .then(({ error }) => warn('add money', error));
+    }
+
+    supabase
+      .from('card_topups')
+      .insert({ card_id: cardId, user_id: userId, amount })
+      .select('*')
+      .single()
+      .then(({ data, error }) => {
+        warn('log top-up', error);
+        if (data) setTopupRows((prev) => [data as TopupRow, ...prev]);
+      });
   };
 
   const deleteFocusedCard = () => {
@@ -361,6 +418,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
 
     setCardRows((prev) => prev.filter((c) => c.id !== cardId));
     setExpenseRows((prev) => prev.filter((r) => r.card_id !== cardId));
+    setTopupRows((prev) => prev.filter((r) => r.card_id !== cardId));
 
     const nextLen = deck.length - 1;
     if (nextLen <= 0) {
@@ -394,10 +452,17 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     setCardRows((prev) => (prev.some((c) => c.id === row.id) ? prev : [...prev, row]));
 
     if (row.owner_id !== userId) {
-      const { data: expenseData, error: expenseError } = await supabase.from('card_expenses').select('*').eq('card_id', row.id);
+      const [{ data: expenseData, error: expenseError }, { data: topupData, error: topupError }] = await Promise.all([
+        supabase.from('card_expenses').select('*').eq('card_id', row.id),
+        supabase.from('card_topups').select('*').eq('card_id', row.id),
+      ]);
       warn('load joined card expenses', expenseError);
+      warn('load joined card topups', topupError);
       if (expenseData) {
         setExpenseRows((prev) => [...prev.filter((r) => r.card_id !== row.id), ...(expenseData as ExpenseRow[])]);
+      }
+      if (topupData) {
+        setTopupRows((prev) => [...prev.filter((r) => r.card_id !== row.id), ...(topupData as TopupRow[])]);
       }
     }
 
@@ -417,6 +482,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     focusedIdx,
     focusedCard,
     expensesFor,
+    historyFor,
     memberSpendsFor,
     addExpense,
     addCard,

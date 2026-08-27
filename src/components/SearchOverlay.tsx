@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, EASE, duration, fontFamily, noOutline, radius, spacing, typography } from '../theme';
 import { useGlobalSearch, type SearchResult, type SearchSection } from '../hooks/useGlobalSearch';
 import type { Item, Room } from '../types/space';
+import type { ViewId } from '../data/views';
 
 interface SearchOverlayProps {
   visible: boolean;
@@ -11,9 +12,15 @@ interface SearchOverlayProps {
   rooms: Room[];
   items: Item[];
   onOpenHome: () => void;
+  onOpenDetail: (viewId: ViewId) => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
   reduceMotion?: boolean;
+}
+
+interface Shortcut {
+  label: string;
+  onPress: () => void;
 }
 
 const SECTION_LABEL: Record<SearchSection, string> = {
@@ -23,12 +30,20 @@ const SECTION_LABEL: Record<SearchSection, string> = {
 };
 
 /** Full-screen animated search popup — spans Home's own rooms/items plus Expenses' budget cards and Split's groups. */
-export function SearchOverlay({ visible, onClose, rooms, items, onOpenHome, onOpenExpenses, onOpenSplit, reduceMotion }: SearchOverlayProps) {
+export function SearchOverlay({ visible, onClose, rooms, items, onOpenHome, onOpenDetail, onOpenExpenses, onOpenSplit, reduceMotion }: SearchOverlayProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(0)).current;
   const results = useGlobalSearch(query, rooms, items);
+
+  const shortcuts: Shortcut[] = [
+    { label: 'Add room', onPress: () => onOpenDetail('rooms') },
+    { label: 'Add item', onPress: () => onOpenDetail('add') },
+    { label: 'Needs attention', onPress: () => onOpenDetail('attention') },
+    { label: 'Add budget card', onPress: onOpenExpenses },
+    { label: 'Add split', onPress: onOpenSplit },
+  ];
 
   useEffect(() => {
     if (visible) {
@@ -92,7 +107,25 @@ export function SearchOverlay({ visible, onClose, rooms, items, onOpenHome, onOp
 
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.results}>
           {!hasQuery ? (
-            <Text style={styles.hint}>Search rooms and items in Home, budget cards in Expenses, and splits in Split.</Text>
+            <View style={styles.shortcutsWrap}>
+              <Text style={styles.hint}>Search rooms and items in Home, budget cards in Expenses, and splits in Split.</Text>
+              <View style={styles.chipRow}>
+                {shortcuts.map((s) => (
+                  <Pressable
+                    key={s.label}
+                    onPress={() => {
+                      onClose();
+                      s.onPress();
+                    }}
+                    style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel={s.label}
+                  >
+                    <Text style={styles.chipLabel}>{s.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
           ) : totalResults === 0 ? (
             <Text style={styles.hint}>No matches for "{query.trim()}".</Text>
           ) : (
@@ -182,6 +215,30 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     lineHeight: 20,
     color: colors.textFaint,
+  },
+  shortcutsWrap: {
+    gap: spacing.md,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  chip: {
+    backgroundColor: colors.white,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  chipPressed: {
+    backgroundColor: colors.pressWash,
+  },
+  chipLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 13,
+    color: colors.textPrimary,
   },
   section: {
     gap: spacing.xs,

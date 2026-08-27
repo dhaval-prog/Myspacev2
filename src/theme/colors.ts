@@ -58,6 +58,7 @@ export const colors = {
   walletSheetTextSecondary: 'rgba(0,0,0,0.5)',
   walletSheetTextFaint: 'rgba(0,0,0,0.42)',
   walletAccentBlue: '#1668E8',
+  walletAccentBlueSoftBg: 'rgba(22,104,232,0.12)',
   walletAccentRed: '#E8352A',
 
   // --- Split screens ---
