@@ -9,12 +9,14 @@ import { parseAmount } from '../../utils/expensesFormat';
 
 /** Full spend history for the focused card. */
 export function HistorySheet() {
-  const { historyOpen, closeHistory, focusedCard, expensesFor, historyFor, memberSpendsFor } = useExpenses();
+  const { historyOpen, closeHistory, focusedCard, expensesFor, historyFor, memberSpendsFor, memberTopupsFor } = useExpenses();
   const expenses = expensesFor(focusedCard);
   const history = historyFor(focusedCard);
   const total = expenses.reduce((s, x) => s + parseAmount(x.amt), 0);
   const members = memberSpendsFor(focusedCard);
   const maxMemberTotal = Math.max(0, ...members.map((m) => m.total));
+  const topupMembers = memberTopupsFor(focusedCard);
+  const maxTopupTotal = Math.max(0, ...topupMembers.map((m) => m.total));
 
   return (
     <BottomSheet visible={historyOpen} onClose={closeHistory} maxHeightRatio={0.76}>
@@ -27,8 +29,18 @@ export function HistorySheet() {
 
       {members.length > 0 && (
         <View style={styles.members}>
+          <Text style={styles.membersLabel}>Spent by</Text>
           {members.map((member) => (
             <MemberSpendBar key={member.userId} member={member} maxTotal={maxMemberTotal} />
+          ))}
+        </View>
+      )}
+
+      {topupMembers.length > 0 && (
+        <View style={styles.members}>
+          <Text style={styles.membersLabel}>Added by</Text>
+          {topupMembers.map((member) => (
+            <MemberSpendBar key={member.userId} member={member} maxTotal={maxTopupTotal} />
           ))}
         </View>
       )}
@@ -70,6 +82,13 @@ const styles = StyleSheet.create({
   },
   members: {
     gap: spacing.ms,
+  },
+  membersLabel: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 10.5,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.walletSheetTextFaint,
   },
   summary: {
     flexDirection: 'row',

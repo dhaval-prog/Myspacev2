@@ -127,6 +127,8 @@ interface ExpensesContextValue {
   historyFor: (card: WalletCard | undefined) => Expense[];
   /** Per-member spend totals on a card, highest first — for History's breakdown. */
   memberSpendsFor: (card: WalletCard | undefined) => MemberSpend[];
+  /** Per-member Add Money totals on a card, highest first — for History's "Added by" breakdown. */
+  memberTopupsFor: (card: WalletCard | undefined) => MemberSpend[];
   addExpense: (input: NewExpenseInput) => void;
   addCard: (input: NewCardInput) => void;
   /** Owner-only: tops up the focused card's budget total by `amount`. */
@@ -226,7 +228,8 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
   // never refetching a name already in hand.
   useEffect(() => {
     if (!userId || !isSupabaseConfigured) return;
-    const missing = Array.from(new Set(expenseRows.map((r) => r.user_id))).filter((id) => !(id in profileNames));
+    const seen = new Set([...expenseRows.map((r) => r.user_id), ...topupRows.map((r) => r.user_id)]);
+    const missing = Array.from(seen).filter((id) => !(id in profileNames));
     if (missing.length === 0) return;
 
     supabase
@@ -246,7 +249,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
       });
     // profileNames deliberately excluded — it's read to find gaps, not to retrigger on every fill.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenseRows, userId]);
+  }, [expenseRows, topupRows, userId]);
 
   const deck = useMemo(() => cardRows.map((row) => toWalletCard(row, userId)), [cardRows, userId]);
   const focusedIdx = deck.length ? (sel + dot) % deck.length : 0;
@@ -270,6 +273,18 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     if (!card) return [];
     const totals = new Map<string, number>();
     for (const row of expenseRows) {
+      if (row.card_id !== card.id) continue;
+      totals.set(row.user_id, (totals.get(row.user_id) ?? 0) + row.amount);
+    }
+    return Array.from(totals.entries())
+      .map(([id, total]) => ({ userId: id, name: profileNames[id] ?? 'Member', total }))
+      .sort((a, b) => b.total - a.total);
+  };
+
+  const memberTopupsFor = (card: WalletCard | undefined): MemberSpend[] => {
+    if (!card) return [];
+    const totals = new Map<string, number>();
+    for (const row of topupRows) {
       if (row.card_id !== card.id) continue;
       totals.set(row.user_id, (totals.get(row.user_id) ?? 0) + row.amount);
     }
@@ -484,6 +499,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     expensesFor,
     historyFor,
     memberSpendsFor,
+    memberTopupsFor,
     addExpense,
     addCard,
     addMoney,
