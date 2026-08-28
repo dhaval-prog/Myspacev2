@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { AccountBadge } from '../../components/AccountBadge';
+import { NotificationsBell } from '../../components/NotificationsBell';
+import { NotificationsSheet } from '../../components/NotificationsSheet';
 import { Icon } from '../../components/Icon';
 import { initialsOf } from '../../components/split/MemberAvatar';
 import { JoinSplitSheet } from '../../components/split/JoinSplitSheet';
@@ -34,6 +36,7 @@ export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount }: Split
   const [friendsTab, setFriendsTab] = useState<'nearby' | 'recent'>('nearby');
   const [revealedGroupId, setRevealedGroupId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const revealedGroupIdRef = useRef<string | null>(null);
   const dragXMap = useRef(new Map<string, Animated.Value>()).current;
   const responderCache = useRef(new Map<string, ReturnType<typeof PanResponder.create>>()).current;
@@ -112,10 +115,10 @@ export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount }: Split
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}
       >
         <View style={styles.topRow}>
-          <Pressable style={styles.roundButton} accessibilityRole="button" accessibilityLabel="Notifications">
-            <Icon path="M6 8v8M12 5v14M18 9v6" color={colors.splitInk} size={20} strokeWidth={2} />
-          </Pressable>
-          <AccountBadge onPress={onOpenAccount} />
+          <View style={styles.headerActions}>
+            <NotificationsBell onPress={() => setNotificationsOpen(true)} bg={colors.splitSurface} tint={colors.splitInk} />
+            <AccountBadge onPress={onOpenAccount} />
+          </View>
         </View>
 
         <LinearGradient
@@ -319,6 +322,7 @@ export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount }: Split
         reduceMotion={reduceMotion}
       />
       <JoinSplitSheet visible={joinOpen} onClose={() => setJoinOpen(false)} />
+      <NotificationsSheet visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
 
       <Modal visible={!!deleteTarget} transparent animationType="fade" onRequestClose={() => setDeleteTarget(null)}>
         <View style={styles.deleteModalWrap}>
@@ -356,20 +360,12 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
   },
-  roundButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    backgroundColor: colors.splitSurface,
+  headerActions: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.splitInk,
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 18,
-    elevation: 2,
+    gap: spacing.ms,
   },
   hero: {
     borderRadius: 34,
