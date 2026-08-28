@@ -71,7 +71,6 @@ const NOTIFICATION_CATEGORIES: { key: string; label: string }[] = [
   { key: 'item_reminders', label: 'Item reminders' },
   { key: 'budget_alerts', label: 'Budget alerts' },
   { key: 'budget_reset', label: 'Budget reset reminders' },
-  { key: 'piggy_goals', label: 'Piggy goal updates' },
   { key: 'split_activity', label: 'Split expense activity' },
   { key: 'invitations', label: 'New invitations' },
   { key: 'shared_space_activity', label: 'Shared space activity' },
