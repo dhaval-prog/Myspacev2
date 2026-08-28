@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { colors } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { AppleIcon, FacebookIcon, GoogleIcon } from './icons';
 
 const PROVIDERS = [
@@ -9,6 +10,14 @@ const PROVIDERS = [
   { id: 'google', label: 'Continue with Google', bg: colors.white, render: () => <GoogleIcon /> },
   { id: 'apple', label: 'Continue with Apple', bg: colors.ink, render: () => <AppleIcon /> },
 ] as const;
+
+// Facebook and Apple sign-in are still mid-setup (pending Facebook App Review
+// and an Apple Developer account) — tapping them explains that instead of
+// attempting a real OAuth redirect.
+const COMING_SOON: Partial<Record<(typeof PROVIDERS)[number]['id'], string>> = {
+  facebook: 'Facebook',
+  apple: 'Apple',
+};
 
 interface SocialAuthRowProps {
   /** Surfaces a failed OAuth redirect (e.g. the provider isn't enabled on the Supabase project yet) — the caller renders it the same way as its own form errors. */
@@ -19,9 +28,15 @@ interface SocialAuthRowProps {
 export function SocialAuthRow({ onError }: SocialAuthRowProps) {
   const { signInWithOAuth } = useAuth();
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [comingSoon, setComingSoon] = useState<string | null>(null);
 
   const handlePress = async (id: (typeof PROVIDERS)[number]['id']) => {
     if (pendingId) return;
+    const providerName = COMING_SOON[id];
+    if (providerName) {
+      setComingSoon(providerName);
+      return;
+    }
     setPendingId(id);
     const { error } = await signInWithOAuth(id);
     // On success the browser is already navigating away; only a failure to
@@ -51,6 +66,15 @@ export function SocialAuthRow({ onError }: SocialAuthRowProps) {
           {p.render()}
         </Pressable>
       ))}
+      <ConfirmDialog
+        visible={comingSoon !== null}
+        title="Coming soon"
+        message={`Sign in with ${comingSoon} will be enabled once the app is live on the App Store.`}
+        confirmLabel="Got it"
+        hideCancel
+        onConfirm={() => setComingSoon(null)}
+        onCancel={() => setComingSoon(null)}
+      />
     </View>
   );
 }
