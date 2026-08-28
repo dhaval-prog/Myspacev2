@@ -47,6 +47,15 @@ export function nextResetLabel(day: string, now: Date = new Date()): string {
   return `${String(dd).padStart(2, '0')} / ${String(when.getMonth() + 1).padStart(2, '0')}`;
 }
 
+/** Days from `now` until the next occurrence of a reset day (1st/15th/Last day/custom ordinal). */
+export function daysUntilReset(day: string, now: Date = new Date()): number {
+  const eom = daysInCurrentMonth(now);
+  const dd = day === 'Last day' ? eom : Math.min(eom, parseInt(day, 10) || 1);
+  const monthOffset = dd >= now.getDate() ? 0 : 1;
+  const when = new Date(now.getFullYear(), now.getMonth() + monthOffset, dd);
+  return Math.round((when.getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
+}
+
 export function randomRid(): string {
   return Array.from({ length: 11 }, () => Math.floor(Math.random() * 10)).join('');
 }

@@ -3,11 +3,15 @@ import { ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAuth } from '../context/AuthContext';
 import { useSpace } from '../context/SpaceContext';
 import { getAttentionEntries } from '../utils/attention';
+import { notifySelf } from '../utils/notify';
+import { isSupabaseConfigured } from '../lib/supabase';
 import { VIEWS, type ViewId } from '../data/views';
 import { Header } from '../components/Header';
 import { SearchOverlay } from '../components/SearchOverlay';
+import { NotificationsSheet } from '../components/NotificationsSheet';
 import { Hero } from '../components/Hero';
 import { CategoryNavigation, type CategoryRowData } from '../components/CategoryNavigation';
 import { ContextCard } from '../components/ContextCard';
@@ -29,14 +33,34 @@ interface HomeScreenProps {
 export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenAccount }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const { rooms, items } = useSpace();
   const [activeViewId, setActiveViewId] = useState<ViewId>('rooms');
   const [previewViewId, setPreviewViewId] = useState<ViewId>('rooms');
   const [activeNavId, setActiveNavId] = useState('home');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const attentionEntries = useMemo(() => getAttentionEntries(items), [items]);
   const showAttention = attentionEntries.length > 0;
+
+  // Fires a real in-app notification the first time each item is seen at
+  // (or past) its expiry ("Expiring items") or coming up within the window
+  // ("Item reminders") — deduped per item name + tier for this session so
+  // re-renders don't spam the inbox.
+  const notifiedRef = React.useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured) return;
+    for (const entry of attentionEntries) {
+      const category = entry.urgent ? 'expiring_items' : 'item_reminders';
+      const key = `${category}:${entry.item.name}:${entry.item.expiry}`;
+      if (notifiedRef.current.has(key)) continue;
+      notifiedRef.current.add(key);
+      const title = entry.urgent ? 'Item expiring' : 'Item reminder';
+      notifySelf(userId, category, title, `${entry.item.name} — ${entry.badge.toLowerCase()}`);
+    }
+  }, [attentionEntries, userId]);
 
   const rows: CategoryRowData[] = useMemo(() => {
     const list: CategoryRowData[] = [
@@ -101,7 +125,11 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenAc
 
       <View style={{ paddingTop: insets.top + spacing.md }}>
         <View style={styles.headerPad}>
-          <Header onSearchPress={() => setSearchOpen(true)} onAvatarPress={onOpenAccount} />
+          <Header
+            onSearchPress={() => setSearchOpen(true)}
+            onAvatarPress={onOpenAccount}
+            onBellPress={() => setNotificationsOpen(true)}
+          />
         </View>
         <Hero line={heroLine} reduceMotion={reduceMotion} />
       </View>
@@ -155,6 +183,8 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenAc
         onOpenSplit={onOpenSplit}
         reduceMotion={reduceMotion}
       />
+
+      <NotificationsSheet visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
     </View>
   );
 }
