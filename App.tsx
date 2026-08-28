@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { colors, fontsToLoad } from './src/theme';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { SpaceProvider } from './src/context/SpaceContext';
+import { NotificationsProvider } from './src/context/NotificationsContext';
 import { SignUpScreen } from './src/screens/SignUpScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -90,7 +91,9 @@ function RootNavigator() {
 
   return (
     <SpaceProvider>
-      <AppNavigator />
+      <NotificationsProvider>
+        <AppNavigator />
+      </NotificationsProvider>
     </SpaceProvider>
   );
 }
