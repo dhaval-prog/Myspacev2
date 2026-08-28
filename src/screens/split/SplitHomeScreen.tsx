@@ -3,7 +3,7 @@ import { Animated, Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet
 import type { PanResponderGestureState } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fontFamily, spacing } from '../../theme';
+import { colors, fontFamily, radius, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { AccountBadge } from '../../components/AccountBadge';
 import { NotificationsBell } from '../../components/NotificationsBell';
@@ -364,9 +364,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   logo: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
   },
   headerActions: {
     flexDirection: 'row',
