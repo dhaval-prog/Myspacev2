@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors, fontFamily, radius, spacing } from '../theme';
+import { colors, fontFamily, spacing } from '../theme';
 import { BottomSheet } from './expenses/BottomSheet';
 import { useNotifications } from '../context/NotificationsContext';
 
@@ -20,17 +20,17 @@ interface NotificationsSheetProps {
   onClose: () => void;
 }
 
-/** Slide-up inbox of real notifications — tap to mark read, long-press to remove. */
+/** Slide-up inbox of real notifications — each one appears only once: tapping it reads and removes it. */
 export function NotificationsSheet({ visible, onClose }: NotificationsSheetProps) {
-  const { notifications, unreadCount, markRead, markAllRead, remove } = useNotifications();
+  const { notifications, unreadCount, acknowledge, clearAll } = useNotifications();
 
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.78}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>Notifications</Text>
         {unreadCount > 0 ? (
-          <Pressable onPress={markAllRead} accessibilityRole="button" accessibilityLabel="Mark all as read">
-            <Text style={styles.markAll}>Mark all read</Text>
+          <Pressable onPress={clearAll} accessibilityRole="button" accessibilityLabel="Clear all">
+            <Text style={styles.clearAll}>Clear all</Text>
           </Pressable>
         ) : null}
       </View>
@@ -42,13 +42,12 @@ export function NotificationsSheet({ visible, onClose }: NotificationsSheetProps
           {notifications.map((n, i) => (
             <Pressable
               key={n.id}
-              onPress={() => markRead(n.id)}
-              onLongPress={() => remove(n.id)}
+              onPress={() => acknowledge(n.id)}
               accessibilityRole="button"
-              accessibilityLabel={`${n.title}. ${n.body}`}
+              accessibilityLabel={`${n.title}. ${n.body}. Tap to dismiss.`}
               style={[styles.row, i !== notifications.length - 1 && styles.rowDivider]}
             >
-              {!n.read ? <View style={styles.unreadDot} /> : <View style={styles.unreadDotSpacer} />}
+              <View style={styles.unreadDot} />
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>{n.title}</Text>
                 <Text style={styles.rowBody}>{n.body}</Text>
@@ -74,7 +73,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.textPrimary,
   },
-  markAll: {
+  clearAll: {
     fontFamily: fontFamily.sans600,
     fontSize: 12.5,
     color: colors.textSecondary,
@@ -98,12 +97,9 @@ const styles = StyleSheet.create({
   unreadDot: {
     width: 7,
     height: 7,
-    borderRadius: radius.pill,
+    borderRadius: 999,
     backgroundColor: colors.danger,
     marginTop: 6,
-  },
-  unreadDotSpacer: {
-    width: 7,
   },
   rowText: {
     flex: 1,

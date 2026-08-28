@@ -7,7 +7,6 @@ export interface AppNotification {
   category: string;
   title: string;
   body: string;
-  read: boolean;
   createdAt: string;
 }
 
@@ -16,20 +15,20 @@ interface NotificationRow {
   category: string;
   title: string;
   body: string;
-  read: boolean;
   created_at: string;
 }
 
 function toNotification(row: NotificationRow): AppNotification {
-  return { id: row.id, category: row.category, title: row.title, body: row.body, read: row.read, createdAt: row.created_at };
+  return { id: row.id, category: row.category, title: row.title, body: row.body, createdAt: row.created_at };
 }
 
 interface NotificationsContextValue {
   notifications: AppNotification[];
+  /** Every open notification is by definition unread — one is deleted the moment it's acknowledged. */
   unreadCount: number;
-  markRead: (id: string) => void;
-  markAllRead: () => void;
-  remove: (id: string) => void;
+  /** Reading a notification consumes it: deletes the row, freeing its dedupe key for a future occurrence of the same event. */
+  acknowledge: (id: string) => void;
+  clearAll: () => void;
 }
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
@@ -40,7 +39,9 @@ const MAX_NOTIFICATIONS = 50;
  * Real in-app notification inbox: loads the signed-in user's rows from
  * `public.notifications` and keeps them live via Supabase Realtime, so a
  * notification inserted by another member (a split-expense activity ping,
- * say) shows up without a refresh.
+ * say) shows up without a refresh. Each notification appears only once —
+ * reading it deletes it (see `acknowledge`) rather than just flagging it
+ * read, so the inbox is always exactly "what still needs your attention."
  */
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -56,7 +57,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
     supabase
       .from('notifications')
-      .select('id,category,title,body,read,created_at')
+      .select('id,category,title,body,created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(MAX_NOTIFICATIONS)
@@ -80,14 +81,6 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       )
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-        (payload) => {
-          const next = payload.new as NotificationRow;
-          setNotifications((prev) => prev.map((n) => (n.id === next.id ? toNotification(next) : n)));
-        },
-      )
-      .on(
-        'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         (payload) => {
           const gone = payload.old as { id: string };
@@ -102,33 +95,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     };
   }, [userId]);
 
-  const markRead = (id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-    if (!isSupabaseConfigured) return;
-    supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('id', id)
-      .then(({ error }) => {
-        if (error) console.warn('[notifications] failed to mark read:', error.message);
-      });
-  };
-
-  const markAllRead = () => {
-    if (!userId) return;
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    if (!isSupabaseConfigured) return;
-    supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('user_id', userId)
-      .eq('read', false)
-      .then(({ error }) => {
-        if (error) console.warn('[notifications] failed to mark all read:', error.message);
-      });
-  };
-
-  const remove = (id: string) => {
+  const acknowledge = (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
     if (!isSupabaseConfigured) return;
     supabase
@@ -140,11 +107,22 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       });
   };
 
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
+  const clearAll = () => {
+    if (!userId) return;
+    setNotifications([]);
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from('notifications')
+      .delete()
+      .eq('user_id', userId)
+      .then(({ error }) => {
+        if (error) console.warn('[notifications] failed to clear all:', error.message);
+      });
+  };
 
   const value = useMemo<NotificationsContextValue>(
-    () => ({ notifications, unreadCount, markRead, markAllRead, remove }),
-    [notifications, unreadCount],
+    () => ({ notifications, unreadCount: notifications.length, acknowledge, clearAll }),
+    [notifications],
   );
 
   return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>;
