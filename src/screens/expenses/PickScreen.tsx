@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fontFamily, spacing } from '../../theme';
+import { colors, fontFamily, radius, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CardStack } from '../../components/expenses/CardStack';
 import { BottomNav } from '../../components/BottomNav';
@@ -85,9 +85,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   logo: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
   },
   headerActions: {
     flexDirection: 'row',

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { colors, spacing } from '../theme';
+import { colors, radius, spacing } from '../theme';
 import { AccountBadge } from './AccountBadge';
 import { NotificationsBell } from './NotificationsBell';
 import { SearchBar } from './SearchBar';
@@ -30,8 +30,8 @@ const styles = StyleSheet.create({
     gap: spacing.ms,
   },
   logo: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
   },
 });
