@@ -8,6 +8,8 @@ interface ConfirmDialogProps {
   message: string;
   confirmLabel: string;
   cancelLabel?: string;
+  /** Renders only the confirm button, for a plain info popup rather than a confirm/cancel choice. */
+  hideCancel?: boolean;
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -25,6 +27,7 @@ export function ConfirmDialog({
   message,
   confirmLabel,
   cancelLabel = 'Cancel',
+  hideCancel,
   destructive,
   onConfirm,
   onCancel,
@@ -37,9 +40,11 @@ export function ConfirmDialog({
           <Text style={[typography.detailTitle, styles.title]}>{title}</Text>
           <Text style={[typography.body, styles.message]}>{message}</Text>
           <View style={styles.actions}>
-            <Pressable onPress={onCancel} style={[styles.button, { backgroundColor: colors.pressWash }]}>
-              <Text style={[typography.buttonLabel, { fontSize: 14, color: colors.textPrimary }]}>{cancelLabel}</Text>
-            </Pressable>
+            {!hideCancel && (
+              <Pressable onPress={onCancel} style={[styles.button, { backgroundColor: colors.pressWash }]}>
+                <Text style={[typography.buttonLabel, { fontSize: 14, color: colors.textPrimary }]}>{cancelLabel}</Text>
+              </Pressable>
+            )}
             <Pressable onPress={onConfirm} style={[styles.button, { backgroundColor: destructive ? colors.danger : colors.ink }]}>
               <Text style={[typography.buttonLabel, { fontSize: 14, color: destructive ? colors.white : colors.lime }]}>
                 {confirmLabel}
