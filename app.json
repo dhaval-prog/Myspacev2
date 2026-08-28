@@ -3,6 +3,7 @@
     "name": "MySpace",
     "slug": "myspace-v2",
     "version": "1.0.0",
+    "scheme": "myspace",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
