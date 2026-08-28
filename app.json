@@ -35,6 +35,15 @@
         {
           "photosPermission": "MySpace uses your photos to read a join QR code from an image."
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 150,
+          "resizeMode": "contain",
+          "backgroundColor": "#C3EA4F"
+        }
       ]
     ]
   }
