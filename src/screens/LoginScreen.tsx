@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, typography } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { AuthLayout } from '../components/auth/AuthLayout';
@@ -140,8 +140,13 @@ export function LoginScreen({ onSwitchToSignUp }: LoginScreenProps) {
 
       <Text style={styles.footer}>
         By continuing to use MySpace, you agree to our{'\n'}
-        <Text style={typography.authLink}>Terms of Service</Text> and{' '}
-        <Text style={typography.authLink}>Privacy Policy</Text>
+        <Text style={typography.authLink} onPress={() => Linking.openURL('https://myspacev2.vercel.app/terms.html')}>
+          Terms of Service
+        </Text>{' '}
+        and{' '}
+        <Text style={typography.authLink} onPress={() => Linking.openURL('https://myspacev2.vercel.app/privacy.html')}>
+          Privacy Policy
+        </Text>
       </Text>
     </AuthLayout>
   );
