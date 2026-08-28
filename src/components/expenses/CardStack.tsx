@@ -39,16 +39,20 @@ export function CardStack({ reduceMotion }: CardStackProps) {
   const [pickP, setPickP] = useState(0);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragY, setDragY] = useState(0);
-  // The trailing spacer must be at least as tall as the viewport itself —
-  // a fixed spacer shorter than that leaves the ScrollView with less
-  // scrollable content than (n-1)*SLOT_HEIGHT on taller screens, so it
-  // bottoms out before pickP can ever reach the last card.
+  // The trailing spacer is sized so the ScrollView's scrollable range is
+  // exactly (n-1)*SLOT_HEIGHT — one slot short of the viewport itself.
+  // Anything taller than that leaves dead scroll room past the point
+  // where the last card is already fully focused (pickP has clamped to
+  // n-1), which reads as the gesture "sticking" right at the end.
   const [areaHeight, setAreaHeight] = useState(0);
   const moved = React.useRef(0);
   // 0→1 over the same window ExpensesContext holds before swapping to the
   // wallet screen, easing the tapped/dragged card's lift instead of
   // snapping it straight to its end position and holding it there static.
   const flyProgress = useRef(new Animated.Value(0)).current;
+  // Subtle press-down feedback on the card currently held by touch —
+  // shared across cards since only one can be held at a time.
+  const pressScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (flyCard === null) {
@@ -133,6 +137,7 @@ export function CardStack({ reduceMotion }: CardStackProps) {
         dragStartPickP.current = pickPRef.current;
         setDragIdx(indexRef.current);
         setDragY(0);
+        Animated.spring(pressScale, { toValue: 0.96, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
       },
       onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
         moved.current = Math.abs(g.dy);
@@ -145,11 +150,13 @@ export function CardStack({ reduceMotion }: CardStackProps) {
         setDragIdx(null);
         const finalDragY = Math.max(-190, Math.min(40, g.dy));
         setDragY(0);
+        Animated.spring(pressScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
         if (moved.current < 6 || finalDragY < OPEN_THRESHOLD) openCard(indexRef.current);
       },
       onPanResponderTerminate: () => {
         setDragIdx(null);
         setDragY(0);
+        Animated.spring(pressScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
       },
     });
     cache.set(rid, { responder, indexRef });
@@ -184,7 +191,7 @@ export function CardStack({ reduceMotion }: CardStackProps) {
         {deck.map((card) => (
           <View key={card.rid} style={{ height: SLOT_HEIGHT }} />
         ))}
-        <View style={{ height: Math.max(300, areaHeight) }} />
+        <View style={{ height: Math.max(0, areaHeight - SLOT_HEIGHT) }} />
       </ScrollView>
 
       <View style={styles.centerWrap} pointerEvents="box-none">
@@ -196,10 +203,17 @@ export function CardStack({ reduceMotion }: CardStackProps) {
             // holding it — only the rest of the stack reacts live as the
             // drag also moves `pickP`, giving the "dragging browses too"
             // feedback without disturbing the card under your finger.
-            const d = i - (held ? dragStartPickP.current : pickP);
+            const rawD = i - (held ? dragStartPickP.current : pickP);
+            const flying = flyCard === i;
+            // Cards far enough behind the focused one are fully hidden
+            // anyway (opacity floors at 0.5 only within `ad<=3`, everything
+            // past that renders nothing extra) — skip them outright so a
+            // long deck stays cheap instead of animating every card on
+            // every scroll tick.
+            if (!flying && Math.abs(rawD) > 3.5) return null;
+            const d = rawD;
             const ad = Math.min(3, Math.abs(d));
             const focused = ad < 0.5;
-            const flying = flyCard === i;
             // Computed the same way regardless of `flying`, so this is
             // exactly the card's on-screen position the instant it started
             // flying — the animation's start point, whether that's a tap
@@ -229,7 +243,7 @@ export function CardStack({ reduceMotion }: CardStackProps) {
                     backgroundColor: card.bg,
                     zIndex: flying || held ? 60 : Math.round(40 - ad * 10),
                     opacity,
-                    transform: [{ translateY }, { scale }],
+                    transform: held ? [{ translateY }, { scale }, { scale: pressScale }] : [{ translateY }, { scale }],
                   },
                 ]}
               >

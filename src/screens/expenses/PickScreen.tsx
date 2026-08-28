@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
@@ -6,6 +6,8 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CardStack } from '../../components/expenses/CardStack';
 import { BottomNav } from '../../components/BottomNav';
 import { AccountBadge } from '../../components/AccountBadge';
+import { NotificationsBell } from '../../components/NotificationsBell';
+import { NotificationsSheet } from '../../components/NotificationsSheet';
 import { useExpenses } from '../../context/ExpensesContext';
 
 interface PickScreenProps {
@@ -19,6 +21,7 @@ export function PickScreen({ onHome, onOpenSplit, onOpenAccount }: PickScreenPro
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { openNewCard, openJoin } = useExpenses();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   return (
     <View style={styles.screen}>
@@ -32,7 +35,10 @@ export function PickScreen({ onHome, onOpenSplit, onOpenAccount }: PickScreenPro
             </View>
             <Text style={styles.subtitle}>Scroll through your cards · pull one up to open</Text>
           </View>
-          <AccountBadge onPress={onOpenAccount} bg="#111" tint="#fff" />
+          <View style={styles.headerActions}>
+            <NotificationsBell onPress={() => setNotificationsOpen(true)} bg="#111" tint="#fff" />
+            <AccountBadge onPress={onOpenAccount} bg="#111" tint="#fff" />
+          </View>
         </View>
       </View>
 
@@ -57,6 +63,8 @@ export function PickScreen({ onHome, onOpenSplit, onOpenAccount }: PickScreenPro
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
       />
+
+      <NotificationsSheet visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
     </View>
   );
 }
@@ -75,7 +83,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerSpacer: {
-    width: 44,
+    width: 100,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.ms,
   },
   headerCenter: {
     flex: 1,
