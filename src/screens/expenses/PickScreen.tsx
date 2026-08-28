@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -27,12 +27,10 @@ export function PickScreen({ onHome, onOpenSplit, onOpenAccount }: PickScreenPro
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.huge }]}>
         <View style={styles.headerRow}>
-          <View style={styles.headerSpacer} />
+          <View style={styles.headerSpacer}>
+            <Image source={require('../../../assets/logos/logo-mono-white.png')} style={styles.logo} />
+          </View>
           <View style={styles.headerCenter}>
-            <View style={styles.wordmark}>
-              <Text style={styles.sparkle}>✻</Text>
-              <Text style={styles.wordmarkText}>myspace</Text>
-            </View>
             <Text style={styles.subtitle}>Scroll through your cards · pull one up to open</Text>
           </View>
           <View style={styles.headerActions}>
@@ -84,6 +82,12 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 100,
+    alignItems: 'flex-start',
+  },
+  logo: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
   },
   headerActions: {
     flexDirection: 'row',
@@ -94,21 +98,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     gap: spacing.xs,
-  },
-  wordmark: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  sparkle: {
-    fontSize: 22,
-    color: colors.walletTextPrimary,
-  },
-  wordmarkText: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 25,
-    letterSpacing: -0.5,
-    color: colors.walletTextPrimary,
   },
   subtitle: {
     fontFamily: fontFamily.sans400,

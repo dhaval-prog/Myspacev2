@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Animated, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { PanResponderGestureState } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -115,6 +115,7 @@ export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount }: Split
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}
       >
         <View style={styles.topRow}>
+          <Image source={require('../../../assets/logos/logo-coral.png')} style={styles.logo} />
           <View style={styles.headerActions}>
             <NotificationsBell onPress={() => setNotificationsOpen(true)} bg={colors.splitSurface} tint={colors.splitInk} />
             <AccountBadge onPress={onOpenAccount} />
@@ -360,7 +361,12 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  logo: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
   },
   headerActions: {
     flexDirection: 'row',

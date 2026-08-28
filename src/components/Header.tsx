@@ -1,6 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { colors, spacing, typography } from '../theme';
+import { Image, StyleSheet, View } from 'react-native';
+import { colors, spacing } from '../theme';
 import { AccountBadge } from './AccountBadge';
 import { NotificationsBell } from './NotificationsBell';
 import { SearchBar } from './SearchBar';
@@ -11,11 +11,11 @@ interface HeaderProps {
   onBellPress?: () => void;
 }
 
-/** Quiet top area: wordmark, integrated search, notifications, profile action. */
+/** Quiet top area: logo mark, integrated search, notifications, profile action. */
 export function Header({ onSearchPress, onAvatarPress, onBellPress }: HeaderProps) {
   return (
     <View style={styles.row}>
-      <Text style={typography.logo}>myspace</Text>
+      <Image source={require('../../assets/logos/logo-lime.png')} style={styles.logo} />
       <SearchBar onPress={onSearchPress} />
       {onBellPress ? <NotificationsBell onPress={onBellPress} bg="#111" tint={colors.lime} /> : null}
       <AccountBadge onPress={onAvatarPress} bg="#111" tint={colors.lime} />
@@ -28,5 +28,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.ms,
+  },
+  logo: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
   },
 });
