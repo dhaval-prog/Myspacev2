@@ -39,6 +39,11 @@ export function CardStack({ reduceMotion }: CardStackProps) {
   const [pickP, setPickP] = useState(0);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragY, setDragY] = useState(0);
+  // The trailing spacer must be at least as tall as the viewport itself —
+  // a fixed spacer shorter than that leaves the ScrollView with less
+  // scrollable content than (n-1)*SLOT_HEIGHT on taller screens, so it
+  // bottoms out before pickP can ever reach the last card.
+  const [areaHeight, setAreaHeight] = useState(0);
   const moved = React.useRef(0);
   // 0→1 over the same window ExpensesContext holds before swapping to the
   // wallet screen, easing the tapped/dragged card's lift instead of
@@ -166,7 +171,7 @@ export function CardStack({ reduceMotion }: CardStackProps) {
   const wheelProps: Record<string, unknown> = { onWheel: handleWheel };
 
   return (
-    <View style={styles.area} {...wheelProps}>
+    <View style={styles.area} {...wheelProps} onLayout={(e) => setAreaHeight(e.nativeEvent.layout.height)}>
       <ScrollView
         ref={scrollRef}
         onScroll={handleScroll}
@@ -179,7 +184,7 @@ export function CardStack({ reduceMotion }: CardStackProps) {
         {deck.map((card) => (
           <View key={card.rid} style={{ height: SLOT_HEIGHT }} />
         ))}
-        <View style={{ height: 300 }} />
+        <View style={{ height: Math.max(300, areaHeight) }} />
       </ScrollView>
 
       <View style={styles.centerWrap} pointerEvents="box-none">

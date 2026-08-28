@@ -254,8 +254,9 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
   }, [expenseRows, topupRows, userId]);
 
   // Self-only "Budget reset reminder": nudges the owner once per upcoming
-  // reset when it's within 3 days — deduped per card + reset date for this
-  // session, since there's no scheduled job to own a once-ever guarantee.
+  // reset when it's within 3 days. The dedupe key includes the reset date,
+  // so a DB-level unique constraint (not just this session's Set) stops it
+  // duplicating across app restarts, while still firing fresh next cycle.
   const resetNotifiedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!userId || !isSupabaseConfigured) return;
@@ -263,11 +264,11 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
       if (row.owner_id !== userId) continue;
       const days = daysUntilReset(row.reset_day);
       if (days < 0 || days > 3) continue;
-      const key = `${row.id}:${nextResetLabel(row.reset_day)}`;
+      const key = `budget_reset:${row.id}:${nextResetLabel(row.reset_day)}`;
       if (resetNotifiedRef.current.has(key)) continue;
       resetNotifiedRef.current.add(key);
       const when = days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`;
-      notifySelf(userId, 'budget_reset', 'Budget reset reminder', `"${row.label}" resets ${when}.`);
+      notifySelf(userId, 'budget_reset', key, 'Budget reset reminder', `"${row.label}" resets ${when}.`);
     }
   }, [cardRows, userId]);
 
@@ -357,7 +358,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
       const priorTotal = expenseRows.filter((r) => r.card_id === cardId).reduce((sum, r) => sum + r.amount, 0);
       const newTotal = priorTotal + amount;
       if (priorTotal < cardRow.amount && newTotal >= cardRow.amount) {
-        notifySelf(userId, 'budget_alerts', 'Budget alert', `"${cardRow.label}" has reached its budget of ${formatMoney(cardRow.amount)}.`);
+        notifySelf(userId, 'budget_alerts', `budget_alerts:${cardId}`, 'Budget alert', `"${cardRow.label}" has reached its budget of ${formatMoney(cardRow.amount)}.`);
       }
     }
 

@@ -58,7 +58,7 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenAc
       if (notifiedRef.current.has(key)) continue;
       notifiedRef.current.add(key);
       const title = entry.urgent ? 'Item expiring' : 'Item reminder';
-      notifySelf(userId, category, title, `${entry.item.name} — ${entry.badge.toLowerCase()}`);
+      notifySelf(userId, category, key, title, `${entry.item.name} — ${entry.badge.toLowerCase()}`);
     }
   }, [attentionEntries, userId]);
 
