@@ -6,6 +6,7 @@ import { colors, fontFamily, noOutline, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { MemberAvatar } from '../../components/split/MemberAvatar';
 import { AddKnownMembersSheet } from '../../components/split/AddKnownMembersSheet';
+import { InviteSplitSheet } from '../../components/split/InviteSplitSheet';
 import { useSplit } from '../../context/SplitContext';
 import { useAuth } from '../../context/AuthContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -14,6 +15,8 @@ import type { SplitGroup } from '../../types/split';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const PLUS_ICON = 'M12 6v12M6 12h12';
+const SHARE_ICON = 'M12 4v10M8 8l4-4 4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4';
+const CHEVRON_ICON = 'M9 6l6 6-6 6';
 
 type SplitMode = 'equal' | 'percentage' | 'custom' | 'shares';
 const MODE_CARDS: { key: SplitMode; label: string; note: string }[] = [
@@ -44,6 +47,7 @@ export function CreateSplitScreen() {
   const [saving, setSaving] = useState(false);
   const [draftGroup, setDraftGroup] = useState<SplitGroup | null>(null);
   const [addMembersOpen, setAddMembersOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const canCreate = name.trim().length > 0 && !saving;
   const catDef = SPLIT_CATEGORIES.find((c) => c.label === category) ?? SPLIT_CATEGORIES[0];
@@ -63,6 +67,11 @@ export function CreateSplitScreen() {
   const openAddMembers = async () => {
     const group = await ensureDraftGroup();
     if (group) setAddMembersOpen(true);
+  };
+
+  const openInvite = async () => {
+    const group = await ensureDraftGroup();
+    if (group) setInviteOpen(true);
   };
 
   const create = async () => {
@@ -169,6 +178,17 @@ export function CreateSplitScreen() {
           </Pressable>
         </View>
 
+        <Pressable onPress={openInvite} style={styles.inviteButton} accessibilityRole="button" accessibilityLabel="Send invite">
+          <View style={styles.inviteIconWrap}>
+            <Icon path={SHARE_ICON} color={colors.splitAccent} size={17} strokeWidth={2} />
+          </View>
+          <View style={styles.inviteButtonText}>
+            <Text style={styles.inviteButtonLabel}>Send Invite</Text>
+            <Text style={styles.inviteButtonNote}>QR code, WhatsApp, or email</Text>
+          </View>
+          <Icon path={CHEVRON_ICON} color={colors.splitInkFaint30} size={16} strokeWidth={2} />
+        </Pressable>
+
         <Text style={styles.label}>DEFAULT SPLIT</Text>
         <SplitModeSlider value={splitMode} onChange={setSplitMode} reduceMotion={reduceMotion} />
 
@@ -249,6 +269,7 @@ export function CreateSplitScreen() {
       </View>
 
       <AddKnownMembersSheet visible={addMembersOpen} onClose={() => setAddMembersOpen(false)} groupId={draftGroup?.id ?? null} />
+      <InviteSplitSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} group={draftGroup} />
     </View>
   );
 }
@@ -449,6 +470,37 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans600,
     fontSize: 12.5,
     color: colors.splitAccent,
+  },
+  inviteButton: {
+    marginTop: spacing.ms,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.ms,
+    backgroundColor: colors.splitSurface,
+    borderRadius: 20,
+    padding: spacing.md,
+  },
+  inviteIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: colors.splitAccentSoftBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteButtonText: {
+    flex: 1,
+    gap: 1,
+  },
+  inviteButtonLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 14.5,
+    color: colors.splitInk,
+  },
+  inviteButtonNote: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 11.5,
+    color: colors.splitInkFaint45,
   },
   modeGrid: {
     position: 'relative',

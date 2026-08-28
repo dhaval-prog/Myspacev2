@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { AccountBadge } from '../../components/AccountBadge';
 import { Icon } from '../../components/Icon';
 import { initialsOf } from '../../components/split/MemberAvatar';
 import { JoinSplitSheet } from '../../components/split/JoinSplitSheet';
@@ -97,8 +98,6 @@ export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount }: Split
     await deleteGroup(id);
   };
 
-  const meInitials = (user?.user_metadata?.full_name ?? user?.email ?? 'You').trim().slice(0, 2).toUpperCase();
-
   const totalBalance = groups.reduce((sum, g) => sum + balancesFor(g.id).reduce((s, b) => s + b.net, 0), 0);
 
   const peopleIds = new Set<string>();
@@ -116,14 +115,7 @@ export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount }: Split
           <Pressable style={styles.roundButton} accessibilityRole="button" accessibilityLabel="Notifications">
             <Icon path="M6 8v8M12 5v14M18 9v6" color={colors.splitInk} size={20} strokeWidth={2} />
           </Pressable>
-          <Pressable
-            onPress={onOpenAccount}
-            style={styles.meAvatar}
-            accessibilityRole="button"
-            accessibilityLabel="Account"
-          >
-            <Text style={styles.meAvatarText}>{meInitials}</Text>
-          </Pressable>
+          <AccountBadge onPress={onOpenAccount} />
         </View>
 
         <LinearGradient
@@ -378,19 +370,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 18,
     elevation: 2,
-  },
-  meAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#111',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  meAvatarText: {
-    fontFamily: fontFamily.sans700,
-    fontSize: 15,
-    color: '#b32b4d',
   },
   hero: {
     borderRadius: 34,
