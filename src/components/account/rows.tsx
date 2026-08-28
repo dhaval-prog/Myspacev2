@@ -130,7 +130,7 @@ export function ActionButton({
 }: {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'destructive';
+  variant?: 'primary' | 'secondary' | 'destructive' | 'success';
   disabled?: boolean;
   loading?: boolean;
 }) {
@@ -145,6 +145,7 @@ export function ActionButton({
         variant === 'primary' && styles.buttonPrimary,
         variant === 'secondary' && styles.buttonSecondary,
         variant === 'destructive' && styles.buttonDestructive,
+        variant === 'success' && styles.buttonSuccess,
         (disabled || loading) && styles.buttonDisabled,
         pressed && !disabled && !loading && styles.buttonPressed,
       ]}
@@ -155,6 +156,7 @@ export function ActionButton({
           variant === 'primary' && styles.buttonLabelPrimary,
           variant === 'secondary' && styles.buttonLabelSecondary,
           variant === 'destructive' && styles.buttonLabelDestructive,
+          variant === 'success' && styles.buttonLabelSuccess,
         ]}
       >
         {loading ? 'Please wait…' : label}
@@ -278,6 +280,9 @@ const styles = StyleSheet.create({
   buttonDestructive: {
     backgroundColor: colors.danger,
   },
+  buttonSuccess: {
+    backgroundColor: colors.lime,
+  },
   buttonDisabled: {
     opacity: 0.5,
   },
@@ -296,6 +301,9 @@ const styles = StyleSheet.create({
   },
   buttonLabelDestructive: {
     color: colors.white,
+  },
+  buttonLabelSuccess: {
+    color: colors.ink,
   },
   inlineError: {
     fontFamily: fontFamily.sans500,

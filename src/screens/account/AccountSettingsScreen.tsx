@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, fontFamily, radius, spacing, typography } from '../../theme';
 import { Icon } from '../../components/Icon';
-import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { ActionButton, Card, InlineError, InlineNote, Row, SectionLabel, TextField } from '../../components/account/rows';
 import { useAuth } from '../../context/AuthContext';
 import { useSpace } from '../../context/SpaceContext';
@@ -13,6 +13,47 @@ import { downloadCsv, downloadJson } from '../../utils/accountExport';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const CAMERA_ICON = 'M4 8h3l1.5-2h7L17 8h3v11H4V8z M12 12.5a2.8 2.8 0 100 5.6 2.8 2.8 0 000-5.6z';
+
+/** One slide-up confirm sheet, reused for every "are you sure" in this screen — logout variants share this shape as-is; the two delete flows extend it with password/phrase fields of their own. */
+function ConfirmSheet({
+  visible,
+  title,
+  message,
+  confirmLabel,
+  destructive,
+  onConfirm,
+  onCancel,
+}: {
+  visible: boolean;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <BottomSheet visible={visible} onClose={onCancel}>
+      <Text style={sheetStyles.title}>{title}</Text>
+      <Text style={sheetStyles.body}>{message}</Text>
+      <View style={sheetStyles.actions}>
+        <View style={sheetStyles.actionFlex}>
+          <ActionButton label="Cancel" variant="secondary" onPress={onCancel} />
+        </View>
+        <View style={sheetStyles.actionFlex}>
+          <ActionButton label={confirmLabel} variant={destructive ? 'destructive' : 'primary'} onPress={onConfirm} />
+        </View>
+      </View>
+    </BottomSheet>
+  );
+}
+
+function strengthBarColor(barIndex: number, strength: number): string {
+  if (strength < barIndex) return colors.badgeInactiveBg;
+  if (strength === 1) return colors.danger;
+  if (strength === 2) return colors.textMuted;
+  return colors.ink;
+}
 
 interface ProfileRow {
   full_name: string | null;
@@ -129,6 +170,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [pwShow, setPwShow] = useState(false);
   const [logoutOthersConfirm, setLogoutOthersConfirm] = useState(false);
   const [logoutAllConfirm, setLogoutAllConfirm] = useState(false);
 
@@ -294,6 +336,15 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
     } finally {
       setAvatarUploading(false);
     }
+  };
+
+  const openPasswordSheet = () => {
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    setPwShow(false);
+    setPasswordSheetOpen(true);
   };
 
   const changePassword = async () => {
@@ -465,6 +516,10 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
 
   const identities = Array.from(new Set((user?.identities ?? []).map((i) => i.provider)));
 
+  const pwLen = newPassword.length;
+  const passwordStrength = pwLen === 0 ? 0 : pwLen < 8 ? 1 : /[0-9]/.test(newPassword) && /[^a-zA-Z0-9]/.test(newPassword) ? 3 : 2;
+  const passwordStrengthLabel = ['', 'Too short', 'Okay', 'Strong'][passwordStrength];
+
   if (loading) {
     return (
       <View style={[styles.screen, styles.loadingWrap]}>
@@ -475,36 +530,36 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <Pressable onPress={onBack} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Icon path={BACK_ICON} color={colors.textPrimary} size={19} strokeWidth={2} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Account settings</Text>
-        <View style={styles.backButton} />
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.huge }]}>
-        {/* Profile */}
-        <View style={styles.profileCard}>
-          <Pressable onPress={pickAvatar} accessibilityRole="button" accessibilityLabel="Change profile photo" style={styles.avatarWrap}>
-            {profile?.avatar_url ? (
-              <View style={styles.avatarImageWrap}>
-                <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
-              </View>
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarFallbackText}>{initials(fullName, user?.email)}</Text>
-              </View>
-            )}
-            <View style={styles.avatarBadge}>
-              {avatarUploading ? <ActivityIndicator size="small" color="#fff" /> : <Icon path={CAMERA_ICON} color="#fff" size={13} strokeWidth={2} />}
-            </View>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.lime} />
+      <View style={[styles.hero, { paddingTop: insets.top + spacing.md }]}>
+        <View style={styles.heroTopRow}>
+          <Pressable onPress={onBack} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back">
+            <Icon path={BACK_ICON} color={colors.textPrimary} size={17} strokeWidth={2.4} />
           </Pressable>
-          <Text style={styles.profileName}>{fullName || 'Add your name'}</Text>
-          <Text style={styles.profileEmail}>{user?.email}</Text>
-          <InlineError>{avatarError}</InlineError>
+          <Text style={styles.heroTitle}>Account settings</Text>
+          <View style={styles.backButton} />
         </View>
 
+        <Pressable onPress={pickAvatar} accessibilityRole="button" accessibilityLabel="Change profile photo" style={styles.avatarWrap}>
+          {profile?.avatar_url ? (
+            <View style={styles.avatarImageWrap}>
+              <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+            </View>
+          ) : (
+            <View style={styles.avatarFallback}>
+              <Text style={styles.avatarFallbackText}>{initials(fullName, user?.email)}</Text>
+            </View>
+          )}
+          <View style={styles.avatarBadge}>
+            {avatarUploading ? <ActivityIndicator size="small" color={colors.ink} /> : <Icon path={CAMERA_ICON} color={colors.ink} size={13} strokeWidth={2} />}
+          </View>
+        </Pressable>
+        <Text style={styles.profileName}>{fullName || 'Add your name'}</Text>
+        <Text style={styles.profileEmail}>{user?.email}</Text>
+        <InlineError>{avatarError}</InlineError>
+      </View>
+
+      <ScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.huge }]}>
         <SectionLabel>Profile</SectionLabel>
         <Card>
           <TextField label="Full name" value={fullName} onChangeText={setFullName} placeholder="Your name" autoCapitalize="words" />
@@ -514,12 +569,19 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
           <TextField label="Date of birth (optional)" value={dob} onChangeText={setDob} placeholder="YYYY-MM-DD" />
           <View style={styles.saveRow}>
             <InlineError>{profileError}</InlineError>
-            {profileSaved ? <InlineNote>Saved.</InlineNote> : null}
-            <ActionButton label="Save changes" onPress={saveProfile} loading={profileSaving} />
+            <ActionButton
+              label={profileSaved ? 'Saved ✓' : 'Save changes'}
+              variant={profileSaved ? 'success' : 'primary'}
+              onPress={saveProfile}
+              loading={profileSaving}
+            />
           </View>
         </Card>
-        <Card style={styles.cardSpaced}>
-          <Row label="Change password" onPress={() => setPasswordSheetOpen(true)} last={identities.length === 0} />
+
+        {/* Security & Login */}
+        <SectionLabel>Security & login</SectionLabel>
+        <Card>
+          <Row label="Change password" onPress={openPasswordSheet} />
           {identities.length > 0 ? (
             <View style={styles.identityRow}>
               <Text style={styles.identityLabel}>Connected login methods</Text>
@@ -532,12 +594,6 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
               </View>
             </View>
           ) : null}
-        </Card>
-
-        {/* Security & Login */}
-        <SectionLabel>Security & login</SectionLabel>
-        <Card>
-          <Row label="Change password" onPress={() => setPasswordSheetOpen(true)} />
           <Row label="Biometric login" sublabel="Face ID / Touch ID / Fingerprint" badge="Coming soon" />
           <Row label="Two-factor authentication" badge="Coming soon" />
           <Row label="Active devices" badge="Coming soon" />
@@ -681,28 +737,38 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       </ScrollView>
 
       {/* Change password */}
-      <Modal visible={passwordSheetOpen} transparent animationType="fade" onRequestClose={() => setPasswordSheetOpen(false)}>
-        <View style={styles.modalWrap}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPasswordSheetOpen(false)} accessibilityRole="button" accessibilityLabel="Dismiss" />
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Change password</Text>
-            <TextField label="New password" value={newPassword} onChangeText={setNewPassword} secureTextEntry placeholder="At least 8 characters" />
-            <TextField label="Confirm new password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry placeholder="Repeat password" />
-            <InlineError>{passwordError}</InlineError>
-            {passwordSuccess ? <InlineNote>Password updated.</InlineNote> : null}
-            <View style={styles.modalActions}>
-              <View style={styles.modalActionFlex}>
-                <ActionButton label="Cancel" variant="secondary" onPress={() => setPasswordSheetOpen(false)} />
-              </View>
-              <View style={styles.modalActionFlex}>
-                <ActionButton label="Update" onPress={changePassword} loading={passwordSaving} />
-              </View>
+      <BottomSheet visible={passwordSheetOpen} onClose={() => setPasswordSheetOpen(false)}>
+        <View style={sheetStyles.titleRow}>
+          <Text style={[sheetStyles.title, sheetStyles.titleFlex]}>Change password</Text>
+          <Pressable onPress={() => setPwShow((v) => !v)} accessibilityRole="button" accessibilityLabel={pwShow ? 'Hide password' : 'Show password'}>
+            <Text style={sheetStyles.showToggle}>{pwShow ? 'Hide' : 'Show'}</Text>
+          </Pressable>
+        </View>
+        <TextField label="New password" value={newPassword} onChangeText={setNewPassword} secureTextEntry={!pwShow} placeholder="At least 8 characters" />
+        {newPassword.length > 0 ? (
+          <View style={sheetStyles.strengthRow}>
+            <View style={sheetStyles.strengthBars}>
+              {[1, 2, 3].map((i) => (
+                <View key={i} style={[sheetStyles.strengthBar, { backgroundColor: strengthBarColor(i, passwordStrength) }]} />
+              ))}
             </View>
+            <Text style={sheetStyles.strengthLabel}>{passwordStrengthLabel}</Text>
+          </View>
+        ) : null}
+        <TextField label="Confirm new password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!pwShow} placeholder="Repeat password" />
+        <InlineError>{passwordError}</InlineError>
+        {passwordSuccess ? <InlineNote>Password updated.</InlineNote> : null}
+        <View style={sheetStyles.actions}>
+          <View style={sheetStyles.actionFlex}>
+            <ActionButton label="Cancel" variant="secondary" onPress={() => setPasswordSheetOpen(false)} />
+          </View>
+          <View style={sheetStyles.actionFlex}>
+            <ActionButton label="Update" onPress={changePassword} loading={passwordSaving} />
           </View>
         </View>
-      </Modal>
+      </BottomSheet>
 
-      <ConfirmDialog
+      <ConfirmSheet
         visible={logoutOthersConfirm}
         title="Log out of other devices"
         message="You'll stay signed in here, but every other device will need to sign in again."
@@ -714,7 +780,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
           signOut('others');
         }}
       />
-      <ConfirmDialog
+      <ConfirmSheet
         visible={logoutAllConfirm}
         title="Log out of all devices"
         message="This signs you out here too — you'll need to log in again."
@@ -726,7 +792,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
           signOut('global');
         }}
       />
-      <ConfirmDialog
+      <ConfirmSheet
         visible={logoutConfirm}
         title="Log out"
         message="Log out of MySpace?"
@@ -740,72 +806,62 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       />
 
       {/* Delete all data */}
-      <Modal visible={deleteDataModal} transparent animationType="fade" onRequestClose={() => setDeleteDataModal(false)}>
-        <View style={styles.modalWrap}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDeleteDataModal(false)} accessibilityRole="button" accessibilityLabel="Dismiss" />
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Delete all my data</Text>
-            <Text style={styles.modalBody}>
-              This permanently deletes every room, item, budget card, and split you own — for everyone they're shared with. Your
-              account itself stays active. This can't be undone.
-            </Text>
-            <TextField label="Password" value={deleteDataPassword} onChangeText={setDeleteDataPassword} secureTextEntry placeholder="Confirm your password" />
-            <TextField label='Type "DELETE" to confirm' value={deleteDataPhrase} onChangeText={setDeleteDataPhrase} placeholder="DELETE" autoCapitalize="none" />
-            <InlineError>{deleteDataError}</InlineError>
-            <View style={styles.modalActions}>
-              <View style={styles.modalActionFlex}>
-                <ActionButton label="Cancel" variant="secondary" onPress={() => setDeleteDataModal(false)} />
-              </View>
-              <View style={styles.modalActionFlex}>
-                <ActionButton
-                  label="Delete data"
-                  variant="destructive"
-                  disabled={deleteDataPhrase !== 'DELETE' || !deleteDataPassword}
-                  loading={deleteDataSaving}
-                  onPress={confirmDeleteData}
-                />
-              </View>
-            </View>
+      <BottomSheet visible={deleteDataModal} onClose={() => setDeleteDataModal(false)}>
+        <Text style={sheetStyles.title}>Delete all my data</Text>
+        <Text style={sheetStyles.body}>
+          This permanently deletes every room, item, budget card, and split you own — for everyone they're shared with. Your
+          account itself stays active. This can't be undone.
+        </Text>
+        <TextField label="Password" value={deleteDataPassword} onChangeText={setDeleteDataPassword} secureTextEntry placeholder="Confirm your password" />
+        <TextField label='Type "DELETE" to confirm' value={deleteDataPhrase} onChangeText={setDeleteDataPhrase} placeholder="DELETE" autoCapitalize="none" />
+        <InlineError>{deleteDataError}</InlineError>
+        <View style={sheetStyles.actions}>
+          <View style={sheetStyles.actionFlex}>
+            <ActionButton label="Cancel" variant="secondary" onPress={() => setDeleteDataModal(false)} />
+          </View>
+          <View style={sheetStyles.actionFlex}>
+            <ActionButton
+              label="Delete data"
+              variant="destructive"
+              disabled={deleteDataPhrase !== 'DELETE' || !deleteDataPassword}
+              loading={deleteDataSaving}
+              onPress={confirmDeleteData}
+            />
           </View>
         </View>
-      </Modal>
+      </BottomSheet>
 
       {/* Delete account */}
-      <Modal visible={deleteAccountModal} transparent animationType="fade" onRequestClose={() => setDeleteAccountModal(false)}>
-        <View style={styles.modalWrap}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDeleteAccountModal(false)} accessibilityRole="button" accessibilityLabel="Dismiss" />
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Delete MySpace account</Text>
-            <Text style={styles.modalBody}>
-              This will permanently remove your spaces, items, budgets, and associated data, and delete your account. This can't be
-              undone.
-            </Text>
-            <TextField label="Password" value={deleteAccountPassword} onChangeText={setDeleteAccountPassword} secureTextEntry placeholder="Confirm your password" />
-            <TextField
-              label='Type "DELETE MY ACCOUNT" to confirm'
-              value={deleteAccountPhrase}
-              onChangeText={setDeleteAccountPhrase}
-              placeholder="DELETE MY ACCOUNT"
-              autoCapitalize="none"
+      <BottomSheet visible={deleteAccountModal} onClose={() => setDeleteAccountModal(false)}>
+        <Text style={sheetStyles.title}>Delete MySpace account</Text>
+        <Text style={sheetStyles.body}>
+          This will permanently remove your spaces, items, budgets, and associated data, and delete your account. This can't be
+          undone.
+        </Text>
+        <TextField label="Password" value={deleteAccountPassword} onChangeText={setDeleteAccountPassword} secureTextEntry placeholder="Confirm your password" />
+        <TextField
+          label='Type "DELETE MY ACCOUNT" to confirm'
+          value={deleteAccountPhrase}
+          onChangeText={setDeleteAccountPhrase}
+          placeholder="DELETE MY ACCOUNT"
+          autoCapitalize="none"
+        />
+        <InlineError>{deleteAccountError}</InlineError>
+        <View style={sheetStyles.actions}>
+          <View style={sheetStyles.actionFlex}>
+            <ActionButton label="Cancel" variant="secondary" onPress={() => setDeleteAccountModal(false)} />
+          </View>
+          <View style={sheetStyles.actionFlex}>
+            <ActionButton
+              label="Delete account"
+              variant="destructive"
+              disabled={deleteAccountPhrase !== 'DELETE MY ACCOUNT' || !deleteAccountPassword}
+              loading={deleteAccountSaving}
+              onPress={confirmDeleteAccount}
             />
-            <InlineError>{deleteAccountError}</InlineError>
-            <View style={styles.modalActions}>
-              <View style={styles.modalActionFlex}>
-                <ActionButton label="Cancel" variant="secondary" onPress={() => setDeleteAccountModal(false)} />
-              </View>
-              <View style={styles.modalActionFlex}>
-                <ActionButton
-                  label="Delete account"
-                  variant="destructive"
-                  disabled={deleteAccountPhrase !== 'DELETE MY ACCOUNT' || !deleteAccountPassword}
-                  loading={deleteAccountSaving}
-                  onPress={confirmDeleteAccount}
-                />
-              </View>
-            </View>
           </View>
         </View>
-      </Modal>
+      </BottomSheet>
     </View>
   );
 }
@@ -813,39 +869,47 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.pale,
+    backgroundColor: colors.lime,
   },
   loadingWrap: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  header: {
+  hero: {
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: spacing.xl,
+  },
+  heroTopRow: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.xxl,
-    paddingBottom: spacing.md,
+    marginBottom: spacing.md,
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: radius.sm,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(22,33,12,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
+  heroTitle: {
     fontFamily: fontFamily.sans600,
     fontSize: 17,
     color: colors.textPrimary,
   },
+  body: {
+    flex: 1,
+    backgroundColor: colors.pale,
+    borderTopLeftRadius: radius.organic,
+  },
   scroll: {
     paddingHorizontal: spacing.xxl,
+    paddingTop: spacing.xl,
     gap: spacing.ms,
-  },
-  profileCard: {
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: spacing.lg,
   },
   avatarWrap: {
     position: 'relative',
@@ -882,21 +946,21 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.pale,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: colors.pale,
+    borderWidth: 2,
+    borderColor: colors.lime,
   },
   profileName: {
     fontFamily: fontFamily.sans700,
-    fontSize: 18,
+    fontSize: 20,
     color: colors.textPrimary,
   },
   profileEmail: {
     fontFamily: fontFamily.sans400,
     fontSize: 12.5,
-    color: colors.textFaint,
+    color: colors.textSecondary,
   },
   cardSpaced: {
     marginTop: spacing.xs,
@@ -909,6 +973,8 @@ const styles = StyleSheet.create({
   identityRow: {
     paddingVertical: 14,
     gap: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
   },
   identityLabel: {
     fontFamily: fontFamily.mono500,
@@ -1082,38 +1148,63 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(211,50,67,0.25)',
     marginBottom: spacing.xxl,
   },
-  modalWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.organic,
-    backgroundColor: 'rgba(22,33,12,0.35)',
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: colors.pale,
-    borderRadius: radius.lg,
-    padding: spacing.xxl,
-    gap: 2,
-  },
-  modalTitle: {
+});
+
+const sheetStyles = StyleSheet.create({
+  title: {
     ...typography.detailTitle,
     marginBottom: spacing.sm,
   },
-  modalBody: {
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.sm,
+  },
+  titleFlex: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  showToggle: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  body: {
     fontFamily: fontFamily.sans400,
     fontSize: 13,
     lineHeight: 19,
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
-  modalActions: {
+  strengthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: -4,
+    marginBottom: spacing.xs,
+  },
+  strengthBars: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 5,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 999,
+  },
+  strengthLabel: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  actions: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.md,
   },
-  modalActionFlex: {
+  actionFlex: {
     flex: 1,
   },
 });
