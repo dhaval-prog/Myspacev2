@@ -133,7 +133,7 @@ interface ExpensesContextValue {
   memberTopupsFor: (card: WalletCard | undefined) => MemberSpend[];
   addExpense: (input: NewExpenseInput) => void;
   addCard: (input: NewCardInput) => void;
-  /** Owner-only: tops up the focused card's budget total by `amount`. */
+  /** Owner or member: tops up the focused card's budget total by `amount`. */
   addMoney: (amount: number) => void;
   deleteFocusedCard: () => void;
   joinCard: (code: string) => Promise<{ error: string | null }>;
@@ -430,7 +430,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addMoney = (amount: number) => {
-    if (!focusedCard || !focusedCard.isOwner || amount <= 0) return;
+    if (!focusedCard || amount <= 0) return;
     const cardId = focusedCard.id;
     setAddMoneyOpen(false);
 
@@ -552,12 +552,12 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     closeHistory: () => setHistoryOpen(false),
     inviteOpen,
     openInvite: () => {
-      if (focusedCard?.isOwner) setInviteOpen(true);
+      if (focusedCard) setInviteOpen(true);
     },
     closeInvite: () => setInviteOpen(false),
     addMoneyOpen,
     openAddMoney: () => {
-      if (focusedCard?.isOwner) setAddMoneyOpen(true);
+      if (focusedCard) setAddMoneyOpen(true);
     },
     closeAddMoney: () => setAddMoneyOpen(false),
     confirmDeleteOpen,
