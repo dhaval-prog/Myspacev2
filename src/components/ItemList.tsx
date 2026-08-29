@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, radius, spacing, typography, noOutline } from '../theme';
 import { useFocusBorder } from '../hooks/useFocusBorder';
 import { Icon } from './Icon';
@@ -124,7 +124,11 @@ function ItemCard({
     <View style={styles.card}>
       <View style={styles.cardRow}>
         <View style={styles.cardIcon}>
-          <Icon path={CATEGORY_ICON[item.category] || EMPTY_CATEGORY_ICON} color={colors.pale} size={24} />
+          {item.photoUrl ? (
+            <Image source={{ uri: item.photoUrl }} style={styles.cardPhoto} />
+          ) : (
+            <Icon path={CATEGORY_ICON[item.category] || EMPTY_CATEGORY_ICON} color={colors.pale} size={24} />
+          )}
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={typography.itemTitle}>{item.name}</Text>
@@ -311,6 +315,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#3A3A3A',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  cardPhoto: {
+    width: '100%',
+    height: '100%',
   },
   action: {
     width: 46,

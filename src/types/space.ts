@@ -29,4 +29,6 @@ export interface Item {
   dosesPerDay?: number;
   /** "HH:MM" 24-hour strings, one per dose, only meaningful when remindersEnabled. */
   reminderTimes?: string[];
+  /** Public URL of an optional photo taken for this item, shown in place of its category icon. */
+  photoUrl?: string;
 }
