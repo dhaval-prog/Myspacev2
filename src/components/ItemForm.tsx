@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, fontFamily, radius, spacing, typography, noOutline } from '../theme';
 import { useFocusBorder } from '../hooks/useFocusBorder';
+import { useAuth } from '../context/AuthContext';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { Icon } from './Icon';
 import { CategoryPicker } from './CategoryPicker';
 import { Calendar } from './Calendar';
 import { SegmentedToggle } from './SegmentedToggle';
 import { TimePicker } from './TimePicker';
+import { PhotoCaptureSheet } from './PhotoCaptureSheet';
 import { ToggleRow } from './account/rows';
 import { CATEGORY_ICON, EMPTY_CATEGORY_ICON } from '../data/itemCategories';
 import { formatDate } from '../utils/attention';
@@ -14,6 +17,8 @@ import { formatTime12 } from '../utils/time';
 import type { DosageType } from '../types/space';
 
 const CLOCK_ICON = 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M12 7v5l3.5 2';
+const CAMERA_ICON = 'M4 8h3l1.5-2h7L17 8h3v12H4z M12 11.4a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8';
+const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 const DOSE_FREQUENCIES = [1, 2, 3, 4];
 
 interface MedicineFields {
@@ -26,17 +31,26 @@ interface MedicineFields {
 
 interface ItemFormProps {
   rooms: string[];
-  onSubmit: (input: { name: string; category: string; room: string; expiry: string } & MedicineFields) => void;
+  onSubmit: (input: { name: string; category: string; room: string; expiry: string; photoUrl?: string } & MedicineFields) => void;
 }
 
 /** "What are you putting away?" — the add-item form. */
 export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [room, setRoom] = useState('');
   const [expiry, setExpiry] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const [medOpen, setMedOpen] = useState(false);
   const [dosageType, setDosageType] = useState<DosageType>('ml');
@@ -53,7 +67,44 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
 
   const isMedicine = category === 'Medicines';
   const remindersValid = !remindersEnabled || Array.from({ length: dosesPerDay }).every((_, i) => Boolean(reminderTimes[i]));
-  const canSave = name.trim().length > 0 && remindersValid;
+  const canSave = name.trim().length > 0 && remindersValid && !photoUploading;
+
+  const handleCapture = async (uri: string) => {
+    setCameraOpen(false);
+    setPhotoUri(uri);
+    setPhotoError(null);
+
+    if (!userId || !isSupabaseConfigured) {
+      // No account to upload against — keep the local capture as the preview/value.
+      setPhotoUrl(uri);
+      return;
+    }
+
+    setPhotoUploading(true);
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const ext = (blob.type.split('/')[1] || 'jpg').split('+')[0];
+      const path = `${userId}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('item-photos').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('item-photos').getPublicUrl(path);
+      setPhotoUrl(pub.publicUrl);
+    } catch {
+      setPhotoError('Could not upload that photo. Try again.');
+      setPhotoUrl(null);
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const resetPhotoFields = () => {
+    setCameraOpen(false);
+    setPhotoUri(null);
+    setPhotoUrl(null);
+    setPhotoUploading(false);
+    setPhotoError(null);
+  };
 
   const resetMedicineFields = () => {
     setMedOpen(false);
@@ -72,6 +123,7 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
       category,
       room,
       expiry,
+      ...(photoUrl ? { photoUrl } : {}),
       ...(isMedicine && dosageAmount.trim() ? { dosageType, dosageAmount: Number(dosageAmount) } : {}),
       ...(isMedicine && remindersEnabled ? { remindersEnabled: true, dosesPerDay, reminderTimes: reminderTimes.slice(0, dosesPerDay) } : {}),
     });
@@ -80,6 +132,7 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
     setRoom('');
     setExpiry('');
     setCalendarOpen(false);
+    resetPhotoFields();
     resetMedicineFields();
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1400);
@@ -89,7 +142,11 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
     <ScrollView style={styles.wrap} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <Animated.View style={[styles.nameRow, { borderColor: nameBorder }]}>
         <View style={styles.nameIcon}>
-          <Icon path={CATEGORY_ICON[category] || EMPTY_CATEGORY_ICON} color={colors.pale} size={26} />
+          {photoUri ? (
+            <Image source={{ uri: photoUri }} style={styles.nameIconPhoto} />
+          ) : (
+            <Icon path={CATEGORY_ICON[category] || EMPTY_CATEGORY_ICON} color={colors.pale} size={26} />
+          )}
         </View>
         <TextInput
           value={name}
@@ -106,6 +163,26 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
       <View style={styles.section}>
         <Text style={typography.formLabel}>Category (optional)</Text>
         <CategoryPicker value={category} onChange={setCategory} />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={typography.formLabel}>Add Photo (optional)</Text>
+        {photoUri ? (
+          <View style={styles.photoRow}>
+            <Image source={{ uri: photoUri }} style={styles.photoThumb} />
+            <Text style={[typography.chipLabel, { flex: 1, color: photoError ? colors.danger : colors.textPrimary }]}>
+              {photoUploading ? 'Uploading…' : photoError ? photoError : 'Photo added'}
+            </Text>
+            <Pressable onPress={resetPhotoFields} accessibilityRole="button" accessibilityLabel="Remove photo" style={styles.photoRemove} hitSlop={8}>
+              <Icon path={CLOSE_ICON} color={colors.textPrimary} size={14} />
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable onPress={() => setCameraOpen(true)} accessibilityRole="button" accessibilityLabel="Add photo" style={styles.field}>
+            <Icon path={CAMERA_ICON} color={colors.textFaint} size={17} />
+            <Text style={[typography.chipLabel, { flex: 1, color: colors.textFaint }]}>Take a photo</Text>
+          </Pressable>
+        )}
       </View>
 
       {isMedicine && (
@@ -292,6 +369,8 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
           {savedFlash ? 'Added ✓' : 'Add item'}
         </Text>
       </Pressable>
+
+      <PhotoCaptureSheet visible={cameraOpen} onClose={() => setCameraOpen(false)} onCapture={handleCapture} />
     </ScrollView>
   );
 }
@@ -320,9 +399,36 @@ const styles = StyleSheet.create({
     backgroundColor: '#3A3A3A',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  nameIconPhoto: {
+    width: '100%',
+    height: '100%',
   },
   section: {
     gap: spacing.xs,
+  },
+  photoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.pale,
+    borderRadius: radius.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  photoThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+  },
+  photoRemove: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.pressWash,
   },
   field: {
     flexDirection: 'row',
