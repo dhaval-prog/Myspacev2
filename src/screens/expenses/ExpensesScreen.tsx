@@ -10,6 +10,7 @@ import { MembersSheet } from '../../components/expenses/MembersSheet';
 import { InviteSheet } from '../../components/expenses/InviteSheet';
 import { JoinCardSheet } from '../../components/expenses/JoinCardSheet';
 import { ConfirmDeleteModal } from '../../components/expenses/ConfirmDeleteModal';
+import { BudgetResetPrompt } from '../../components/expenses/BudgetResetPrompt';
 
 interface ExpensesScreenProps {
   onHome: () => void;
@@ -30,6 +31,7 @@ function ExpensesRoot({ onHome, onOpenSplit, onOpenAccount }: ExpensesScreenProp
       <InviteSheet />
       <JoinCardSheet />
       <ConfirmDeleteModal />
+      <BudgetResetPrompt />
     </>
   );
 }

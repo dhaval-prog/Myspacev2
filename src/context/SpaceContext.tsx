@@ -116,7 +116,7 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
             remindersEnabled: (row.reminders_enabled as boolean | null) ?? undefined,
             dosesPerDay: (row.doses_per_day as number | null) ?? undefined,
             reminderTimes: (row.reminder_times as string[] | null) ?? undefined,
-            photoUrl: (row.photo_url as string | null) ?? undefined,
+            photoUrl: (row.photo_url as string | null) || undefined,
           },
         })),
       );
@@ -269,7 +269,7 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
               ...(input.remindersEnabled !== undefined && { reminders_enabled: input.remindersEnabled }),
               ...(input.dosesPerDay !== undefined && { doses_per_day: input.dosesPerDay }),
               ...(input.reminderTimes !== undefined && { reminder_times: input.reminderTimes }),
-              ...(input.photoUrl !== undefined && { photo_url: input.photoUrl }),
+              ...(input.photoUrl !== undefined && { photo_url: input.photoUrl || null }),
             })
             .eq('id', row.id)
             .then(({ error }) => warn('update item', error));

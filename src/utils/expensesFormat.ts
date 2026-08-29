@@ -56,6 +56,21 @@ export function daysUntilReset(day: string, now: Date = new Date()): number {
   return Math.round((when.getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
 }
 
+/** Midnight (local) of the most recent occurrence of a reset day that is on or before `now`. */
+export function latestResetOccurrence(day: string, now: Date = new Date()): Date {
+  const eom = daysInCurrentMonth(now);
+  const dd = day === 'Last day' ? eom : Math.min(eom, parseInt(day, 10) || 1);
+  if (dd <= now.getDate()) {
+    return new Date(now.getFullYear(), now.getMonth(), dd);
+  }
+  // This month's reset day hasn't happened yet — the latest occurrence was last month's,
+  // clamped to that month's own day count (e.g. day "31" in a 30-day month).
+  const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  const prevEom = prevMonthEnd.getDate();
+  const prevDd = day === 'Last day' ? prevEom : Math.min(prevEom, parseInt(day, 10) || 1);
+  return new Date(prevMonthEnd.getFullYear(), prevMonthEnd.getMonth(), prevDd);
+}
+
 export function randomRid(): string {
   return Array.from({ length: 11 }, () => Math.floor(Math.random() * 10)).join('');
 }
