@@ -4,16 +4,17 @@ import { colors, fontFamily, spacing } from '../../theme';
 import { useExpenses } from '../../context/ExpensesContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
-/** Centered confirmation popup for removing a card. */
+/** Centered confirmation popup for removing a card, or a member leaving one. */
 export function ConfirmDeleteModal() {
-  const { confirmDeleteOpen, cancelDelete, deleteFocusedCard } = useExpenses();
+  const { confirmDeleteOpen, cancelDelete, deleteFocusedCard, confirmLeaveOpen, cancelLeave, leaveFocusedCard } = useExpenses();
   const reduceMotion = useReducedMotion();
   const scale = useRef(new Animated.Value(0.72)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const [mounted, setMounted] = useState(confirmDeleteOpen);
+  const open = confirmDeleteOpen || confirmLeaveOpen;
+  const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
-    if (confirmDeleteOpen) {
+    if (open) {
       setMounted(true);
       scale.setValue(reduceMotion ? 1 : 0.72);
       opacity.setValue(reduceMotion ? 1 : 0);
@@ -29,23 +30,27 @@ export function ConfirmDeleteModal() {
         if (finished) setMounted(false);
       });
     }
-    // mounted intentionally excluded — driven by confirmDeleteOpen, not itself.
+    // mounted intentionally excluded — driven by open, not itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [confirmDeleteOpen, reduceMotion, scale, opacity]);
+  }, [open, reduceMotion, scale, opacity]);
 
   if (!mounted) return null;
 
+  const cancel = confirmLeaveOpen ? cancelLeave : cancelDelete;
+  const confirm = confirmLeaveOpen ? leaveFocusedCard : deleteFocusedCard;
+  const message = confirmLeaveOpen ? 'Leave this budget card?' : 'Would you like to remove the card?';
+
   return (
-    <Modal visible transparent animationType="none" onRequestClose={cancelDelete} statusBarTranslucent>
+    <Modal visible transparent animationType="none" onRequestClose={cancel} statusBarTranslucent>
       <View style={styles.wrap}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={cancelDelete} accessibilityRole="button" accessibilityLabel="Dismiss" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={cancel} accessibilityRole="button" accessibilityLabel="Dismiss" />
         <Animated.View style={[styles.card, { opacity, transform: [{ scale }] }]}>
-          <Text style={styles.message}>Would you like to remove the card?</Text>
+          <Text style={styles.message}>{message}</Text>
           <View style={styles.row}>
-            <Pressable onPress={cancelDelete} style={styles.noButton}>
+            <Pressable onPress={cancel} style={styles.noButton}>
               <Text style={styles.noLabel}>No</Text>
             </Pressable>
-            <Pressable onPress={deleteFocusedCard} style={styles.yesButton}>
+            <Pressable onPress={confirm} style={styles.yesButton}>
               <Text style={styles.yesLabel}>Yes</Text>
             </Pressable>
           </View>

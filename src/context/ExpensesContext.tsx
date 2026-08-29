@@ -136,6 +136,8 @@ interface ExpensesContextValue {
   /** Owner or member: tops up the focused card's budget total by `amount`. */
   addMoney: (amount: number) => void;
   deleteFocusedCard: () => void;
+  /** Member-only: removes the current user from the focused card without deleting it for anyone else. */
+  leaveFocusedCard: () => void;
   joinCard: (code: string) => Promise<{ error: string | null }>;
 
   spendOpen: boolean;
@@ -153,6 +155,9 @@ interface ExpensesContextValue {
   confirmDeleteOpen: boolean;
   askDelete: () => void;
   cancelDelete: () => void;
+  confirmLeaveOpen: boolean;
+  askLeave: () => void;
+  cancelLeave: () => void;
   newCardOpen: boolean;
   openNewCard: () => void;
   closeNewCard: () => void;
@@ -188,6 +193,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [addMoneyOpen, setAddMoneyOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
   const [newCardOpen, setNewCardOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
 
@@ -494,6 +500,36 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const leaveFocusedCard = () => {
+    if (!focusedCard || focusedCard.isOwner) return;
+    const idx = focusedIdx;
+    const cardId = focusedCard.id;
+
+    setCardRows((prev) => prev.filter((c) => c.id !== cardId));
+    setExpenseRows((prev) => prev.filter((r) => r.card_id !== cardId));
+    setTopupRows((prev) => prev.filter((r) => r.card_id !== cardId));
+
+    const nextLen = deck.length - 1;
+    if (nextLen <= 0) {
+      setPage('pick');
+      setSel(0);
+      setDot(0);
+    } else {
+      setSel(Math.min(idx, nextLen - 1));
+      setDot(0);
+    }
+    setConfirmLeaveOpen(false);
+
+    if (userId && isSupabaseConfigured) {
+      supabase
+        .from('card_members')
+        .delete()
+        .eq('card_id', cardId)
+        .eq('user_id', userId)
+        .then(({ error }) => warn('leave card', error));
+    }
+  };
+
   const joinCard = async (code: string): Promise<{ error: string | null }> => {
     const rid = code.replace(/\D/g, '');
     if (rid.length !== 11) return { error: 'Enter the full 11-digit code.' };
@@ -543,6 +579,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     addCard,
     addMoney,
     deleteFocusedCard,
+    leaveFocusedCard,
     joinCard,
     spendOpen,
     openSpend: () => setSpendOpen(true),
@@ -565,6 +602,11 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
       if (focusedCard?.isOwner) setConfirmDeleteOpen(true);
     },
     cancelDelete: () => setConfirmDeleteOpen(false),
+    confirmLeaveOpen,
+    askLeave: () => {
+      if (focusedCard && !focusedCard.isOwner) setConfirmLeaveOpen(true);
+    },
+    cancelLeave: () => setConfirmLeaveOpen(false),
     newCardOpen,
     openNewCard: () => setNewCardOpen(true),
     closeNewCard: () => setNewCardOpen(false),
