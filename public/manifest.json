@@ -1,0 +1,22 @@
+{
+  "name": "MySpace",
+  "short_name": "MySpace",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#C3EA4F",
+  "theme_color": "#C3EA4F",
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

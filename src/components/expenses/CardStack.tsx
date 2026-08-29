@@ -16,7 +16,12 @@ import { formatMoney, parseAmount } from '../../utils/expensesFormat';
 const CARD_WIDTH = 326;
 const CARD_HEIGHT = 206;
 const SLOT_HEIGHT = 132;
-const OPEN_THRESHOLD = -64;
+// Web only: without this, a mouse-drag over the card's text starts a native
+// text selection, which fights the in-progress PanResponder gesture and can
+// cut it off partway through a longer swipe. RN's ViewStyle type doesn't
+// model this CSS-only key, so — like `noOutline` in theme/webStyles.ts —
+// it's applied as a loosely-typed style rather than added to it.
+const noSelect: Record<string, unknown> = { userSelect: 'none' };
 /** Matches the 340ms delay ExpensesContext.openCard waits before swapping to the wallet screen. */
 const FLY_DURATION = 340;
 
@@ -25,24 +30,42 @@ interface CardStackProps {
 }
 
 /**
- * The card-browsing deck: scroll through an invisible tall list to fan
- * through the cards, drag the front card up (or tap it) to open its
- * wallet. Styles are computed per-frame from plain state, mirroring how
- * the reference itself drives this (imperative JS math, not CSS
- * transitions) rather than trying to force it through Animated nodes —
- * except the tap/drag-to-open lift itself, which needs a real eased
- * animation (see `flyProgress` below) rather than an instant snap to its
- * end position held static for the rest of the 340ms.
+ * The card-browsing deck: scroll through an invisible tall list (native
+ * touch-scroll, or mouse wheel on web) to fan through the cards, tap the
+ * focused one to open its wallet. There is no per-card drag — a touch
+ * that starts directly on the focused card also just browses the deck
+ * (it drives the same `pickP` position everything else reads from,
+ * rather than lifting that one card independently), and only resolves
+ * to opening it if the touch never really moved. Styles are computed
+ * per-frame from plain state, mirroring how the reference itself drives
+ * this (imperative JS math, not CSS transitions) rather than trying to
+ * force it through Animated nodes — except the tap-to-open lift itself,
+ * which needs a real eased animation (see `flyProgress` below) rather
+ * than an instant snap to its end position held static for the rest of
+ * the 340ms.
  */
 export function CardStack({ reduceMotion }: CardStackProps) {
   const { deck, flyCard, openCard, expensesFor } = useExpenses();
   const [pickP, setPickP] = useState(0);
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragY, setDragY] = useState(0);
+  // Index of the card whose touch gesture is in progress, purely so its
+  // panHandlers/pointerEvents stay attached for the gesture's full
+  // duration. Without this, scrolling the touched card just past the
+  // "focused" window (ad>=0.5) flips it out of the focused/held check
+  // that grants a responder at all, stripping its panHandlers mid-drag
+  // and silently killing the gesture partway through a longer swipe. It
+  // has no effect on layout/position — every card (including this one)
+  // is positioned purely from `pickP`, uniformly, with no special offset.
+  const [gestureCardIdx, setGestureCardIdx] = useState<number | null>(null);
+  // The trailing spacer is sized so the ScrollView's scrollable range is
+  // exactly (n-1)*SLOT_HEIGHT — one slot short of the viewport itself.
+  // Anything taller than that leaves dead scroll room past the point
+  // where the last card is already fully focused (pickP has clamped to
+  // n-1), which reads as the gesture "sticking" right at the end.
+  const [areaHeight, setAreaHeight] = useState(0);
   const moved = React.useRef(0);
   // 0→1 over the same window ExpensesContext holds before swapping to the
-  // wallet screen, easing the tapped/dragged card's lift instead of
-  // snapping it straight to its end position and holding it there static.
+  // wallet screen, easing the tapped card's lift instead of snapping it
+  // straight to its end position and holding it there static.
   const flyProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -62,19 +85,28 @@ export function CardStack({ reduceMotion }: CardStackProps) {
   // correctly instead of each reading the same stale value from the
   // render closure.
   const pickPRef = React.useRef(0);
-  // `pickP` when the current drag gesture started, so a drag's cumulative
-  // `g.dy` maps onto an absolute pickP rather than compounding every frame.
-  const dragStartPickP = React.useRef(0);
+  // `pickP` when the current touch-on-card gesture started, so its
+  // cumulative `g.dy` maps onto an absolute pickP rather than compounding
+  // every frame.
+  const gestureStartPickP = React.useRef(0);
   // One PanResponder per card, cached for the card's lifetime (keyed by its
   // stable rid, not its deck index). Calling PanResponder.create() fresh on
   // every render — which a plain `panResponderFor(i)` call in the render
-  // body would do, since every state update it drives (setDragY, setPickP)
-  // triggers a re-render — hands react-native-web's DOM listeners a new
-  // callback identity mid-gesture and resets its internal responder
-  // bookkeeping, breaking the drag into disconnected few-pixel fragments.
+  // body would do, since every state update it drives (setPickP) triggers a
+  // re-render — hands react-native-web's DOM listeners a new callback
+  // identity mid-gesture and resets its internal responder bookkeeping,
+  // breaking the gesture into disconnected few-pixel fragments.
   const responderCache = React.useRef(new Map<string, { responder: ReturnType<typeof PanResponder.create>; indexRef: { current: number } }>());
 
   const n = Math.max(1, deck.length);
+  // `movePickTo` is called from the cached per-card PanResponder's
+  // onPanResponderMove — a closure fixed at whichever render first created
+  // that responder (e.g. the very first card, the moment it existed, deck
+  // length 1). Reading `n` through a ref that's kept current every render,
+  // instead of closing over that render's local `n` directly, keeps its
+  // clamp accurate no matter how many cards have been added since.
+  const nRef = React.useRef(n);
+  nRef.current = n;
 
   // Drop cached responders for cards that no longer exist (deleted).
   for (const rid of responderCache.current.keys()) {
@@ -96,7 +128,7 @@ export function CardStack({ reduceMotion }: CardStackProps) {
    * scroll gesture (see onScrollBeginDrag below).
    */
   const movePickTo = (next: number) => {
-    const clamped = Math.max(0, Math.min(n - 1, next));
+    const clamped = Math.max(0, Math.min(nRef.current - 1, next));
     pickPRef.current = clamped;
     setPickP(clamped);
   };
@@ -125,26 +157,28 @@ export function CardStack({ reduceMotion }: CardStackProps) {
       onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 2,
       onPanResponderGrant: () => {
         moved.current = 0;
-        dragStartPickP.current = pickPRef.current;
-        setDragIdx(indexRef.current);
-        setDragY(0);
+        gestureStartPickP.current = pickPRef.current;
+        setGestureCardIdx(indexRef.current);
       },
       onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
         moved.current = Math.abs(g.dy);
-        setDragY(Math.max(-190, Math.min(40, g.dy)));
-        // Dragging the focused card up/down also browses the deck — the
-        // held card keeps lifting free of the stack (dragY) on top of that.
-        movePickTo(dragStartPickP.current - g.dy / SLOT_HEIGHT);
+        // A touch that starts on the focused card browses the deck exactly
+        // like a touch anywhere else — it just moves `pickP`, the same
+        // position everything else on screen reads from. There's no
+        // separate "lift this one card off the stack" offset, so the
+        // touched card slides back with the rest of the deck instead of
+        // pulling free of it.
+        movePickTo(gestureStartPickP.current - g.dy / SLOT_HEIGHT);
       },
-      onPanResponderRelease: (_e, g: PanResponderGestureState) => {
-        setDragIdx(null);
-        const finalDragY = Math.max(-190, Math.min(40, g.dy));
-        setDragY(0);
-        if (moved.current < 6 || finalDragY < OPEN_THRESHOLD) openCard(indexRef.current);
+      onPanResponderRelease: () => {
+        setGestureCardIdx(null);
+        // Only a genuine tap (negligible movement) opens the card — any
+        // real vertical movement was already just a scroll, not a
+        // pull-to-open gesture.
+        if (moved.current < 6) openCard(indexRef.current);
       },
       onPanResponderTerminate: () => {
-        setDragIdx(null);
-        setDragY(0);
+        setGestureCardIdx(null);
       },
     });
     cache.set(rid, { responder, indexRef });
@@ -166,7 +200,7 @@ export function CardStack({ reduceMotion }: CardStackProps) {
   const wheelProps: Record<string, unknown> = { onWheel: handleWheel };
 
   return (
-    <View style={styles.area} {...wheelProps}>
+    <View style={styles.area} {...wheelProps} onLayout={(e) => setAreaHeight(e.nativeEvent.layout.height)}>
       <ScrollView
         ref={scrollRef}
         onScroll={handleScroll}
@@ -179,27 +213,30 @@ export function CardStack({ reduceMotion }: CardStackProps) {
         {deck.map((card) => (
           <View key={card.rid} style={{ height: SLOT_HEIGHT }} />
         ))}
-        <View style={{ height: 300 }} />
+        <View style={{ height: Math.max(0, areaHeight - SLOT_HEIGHT) }} />
       </ScrollView>
 
       <View style={styles.centerWrap} pointerEvents="box-none">
         <View style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}>
           {deck.map((card, i) => {
-            const held = dragIdx === i;
-            // The held card keeps its own pre-drag resting look (focused,
-            // full opacity/scale) so it never fades while you're actually
-            // holding it — only the rest of the stack reacts live as the
-            // drag also moves `pickP`, giving the "dragging browses too"
-            // feedback without disturbing the card under your finger.
-            const d = i - (held ? dragStartPickP.current : pickP);
+            const rawD = i - pickP;
+            const flying = flyCard === i;
+            const isGestureCard = gestureCardIdx === i;
+            // Cards far enough behind the focused one are fully hidden
+            // anyway (opacity floors at 0.5 only within `ad<=3`, everything
+            // past that renders nothing extra) — skip them outright so a
+            // long deck stays cheap instead of animating every card on
+            // every scroll tick. The card currently mid-gesture is kept
+            // mounted regardless, so a long swipe never unmounts the very
+            // view holding its own touch responder.
+            if (!flying && !isGestureCard && Math.abs(rawD) > 3.5) return null;
+            const d = rawD;
             const ad = Math.min(3, Math.abs(d));
             const focused = ad < 0.5;
-            const flying = flyCard === i;
             // Computed the same way regardless of `flying`, so this is
             // exactly the card's on-screen position the instant it started
-            // flying — the animation's start point, whether that's a tap
-            // from rest (d≈0) or a release mid-drag (baseY + dragY).
-            const restingY = (d >= 0 ? d * 46 - ad * ad * 4 : d * 62) + (held ? dragY : 0);
+            // flying — the animation's start point for a tap opened from rest.
+            const restingY = d >= 0 ? d * 46 - ad * ad * 4 : d * 62;
             const restingScale = Math.max(0.78, 1 - ad * 0.06);
             const restingOpacity = Math.max(0.5, 1 - ad * 0.16);
             const spent = expensesFor(card).reduce((s, x) => s + parseAmount(x.amt), 0);
@@ -211,18 +248,24 @@ export function CardStack({ reduceMotion }: CardStackProps) {
             const opacity = flying
               ? flyProgress.interpolate({ inputRange: [0, 1], outputRange: [restingOpacity, 1] })
               : restingOpacity;
-            const responder = focused || held ? panResponderFor(card.rid, i) : null;
+            // While a gesture is in progress, no other card may become
+            // interactive — even one that has newly scrolled into the
+            // focused window — so nothing can front the gesture-owning
+            // card in the DOM and steal its pointer capture mid-drag.
+            const interactive = isGestureCard || (gestureCardIdx === null && focused);
+            const responder = interactive ? panResponderFor(card.rid, i) : null;
 
             return (
               <Animated.View
                 key={card.rid}
                 {...(responder ? responder.panHandlers : {})}
-                pointerEvents={focused || held ? 'auto' : 'none'}
+                pointerEvents={interactive ? 'auto' : 'none'}
                 style={[
                   styles.card,
+                  noSelect,
                   {
                     backgroundColor: card.bg,
-                    zIndex: flying || held ? 60 : Math.round(40 - ad * 10),
+                    zIndex: flying ? 60 : Math.round(40 - ad * 10),
                     opacity,
                     transform: [{ translateY }, { scale }],
                   },

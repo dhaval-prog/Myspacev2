@@ -6,6 +6,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { colors, fontsToLoad } from './src/theme';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { SpaceProvider } from './src/context/SpaceContext';
+import { NotificationsProvider } from './src/context/NotificationsContext';
+import { LaunchIntro } from './src/components/LaunchIntro';
 import { SignUpScreen } from './src/screens/SignUpScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -90,13 +92,19 @@ function RootNavigator() {
 
   return (
     <SpaceProvider>
-      <AppNavigator />
+      <NotificationsProvider>
+        <AppNavigator />
+      </NotificationsProvider>
     </SpaceProvider>
   );
 }
 
 export default function App() {
   const [fontsLoaded] = useFonts(fontsToLoad);
+  // Plays once right after the native (static) launch screen hands off,
+  // over the real app underneath — see LaunchIntro for why this can't
+  // live in the native launch screen itself (it can only ever be static).
+  const [introDone, setIntroDone] = useState(false);
 
   const onLayout = useCallback(async () => {
     if (fontsLoaded) {
@@ -113,6 +121,7 @@ export default function App() {
       <AuthProvider>
         <View style={{ flex: 1 }} onLayout={onLayout}>
           <RootNavigator />
+          {!introDone && <LaunchIntro onDone={() => setIntroDone(true)} />}
         </View>
       </AuthProvider>
     </SafeAreaProvider>

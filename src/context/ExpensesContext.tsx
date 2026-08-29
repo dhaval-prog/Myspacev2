@@ -5,7 +5,9 @@ import { SPEND_CATEGORY_MAP } from '../data/expenseCategories';
 import { colors } from '../theme';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { notifySelf } from '../utils/notify';
 import {
+  daysUntilReset,
   formatMoney,
   longDateLabel,
   maskRid,
@@ -251,6 +253,25 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expenseRows, topupRows, userId]);
 
+  // Self-only "Budget reset reminder": nudges the owner once per upcoming
+  // reset when it's within 3 days. The dedupe key includes the reset date,
+  // so a DB-level unique constraint (not just this session's Set) stops it
+  // duplicating across app restarts, while still firing fresh next cycle.
+  const resetNotifiedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured) return;
+    for (const row of cardRows) {
+      if (row.owner_id !== userId) continue;
+      const days = daysUntilReset(row.reset_day);
+      if (days < 0 || days > 3) continue;
+      const key = `budget_reset:${row.id}:${nextResetLabel(row.reset_day)}`;
+      if (resetNotifiedRef.current.has(key)) continue;
+      resetNotifiedRef.current.add(key);
+      const when = days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`;
+      notifySelf(userId, 'budget_reset', key, 'Budget reset reminder', `"${row.label}" resets ${when}.`);
+    }
+  }, [cardRows, userId]);
+
   const deck = useMemo(() => cardRows.map((row) => toWalletCard(row, userId)), [cardRows, userId]);
   const focusedIdx = deck.length ? (sel + dot) % deck.length : 0;
   const focusedCard = deck[focusedIdx];
@@ -329,6 +350,18 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Fire a self-only "Budget alert" the moment this expense pushes the
+    // card's total spend from under to at/over its budget — once per
+    // crossing, not on every expense already past it.
+    const cardRow = cardRows.find((c) => c.id === cardId);
+    if (cardRow) {
+      const priorTotal = expenseRows.filter((r) => r.card_id === cardId).reduce((sum, r) => sum + r.amount, 0);
+      const newTotal = priorTotal + amount;
+      if (priorTotal < cardRow.amount && newTotal >= cardRow.amount) {
+        notifySelf(userId, 'budget_alerts', `budget_alerts:${cardId}`, 'Budget alert', `"${cardRow.label}" has reached its budget of ${formatMoney(cardRow.amount)}.`);
+      }
+    }
+
     supabase
       .from('card_expenses')
       .insert({ card_id: cardId, user_id: userId, title: trimmedTitle, amount, category, spent_on: spentOn })
@@ -338,6 +371,12 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
         warn('add expense', error);
         if (data) setExpenseRows((prev) => [data as ExpenseRow, ...prev]);
       });
+
+    // Notifies other members of this card (if any) — no-op server-side when
+    // it's a solo card.
+    supabase
+      .rpc('notify_card_expense_activity', { p_card_id: cardId, p_expense_title: trimmedTitle, p_amount: amount })
+      .then(({ error }) => warn('notify card expense activity', error));
   };
 
   const addCard = ({ name, amount, resetDay }: NewCardInput) => {

@@ -494,6 +494,14 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     warn('add expense shares', shareError);
     if (shareData) setShareRows((prev) => [...prev, ...(shareData as ShareRow[])]);
     setPage('dashboard');
+
+    // Notifies other split members (if any) — no-op server-side when it's a solo split.
+    const { error: notifyError } = await supabase.rpc('notify_split_expense_activity', {
+      p_group_id: groupId,
+      p_expense_title: title.trim(),
+      p_amount: amount,
+    });
+    warn('notify split expense activity', notifyError);
   };
 
   const settleUp = async (toUserId: string, amount: number) => {
