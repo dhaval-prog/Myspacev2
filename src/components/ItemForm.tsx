@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, spacing, typography, noOutline } from '../theme';
+import { colors, fontFamily, radius, spacing, typography, noOutline } from '../theme';
 import { useFocusBorder } from '../hooks/useFocusBorder';
 import { Icon } from './Icon';
 import { CategoryPicker } from './CategoryPicker';
@@ -144,7 +144,7 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
               </View>
 
               <View style={{ gap: spacing.xs }}>
-                <Text style={typography.formLabel}>{dosageType === 'ml' ? 'Dosage per intake' : 'Capsules per intake'}</Text>
+                <Text style={typography.formLabel}>{dosageType === 'ml' ? 'Dosage per intake' : 'Tab per intake'}</Text>
                 <View style={styles.amountRow}>
                   <TextInput
                     value={dosageAmount}
@@ -152,10 +152,10 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
                     placeholder={dosageType === 'ml' ? '0.5' : '1'}
                     placeholderTextColor={colors.textFaint}
                     keyboardType="decimal-pad"
-                    style={[typography.sheetInput, { fontSize: 15, flex: 1 }, noOutline]}
+                    style={[styles.amountInput, noOutline]}
                     accessibilityLabel={dosageType === 'ml' ? 'Dosage amount in millilitres' : 'Number of capsules'}
                   />
-                  <Text style={styles.amountUnit}>{dosageType === 'ml' ? 'ML' : 'Capsules'}</Text>
+                  <Text style={styles.amountUnit}>{dosageType === 'ml' ? 'ML' : 'Tab'}</Text>
                 </View>
               </View>
 
@@ -356,9 +356,20 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.ms,
     paddingHorizontal: spacing.md,
   },
+  amountInput: {
+    flex: 1,
+    // Flex items default to a min-width equal to their content, which can
+    // push a sibling (the unit label) outside the pill instead of actually
+    // shrinking — this forces it to shrink like the rest of the row.
+    minWidth: 0,
+    fontFamily: fontFamily.mono500,
+    fontSize: 16,
+    color: colors.textPrimary,
+  },
   amountUnit: {
-    fontFamily: typography.chipLabel.fontFamily,
-    fontSize: 12.5,
+    flexShrink: 0,
+    fontFamily: fontFamily.mono500,
+    fontSize: 13,
     color: colors.textMuted,
   },
   freqChip: {
