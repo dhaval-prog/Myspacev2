@@ -5,12 +5,28 @@ import { useFocusBorder } from '../hooks/useFocusBorder';
 import { Icon } from './Icon';
 import { CategoryPicker } from './CategoryPicker';
 import { Calendar } from './Calendar';
+import { SegmentedToggle } from './SegmentedToggle';
+import { TimePicker } from './TimePicker';
+import { ToggleRow } from './account/rows';
 import { CATEGORY_ICON, EMPTY_CATEGORY_ICON } from '../data/itemCategories';
 import { formatDate } from '../utils/attention';
+import { formatTime12 } from '../utils/time';
+import type { DosageType } from '../types/space';
+
+const CLOCK_ICON = 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M12 7v5l3.5 2';
+const DOSE_FREQUENCIES = [1, 2, 3, 4];
+
+interface MedicineFields {
+  dosageType?: DosageType;
+  dosageAmount?: number;
+  remindersEnabled?: boolean;
+  dosesPerDay?: number;
+  reminderTimes?: string[];
+}
 
 interface ItemFormProps {
   rooms: string[];
-  onSubmit: (input: { name: string; category: string; room: string; expiry: string }) => void;
+  onSubmit: (input: { name: string; category: string; room: string; expiry: string } & MedicineFields) => void;
 }
 
 /** "What are you putting away?" — the add-item form. */
@@ -22,21 +38,49 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
+  const [medOpen, setMedOpen] = useState(false);
+  const [dosageType, setDosageType] = useState<DosageType>('ml');
+  const [dosageAmount, setDosageAmount] = useState('');
+  const [remindersEnabled, setRemindersEnabled] = useState(false);
+  const [dosesPerDay, setDosesPerDay] = useState(1);
+  const [reminderTimes, setReminderTimes] = useState<string[]>([]);
+  const [openDoseIndex, setOpenDoseIndex] = useState<number | null>(null);
+
   const { borderColor: nameBorder, onFocus: onNameFocus, onBlur: onNameBlur } = useFocusBorder(
     'rgba(22,33,12,0)',
     colors.ink,
   );
 
-  const canSave = name.trim().length > 0;
+  const isMedicine = category === 'Medicines';
+  const remindersValid = !remindersEnabled || Array.from({ length: dosesPerDay }).every((_, i) => Boolean(reminderTimes[i]));
+  const canSave = name.trim().length > 0 && remindersValid;
+
+  const resetMedicineFields = () => {
+    setMedOpen(false);
+    setDosageType('ml');
+    setDosageAmount('');
+    setRemindersEnabled(false);
+    setDosesPerDay(1);
+    setReminderTimes([]);
+    setOpenDoseIndex(null);
+  };
 
   const handleSave = () => {
     if (!canSave) return;
-    onSubmit({ name: name.trim(), category, room, expiry });
+    onSubmit({
+      name: name.trim(),
+      category,
+      room,
+      expiry,
+      ...(isMedicine && dosageAmount.trim() ? { dosageType, dosageAmount: Number(dosageAmount) } : {}),
+      ...(isMedicine && remindersEnabled ? { remindersEnabled: true, dosesPerDay, reminderTimes: reminderTimes.slice(0, dosesPerDay) } : {}),
+    });
     setName('');
     setCategory('');
     setRoom('');
     setExpiry('');
     setCalendarOpen(false);
+    resetMedicineFields();
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1400);
   };
@@ -63,6 +107,125 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
         <Text style={typography.formLabel}>Category (optional)</Text>
         <CategoryPicker value={category} onChange={setCategory} />
       </View>
+
+      {isMedicine && (
+        <View style={styles.section}>
+          <Pressable
+            onPress={() => setMedOpen((o) => !o)}
+            accessibilityRole="button"
+            accessibilityLabel="Dosage and reminders"
+            style={styles.field}
+          >
+            <Icon path={CLOCK_ICON} color={colors.textPrimary} size={17} />
+            <Text style={[typography.chipLabel, { flex: 1, color: colors.textPrimary }]}>Dosage & Reminders (optional)</Text>
+            <Text style={styles.caret}>{medOpen ? '⌃' : '⌄'}</Text>
+          </Pressable>
+
+          {medOpen && (
+            <View style={styles.medicineBody}>
+              <View style={{ gap: spacing.xs }}>
+                <Text style={typography.formLabel}>Dosage type</Text>
+                <SegmentedToggle
+                  options={[
+                    { label: 'ML', value: 'ml' },
+                    { label: 'Capsules', value: 'capsules' },
+                  ]}
+                  value={dosageType}
+                  onChange={(v) => {
+                    const next = v as DosageType;
+                    setDosageType(next);
+                    // Capsules can't be fractional — drop any decimal carried over from ML.
+                    if (next === 'capsules' && dosageAmount.includes('.')) {
+                      const whole = Math.floor(Number(dosageAmount));
+                      setDosageAmount(whole > 0 ? String(whole) : '');
+                    }
+                  }}
+                />
+              </View>
+
+              <View style={{ gap: spacing.xs }}>
+                <Text style={typography.formLabel}>{dosageType === 'ml' ? 'Dosage per intake' : 'Capsules per intake'}</Text>
+                <View style={styles.amountRow}>
+                  <TextInput
+                    value={dosageAmount}
+                    onChangeText={(v) => setDosageAmount(dosageType === 'ml' ? v.replace(/[^0-9.]/g, '') : v.replace(/[^0-9]/g, ''))}
+                    placeholder={dosageType === 'ml' ? '0.5' : '1'}
+                    placeholderTextColor={colors.textFaint}
+                    keyboardType="decimal-pad"
+                    style={[typography.sheetInput, { fontSize: 15, flex: 1 }, noOutline]}
+                    accessibilityLabel={dosageType === 'ml' ? 'Dosage amount in millilitres' : 'Number of capsules'}
+                  />
+                  <Text style={styles.amountUnit}>{dosageType === 'ml' ? 'ML' : 'Capsules'}</Text>
+                </View>
+              </View>
+
+              <ToggleRow
+                label="Medication Reminders"
+                sublabel={remindersEnabled ? 'On' : 'Off'}
+                value={remindersEnabled}
+                onValueChange={setRemindersEnabled}
+              />
+
+              {remindersEnabled && (
+                <View style={{ gap: spacing.md }}>
+                  <View style={{ gap: spacing.xs }}>
+                    <Text style={typography.formLabel}>How many times a day?</Text>
+                    <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                      {DOSE_FREQUENCIES.map((n) => {
+                        const on = dosesPerDay === n;
+                        return (
+                          <Pressable
+                            key={n}
+                            onPress={() => setDosesPerDay(n)}
+                            accessibilityRole="radio"
+                            accessibilityState={{ checked: on }}
+                            style={[styles.freqChip, { backgroundColor: on ? colors.ink : colors.pale }]}
+                          >
+                            <Text style={[typography.chipLabel, { color: on ? colors.lime : colors.textPrimary }]}>{n}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  <View style={{ gap: spacing.md }}>
+                    {Array.from({ length: dosesPerDay }).map((_, i) => (
+                      <View key={i} style={{ gap: spacing.xs }}>
+                        <Text style={typography.formLabel}>{`Dose ${i + 1}`}</Text>
+                        <Pressable
+                          onPress={() => setOpenDoseIndex((cur) => (cur === i ? null : i))}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Dose ${i + 1} time`}
+                          style={styles.field}
+                        >
+                          <Icon path={CLOCK_ICON} color={reminderTimes[i] ? colors.textPrimary : colors.textFaint} size={17} />
+                          <Text style={[typography.chipLabel, { flex: 1, color: reminderTimes[i] ? colors.textPrimary : colors.textFaint }]}>
+                            {reminderTimes[i] ? formatTime12(reminderTimes[i]) : 'Set time'}
+                          </Text>
+                          <Text style={styles.caret}>{openDoseIndex === i ? '⌃' : '⌄'}</Text>
+                        </Pressable>
+                        {openDoseIndex === i && (
+                          <TimePicker
+                            value={reminderTimes[i]}
+                            onSelect={(hhmm) => {
+                              setReminderTimes((prev) => {
+                                const next = [...prev];
+                                next[i] = hhmm;
+                                return next;
+                              });
+                              setOpenDoseIndex(null);
+                            }}
+                          />
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={typography.formLabel}>Expiry date (optional)</Text>
@@ -179,6 +342,30 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: spacing.ms,
     paddingHorizontal: spacing.md,
+  },
+  medicineBody: {
+    gap: spacing.md,
+    marginTop: spacing.xs,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.pale,
+    borderRadius: radius.md,
+    paddingVertical: spacing.ms,
+    paddingHorizontal: spacing.md,
+  },
+  amountUnit: {
+    fontFamily: typography.chipLabel.fontFamily,
+    fontSize: 12.5,
+    color: colors.textMuted,
+  },
+  freqChip: {
+    flex: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing.ms,
+    alignItems: 'center',
   },
   saveButton: {
     borderRadius: radius.md - 6,

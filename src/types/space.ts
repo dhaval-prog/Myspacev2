@@ -11,6 +11,8 @@ export interface Room {
   label: string;
 }
 
+export type DosageType = 'ml' | 'capsules';
+
 /** A single filed belonging. */
 export interface Item {
   name: string;
@@ -19,4 +21,12 @@ export interface Item {
   /** ISO yyyy-mm-dd, or '' when no expiry was set. */
   expiry: string;
   mono: string;
+  /** Medicines category only, all optional — undefined unless the user filled in dosage/reminders. */
+  dosageType?: DosageType;
+  dosageAmount?: number;
+  remindersEnabled?: boolean;
+  /** 1-4, only meaningful when remindersEnabled. */
+  dosesPerDay?: number;
+  /** "HH:MM" 24-hour strings, one per dose, only meaningful when remindersEnabled. */
+  reminderTimes?: string[];
 }
