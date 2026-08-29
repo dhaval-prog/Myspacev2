@@ -6,6 +6,7 @@ import { AddSpendSheet } from '../../components/expenses/AddSpendSheet';
 import { AddMoneySheet } from '../../components/expenses/AddMoneySheet';
 import { NewCardSheet } from '../../components/expenses/NewCardSheet';
 import { HistorySheet } from '../../components/expenses/HistorySheet';
+import { MembersSheet } from '../../components/expenses/MembersSheet';
 import { InviteSheet } from '../../components/expenses/InviteSheet';
 import { JoinCardSheet } from '../../components/expenses/JoinCardSheet';
 import { ConfirmDeleteModal } from '../../components/expenses/ConfirmDeleteModal';
@@ -25,6 +26,7 @@ function ExpensesRoot({ onHome, onOpenSplit, onOpenAccount }: ExpensesScreenProp
       <AddMoneySheet />
       <NewCardSheet />
       <HistorySheet />
+      <MembersSheet />
       <InviteSheet />
       <JoinCardSheet />
       <ConfirmDeleteModal />
