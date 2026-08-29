@@ -39,3 +39,10 @@ export interface MemberSpend {
   name: string;
   total: number;
 }
+
+/** One person with access to a card, for the Members sheet — the owner plus everyone who joined. */
+export interface CardMember {
+  userId: string;
+  name: string;
+  isOwner: boolean;
+}

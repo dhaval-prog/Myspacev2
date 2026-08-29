@@ -30,9 +30,6 @@ export function PickScreen({ onHome, onOpenSplit, onOpenAccount }: PickScreenPro
           <View style={styles.headerSpacer}>
             <Image source={require('../../../assets/logos/logo-mono-white.png')} style={styles.logo} />
           </View>
-          <View style={styles.headerCenter}>
-            <Text style={styles.subtitle}>Scroll through your cards · pull one up to open</Text>
-          </View>
           <View style={styles.headerActions}>
             <NotificationsBell onPress={() => setNotificationsOpen(true)} bg="#111" tint="#fff" />
             <AccountBadge onPress={onOpenAccount} bg="#111" tint="#fff" />
@@ -41,6 +38,9 @@ export function PickScreen({ onHome, onOpenSplit, onOpenAccount }: PickScreenPro
       </View>
 
       <View style={styles.stackArea}>
+        <Text style={styles.stackHint} pointerEvents="none">
+          Scroll through your cards · pull one up to open
+        </Text>
         <CardStack reduceMotion={reduceMotion} />
         <Pressable onPress={openNewCard} style={styles.addButton} accessibilityRole="button" accessibilityLabel="Add budget card">
           <Text style={styles.addPlus}>+</Text>
@@ -94,20 +94,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.ms,
   },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  subtitle: {
-    fontFamily: fontFamily.sans400,
-    fontSize: 13,
-    color: colors.walletTextSecondary,
-  },
   stackArea: {
     flex: 1,
     minHeight: 0,
     position: 'relative',
+  },
+  stackHint: {
+    position: 'absolute',
+    top: spacing.md,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontFamily: fontFamily.sans400,
+    fontSize: 13,
+    color: colors.walletTextSecondary,
+    opacity: 0.4,
   },
   addButton: {
     position: 'absolute',
