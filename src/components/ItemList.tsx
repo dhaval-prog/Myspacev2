@@ -2,9 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, radius, spacing, typography, noOutline } from '../theme';
 import { useFocusBorder } from '../hooks/useFocusBorder';
+import { useAuth } from '../context/AuthContext';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { Icon } from './Icon';
 import { CategoryPicker } from './CategoryPicker';
 import { Calendar } from './Calendar';
+import { PhotoCaptureSheet } from './PhotoCaptureSheet';
 import { CATEGORY_ICON, EMPTY_CATEGORY_ICON } from '../data/itemCategories';
 import { formatDate } from '../utils/attention';
 import type { Item } from '../types/space';
@@ -13,12 +16,15 @@ const EDIT_PATH = 'M4 20h4L20 8l-4-4L4 16zM14.5 5.5l4 4';
 const DELETE_PATH = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 const SEARCH_PATH = 'M11 4.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM16 16l4 4';
 const CLOSE_PATH = 'M6 6l12 12M18 6L6 18';
+const CAMERA_PATH = 'M4 8h3l1.5-2h7L17 8h3v12H4z M12 11.4a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8';
 
 interface EditPatch {
   name?: string;
   category?: string;
   room?: string;
   expiry?: string;
+  /** Omitted = unchanged; '' = removed; a URL = replaced with a new photo. */
+  photoUrl?: string;
 }
 
 interface ItemListProps {
@@ -172,6 +178,9 @@ function ItemEditForm({
   onSave: (patch: EditPatch) => void;
   onCancel: () => void;
 }) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+
   const [name, setName] = useState(item.name);
   const [category, setCategory] = useState(item.category);
   const [room, setRoom] = useState(item.room);
@@ -181,6 +190,47 @@ function ItemEditForm({
     'rgba(22,33,12,0)',
     colors.ink,
   );
+
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [photoUri, setPhotoUri] = useState<string | null>(item.photoUrl ?? null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(item.photoUrl ?? null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoChanged = photoUrl !== (item.photoUrl ?? null);
+
+  const handleCapture = async (uri: string) => {
+    setCameraOpen(false);
+    setPhotoUri(uri);
+    setPhotoError(null);
+
+    if (!userId || !isSupabaseConfigured) {
+      setPhotoUrl(uri);
+      return;
+    }
+
+    setPhotoUploading(true);
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const ext = (blob.type.split('/')[1] || 'jpg').split('+')[0];
+      const path = `${userId}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('item-photos').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('item-photos').getPublicUrl(path);
+      setPhotoUrl(pub.publicUrl);
+    } catch {
+      setPhotoError('Could not upload that photo. Try again.');
+      setPhotoUrl(item.photoUrl ?? null);
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const removePhoto = () => {
+    setPhotoUri(null);
+    setPhotoUrl(null);
+    setPhotoError(null);
+  };
 
   return (
     <View style={styles.editWrap}>
@@ -202,6 +252,41 @@ function ItemEditForm({
       <View style={styles.editSection}>
         <Text style={typography.formLabel}>Category</Text>
         <CategoryPicker value={category} onChange={setCategory} />
+      </View>
+
+      <View style={styles.editSection}>
+        <Text style={typography.formLabel}>Photo</Text>
+        {photoUri ? (
+          <View style={styles.photoRow}>
+            <Image source={{ uri: photoUri }} style={styles.photoThumb} />
+            <Text style={[typography.chipLabel, { flex: 1, color: photoError ? '#D33243' : colors.textPrimary }]}>
+              {photoUploading ? 'Uploading…' : photoError ? photoError : 'Photo'}
+            </Text>
+            <Pressable
+              onPress={() => setCameraOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Update photo"
+              style={styles.photoIconButton}
+              hitSlop={8}
+            >
+              <Icon path={CAMERA_PATH} color={colors.textPrimary} size={15} />
+            </Pressable>
+            <Pressable
+              onPress={removePhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Remove photo"
+              style={styles.photoIconButton}
+              hitSlop={8}
+            >
+              <Icon path={CLOSE_PATH} color={colors.textPrimary} size={14} />
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable onPress={() => setCameraOpen(true)} accessibilityRole="button" accessibilityLabel="Add photo" style={styles.editField}>
+            <Icon path={CAMERA_PATH} color={colors.textFaint} size={16} />
+            <Text style={[typography.chipLabel, { flex: 1, color: colors.textFaint }]}>Take a photo</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.editSection}>
@@ -256,12 +341,25 @@ function ItemEditForm({
           <Text style={[typography.buttonLabel, { fontSize: 13, color: colors.textPrimary }]}>Cancel</Text>
         </Pressable>
         <Pressable
-          onPress={() => onSave({ name: name.trim() || item.name, category, room, expiry })}
-          style={[styles.editButton, { backgroundColor: colors.ink }]}
+          disabled={photoUploading}
+          onPress={() =>
+            onSave({
+              name: name.trim() || item.name,
+              category,
+              room,
+              expiry,
+              ...(photoChanged ? { photoUrl: photoUrl ?? '' } : {}),
+            })
+          }
+          style={[styles.editButton, { backgroundColor: photoUploading ? colors.pressWash : colors.ink }]}
         >
-          <Text style={[typography.buttonLabel, { fontSize: 13, color: colors.lime }]}>Save</Text>
+          <Text style={[typography.buttonLabel, { fontSize: 13, color: photoUploading ? colors.textFaint : colors.lime }]}>
+            {photoUploading ? 'Uploading…' : 'Save'}
+          </Text>
         </Pressable>
       </View>
+
+      <PhotoCaptureSheet visible={cameraOpen} onClose={() => setCameraOpen(false)} onCapture={handleCapture} />
     </View>
   );
 }
@@ -360,6 +458,28 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 11,
     paddingHorizontal: spacing.ms,
+  },
+  photoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm - 1,
+    backgroundColor: colors.pale,
+    borderRadius: 12,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.ms,
+  },
+  photoThumb: {
+    width: 40,
+    height: 40,
+    borderRadius: 9,
+  },
+  photoIconButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.pressWash,
   },
   roomWrap: {
     flexDirection: 'row',

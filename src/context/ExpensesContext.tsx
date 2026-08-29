@@ -9,6 +9,7 @@ import { notifySelf } from '../utils/notify';
 import {
   daysUntilReset,
   formatMoney,
+  latestResetOccurrence,
   longDateLabel,
   maskRid,
   nextResetLabel,
@@ -47,6 +48,10 @@ interface CardRow {
   amount: number;
   rid: string;
   reset_day: string;
+  /** Spends before this moment don't count toward "remaining" — bumped to now() on a budget reset. */
+  cycle_started_at: string;
+  /** Last time the owner was shown the reset-day prompt (either choice) — keeps it to once per occurrence. */
+  last_reset_prompt_at: string | null;
 }
 
 interface ExpenseRow {
@@ -174,6 +179,13 @@ interface ExpensesContextValue {
   joinOpen: boolean;
   openJoin: () => void;
   closeJoin: () => void;
+
+  /** Owner-only: the card currently due for its reset-day prompt, or null. */
+  resetPrompt: { label: string; amount: string } | null;
+  /** Starts a fresh cycle — remaining goes back to the card's full budget amount. */
+  confirmBudgetReset: () => void;
+  /** Keeps the current balance carrying over into the new month, unchanged. */
+  continueBudgetCycle: () => void;
 }
 
 const ExpensesContext = createContext<ExpensesContextValue | null>(null);
@@ -208,6 +220,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
   const [newCardOpen, setNewCardOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [resetPromptCard, setResetPromptCard] = useState<CardRow | null>(null);
 
   const localRef = useRef({ cardSeq: 0, expenseSeq: 0 });
 
@@ -299,12 +312,68 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     }
   }, [cardRows, userId]);
 
+  // Owner-only reset-day prompt: once the reset day itself has arrived (or
+  // passed since the last time this card was checked), ask whether to
+  // start a fresh cycle or keep carrying the current balance forward.
+  // last_reset_prompt_at (bumped by either choice) keeps this to once per
+  // occurrence rather than every time cardRows reloads.
+  useEffect(() => {
+    if (!userId || resetPromptCard) return;
+    const due = cardRows.find((row) => {
+      if (row.owner_id !== userId) return false;
+      const occurrence = latestResetOccurrence(row.reset_day);
+      const lastMarker = new Date(row.last_reset_prompt_at ?? row.cycle_started_at);
+      return occurrence.getTime() > lastMarker.getTime();
+    });
+    if (due) setResetPromptCard(due);
+  }, [cardRows, userId, resetPromptCard]);
+
+  const confirmBudgetReset = () => {
+    const card = resetPromptCard;
+    if (!card) return;
+    const now = new Date().toISOString();
+    setCardRows((prev) => prev.map((c) => (c.id === card.id ? { ...c, cycle_started_at: now, last_reset_prompt_at: now } : c)));
+    setResetPromptCard(null);
+    if (userId && isSupabaseConfigured) {
+      supabase
+        .from('budget_cards')
+        .update({ cycle_started_at: now, last_reset_prompt_at: now })
+        .eq('id', card.id)
+        .then(({ error }) => warn('reset budget cycle', error));
+    }
+  };
+
+  const continueBudgetCycle = () => {
+    const card = resetPromptCard;
+    if (!card) return;
+    const now = new Date().toISOString();
+    setCardRows((prev) => prev.map((c) => (c.id === card.id ? { ...c, last_reset_prompt_at: now } : c)));
+    setResetPromptCard(null);
+    if (userId && isSupabaseConfigured) {
+      supabase
+        .from('budget_cards')
+        .update({ last_reset_prompt_at: now })
+        .eq('id', card.id)
+        .then(({ error }) => warn('continue budget cycle', error));
+    }
+  };
+
   const deck = useMemo(() => cardRows.map((row) => toWalletCard(row, userId)), [cardRows, userId]);
   const focusedIdx = deck.length ? (sel + dot) % deck.length : 0;
   const focusedCard = deck[focusedIdx];
 
-  const expensesFor = (card: WalletCard | undefined) =>
-    card ? expenseRows.filter((r) => r.card_id === card.id).map(toExpense) : [];
+  // "Remaining" (and this list) only count spends from the card's current
+  // cycle onward — historyFor below stays all-time, since History is the
+  // permanent record, not the live remaining-budget calculation.
+  const expensesFor = (card: WalletCard | undefined) => {
+    if (!card) return [];
+    const cardRow = cardRows.find((c) => c.id === card.id);
+    const cycleStart = cardRow ? new Date(cardRow.cycle_started_at) : null;
+    if (cycleStart) cycleStart.setHours(0, 0, 0, 0);
+    return expenseRows
+      .filter((r) => r.card_id === card.id && (!cycleStart || parseDateOnly(r.spent_on).getTime() >= cycleStart.getTime()))
+      .map(toExpense);
+  };
 
   const historyFor = (card: WalletCard | undefined): Expense[] => {
     if (!card) return [];
@@ -441,6 +510,8 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
           amount,
           rid,
           reset_day: resetDay,
+          cycle_started_at: new Date().toISOString(),
+          last_reset_prompt_at: null,
         },
       ]);
       if (amount > 0) {
@@ -680,6 +751,10 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     joinOpen,
     openJoin: () => setJoinOpen(true),
     closeJoin: () => setJoinOpen(false),
+
+    resetPrompt: resetPromptCard ? { label: resetPromptCard.label, amount: formatMoney(resetPromptCard.amount) } : null,
+    confirmBudgetReset,
+    continueBudgetCycle,
   };
 
   return <ExpensesContext.Provider value={value}>{children}</ExpensesContext.Provider>;
