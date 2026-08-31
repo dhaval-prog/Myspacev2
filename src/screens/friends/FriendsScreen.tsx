@@ -7,14 +7,14 @@ import { MatchFoundScreen } from './MatchFoundScreen';
 import { FriendRequestsScreen } from './FriendRequestsScreen';
 import { ChatsListScreen } from './ChatsListScreen';
 import { ChatThreadScreen } from './ChatThreadScreen';
+import { LockedThreadScreen } from './LockedThreadScreen';
 
 interface FriendsScreenProps {
   onHome: () => void;
-  onOpenAccount: () => void;
 }
 
 /** The Friends & chat feature: friend requests and direct messaging, and every screen it opens. */
-export function FriendsScreen({ onHome, onOpenAccount }: FriendsScreenProps) {
+export function FriendsScreen({ onHome }: FriendsScreenProps) {
   const { page } = useFriends();
   switch (page) {
     case 'add':
@@ -29,7 +29,9 @@ export function FriendsScreen({ onHome, onOpenAccount }: FriendsScreenProps) {
       return <ChatsListScreen />;
     case 'chat':
       return <ChatThreadScreen />;
+    case 'locked-chat':
+      return <LockedThreadScreen />;
     default:
-      return <FriendsHomeScreen onHome={onHome} onOpenAccount={onOpenAccount} />;
+      return <FriendsHomeScreen onHome={onHome} />;
   }
 }

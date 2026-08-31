@@ -1,95 +1,145 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fontFamily, radius, spacing } from '../../theme';
+import { colors, fontFamily, noOutline, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
-import { AccountBadge } from '../../components/AccountBadge';
-import { MemberAvatar } from '../../components/split/MemberAvatar';
+import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { useFriends } from '../../context/FriendsContext';
 
-const BACK_ICON = 'M15 5l-7 7 7 7';
-const ADD_ICON = 'M15 19c0-3.3-2.7-6-6-6s-6 2.7-6 6M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM18 8v6M15 11h6';
-const INBOX_ICON = 'M4 12h4l2 3h4l2-3h4M4 12l1.5-6.5A2 2 0 0 1 7.44 4h9.12a2 2 0 0 1 1.94 1.5L20 12M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6';
 const CHAT_ICON = 'M4 4h16v12H8l-4 4z';
+const CHEVRON_ICON = 'M9 6l6 6-6 6';
+const QR_ICON = 'M4 4h6v6H4zM6 6.5h2v1H6zM14 4h6v6h-6zM16 6.5h2v1h-2zM4 14h6v6H4zM6 16.5h2v1H6zM14 14h3v3h-3zM19 14v3h-3M14 20h3M19 20v-3';
 
 interface FriendsHomeScreenProps {
   onHome: () => void;
-  onOpenAccount: () => void;
 }
 
-/** Friends list — the entry point into add-a-friend, requests, and chats. */
-export function FriendsHomeScreen({ onHome, onOpenAccount }: FriendsHomeScreenProps) {
+/** Friends list (6p-1): pending requests surfaced at the top, then everyone connected or waiting. */
+export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
   const insets = useSafeAreaInsets();
-  const { friends, receivedRequests, goAdd, goRequests, goChats, openChat, loading } = useFriends();
+  const { friends, receivedRequests, sentRequests, goAdd, goRequests, goChats, openChat, cancelRequest } = useFriends();
+  const [query, setQuery] = useState('');
+
+  const people = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = [
+      ...friends.map((f) => ({ kind: 'friend' as const, connectionId: f.connectionId, userId: f.userId, name: f.name, username: f.username })),
+      ...sentRequests.map((r) => ({ kind: 'pending' as const, connectionId: r.connectionId, userId: r.userId, name: r.name, username: r.username })),
+    ];
+    if (!q) return list;
+    return list.filter((p) => p.name.toLowerCase().includes(q) || p.username?.toLowerCase().includes(q));
+  }, [friends, sentRequests, query]);
+
+  const requestNames = receivedRequests.slice(0, 2).map((r) => r.name.split(' ')[0]);
+  const requestSummary =
+    receivedRequests.length === 0
+      ? ''
+      : requestNames.length === 1
+        ? `${requestNames[0]} wants to connect`
+        : `${requestNames.join(' and ')} want to connect`;
 
   return (
     <View style={styles.screen}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
-        <View style={styles.topRow}>
-          <Pressable onPress={onHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Home">
-            <Icon path={BACK_ICON} color={colors.friendsInk} size={19} strokeWidth={2} />
+        <View style={styles.headerRow}>
+          <Pressable onPress={onHome} accessibilityRole="button" accessibilityLabel="Back to Home" hitSlop={8}>
+            <View>
+              <Text style={styles.title}>Friends</Text>
+              <Text style={styles.sub}>
+                {friends.length} connected{receivedRequests.length > 0 ? ` · ${receivedRequests.length} waiting` : ''}
+              </Text>
+            </View>
           </Pressable>
-          <Text style={styles.title}>Friends</Text>
-          <AccountBadge onPress={onOpenAccount} bg={colors.friendsSurface} tint={colors.friendsInk} />
+          <Pressable onPress={goChats} style={styles.chatButton} accessibilityRole="button" accessibilityLabel="Chats">
+            <Icon path={CHAT_ICON} color={colors.lime} size={20} strokeWidth={1.9} />
+          </Pressable>
         </View>
 
-        <View style={styles.actionsRow}>
-          <Pressable onPress={goAdd} style={styles.actionTile} accessibilityRole="button" accessibilityLabel="Add a friend">
-            <View style={styles.actionIcon}>
-              <Icon path={ADD_ICON} color="#fff" size={20} strokeWidth={2} />
+        <View style={styles.searchField}>
+          <Text style={styles.searchIcon}>⌕</Text>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search friends"
+            placeholderTextColor={colors.placeholder}
+            style={[styles.searchInput, noOutline]}
+          />
+        </View>
+
+        {receivedRequests.length > 0 && (
+          <Pressable onPress={goRequests} style={({ pressed }) => [styles.requestsBanner, pressed && styles.pressed]}>
+            <View style={styles.requestsAvatars}>
+              {receivedRequests.slice(0, 2).map((r, i) => (
+                <FriendAvatar key={r.connectionId} userId={r.userId} name={r.name} size={38} style={i > 0 ? styles.requestsAvatarOverlap : undefined} />
+              ))}
             </View>
-            <Text style={styles.actionLabel}>Add a friend</Text>
+            <View style={styles.requestsText}>
+              <Text style={styles.requestsTitle}>
+                {receivedRequests.length} friend request{receivedRequests.length === 1 ? '' : 's'}
+              </Text>
+              <Text style={styles.requestsSub}>{requestSummary}</Text>
+            </View>
+            <Icon path={CHEVRON_ICON} color={colors.lime} size={18} strokeWidth={2} />
           </Pressable>
-          <Pressable onPress={goRequests} style={styles.actionTile} accessibilityRole="button" accessibilityLabel="Friend requests">
-            <View style={[styles.actionIcon, styles.actionIconAlt]}>
-              <Icon path={INBOX_ICON} color={colors.friendsInk} size={19} strokeWidth={1.8} />
-              {receivedRequests.length > 0 && (
-                <View style={styles.actionBadge}>
-                  <Text style={styles.actionBadgeText}>{receivedRequests.length}</Text>
-                </View>
+        )}
+
+        {people.length > 0 && (
+          <>
+            <Text style={styles.eyebrow}>YOUR PEOPLE</Text>
+            <View style={styles.list}>
+              {people.map((p) =>
+                p.kind === 'friend' ? (
+                  <View key={p.connectionId} style={styles.row}>
+                    <FriendAvatar userId={p.userId} name={p.name} size={44} />
+                    <View style={styles.rowText}>
+                      <Text style={styles.rowName}>{p.name}</Text>
+                      {p.username && <Text style={styles.rowMeta}>@{p.username}</Text>}
+                    </View>
+                    <Pressable
+                      onPress={() => openChat(p.connectionId)}
+                      style={styles.rowChatButton}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Message ${p.name}`}
+                    >
+                      <Icon path={CHAT_ICON} color={colors.lime} size={15} strokeWidth={1.9} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View key={p.connectionId} style={[styles.row, styles.rowPending]}>
+                    <FriendAvatar userId={p.userId} name={p.name} size={44} style={styles.rowPendingAvatar} />
+                    <View style={styles.rowText}>
+                      <Text style={[styles.rowName, styles.rowNamePending]}>{p.name}</Text>
+                      <Text style={styles.rowMeta}>Request sent · pending</Text>
+                    </View>
+                    <Pressable
+                      onPress={() => cancelRequest(p.connectionId)}
+                      style={styles.cancelPill}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Cancel request to ${p.name}`}
+                    >
+                      <Text style={styles.cancelLabel}>Cancel</Text>
+                    </Pressable>
+                  </View>
+                ),
               )}
             </View>
-            <Text style={styles.actionLabel}>Requests</Text>
-          </Pressable>
-          <Pressable onPress={goChats} style={styles.actionTile} accessibilityRole="button" accessibilityLabel="Chats">
-            <View style={[styles.actionIcon, styles.actionIconAlt]}>
-              <Icon path={CHAT_ICON} color={colors.friendsInk} size={18} strokeWidth={1.8} />
-            </View>
-            <Text style={styles.actionLabel}>Chats</Text>
-          </Pressable>
-        </View>
+          </>
+        )}
 
-        <Text style={styles.sectionTitle}>
-          {friends.length > 0 ? `${friends.length} friend${friends.length === 1 ? '' : 's'}` : 'Your friends'}
-        </Text>
-
-        {!loading && friends.length === 0 ? (
+        {people.length === 0 && receivedRequests.length === 0 && (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No friends yet</Text>
             <Text style={styles.emptyBody}>Share your code or scan someone else's to start connecting.</Text>
-            <Pressable onPress={goAdd} style={styles.emptyCta}>
-              <Text style={styles.emptyCtaLabel}>Add a friend</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.list}>
-            {friends.map((f) => (
-              <Pressable
-                key={f.connectionId}
-                onPress={() => openChat(f.connectionId)}
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-              >
-                <MemberAvatar userId={f.userId} name={f.name} size={48} />
-                <View style={styles.rowText}>
-                  <Text style={styles.rowName}>{f.name}</Text>
-                  {f.username && <Text style={styles.rowMeta}>@{f.username}</Text>}
-                </View>
-                <Icon path={CHAT_ICON} color={colors.friendsInkFaint30} size={18} strokeWidth={1.7} />
-              </Pressable>
-            ))}
           </View>
         )}
       </ScrollView>
+
+      <View style={[styles.pinned, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+        <Pressable onPress={goAdd} style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}>
+          <Icon path={QR_ICON} color={colors.ink} size={18} strokeWidth={1.8} />
+          <Text style={styles.addLabel}>Add a friend</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -97,95 +147,156 @@ export function FriendsHomeScreen({ onHome, onOpenAccount }: FriendsHomeScreenPr
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.friendsBg,
+    backgroundColor: colors.pale,
   },
   scroll: {
-    paddingHorizontal: spacing.xxxl,
-    paddingBottom: spacing.huge,
-    gap: spacing.xxl,
+    paddingHorizontal: 26,
+    paddingBottom: 110,
+    gap: 14,
   },
-  topRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.friendsSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.friendsInk,
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 18,
-    elevation: 1,
-  },
   title: {
     fontFamily: fontFamily.sans700,
-    fontSize: 19,
-    color: colors.friendsInk,
+    fontSize: 30,
+    lineHeight: 31.5,
+    letterSpacing: -0.9,
+    color: colors.textPrimary,
   },
-  actionsRow: {
+  sub: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 13.5,
+    color: colors.textSecondary,
+  },
+  chatButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: {
+    opacity: 0.85,
+  },
+  searchField: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: 'rgba(255,255,255,.86)',
+    borderRadius: radius.pill,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
   },
-  actionTile: {
+  searchIcon: {
+    fontSize: 15,
+    color: colors.textPrimary,
+    opacity: 0.5,
+  },
+  searchInput: {
     flex: 1,
+    fontFamily: fontFamily.sans400,
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  requestsBanner: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.friendsSurface,
-    borderRadius: 22,
-    paddingVertical: spacing.ms,
-    shadowColor: colors.friendsInk,
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 22,
-    elevation: 1,
+    gap: spacing.ms,
+    backgroundColor: colors.ink,
+    borderRadius: 26,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
   },
-  actionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: colors.friendsAccent,
-    alignItems: 'center',
-    justifyContent: 'center',
+  requestsAvatars: {
+    flexDirection: 'row',
   },
-  actionIconAlt: {
-    backgroundColor: colors.friendsAccentSoftBg,
+  requestsAvatarOverlap: {
+    marginLeft: -14,
+    borderWidth: 2,
+    borderColor: colors.ink,
   },
-  actionBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    backgroundColor: colors.friendsAccent,
-    alignItems: 'center',
-    justifyContent: 'center',
+  requestsText: {
+    flex: 1,
+    gap: 2,
   },
-  actionBadgeText: {
-    fontFamily: fontFamily.sans700,
-    fontSize: 10,
+  requestsTitle: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 14.5,
     color: '#fff',
   },
-  actionLabel: {
-    fontFamily: fontFamily.sans600,
+  requestsSub: {
+    fontFamily: fontFamily.sans400,
     fontSize: 12.5,
-    color: colors.friendsInk,
+    color: 'rgba(255,255,255,.6)',
   },
-  sectionTitle: {
-    fontFamily: fontFamily.sans700,
-    fontSize: 17,
-    letterSpacing: -0.2,
-    color: colors.friendsInk,
+  eyebrow: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 11.5,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+  },
+  list: {
+    gap: 10,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: 'rgba(255,255,255,.86)',
+    borderRadius: radius.md,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+  },
+  rowPending: {
+    backgroundColor: 'rgba(255,255,255,.5)',
+  },
+  rowPendingAvatar: {
+    opacity: 0.5,
+  },
+  rowText: {
+    flex: 1,
+  },
+  rowName: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15.5,
+    color: colors.textPrimary,
+  },
+  rowNamePending: {
+    color: colors.textFaint,
+  },
+  rowMeta: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 12.5,
+    color: colors.textFaint,
+  },
+  rowChatButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelPill: {
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(22,33,12,0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  cancelLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 11.5,
+    color: colors.textPrimary,
   },
   empty: {
-    borderRadius: 24,
-    backgroundColor: colors.friendsSurface,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,.7)',
     padding: spacing.xxl,
     alignItems: 'center',
     gap: 6,
@@ -193,51 +304,39 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontFamily: fontFamily.sans600,
     fontSize: 15,
-    color: colors.friendsInk,
+    color: colors.textPrimary,
   },
   emptyBody: {
     fontFamily: fontFamily.sans400,
     fontSize: 13,
-    color: colors.friendsInkFaint45,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
-  emptyCta: {
-    marginTop: spacing.xs,
-    borderRadius: 999,
-    backgroundColor: colors.friendsAccent,
-    paddingVertical: 13,
-    paddingHorizontal: 24,
+  pinned: {
+    paddingHorizontal: 26,
+    paddingTop: spacing.ms,
+    backgroundColor: colors.pale,
   },
-  emptyCtaLabel: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 14,
-    color: '#fff',
-  },
-  list: {
-    gap: spacing.xs,
-  },
-  row: {
+  addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.ms,
-    backgroundColor: colors.friendsSurface,
-    borderRadius: 20,
-    padding: spacing.ms,
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.lime,
+    paddingVertical: 19,
+    shadowColor: '#7AA82C',
+    shadowOpacity: 0.32,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 24,
+    elevation: 4,
   },
-  rowPressed: {
-    opacity: 0.85,
+  addButtonPressed: {
+    opacity: 0.88,
   },
-  rowText: {
-    flex: 1,
-  },
-  rowName: {
+  addLabel: {
     fontFamily: fontFamily.sans600,
-    fontSize: 15,
-    color: colors.friendsInk,
-  },
-  rowMeta: {
-    fontFamily: fontFamily.sans400,
-    fontSize: 12,
-    color: colors.friendsInkFaint45,
+    fontSize: 16,
+    color: colors.ink,
   },
 });

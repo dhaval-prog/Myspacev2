@@ -38,7 +38,7 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenFr
   const { user } = useAuth();
   const userId = user?.id ?? null;
   const { rooms, items } = useSpace();
-  const { receivedRequests } = useFriends();
+  const { receivedRequests, goRequests } = useFriends();
   const [activeViewId, setActiveViewId] = useState<ViewId>('rooms');
   const [previewViewId, setPreviewViewId] = useState<ViewId>('rooms');
   const [activeNavId, setActiveNavId] = useState('home');
@@ -111,19 +111,37 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenFr
     setPreviewViewId(activeViewId);
   }, [activeViewId]);
 
+  const friendRequestNote =
+    receivedRequests.length > 0 ? ` ${receivedRequests.length} friend request${receivedRequests.length === 1 ? '' : 's'} waiting.` : '';
+
   const heroLine =
     activeViewId === 'rooms'
-      ? rooms.length
-        ? `${rooms.length} room${rooms.length === 1 ? '' : 's'} set up. Add the things next.`
-        : 'Start with a room. Add the things after.'
+      ? (rooms.length ? `${rooms.length} room${rooms.length === 1 ? '' : 's'} set up.` : 'Start with a room. Add the things after.') +
+        friendRequestNote
       : activeViewId === 'attention'
         ? 'Set an expiry date and we will nudge you here.'
         : 'Say it, scan it, or type it — it files itself.';
 
-  const contextLabel =
-    previewViewId === 'rooms' ? VIEWS.rooms.tabLabel : previewViewId === 'add' ? VIEWS.add.tabLabel : 'Needs attention';
-  const contextTitle =
-    previewViewId === 'rooms'
+  // The friend-requests card takes over the ambient context card outright
+  // (not just a stop in its rotation) whenever there's something waiting —
+  // it's a nudge, not scenery.
+  const requestNames = receivedRequests.slice(0, 2).map((r) => r.name.split(' ')[0]);
+  const showFriendsCard = receivedRequests.length > 0;
+  const openFriendRequests = () => {
+    goRequests();
+    onOpenFriends();
+  };
+
+  const contextLabel = showFriendsCard
+    ? 'MAKE FRIENDS'
+    : previewViewId === 'rooms'
+      ? VIEWS.rooms.tabLabel
+      : previewViewId === 'add'
+        ? VIEWS.add.tabLabel
+        : 'Needs attention';
+  const contextTitle = showFriendsCard
+    ? `${requestNames.length === 1 ? requestNames[0] : requestNames.join(' and ')} want${requestNames.length === 1 ? 's' : ''} to connect`
+    : previewViewId === 'rooms'
       ? VIEWS.rooms.items[1].title
       : previewViewId === 'add'
         ? VIEWS.add.items[1].title
@@ -169,7 +187,7 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenFr
         <ContextCard
           label={contextLabel}
           title={contextTitle}
-          onPress={() => onOpenDetail(previewViewId)}
+          onPress={showFriendsCard ? openFriendRequests : () => onOpenDetail(previewViewId)}
           reduceMotion={reduceMotion}
         />
 

@@ -28,7 +28,7 @@ type Screen =
   | { name: 'expenses' }
   | { name: 'split' }
   | { name: 'friends' }
-  | { name: 'account'; from: 'home' | 'expenses' | 'split' | 'friends' };
+  | { name: 'account'; from: 'home' | 'expenses' | 'split' };
 
 function AuthNavigator() {
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
@@ -70,12 +70,7 @@ function AppNavigator() {
     );
   }
   if (screen.name === 'friends') {
-    return (
-      <FriendsScreen
-        onHome={() => setScreen({ name: 'home' })}
-        onOpenAccount={() => setScreen({ name: 'account', from: 'friends' })}
-      />
-    );
+    return <FriendsScreen onHome={() => setScreen({ name: 'home' })} />;
   }
   if (screen.name === 'account') {
     return <AccountSettingsScreen onBack={() => setScreen({ name: screen.from } as Screen)} />;
