@@ -93,21 +93,22 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
             <View style={styles.list}>
               {people.map((p) =>
                 p.kind === 'friend' ? (
-                  <View key={p.connectionId} style={styles.row}>
+                  <Pressable
+                    key={p.connectionId}
+                    onPress={() => openChat(p.connectionId)}
+                    style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Message ${p.name}`}
+                  >
                     <FriendAvatar userId={p.userId} name={p.name} size={44} />
                     <View style={styles.rowText}>
                       <Text style={styles.rowName}>{p.name}</Text>
                       {p.username && <Text style={styles.rowMeta}>@{p.username}</Text>}
                     </View>
-                    <Pressable
-                      onPress={() => openChat(p.connectionId)}
-                      style={styles.rowChatButton}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Message ${p.name}`}
-                    >
+                    <View style={styles.rowChatButton}>
                       <Icon path={CHAT_ICON} color={colors.lime} size={15} strokeWidth={1.9} />
-                    </Pressable>
-                  </View>
+                    </View>
+                  </Pressable>
                 ) : (
                   <View key={p.connectionId} style={[styles.row, styles.rowPending]}>
                     <FriendAvatar userId={p.userId} name={p.name} size={44} style={styles.rowPendingAvatar} />
@@ -268,6 +269,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: 14,
     paddingHorizontal: 18,
+  },
+  rowPressed: {
+    opacity: 0.85,
   },
   rowPending: {
     backgroundColor: 'rgba(255,255,255,.5)',

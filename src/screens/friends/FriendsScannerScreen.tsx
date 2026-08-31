@@ -16,8 +16,11 @@ const BRACKET_THICKNESS = 4;
 const SCAN_TRAVEL = 196;
 const LOOP_DURATION = 2600;
 
+/** A scanned QR can hold a bare code or a `myspace://add/CODE` deep link — pull just the code either way. */
 function extractCode(raw: string): string {
-  return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  const trimmed = raw.trim();
+  const afterSlash = trimmed.includes('/') ? trimmed.slice(trimmed.lastIndexOf('/') + 1) : trimmed;
+  return afterSlash.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
 }
 
 const BRACKET_POSITION: Record<'tl' | 'tr' | 'bl' | 'br', ViewStyle> = {

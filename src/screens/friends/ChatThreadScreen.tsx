@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { colors, fontFamily, noOutline, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
@@ -11,6 +13,8 @@ const BACK_ICON = 'M15 5l-7 7 7 7';
 const SEND_ICON = 'M4 12h14M12 6l6 6-6 6';
 const MORE_ICON = 'M12 6.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM12 19.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z';
 const CHECK_ICON = 'M5 12.5l4.5 4.5L19 7';
+const ATTACH_ICON = 'M12 6v12M6 12h12';
+const PIN_ICON = 'M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11z M12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z';
 
 function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
@@ -27,8 +31,10 @@ function isToday(iso: string | null): boolean {
 export function ChatThreadScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { focusedFriend, messages, sendMessage, goChats, removeFriend } = useFriends();
+  const { focusedFriend, messages, sendMessage, sendPhoto, sendLocation, goChats, removeFriend, clearChat, isOnline } = useFriends();
   const [text, setText] = useState('');
+  const [sendingAttachment, setSendingAttachment] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -45,10 +51,68 @@ export function ChatThreadScreen() {
 
   const showFriendsChip = isToday(focusedFriend.acceptedAt);
 
-  const confirmRemove = () => {
+  const pickPhoto = async () => {
+    setAttachError(null);
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setAttachError('Photo library access is needed to share a photo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.7, allowsEditing: true });
+    if (result.canceled || !result.assets[0]) return;
+
+    setSendingAttachment(true);
+    const { error } = await sendPhoto(result.assets[0].uri);
+    setSendingAttachment(false);
+    if (error) setAttachError(error);
+  };
+
+  const shareLocation = async () => {
+    setAttachError(null);
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (!permission.granted) {
+      setAttachError('Location access is needed to share where you are.');
+      return;
+    }
+    setSendingAttachment(true);
+    try {
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { error } = await sendLocation(position.coords.latitude, position.coords.longitude);
+      if (error) setAttachError(error);
+    } catch {
+      setAttachError('Could not get your location.');
+    } finally {
+      setSendingAttachment(false);
+    }
+  };
+
+  const openAttachOptions = () => {
+    Alert.alert('Share', undefined, [
+      { text: 'Photo', onPress: pickPhoto },
+      { text: 'Location', onPress: shareLocation },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const confirmClearChat = () => {
+    Alert.alert('Delete chat', `Delete every message with ${focusedFriend.name}? This can't be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete chat', style: 'destructive', onPress: () => clearChat(focusedFriend.connectionId) },
+    ]);
+  };
+
+  const confirmRemoveFriend = () => {
     Alert.alert('Remove friend', `Remove ${focusedFriend.name}? This deletes your chat history too.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => removeFriend(focusedFriend.connectionId) },
+    ]);
+  };
+
+  const openThreadOptions = () => {
+    Alert.alert(focusedFriend.name, undefined, [
+      { text: 'Delete chat', onPress: confirmClearChat },
+      { text: 'Remove friend', style: 'destructive', onPress: confirmRemoveFriend },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   };
 
@@ -58,11 +122,11 @@ export function ChatThreadScreen() {
         <Pressable onPress={goChats} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
           <Icon path={BACK_ICON} color="#fff" size={19} strokeWidth={2} />
         </Pressable>
-        <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} />
+        <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} online={isOnline(focusedFriend.userId)} />
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>{focusedFriend.name}</Text>
         </View>
-        <Pressable onPress={confirmRemove} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="More options">
+        <Pressable onPress={openThreadOptions} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="More options">
           <Icon path={MORE_ICON} color="rgba(255,255,255,.6)" size={19} strokeWidth={1.8} />
         </Pressable>
       </View>
@@ -81,9 +145,23 @@ export function ChatThreadScreen() {
             const mine = m.senderId === user?.id;
             return (
               <View key={m.id} style={[styles.msgWrap, mine ? styles.msgWrapMine : styles.msgWrapTheirs]}>
-                <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                  <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{m.text}</Text>
-                </View>
+                {m.kind === 'image' && m.attachmentUrl ? (
+                  <Image source={{ uri: m.attachmentUrl }} style={styles.imageBubble} resizeMode="cover" />
+                ) : m.kind === 'location' && m.attachmentUrl ? (
+                  <Pressable
+                    onPress={() => Linking.openURL(m.attachmentUrl!)}
+                    style={[styles.bubble, styles.locationBubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}
+                  >
+                    <View style={styles.locationIcon}>
+                      <Icon path={PIN_ICON} color={mine ? colors.ink : colors.lime} size={16} strokeWidth={1.8} />
+                    </View>
+                    <Text style={[styles.locationText, mine && styles.bubbleTextMine]}>Location shared · Open in Maps</Text>
+                  </Pressable>
+                ) : (
+                  <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                    <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{m.text}</Text>
+                  </View>
+                )}
                 <Text style={styles.meta}>
                   {timeLabel(m.createdAt)}
                   {mine ? '  ✓✓' : ''}
@@ -92,9 +170,21 @@ export function ChatThreadScreen() {
             );
           })
         )}
+        {sendingAttachment && (
+          <View style={[styles.msgWrap, styles.msgWrapMine]}>
+            <View style={[styles.bubble, styles.bubbleMine, styles.sendingBubble]}>
+              <ActivityIndicator size="small" color={colors.ink} />
+            </View>
+          </View>
+        )}
       </ScrollView>
 
+      {attachError && <Text style={styles.attachError}>{attachError}</Text>}
+
       <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+        <Pressable onPress={openAttachOptions} style={styles.attachButton} accessibilityRole="button" accessibilityLabel="Share a photo or your location">
+          <Icon path={ATTACH_ICON} color={colors.ink} size={19} strokeWidth={2} />
+        </Pressable>
         <TextInput
           value={text}
           onChangeText={setText}
@@ -216,10 +306,43 @@ const styles = StyleSheet.create({
   bubbleTextMine: {
     color: colors.ink,
   },
+  sendingBubble: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  imageBubble: {
+    width: 220,
+    height: 220,
+    borderRadius: 20,
+    backgroundColor: colors.badgeInactiveBg,
+  },
+  locationBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  locationIcon: {
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationText: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 13.5,
+    color: colors.textPrimary,
+  },
   meta: {
     fontFamily: fontFamily.mono500,
     fontSize: 10.5,
     color: 'rgba(22,33,12,0.5)',
+  },
+  attachError: {
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: 4,
+    fontFamily: fontFamily.sans500,
+    fontSize: 12,
+    color: colors.danger,
   },
   inputRow: {
     flexDirection: 'row',
@@ -227,6 +350,19 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.xxl,
     paddingTop: spacing.ms,
+  },
+  attachButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    elevation: 1,
   },
   input: {
     flex: 1,

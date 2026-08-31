@@ -30,10 +30,16 @@ export interface FriendRequest {
   introMessage: string | null;
 }
 
+export type MessageKind = 'text' | 'image' | 'location';
+
 export interface DirectMessage {
   id: string;
   connectionId: string;
   senderId: string;
+  kind: MessageKind;
+  /** The message body for 'text'; a caption (may be empty) for 'image'/'location'. */
   text: string;
+  /** Public storage URL for 'image', a Google Maps link for 'location'; null for 'text'. */
+  attachmentUrl: string | null;
   createdAt: string;
 }
