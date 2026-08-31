@@ -83,6 +83,22 @@ export const colors = {
   splitPositiveFg: '#1F9254',
   splitDangerBg: 'rgba(211,50,67,0.12)',
   splitDangerFg: '#D33243',
+
+  // --- Friends / chat screens ---
+  // Warm amber-to-coral, sociable and distinct from Split's magenta and
+  // the dark wallet — over the same soft off-white surface as Split.
+  friendsBg: '#FFF9F2',
+  friendsSurface: '#FFFFFF',
+  friendsInk: '#3A2413',
+  friendsInkFaint30: 'rgba(58,36,19,0.3)',
+  friendsInkFaint45: 'rgba(58,36,19,0.45)',
+  friendsInkFaint55: 'rgba(58,36,19,0.55)',
+  friendsInkFaint08: 'rgba(58,36,19,0.08)',
+  friendsGradient: ['#FFB86B', '#FF7A59', '#E8456B'] as string[],
+  friendsAccent: '#FF7A45',
+  friendsAccentSoftBg: '#FFE9DA',
+  friendsLockedBg: 'rgba(58,36,19,0.06)',
+  friendsLockedFg: 'rgba(58,36,19,0.32)',
 } as const;
 
 export type ColorToken = keyof typeof colors;
