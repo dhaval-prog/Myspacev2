@@ -8,6 +8,9 @@ export interface AppNotification {
   title: string;
   body: string;
   createdAt: string;
+  /** What this notification is about — set server-side so a tap can jump straight to it. */
+  entityType: 'card' | 'group' | 'connection' | null;
+  entityId: string | null;
 }
 
 interface NotificationRow {
@@ -16,10 +19,20 @@ interface NotificationRow {
   title: string;
   body: string;
   created_at: string;
+  entity_type: string | null;
+  entity_id: string | null;
 }
 
 function toNotification(row: NotificationRow): AppNotification {
-  return { id: row.id, category: row.category, title: row.title, body: row.body, createdAt: row.created_at };
+  return {
+    id: row.id,
+    category: row.category,
+    title: row.title,
+    body: row.body,
+    createdAt: row.created_at,
+    entityType: row.entity_type as AppNotification['entityType'],
+    entityId: row.entity_id,
+  };
 }
 
 interface NotificationsContextValue {
@@ -57,7 +70,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
     supabase
       .from('notifications')
-      .select('id,category,title,body,created_at')
+      .select('id,category,title,body,created_at,entity_type,entity_id')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(MAX_NOTIFICATIONS)

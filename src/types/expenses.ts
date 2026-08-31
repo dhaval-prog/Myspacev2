@@ -45,4 +45,5 @@ export interface CardMember {
   userId: string;
   name: string;
   isOwner: boolean;
+  avatarUrl: string | null;
 }

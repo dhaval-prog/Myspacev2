@@ -135,7 +135,7 @@ export function ChatThreadScreen() {
         <Pressable onPress={goChats} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
           <Icon path={BACK_ICON} color="#fff" size={19} strokeWidth={2} />
         </Pressable>
-        <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} online={isOnline(focusedFriend.userId)} />
+        <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} online={isOnline(focusedFriend.userId)} avatarUrl={focusedFriend.avatarUrl} />
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>{focusedFriend.name}</Text>
         </View>

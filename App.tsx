@@ -7,7 +7,8 @@ import { colors, fontsToLoad } from './src/theme';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { SpaceProvider } from './src/context/SpaceContext';
 import { NotificationsProvider } from './src/context/NotificationsContext';
-import { FriendsProvider } from './src/context/FriendsContext';
+import { FriendsProvider, useFriends } from './src/context/FriendsContext';
+import type { NotificationTarget } from './src/utils/notify';
 import { LaunchIntro } from './src/components/LaunchIntro';
 import { SignUpScreen } from './src/screens/SignUpScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
@@ -26,8 +27,8 @@ type AuthScreen = 'login' | 'signup';
 type Screen =
   | { name: 'home' }
   | { name: 'detail'; viewId: ViewId; initialIndex?: number }
-  | { name: 'expenses' }
-  | { name: 'split' }
+  | { name: 'expenses'; focusCardId?: string }
+  | { name: 'split'; focusGroupId?: string }
   | { name: 'friends' }
   | { name: 'liveLocations' }
   | { name: 'account'; from: 'home' | 'expenses' | 'split' };
@@ -43,6 +44,24 @@ function AuthNavigator() {
 
 function AppNavigator() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
+  const { openChat, receivedRequests, goRequests } = useFriends();
+
+  const openNotificationTarget = (target: NotificationTarget) => {
+    if (target.screen === 'expenses') setScreen({ name: 'expenses', focusCardId: target.cardId });
+    else if (target.screen === 'split') setScreen({ name: 'split', focusGroupId: target.groupId });
+    else if (target.screen === 'friends') {
+      // FriendsProvider wraps this whole navigator, so its own state can be
+      // pre-positioned directly — no focus prop needs threading through.
+      // A still-pending request you received has no chat to open (that view
+      // is only for the requester's own outgoing thread) — send it to
+      // Requests, where Accept/Decline actually live, instead.
+      if (receivedRequests.some((r) => r.connectionId === target.connectionId)) goRequests();
+      else openChat(target.connectionId);
+      setScreen({ name: 'friends' });
+    } else {
+      setScreen({ name: 'home' });
+    }
+  };
 
   if (screen.name === 'detail') {
     return (
@@ -59,6 +78,8 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'home' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
         onOpenAccount={() => setScreen({ name: 'account', from: 'expenses' })}
+        focusCardId={screen.focusCardId}
+        onOpenNotificationTarget={openNotificationTarget}
       />
     );
   }
@@ -68,6 +89,8 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'home' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenAccount={() => setScreen({ name: 'account', from: 'split' })}
+        focusGroupId={screen.focusGroupId}
+        onOpenNotificationTarget={openNotificationTarget}
       />
     );
   }
@@ -88,6 +111,7 @@ function AppNavigator() {
       onOpenFriends={() => setScreen({ name: 'friends' })}
       onOpenLiveLocations={() => setScreen({ name: 'liveLocations' })}
       onOpenAccount={() => setScreen({ name: 'account', from: 'home' })}
+      onOpenNotificationTarget={openNotificationTarget}
     />
   );
 }

@@ -46,7 +46,7 @@ export function FriendRequestsScreen() {
               {receivedRequests.map((r) => (
                 <View key={r.connectionId} style={styles.card}>
                   <View style={styles.cardTopRow}>
-                    <FriendAvatar userId={r.userId} name={r.name} size={48} />
+                    <FriendAvatar userId={r.userId} name={r.name} size={48} avatarUrl={r.avatarUrl} />
                     <View style={styles.cardText}>
                       <Text style={styles.cardName}>{r.name}</Text>
                       <Text style={styles.cardMeta}>{r.username ? `@${r.username}` : 'via invite code'}</Text>
@@ -79,7 +79,7 @@ export function FriendRequestsScreen() {
             {sentRequests.map((r) => (
               <View key={r.connectionId} style={styles.card}>
                 <View style={styles.cardTopRow}>
-                  <FriendAvatar userId={r.userId} name={r.name} size={48} />
+                  <FriendAvatar userId={r.userId} name={r.name} size={48} avatarUrl={r.avatarUrl} />
                   <View style={styles.cardText}>
                     <Text style={styles.cardName}>{r.name}</Text>
                     <Text style={styles.cardMeta}>{r.username ? `@${r.username}` : 'via invite code'}</Text>
@@ -100,7 +100,7 @@ export function FriendRequestsScreen() {
             <View style={styles.cards}>
               {justAccepted.map((f) => (
                 <View key={f.connectionId} style={styles.acceptedRow}>
-                  <FriendAvatar userId={f.userId} name={f.name} size={40} />
+                  <FriendAvatar userId={f.userId} name={f.name} size={40} avatarUrl={f.avatarUrl} />
                   <View style={styles.cardText}>
                     <Text style={styles.acceptedName}>{f.name}</Text>
                     <Text style={styles.acceptedSub}>You're friends — chat unlocked</Text>
