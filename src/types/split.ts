@@ -16,6 +16,7 @@ export interface SplitGroup {
 export interface SplitMember {
   userId: string;
   name: string;
+  isOwner: boolean;
 }
 
 /** A single logged spend against a group. */
