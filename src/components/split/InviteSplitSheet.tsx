@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { colors, fontFamily, spacing } from '../../theme';
 import { BottomSheet } from '../expenses/BottomSheet';
@@ -64,6 +64,9 @@ export function InviteSplitSheet({ visible, onClose, group, qrOnly }: InviteSpli
           {!qrOnly && <Text style={styles.hint}>Scan this code to join this split instantly, or share the code below.</Text>}
           <View style={styles.qrBox}>
             <QRCode value={target?.rid ?? '10000000001'} size={QR_BOX - spacing.ms * 2} color={colors.splitInk} backgroundColor="transparent" />
+            <View style={styles.qrBadge}>
+              <Image source={require('../../../assets/logos/logo-lime.png')} style={styles.qrBadgeImage} />
+            </View>
           </View>
           <Text style={styles.qrId}>{joinId}</Text>
         </View>
@@ -151,6 +154,22 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     letterSpacing: 1.6,
     color: colors.splitInkFaint42,
+  },
+  qrBadge: {
+    position: 'absolute',
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 5,
+    borderColor: '#F3F3F8',
+    backgroundColor: colors.lime,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  qrBadgeImage: {
+    width: 46,
+    height: 46,
   },
   shareButton: {
     width: '100%',

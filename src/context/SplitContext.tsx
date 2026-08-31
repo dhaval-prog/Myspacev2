@@ -364,7 +364,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     const group = groupRows.find((g) => g.id === groupId);
     if (!group) return [];
     const ids = new Set<string>([group.owner_id, ...memberRows.filter((m) => m.group_id === groupId).map((m) => m.user_id)]);
-    return Array.from(ids).map((id) => ({ userId: id, name: nameFor(id) }));
+    return Array.from(ids).map((id) => ({ userId: id, name: nameFor(id), isOwner: id === group.owner_id }));
   };
 
   const expensesFor = (groupId: string): SplitExpense[] =>
