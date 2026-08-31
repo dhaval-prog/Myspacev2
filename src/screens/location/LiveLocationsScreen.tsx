@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
+import { MapCanvas } from '../../components/location/MapCanvas';
+import type { MapCanvasHandle } from '../../components/location/mapTypes';
+import { useAuth } from '../../context/AuthContext';
 import { useFriends } from '../../context/FriendsContext';
+import { LocationProvider, useLocationData } from '../../context/LocationContext';
+import type { ShareDurationKey } from '../../types/location';
 import { LocationPrivacyScreen } from './LocationPrivacyScreen';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
@@ -13,29 +19,38 @@ const GEAR_ICON =
   'M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M19 12a7 7 0 00-.1-1.1l1.8-1.4-1.5-2.6-2.1.6a7 7 0 00-1.9-1.1L16.5 5h-3l-.4 2.4a7 7 0 00-1.9 1.1l-2.1-.6-1.5 2.6 1.8 1.4A7 7 0 008.3 12a7 7 0 00.1 1.1l-1.8 1.4 1.5 2.6 2.1-.6a7 7 0 001.9 1.1l.4 2.4h3l.4-2.4a7 7 0 001.9-1.1l2.1.6 1.5-2.6-1.8-1.4c.1-.3.1-.7.1-1.1z';
 const RECENTER_ICON = 'M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 100 8 4 4 0 000-8z';
 const PIN_ICON = 'M12 21s7-6.5 7-11a7 7 0 10-14 0c0 4.5 7 11 7 11z M12 12a2 2 0 100-4 2 2 0 000 4z';
-const CLOCK_ICON = 'M12 7v5l3.5 2M12 21a9 9 0 100-18 9 9 0 000 18z';
 const CHEVRON_ICON = 'M9 6l6 6-6 6';
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 const CHAT_ICON = 'M4 4h16v12H8l-4 4z';
 const DIRECTIONS_ICON = 'M3 12l18-9-9 18-2-7-7-2z';
 
-// Fixed illustrative slots on the map canvas — cycled through by list order.
-// Real coordinates arrive once this is wired to expo-location + a real map.
-const PIN_SLOTS = [
-  { x: 66, y: 176 },
-  { x: 252, y: 148 },
-  { x: 292, y: 300 },
-  { x: 122, y: 344 },
-  { x: 58, y: 430 },
-  { x: 262, y: 410 },
-];
-
-const DURATIONS: { key: string; label: string }[] = [
+const DURATIONS: { key: ShareDurationKey; label: string }[] = [
   { key: '15m', label: '15 min' },
   { key: '1h', label: '1 hour' },
   { key: '2h', label: '2 hours' },
   { key: 'off', label: 'Until I turn it off' },
 ];
+
+function timeAgoLabel(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60000) return 'just now';
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hr${hrs === 1 ? '' : 's'} ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function timeLeftLabel(expiresAt: string | null): string {
+  if (!expiresAt) return '';
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return 'ending…';
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins} min left`;
+  const hrs = Math.round(mins / 60);
+  return `${hrs} hr${hrs === 1 ? '' : 's'} left`;
+}
 
 interface LiveLocationsScreenProps {
   onBack: () => void;
@@ -43,37 +58,93 @@ interface LiveLocationsScreenProps {
 
 /**
  * Friends' locations on a map — opt-in, time-boxed live sharing plus a
- * lightweight automatic "last seen" while MySpace is open. This is a
- * design preview: pin positions and last-seen status use each friend's
- * real online presence as a stand-in, but there's no location backend or
- * real map yet (that's react-native-maps + expo-location + a Supabase
- * schema, still to come — see LocationPrivacyScreen's note).
+ * lightweight automatic "last seen" while MySpace is open, backed by
+ * real Supabase tables (RLS-scoped to accepted friends) and Realtime.
+ * Mobile-only: react-native-maps has no web renderer, so the web build
+ * falls back to an illustrative map (see MapCanvas.web.tsx) and never
+ * requests location permission.
  */
 export function LiveLocationsScreen({ onBack }: LiveLocationsScreenProps) {
   const [page, setPage] = useState<'map' | 'privacy'>('map');
 
-  if (page === 'privacy') {
-    return <LocationPrivacyScreen onBack={() => setPage('map')} />;
-  }
-  return <MapView onBack={onBack} onOpenPrivacy={() => setPage('privacy')} />;
+  return (
+    <LocationProvider>
+      {page === 'privacy' ? <LocationPrivacyScreen onBack={() => setPage('map')} /> : <MapPage onBack={onBack} onOpenPrivacy={() => setPage('privacy')} />}
+    </LocationProvider>
+  );
 }
 
-function MapView({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy: () => void }) {
+function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy: () => void }) {
   const insets = useSafeAreaInsets();
-  const { friends, isOnline } = useFriends();
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const { friends } = useFriends();
+  const { lastSeenFor, shareFor, upsertLastSeen, startShare, pingShare, stopShare } = useLocationData();
+
   const [sheetView, setSheetView] = useState<'none' | 'share' | 'detail'>('none');
   const [detailFriendId, setDetailFriendId] = useState<string | null>(null);
-  const [sharing, setSharing] = useState(false);
-  const [shareDuration, setShareDuration] = useState('1h');
+  const [shareDurationKey, setShareDurationKey] = useState<ShareDurationKey>('1h');
+  const [myPosition, setMyPosition] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const mapRef = useRef<MapCanvasHandle>(null);
 
-  const rows = friends.map((f, i) => ({
-    ...f,
-    live: isOnline(f.userId),
-    slot: PIN_SLOTS[i % PIN_SLOTS.length],
-    statusText: isOnline(f.userId) ? 'Live · updating now' : 'Last seen recently',
-  }));
+  const ownShare = userId ? shareFor(userId) : undefined;
+  const sharing = !!ownShare;
+
+  // Foreground-only capture: request permission and get one fix as soon as
+  // this screen opens. Nothing runs when the screen (or app) isn't open —
+  // no background task, no expo-task-manager.
+  useEffect(() => {
+    if (Platform.OS === 'web' || !userId) return;
+    let cancelled = false;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        if (!cancelled) setLocationError('Enable location access in your device settings to see yourself on the map.');
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({});
+      if (cancelled) return;
+      const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      setMyPosition(coords);
+      upsertLastSeen(coords.latitude, coords.longitude);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  // While actively sharing, keep pinging the share row with fresh
+  // coordinates. Stops the moment `sharing` goes false — no lingering watch.
+  useEffect(() => {
+    if (Platform.OS === 'web' || !sharing) return;
+    let sub: Location.LocationSubscription | null = null;
+    let cancelled = false;
+    (async () => {
+      sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 25 }, (pos) => {
+        if (cancelled) return;
+        const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        setMyPosition(coords);
+        pingShare(coords.latitude, coords.longitude);
+      });
+    })();
+    return () => {
+      cancelled = true;
+      sub?.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharing]);
+
+  const rows = friends.map((f) => {
+    const share = shareFor(f.userId);
+    const seen = lastSeenFor(f.userId);
+    const live = !!share;
+    const coord = share ?? seen;
+    const statusText = live ? 'Live · updating now' : seen ? `Last seen ${timeAgoLabel(seen.updatedAt)}` : 'No location shared yet';
+    return { ...f, live, latitude: coord?.latitude ?? null, longitude: coord?.longitude ?? null, statusText };
+  });
   const detailFriend = rows.find((f) => f.userId === detailFriendId) ?? rows[0];
-  const durationLabel = DURATIONS.find((d) => d.key === shareDuration)?.label ?? '1 hour';
 
   const closeSheet = () => {
     setSheetView('none');
@@ -84,22 +155,19 @@ function MapView({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
     setSheetView('detail');
   };
 
+  const handleStartSharing = async () => {
+    if (!myPosition) {
+      setLocationError('Still finding your location — try again in a moment.');
+      return;
+    }
+    await startShare(shareDurationKey, myPosition.latitude, myPosition.longitude);
+    setSheetView('none');
+  };
+
   return (
     <View style={styles.screen}>
-      {/* Abstract map background — an original illustration, not a real map provider (react-native-maps lands later). */}
-      <View style={[StyleSheet.absoluteFill, styles.mapBg]}>
-        <View style={[styles.road, { top: 214, transform: [{ rotate: '-3deg' }] }]} />
-        <View style={[styles.road, { top: 398, transform: [{ rotate: '2.5deg' }] }]} />
-        <View style={[styles.road, { top: 560, transform: [{ rotate: '-1.5deg' }] }]} />
-        <View style={[styles.roadV, { left: 118, transform: [{ rotate: '5deg' }] }]} />
-        <View style={[styles.roadV, { left: 276, transform: [{ rotate: '-4deg' }] }]} />
-        <View style={[styles.block, { left: 22, top: 118, width: 76, height: 52 }]} />
-        <View style={[styles.block, { left: 168, top: 96, width: 92, height: 64 }]} />
-        <View style={[styles.block, { left: 24, top: 262, width: 64, height: 44 }]} />
-        <View style={[styles.block, { left: 300, top: 210, width: 60, height: 80 }]} />
-        <View style={[styles.block, { left: 170, top: 420, width: 80, height: 52 }]} />
-        <View style={styles.parkA} />
-        <View style={styles.parkB} />
+      <View style={StyleSheet.absoluteFill}>
+        <MapCanvas ref={mapRef} pins={rows} myPosition={myPosition} amSharing={sharing} onSelectPin={openDetail} />
       </View>
 
       {/* Header */}
@@ -118,46 +186,33 @@ function MapView({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
         </Pressable>
       </View>
 
-      <View style={styles.previewNote}>
-        <Text style={styles.previewNoteText}>Preview — real location sharing isn't connected yet.</Text>
-      </View>
+      {Platform.OS === 'web' ? (
+        <View style={styles.previewNote}>
+          <Text style={styles.previewNoteText}>Live Locations is a mobile feature — this is a preview.</Text>
+        </View>
+      ) : Platform.OS === 'android' ? (
+        <View style={styles.previewNote}>
+          <Text style={styles.previewNoteText}>Add a Google Maps API key to app.json to see the real map.</Text>
+        </View>
+      ) : locationError ? (
+        <View style={styles.previewNote}>
+          <Text style={styles.previewNoteText}>{locationError}</Text>
+        </View>
+      ) : null}
 
-      {/* Recenter (static in this preview) */}
-      <View style={styles.recenterFab}>
+      {/* Recenter */}
+      <Pressable onPress={() => mapRef.current?.recenter()} style={styles.recenterFab} accessibilityRole="button" accessibilityLabel="Recenter map">
         <Icon path={RECENTER_ICON} color={colors.textPrimary} size={19} strokeWidth={1.9} />
-      </View>
-
-      {/* Friend pins */}
-      {rows.map((f) => (
-        <Pressable
-          key={f.userId}
-          onPress={() => openDetail(f.userId)}
-          style={[styles.pinWrap, { left: f.slot.x, top: f.slot.y }]}
-          accessibilityRole="button"
-          accessibilityLabel={f.name}
-        >
-          <FriendAvatar userId={f.userId} name={f.name} size={50} />
-          {f.live ? (
-            <View style={styles.liveBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveBadgeText}>LIVE</Text>
-            </View>
-          ) : (
-            <View style={styles.lastSeenBadge}>
-              <Icon path={CLOCK_ICON} color={colors.lime} size={10} strokeWidth={2.4} />
-            </View>
-          )}
-        </Pressable>
-      ))}
+      </Pressable>
 
       {/* Bottom sheet peek */}
       <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.md }]}>
         <View style={styles.sheetHandle} />
 
         {sharing ? (
-          <Pressable onPress={() => setSharing(false)} style={styles.liveBanner}>
+          <Pressable onPress={() => stopShare()} style={styles.liveBanner}>
             <View style={styles.liveBannerDot} />
-            <Text style={styles.liveBannerText}>Sharing your location · {durationLabel} left</Text>
+            <Text style={styles.liveBannerText}>Sharing your location · {timeLeftLabel(ownShare?.expiresAt ?? null)}</Text>
             <Text style={styles.liveBannerStop}>Stop</Text>
           </Pressable>
         ) : (
@@ -196,9 +251,9 @@ function MapView({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
         <Text style={[styles.sheetLabel, { marginTop: spacing.sm }]}>For how long</Text>
         <View style={styles.chipRow}>
           {DURATIONS.map((d) => {
-            const selected = d.key === shareDuration;
+            const selected = d.key === shareDurationKey;
             return (
-              <Pressable key={d.key} onPress={() => setShareDuration(d.key)} style={[styles.chip, selected && styles.chipSelected]}>
+              <Pressable key={d.key} onPress={() => setShareDurationKey(d.key)} style={[styles.chip, selected && styles.chipSelected]}>
                 <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>{d.label}</Text>
               </Pressable>
             );
@@ -211,17 +266,12 @@ function MapView({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
             <Icon path={CHEVRON_ICON} color={colors.textFaint} size={14} strokeWidth={2} />
           </View>
         </View>
+        {locationError ? <Text style={styles.errorText}>{locationError}</Text> : null}
         <View style={styles.sheetActions}>
           <Pressable onPress={closeSheet} style={[styles.sheetButton, styles.sheetButtonSecondary]}>
             <Text style={styles.sheetButtonLabelSecondary}>Cancel</Text>
           </Pressable>
-          <Pressable
-            onPress={() => {
-              setSharing(true);
-              setSheetView('none');
-            }}
-            style={[styles.sheetButton, styles.sheetButtonPrimary]}
-          >
+          <Pressable onPress={handleStartSharing} style={[styles.sheetButton, styles.sheetButtonPrimary]}>
             <Text style={styles.sheetButtonLabelPrimary}>Start sharing</Text>
           </Pressable>
         </View>
@@ -244,8 +294,10 @@ function MapView({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
             <View style={styles.detailNote}>
               <Text style={styles.detailNoteText}>
                 {detailFriend.live
-                  ? `${detailFriend.name.split(' ')[0]} has MySpace open right now.`
-                  : `This reflects when ${detailFriend.name.split(' ')[0]} last had MySpace open — not a live position.`}
+                  ? `${detailFriend.name.split(' ')[0]} is sharing their live location with you.`
+                  : detailFriend.latitude !== null
+                    ? `This is where ${detailFriend.name.split(' ')[0]} last had MySpace open — not a live position.`
+                    : `${detailFriend.name.split(' ')[0]} hasn't shared their location yet.`}
               </Text>
             </View>
             <View style={styles.sheetActions}>
@@ -269,49 +321,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#EDF2EA',
-  },
-  mapBg: {
-    backgroundColor: '#EDF2EA',
-    overflow: 'hidden',
-  },
-  road: {
-    position: 'absolute',
-    left: -30,
-    width: 450,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  roadV: {
-    position: 'absolute',
-    top: -20,
-    width: 9,
-    height: 884,
-    borderRadius: 5,
-    backgroundColor: 'rgba(255,255,255,0.55)',
-  },
-  block: {
-    position: 'absolute',
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
-  parkA: {
-    position: 'absolute',
-    left: 206,
-    top: 246,
-    width: 150,
-    height: 118,
-    borderRadius: 60,
-    backgroundColor: 'rgba(195,234,79,0.38)',
-  },
-  parkB: {
-    position: 'absolute',
-    left: 14,
-    top: 436,
-    width: 130,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(195,234,79,0.3)',
   },
   header: {
     flexDirection: 'row',
@@ -363,6 +372,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.lime,
   },
+  errorText: {
+    fontFamily: fontFamily.sans500,
+    fontSize: 12,
+    color: colors.danger,
+    marginTop: spacing.xs,
+  },
   recenterFab: {
     position: 'absolute',
     right: 28,
@@ -378,51 +393,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 18,
     elevation: 3,
-  },
-  pinWrap: {
-    position: 'absolute',
-  },
-  liveBadge: {
-    position: 'absolute',
-    top: -8,
-    right: -10,
-    backgroundColor: colors.coral,
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    shadowColor: colors.ink,
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  liveDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#fff',
-  },
-  liveBadgeText: {
-    fontFamily: fontFamily.mono500,
-    fontSize: 8.5,
-    letterSpacing: 0.4,
-    color: '#fff',
-  },
-  lastSeenBadge: {
-    position: 'absolute',
-    bottom: -3,
-    right: -5,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.ink,
-    borderWidth: 2,
-    borderColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   sheet: {
     position: 'absolute',

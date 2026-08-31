@@ -4,8 +4,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { Card, InlineNote, Row, SectionLabel, ToggleRow } from '../../components/account/rows';
+import { useAuth } from '../../context/AuthContext';
+import { useLocationData } from '../../context/LocationContext';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
+
+function timeLeftLabel(expiresAt: string | null): string {
+  if (!expiresAt) return '';
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return 'ending…';
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins} min left`;
+  const hrs = Math.round(mins / 60);
+  return `${hrs} hr${hrs === 1 ? '' : 's'} left`;
+}
 
 interface LocationPrivacyScreenProps {
   onBack: () => void;
@@ -13,13 +25,17 @@ interface LocationPrivacyScreenProps {
 
 /**
  * Location sharing defaults — same visual shape as Account settings
- * (lime hero, pale body, white Card rows). Toggle and "Stop" are live
- * UI state only for now; there's no location backend to persist
- * against yet (see the note at the bottom).
+ * (lime hero, pale body, white Card rows). "Active shares" reflects your
+ * real location_shares row; the auto-last-seen toggle is still cosmetic
+ * (capture always runs on screen open) since there's no per-user setting
+ * for it in the backend yet.
  */
 export function LocationPrivacyScreen({ onBack }: LocationPrivacyScreenProps) {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { shareFor, stopShare } = useLocationData();
   const [autoLastSeen, setAutoLastSeen] = useState(true);
+  const ownShare = user ? shareFor(user.id) : undefined;
 
   return (
     <View style={styles.screen}>
@@ -46,13 +62,17 @@ export function LocationPrivacyScreen({ onBack }: LocationPrivacyScreenProps) {
 
         <SectionLabel>Active shares</SectionLabel>
         <Card>
-          <Text style={styles.emptyText}>You're not sharing your live location with anyone right now.</Text>
+          {ownShare ? (
+            <Row label="Stop sharing with all friends" sublabel={timeLeftLabel(ownShare.expiresAt)} destructive onPress={() => stopShare()} last />
+          ) : (
+            <Text style={styles.emptyText}>You're not sharing your live location with anyone right now.</Text>
+          )}
         </Card>
 
         <InlineNote>
           MySpace never tracks your location in the background. Last-seen only updates while the app is open, and a live share
-          always has an end time you control. This screen is a preview — location sharing isn't wired up to a real map or
-          backend yet.
+          always has an end time you control. The real map only renders on a native build — this screen still works fully on
+          web, just without it.
         </InlineNote>
       </ScrollView>
     </View>
