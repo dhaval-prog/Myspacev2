@@ -13,6 +13,8 @@ const ARROW_DOWN = 'M12 5v14M6 13l6 6 6-6';
 const PLUS_ICON = 'M12 5v14M5 12h14';
 const HISTORY_ICON = 'M4 6h16M4 12h16M4 18h16';
 const INVITE_ICON = 'M12 3v12M7 8l5-5 5 5M5 21h14';
+const LEAVE_ICON = 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9';
+const MEMBERS_ICON = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
 
 function ActionPill({ icon, label, onPress, small }: { icon: string; label: string; onPress: () => void; small?: boolean }) {
   return (
@@ -34,7 +36,7 @@ interface WalletScreenProps {
 export function WalletScreen({ onHome }: WalletScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { focusedCard, backToPick, openSpend, openAddMoney, askDelete, openHistory, openInvite, expensesFor } = useExpenses();
+  const { focusedCard, backToPick, openSpend, openAddMoney, askDelete, askLeave, openHistory, openInvite, openMembers, expensesFor } = useExpenses();
 
   const expenses = expensesFor(focusedCard);
 
@@ -75,11 +77,13 @@ export function WalletScreen({ onHome }: WalletScreenProps) {
           <WalletCarousel />
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
+            <ActionPill icon={MEMBERS_ICON} label="Members" onPress={openMembers} small />
             <ActionPill icon={ARROW_UP} label="Add Spend" onPress={openSpend} />
-            {focusedCard?.isOwner && <ActionPill icon={PLUS_ICON} label="Add Money" onPress={openAddMoney} />}
+            <ActionPill icon={PLUS_ICON} label="Add Money" onPress={openAddMoney} />
             {focusedCard?.isOwner && <ActionPill icon={ARROW_DOWN} label="Delete" onPress={askDelete} />}
             <ActionPill icon={HISTORY_ICON} label="History" onPress={openHistory} small />
-            {focusedCard?.isOwner && <ActionPill icon={INVITE_ICON} label="Invite" onPress={openInvite} small />}
+            {focusedCard && !focusedCard.isOwner && <ActionPill icon={LEAVE_ICON} label="Leave" onPress={askLeave} small />}
+            <ActionPill icon={INVITE_ICON} label="Invite" onPress={openInvite} small />
           </ScrollView>
         </View>
 

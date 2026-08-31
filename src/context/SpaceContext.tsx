@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { Item, Room } from '../types/space';
+import type { DosageType, Item, Room } from '../types/space';
 import { CATEGORY_MONO } from '../data/itemCategories';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
@@ -9,6 +9,12 @@ interface NewItemInput {
   category: string;
   room: string;
   expiry: string;
+  dosageType?: DosageType;
+  dosageAmount?: number;
+  remindersEnabled?: boolean;
+  dosesPerDay?: number;
+  reminderTimes?: string[];
+  photoUrl?: string;
 }
 
 interface EditItemInput {
@@ -16,6 +22,12 @@ interface EditItemInput {
   category?: string;
   room?: string;
   expiry?: string;
+  dosageType?: DosageType;
+  dosageAmount?: number;
+  remindersEnabled?: boolean;
+  dosesPerDay?: number;
+  reminderTimes?: string[];
+  photoUrl?: string;
 }
 
 interface SpaceContextValue {
@@ -74,7 +86,7 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
         supabase.from('rooms').select('id,category,label').eq('user_id', userId).order('created_at', { ascending: true }),
         supabase
           .from('items')
-          .select('id,name,category,room,expiry,mono')
+          .select('id,name,category,room,expiry,mono,dosage_type,dosage_amount,reminders_enabled,doses_per_day,reminder_times,photo_url')
           .eq('user_id', userId)
           .order('created_at', { ascending: false }),
       ]);
@@ -99,6 +111,12 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
             room: (row.room as string) ?? '',
             expiry: (row.expiry as string) ?? '',
             mono: row.mono as string,
+            dosageType: (row.dosage_type as DosageType | null) ?? undefined,
+            dosageAmount: (row.dosage_amount as number | null) ?? undefined,
+            remindersEnabled: (row.reminders_enabled as boolean | null) ?? undefined,
+            dosesPerDay: (row.doses_per_day as number | null) ?? undefined,
+            reminderTimes: (row.reminder_times as string[] | null) ?? undefined,
+            photoUrl: (row.photo_url as string | null) || undefined,
           },
         })),
       );
@@ -212,6 +230,12 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
           room: input.room,
           expiry: input.expiry || null,
           mono,
+          dosage_type: input.dosageType ?? null,
+          dosage_amount: input.dosageAmount ?? null,
+          reminders_enabled: input.remindersEnabled ?? false,
+          doses_per_day: input.dosesPerDay ?? null,
+          reminder_times: input.reminderTimes ?? null,
+          photo_url: input.photoUrl ?? null,
         })
         .select('id')
         .single()
@@ -240,6 +264,12 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
               ...(input.category !== undefined && { category: input.category, mono }),
               ...(input.room !== undefined && { room: input.room }),
               ...(input.expiry !== undefined && { expiry: input.expiry || null }),
+              ...(input.dosageType !== undefined && { dosage_type: input.dosageType }),
+              ...(input.dosageAmount !== undefined && { dosage_amount: input.dosageAmount }),
+              ...(input.remindersEnabled !== undefined && { reminders_enabled: input.remindersEnabled }),
+              ...(input.dosesPerDay !== undefined && { doses_per_day: input.dosesPerDay }),
+              ...(input.reminderTimes !== undefined && { reminder_times: input.reminderTimes }),
+              ...(input.photoUrl !== undefined && { photo_url: input.photoUrl || null }),
             })
             .eq('id', row.id)
             .then(({ error }) => warn('update item', error));
