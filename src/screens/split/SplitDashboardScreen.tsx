@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { initialsOf } from '../../components/split/MemberAvatar';
 import { InviteSplitSheet } from '../../components/split/InviteSplitSheet';
 import { useSplit } from '../../context/SplitContext';
@@ -16,7 +17,8 @@ const CHAT_ICON = 'M4 4h16v12H8l-4 4z';
 /** One split group's dashboard: totals, balances, recent expenses. */
 export function SplitDashboardScreen() {
   const insets = useSafeAreaInsets();
-  const { focusedGroup, membersFor, expensesFor, balancesFor, goHome, goAdd, goItems, goSettle, goChat } = useSplit();
+  const { focusedGroup, membersFor, expensesFor, balancesFor, goHome, goAdd, goItems, goSettle, goChat, askLeave, cancelLeave, leaveGroup, confirmLeaveOpen } =
+    useSplit();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
 
@@ -91,6 +93,11 @@ export function SplitDashboardScreen() {
           <Pressable onPress={() => setInviteOpen(true)} style={styles.chip}>
             <Text style={styles.chipLabel}>Invite</Text>
           </Pressable>
+          {!focusedGroup.isOwner && (
+            <Pressable onPress={askLeave} style={styles.chip}>
+              <Text style={styles.chipLabel}>Leave</Text>
+            </Pressable>
+          )}
         </ScrollView>
 
         <View style={styles.sectionHeaderRow}>
@@ -174,6 +181,16 @@ export function SplitDashboardScreen() {
 
       <InviteSplitSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} />
       <InviteSplitSheet visible={qrOpen} onClose={() => setQrOpen(false)} qrOnly />
+      <ConfirmDialog
+        visible={confirmLeaveOpen}
+        title="Leave split?"
+        message={`You'll lose access to "${focusedGroup.name}" and its expenses. You can rejoin later with an invite code.`}
+        confirmLabel="Leave"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={leaveGroup}
+        onCancel={cancelLeave}
+      />
     </View>
   );
 }
