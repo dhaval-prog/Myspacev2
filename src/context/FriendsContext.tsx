@@ -88,8 +88,12 @@ interface FriendsContextValue {
   /** Looks up the connection with this user and opens its thread — used by the "already friends" match state. */
   openChatWithUser: (targetUserId: string) => void;
 
+  /** The relationship between the signed-in account and any userId — usable outside the code-lookup match flow, e.g. from a Members list. */
+  relationshipWith: (targetUserId: string) => MatchRelationship;
   lookupCode: (code: string) => Promise<{ error: string | null }>;
   sendRequest: (introMessage: string) => Promise<{ error: string | null }>;
+  /** Sends a friend request straight to a known userId (no code lookup) — used from a shared card/split's Members list. */
+  sendRequestToUser: (targetUserId: string, introMessage?: string) => Promise<{ error: string | null }>;
   acceptRequest: (connectionId: string) => Promise<void>;
   declineRequest: (connectionId: string) => Promise<void>;
   cancelRequest: (connectionId: string) => Promise<void>;
@@ -354,16 +358,21 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const focusedPendingRequest =
     focusedConnectionRow?.status === 'pending' && focusedConnectionRow.requester_id === userId ? toRequest(focusedConnectionRow) : undefined;
 
-  const matchRelationship: MatchRelationship = useMemo(() => {
-    if (!matchFoundUserId || !userId) return 'none';
-    if (matchFoundUserId === userId) return 'self';
+  const relationshipWith = (targetUserId: string): MatchRelationship => {
+    if (!userId) return 'none';
+    if (targetUserId === userId) return 'self';
     const row = connectionRows.find(
-      (c) => (c.requester_id === userId && c.addressee_id === matchFoundUserId) || (c.requester_id === matchFoundUserId && c.addressee_id === userId),
+      (c) => (c.requester_id === userId && c.addressee_id === targetUserId) || (c.requester_id === targetUserId && c.addressee_id === userId),
     );
     if (!row) return 'none';
     if (row.status === 'accepted') return 'already_friends';
     return 'already_pending';
-  }, [matchFoundUserId, userId, connectionRows]);
+  };
+
+  const matchRelationship: MatchRelationship = useMemo(
+    () => (matchFoundUserId ? relationshipWith(matchFoundUserId) : 'none'),
+    [matchFoundUserId, userId, connectionRows],
+  );
 
   /** For the "already friends" match state — jumps straight into the existing thread. */
   const openChatWithUser = (targetUserId: string) => {
@@ -426,6 +435,18 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     setMatchProfile(null);
     setMatchCode(null);
     setPage(row.status === 'accepted' ? 'chats' : 'home');
+    return { error: null };
+  };
+
+  const sendRequestToUser = async (targetUserId: string, introMessage = ''): Promise<{ error: string | null }> => {
+    if (!userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    const { data, error } = await supabase.rpc('send_friend_request_by_user_id', {
+      p_target_user_id: targetUserId,
+      p_message: introMessage.trim() || null,
+    });
+    if (error) return { error: error.message };
+    const row = data as ConnectionRow;
+    setConnectionRows((prev) => (prev.some((c) => c.id === row.id) ? prev.map((c) => (c.id === row.id ? row : c)) : [row, ...prev]));
     return { error: null };
   };
 
@@ -589,8 +610,10 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     goChats,
     openChat,
     openChatWithUser,
+    relationshipWith,
     lookupCode,
     sendRequest,
+    sendRequestToUser,
     acceptRequest,
     declineRequest,
     cancelRequest,

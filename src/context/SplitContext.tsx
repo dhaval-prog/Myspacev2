@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Balance, ChatMessage, ExpenseShare, Settlement, SplitExpense, SplitGroup, SplitMember } from '../types/split';
 import type { PaymentAttempt, PaymentAttemptStatus, UpiProfile } from '../types/payments';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
@@ -216,7 +216,13 @@ const SplitContext = createContext<SplitContextValue | null>(null);
  * by RLS. Debts are tracked pairwise (who owes whom, not just a net total)
  * so Settle Up always names the right person and amount.
  */
-export function SplitProvider({ children }: { children: React.ReactNode }) {
+interface SplitProviderProps {
+  children: React.ReactNode;
+  /** Opens this group's dashboard as soon as it loads — set when arriving here from a notification about it. */
+  initialGroupId?: string;
+}
+
+export function SplitProvider({ children, initialGroupId }: SplitProviderProps) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
 
@@ -227,6 +233,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
   const [chatRows, setChatRows] = useState<ChatRow[]>([]);
   const [memberRows, setMemberRows] = useState<{ group_id: string; user_id: string }[]>([]);
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
+  const [profileAvatars, setProfileAvatars] = useState<Record<string, string | null>>({});
   const [paymentAttemptRows, setPaymentAttemptRows] = useState<PaymentAttemptRow[]>([]);
   const [paymentProfiles, setPaymentProfiles] = useState<Record<string, UpiProfile>>({});
 
@@ -304,7 +311,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
 
     supabase
       .from('profiles')
-      .select('id, full_name')
+      .select('id, full_name, avatar_url')
       .in('id', missing)
       .then(({ data, error }) => {
         warn('load profiles', error);
@@ -313,6 +320,13 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
           const next = { ...prev };
           for (const row of data as { id: string; full_name: string | null }[]) {
             next[row.id] = row.full_name || 'Member';
+          }
+          return next;
+        });
+        setProfileAvatars((prev) => {
+          const next = { ...prev };
+          for (const row of data as { id: string; avatar_url: string | null }[]) {
+            next[row.id] = row.avatar_url;
           }
           return next;
         });
@@ -364,7 +378,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     const group = groupRows.find((g) => g.id === groupId);
     if (!group) return [];
     const ids = new Set<string>([group.owner_id, ...memberRows.filter((m) => m.group_id === groupId).map((m) => m.user_id)]);
-    return Array.from(ids).map((id) => ({ userId: id, name: nameFor(id), isOwner: id === group.owner_id }));
+    return Array.from(ids).map((id) => ({ userId: id, name: nameFor(id), isOwner: id === group.owner_id, avatarUrl: profileAvatars[id] ?? null }));
   };
 
   const expensesFor = (groupId: string): SplitExpense[] =>
@@ -455,6 +469,18 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     setFocusedGroupId(id);
     setPage('dashboard');
   };
+
+  // Arriving here from a notification about a specific group — open it as
+  // soon as it shows up in the loaded list, once per target id.
+  const lastFocusedGroupIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!initialGroupId || initialGroupId === lastFocusedGroupIdRef.current) return;
+    if (!groupRows.some((g) => g.id === initialGroupId)) return;
+    lastFocusedGroupIdRef.current = initialGroupId;
+    openGroup(initialGroupId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialGroupId, groupRows]);
+
   const goDashboard = () => setPage('dashboard');
   const goCreate = () => setPage('create');
   const goAdd = () => setPage('add');

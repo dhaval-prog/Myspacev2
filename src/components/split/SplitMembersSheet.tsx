@@ -1,8 +1,11 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, fontFamily, spacing } from '../../theme';
 import { BottomSheet } from '../expenses/BottomSheet';
-import { initialsOf } from './MemberAvatar';
+import { ConfirmDialog } from '../ConfirmDialog';
+import { MemberAvatar } from './MemberAvatar';
+import { useAuth } from '../../context/AuthContext';
+import { useFriends } from '../../context/FriendsContext';
 import type { SplitMember } from '../../types/split';
 
 interface SplitMembersSheetProps {
@@ -12,8 +15,38 @@ interface SplitMembersSheetProps {
   members: SplitMember[];
 }
 
-/** Who's in this split — the owner, then everyone who joined. */
+/** Who's in this split — the owner, then everyone who joined. Tap someone to send a friend request. */
 export function SplitMembersSheet({ visible, onClose, groupName, members }: SplitMembersSheetProps) {
+  const { user } = useAuth();
+  const { relationshipWith, sendRequestToUser } = useFriends();
+  const [selected, setSelected] = useState<SplitMember | null>(null);
+  const [sent, setSent] = useState(false);
+
+  const relationship = selected ? relationshipWith(selected.userId) : 'none';
+
+  const dialogCopy = (() => {
+    if (!selected) return null;
+    if (sent) return { title: 'Request sent', message: `Your friend request to ${selected.name} is on its way.`, hideCancel: true, confirmLabel: 'OK' };
+    if (relationship === 'already_friends') return { title: 'Already friends', message: `You and ${selected.name} are already friends.`, hideCancel: true, confirmLabel: 'OK' };
+    if (relationship === 'already_pending') return { title: 'Request pending', message: `A friend request with ${selected.name} is already pending.`, hideCancel: true, confirmLabel: 'OK' };
+    return { title: 'Send friend request?', message: `Send ${selected.name} a friend request?`, hideCancel: false, confirmLabel: 'Send' };
+  })();
+
+  const closeDialog = () => {
+    setSelected(null);
+    setSent(false);
+  };
+
+  const confirm = async () => {
+    if (sent || relationship !== 'none' || !selected) {
+      closeDialog();
+      return;
+    }
+    const { error } = await sendRequestToUser(selected.userId);
+    if (!error) setSent(true);
+    else closeDialog();
+  };
+
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.7}>
       <View style={styles.headerRow}>
@@ -24,20 +57,37 @@ export function SplitMembersSheet({ visible, onClose, groupName, members }: Spli
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-        {members.map((member) => (
-          <View key={member.userId} style={styles.row}>
-            <View style={styles.avatar}>
-              <Text style={styles.initials}>{initialsOf(member.name)}</Text>
+        {members.map((member) => {
+          const isSelf = member.userId === user?.id;
+          const row = (
+            <View style={styles.row}>
+              <MemberAvatar userId={member.userId} name={member.name} size={36} avatarUrl={member.avatarUrl} />
+              <Text style={styles.name} numberOfLines={1}>
+                {member.name}
+              </Text>
+              <View style={[styles.badge, member.isOwner && styles.badgeOwner]}>
+                <Text style={[styles.badgeLabel, member.isOwner && styles.badgeLabelOwner]}>{member.isOwner ? 'Owner' : 'Member'}</Text>
+              </View>
             </View>
-            <Text style={styles.name} numberOfLines={1}>
-              {member.name}
-            </Text>
-            <View style={[styles.badge, member.isOwner && styles.badgeOwner]}>
-              <Text style={[styles.badgeLabel, member.isOwner && styles.badgeLabelOwner]}>{member.isOwner ? 'Owner' : 'Member'}</Text>
-            </View>
-          </View>
-        ))}
+          );
+          if (isSelf) return <View key={member.userId}>{row}</View>;
+          return (
+            <Pressable key={member.userId} onPress={() => setSelected(member)} accessibilityRole="button" accessibilityLabel={`${member.name}, send friend request`}>
+              {row}
+            </Pressable>
+          );
+        })}
       </ScrollView>
+
+      <ConfirmDialog
+        visible={!!selected && !!dialogCopy}
+        title={dialogCopy?.title ?? ''}
+        message={dialogCopy?.message ?? ''}
+        confirmLabel={dialogCopy?.confirmLabel ?? 'OK'}
+        hideCancel={dialogCopy?.hideCancel}
+        onConfirm={confirm}
+        onCancel={closeDialog}
+      />
     </BottomSheet>
   );
 }
@@ -68,21 +118,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#E9EAFB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  initials: {
-    fontFamily: fontFamily.sans700,
-    fontSize: 13,
-    letterSpacing: 0.2,
-    color: colors.splitInk,
   },
   name: {
     flex: 1,

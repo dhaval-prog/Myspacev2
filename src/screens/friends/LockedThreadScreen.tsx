@@ -29,7 +29,13 @@ export function LockedThreadScreen() {
         <Pressable onPress={goChats} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
           <Icon path={BACK_ICON} color="#fff" size={19} strokeWidth={2} />
         </Pressable>
-        <FriendAvatar userId={focusedPendingRequest.userId} name={focusedPendingRequest.name} size={44} style={styles.avatarDim} />
+        <FriendAvatar
+          userId={focusedPendingRequest.userId}
+          name={focusedPendingRequest.name}
+          size={44}
+          style={styles.avatarDim}
+          avatarUrl={focusedPendingRequest.avatarUrl}
+        />
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>{focusedPendingRequest.name}</Text>
           <Text style={styles.headerSub}>Request pending</Text>

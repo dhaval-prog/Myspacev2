@@ -24,8 +24,8 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
   const people = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = [
-      ...friends.map((f) => ({ kind: 'friend' as const, connectionId: f.connectionId, userId: f.userId, name: f.name, username: f.username })),
-      ...sentRequests.map((r) => ({ kind: 'pending' as const, connectionId: r.connectionId, userId: r.userId, name: r.name, username: r.username })),
+      ...friends.map((f) => ({ kind: 'friend' as const, connectionId: f.connectionId, userId: f.userId, name: f.name, username: f.username, avatarUrl: f.avatarUrl })),
+      ...sentRequests.map((r) => ({ kind: 'pending' as const, connectionId: r.connectionId, userId: r.userId, name: r.name, username: r.username, avatarUrl: r.avatarUrl })),
     ];
     if (!q) return list;
     return list.filter((p) => p.name.toLowerCase().includes(q) || p.username?.toLowerCase().includes(q));
@@ -74,7 +74,14 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
           <Pressable onPress={goRequests} style={({ pressed }) => [styles.requestsBanner, pressed && styles.pressed]}>
             <View style={styles.requestsAvatars}>
               {receivedRequests.slice(0, 2).map((r, i) => (
-                <FriendAvatar key={r.connectionId} userId={r.userId} name={r.name} size={38} style={i > 0 ? styles.requestsAvatarOverlap : undefined} />
+                <FriendAvatar
+                  key={r.connectionId}
+                  userId={r.userId}
+                  name={r.name}
+                  size={38}
+                  style={i > 0 ? styles.requestsAvatarOverlap : undefined}
+                  avatarUrl={r.avatarUrl}
+                />
               ))}
             </View>
             <View style={styles.requestsText}>
@@ -100,7 +107,7 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
                     accessibilityRole="button"
                     accessibilityLabel={`Message ${p.name}`}
                   >
-                    <FriendAvatar userId={p.userId} name={p.name} size={44} />
+                    <FriendAvatar userId={p.userId} name={p.name} size={44} avatarUrl={p.avatarUrl} />
                     <View style={styles.rowText}>
                       <Text style={styles.rowName}>{p.name}</Text>
                       {p.username && <Text style={styles.rowMeta}>@{p.username}</Text>}
@@ -108,7 +115,7 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
                   </Pressable>
                 ) : (
                   <View key={p.connectionId} style={[styles.row, styles.rowPending]}>
-                    <FriendAvatar userId={p.userId} name={p.name} size={44} style={styles.rowPendingAvatar} />
+                    <FriendAvatar userId={p.userId} name={p.name} size={44} style={styles.rowPendingAvatar} avatarUrl={p.avatarUrl} />
                     <View style={styles.rowText}>
                       <Text style={[styles.rowName, styles.rowNamePending]}>{p.name}</Text>
                       <Text style={styles.rowMeta}>Request sent · pending</Text>

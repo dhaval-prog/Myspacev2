@@ -36,7 +36,7 @@ export function ChatsListScreen() {
           </Pressable>
           {friends.map((f) => (
             <Pressable key={f.connectionId} onPress={() => openChat(f.connectionId)} style={styles.railItem}>
-              <FriendAvatar userId={f.userId} name={f.name} size={58} online={isOnline(f.userId)} />
+              <FriendAvatar userId={f.userId} name={f.name} size={58} online={isOnline(f.userId)} avatarUrl={f.avatarUrl} />
               <Text style={styles.railLabel} numberOfLines={1}>
                 {f.name.split(' ')[0]}
               </Text>
@@ -60,7 +60,7 @@ export function ChatsListScreen() {
                   onPress={() => openChat(f.connectionId)}
                   style={({ pressed }) => [styles.row, unread ? styles.rowUnread : styles.rowRead, pressed && styles.rowPressed]}
                 >
-                  <FriendAvatar userId={f.userId} name={f.name} size={48} online={isOnline(f.userId)} />
+                  <FriendAvatar userId={f.userId} name={f.name} size={48} online={isOnline(f.userId)} avatarUrl={f.avatarUrl} />
                   <View style={styles.rowText}>
                     <Text style={styles.rowName}>{f.name}</Text>
                     <Text style={[styles.rowPreview, unread && styles.rowPreviewUnread]} numberOfLines={1}>

@@ -17,6 +17,7 @@ export interface SplitMember {
   userId: string;
   name: string;
   isOwner: boolean;
+  avatarUrl: string | null;
 }
 
 /** A single logged spend against a group. */

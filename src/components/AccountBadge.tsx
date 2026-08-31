@@ -1,6 +1,7 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { colors, fontFamily, radius } from '../theme';
 
 function initialsFor(fullName?: string | null, email?: string | null): string {
@@ -24,10 +25,30 @@ interface AccountBadgeProps {
   tint?: string;
 }
 
-/** Rounded-square initials badge — the account entry point on Home, Expenses, and Split. */
+/** Rounded-square badge — the account entry point on Home, Expenses, and Split. Shows the profile photo once one is set, else initials. */
 export function AccountBadge({ onPress, style, bg, tint }: AccountBadgeProps) {
   const { user } = useAuth();
   const initials = initialsFor(user?.user_metadata?.full_name as string | undefined, user?.email);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id || !isSupabaseConfigured) {
+      setAvatarUrl(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('profiles')
+      .select('avatar_url')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (!cancelled) setAvatarUrl((data as { avatar_url: string | null } | null)?.avatar_url ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   return (
     <Pressable
@@ -37,7 +58,11 @@ export function AccountBadge({ onPress, style, bg, tint }: AccountBadgeProps) {
       hitSlop={4}
       style={({ pressed }) => [styles.badge, bg ? { backgroundColor: bg } : null, pressed && styles.pressed, style]}
     >
-      <Text style={[styles.initials, tint ? { color: tint } : null]}>{initials}</Text>
+      {avatarUrl ? (
+        <Image source={{ uri: avatarUrl }} style={styles.photo} />
+      ) : (
+        <Text style={[styles.initials, tint ? { color: tint } : null]}>{initials}</Text>
+      )}
     </Pressable>
   );
 }
@@ -51,9 +76,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    overflow: 'hidden',
   },
   pressed: {
     opacity: 0.85,
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
   },
   initials: {
     fontFamily: fontFamily.sans700,

@@ -38,7 +38,7 @@ export function MatchFoundScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.xl }]}>
-        <FriendAvatar userId={matchFound.userId} name={matchFound.name} size={104} />
+        <FriendAvatar userId={matchFound.userId} name={matchFound.name} size={104} avatarUrl={matchFound.avatarUrl} />
         <Text style={styles.name}>{matchFound.name}</Text>
         {matchFound.username && <Text style={styles.meta}>@{matchFound.username}</Text>}
 
