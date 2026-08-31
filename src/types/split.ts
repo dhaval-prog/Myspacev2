@@ -43,6 +43,8 @@ export interface Settlement {
   toUserId: string;
   amount: number;
   createdAt: string;
+  source: 'manual' | 'upi';
+  paymentAttemptId: string | null;
 }
 
 export interface ChatMessage {
