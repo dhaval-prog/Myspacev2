@@ -11,18 +11,26 @@ import { InviteSheet } from '../../components/expenses/InviteSheet';
 import { JoinCardSheet } from '../../components/expenses/JoinCardSheet';
 import { ConfirmDeleteModal } from '../../components/expenses/ConfirmDeleteModal';
 import { BudgetResetPrompt } from '../../components/expenses/BudgetResetPrompt';
+import type { NotificationTarget } from '../../utils/notify';
 
 interface ExpensesScreenProps {
   onHome: () => void;
   onOpenSplit: () => void;
   onOpenAccount: () => void;
+  /** Opens straight into this card's wallet — set when arriving from a notification about it. */
+  focusCardId?: string;
+  onOpenNotificationTarget?: (target: NotificationTarget) => void;
 }
 
-function ExpensesRoot({ onHome, onOpenSplit, onOpenAccount }: ExpensesScreenProps) {
+function ExpensesRoot({ onHome, onOpenSplit, onOpenAccount, onOpenNotificationTarget }: ExpensesScreenProps) {
   const { page } = useExpenses();
   return (
     <>
-      {page === 'wallet' ? <WalletScreen onHome={onHome} /> : <PickScreen onHome={onHome} onOpenSplit={onOpenSplit} onOpenAccount={onOpenAccount} />}
+      {page === 'wallet' ? (
+        <WalletScreen onHome={onHome} />
+      ) : (
+        <PickScreen onHome={onHome} onOpenSplit={onOpenSplit} onOpenAccount={onOpenAccount} onOpenNotificationTarget={onOpenNotificationTarget} />
+      )}
       <AddSpendSheet />
       <AddMoneySheet />
       <NewCardSheet />
@@ -37,10 +45,10 @@ function ExpensesRoot({ onHome, onOpenSplit, onOpenAccount }: ExpensesScreenProp
 }
 
 /** Card-stack picker + per-card wallet, plus every modal it can open. */
-export function ExpensesScreen({ onHome, onOpenSplit, onOpenAccount }: ExpensesScreenProps) {
+export function ExpensesScreen({ onHome, onOpenSplit, onOpenAccount, focusCardId, onOpenNotificationTarget }: ExpensesScreenProps) {
   return (
-    <ExpensesProvider>
-      <ExpensesRoot onHome={onHome} onOpenSplit={onOpenSplit} onOpenAccount={onOpenAccount} />
+    <ExpensesProvider initialCardId={focusCardId}>
+      <ExpensesRoot onHome={onHome} onOpenSplit={onOpenSplit} onOpenAccount={onOpenAccount} onOpenNotificationTarget={onOpenNotificationTarget} />
     </ExpensesProvider>
   );
 }

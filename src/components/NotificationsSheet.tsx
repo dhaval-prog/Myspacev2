@@ -2,7 +2,8 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, fontFamily, spacing } from '../theme';
 import { BottomSheet } from './expenses/BottomSheet';
-import { useNotifications } from '../context/NotificationsContext';
+import { useNotifications, type AppNotification } from '../context/NotificationsContext';
+import { targetForNotification, type NotificationTarget } from '../utils/notify';
 
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -18,11 +19,21 @@ function timeAgo(iso: string): string {
 interface NotificationsSheetProps {
   visible: boolean;
   onClose: () => void;
+  /** Jumps to whatever this notification is about (a card, split, or chat) — omit to just acknowledge in place. */
+  onNavigate?: (target: NotificationTarget) => void;
 }
 
-/** Slide-up inbox of real notifications — each one appears only once: tapping it reads and removes it. */
-export function NotificationsSheet({ visible, onClose }: NotificationsSheetProps) {
+/** Slide-up inbox of real notifications — tapping one reads it, removes it, and jumps to where it happened. */
+export function NotificationsSheet({ visible, onClose, onNavigate }: NotificationsSheetProps) {
   const { notifications, unreadCount, acknowledge, clearAll } = useNotifications();
+
+  const handlePress = (n: AppNotification) => {
+    acknowledge(n.id);
+    if (onNavigate) {
+      onNavigate(targetForNotification(n));
+      onClose();
+    }
+  };
 
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.78}>
@@ -42,9 +53,9 @@ export function NotificationsSheet({ visible, onClose }: NotificationsSheetProps
           {notifications.map((n, i) => (
             <Pressable
               key={n.id}
-              onPress={() => acknowledge(n.id)}
+              onPress={() => handlePress(n)}
               accessibilityRole="button"
-              accessibilityLabel={`${n.title}. ${n.body}. Tap to dismiss.`}
+              accessibilityLabel={`${n.title}. ${n.body}. ${onNavigate ? 'Tap to open.' : 'Tap to dismiss.'}`}
               style={[styles.row, i !== notifications.length - 1 && styles.rowDivider]}
             >
               <View style={styles.unreadDot} />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { fontFamily } from '../../theme';
 
 /** A rotating set of bright, high-contrast chip looks for member initials. */
@@ -29,10 +29,12 @@ interface MemberAvatarProps {
   onPress?: () => void;
   selected?: boolean;
   style?: object;
+  /** Profile photo URL — shown in place of the initials chip when present. */
+  avatarUrl?: string | null;
 }
 
-/** Colored initials chip for a Split member — consistent across every Split screen. */
-export function MemberAvatar({ userId, name, size = 40, onPress, selected, style }: MemberAvatarProps) {
+/** Photo (once set), else a colored initials chip for a Split member — consistent across every Split screen. */
+export function MemberAvatar({ userId, name, size = 40, onPress, selected, style, avatarUrl }: MemberAvatarProps) {
   const skin = paletteFor(userId);
   const initials = initialsOf(name);
   const dim = { width: size, height: size, borderRadius: size / 2 };
@@ -42,12 +44,12 @@ export function MemberAvatar({ userId, name, size = 40, onPress, selected, style
       style={[
         styles.base,
         dim,
-        { backgroundColor: skin.bg },
+        avatarUrl ? styles.photoBase : { backgroundColor: skin.bg },
         selected !== undefined && { borderWidth: 2, borderColor: selected ? '#FA2E6E' : 'transparent' },
         style,
       ]}
     >
-      <Text style={[styles.initials, { color: skin.fg, fontSize: Math.round(size * 0.36) }]}>{initials}</Text>
+      {avatarUrl ? <Image source={{ uri: avatarUrl }} style={dim} /> : <Text style={[styles.initials, { color: skin.fg, fontSize: Math.round(size * 0.36) }]}>{initials}</Text>}
     </View>
   );
 
@@ -63,6 +65,10 @@ const styles = StyleSheet.create({
   base: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  photoBase: {
+    overflow: 'hidden',
+    backgroundColor: '#E9EAFB',
   },
   initials: {
     fontFamily: fontFamily.sans700,

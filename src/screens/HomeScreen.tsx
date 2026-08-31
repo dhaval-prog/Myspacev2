@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSpace } from '../context/SpaceContext';
 import { useFriends } from '../context/FriendsContext';
 import { getAttentionEntries } from '../utils/attention';
-import { notifySelf } from '../utils/notify';
+import { notifySelf, type NotificationTarget } from '../utils/notify';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { VIEWS, type ViewId } from '../data/views';
 import { Header } from '../components/Header';
@@ -19,6 +19,7 @@ import { ContextCard } from '../components/ContextCard';
 import { BottomNav } from '../components/BottomNav';
 
 interface HomeScreenProps {
+  onOpenNotificationTarget?: (target: NotificationTarget) => void;
   onOpenDetail: (viewId: ViewId, initialIndex?: number) => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
@@ -33,7 +34,15 @@ interface HomeScreenProps {
  * it. "Needs attention" only joins the list once an item has an expiry
  * date that's due or coming up — it's an alarm, not a starting tab.
  */
-export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenFriends, onOpenLiveLocations, onOpenAccount }: HomeScreenProps) {
+export function HomeScreen({
+  onOpenNotificationTarget,
+  onOpenDetail,
+  onOpenExpenses,
+  onOpenSplit,
+  onOpenFriends,
+  onOpenLiveLocations,
+  onOpenAccount,
+}: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
@@ -222,7 +231,7 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenFr
         reduceMotion={reduceMotion}
       />
 
-      <NotificationsSheet visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
+      <NotificationsSheet visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} onNavigate={onOpenNotificationTarget} />
     </View>
   );
 }

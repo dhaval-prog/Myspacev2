@@ -197,7 +197,13 @@ const ExpensesContext = createContext<ExpensesContextValue | null>(null);
  * granted only through the `join_budget_card` RPC) — enforced by RLS, not
  * just this client. A fresh account starts with zero cards.
  */
-export function ExpensesProvider({ children }: { children: React.ReactNode }) {
+interface ExpensesProviderProps {
+  children: React.ReactNode;
+  /** Opens this card's wallet as soon as it loads — set when arriving here from a notification about it. */
+  initialCardId?: string;
+}
+
+export function ExpensesProvider({ children, initialCardId }: ExpensesProviderProps) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
 
@@ -206,6 +212,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
   const [topupRows, setTopupRows] = useState<TopupRow[]>([]);
   const [memberRows, setMemberRows] = useState<CardMemberRow[]>([]);
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
+  const [profileAvatars, setProfileAvatars] = useState<Record<string, string | null>>({});
   const [page, setPage] = useState<Page>('pick');
   const [sel, setSel] = useState(0);
   const [dot, setDot] = useState(0);
@@ -276,7 +283,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
 
     supabase
       .from('profiles')
-      .select('id, full_name')
+      .select('id, full_name, avatar_url')
       .in('id', missing)
       .then(({ data, error }) => {
         warn('load profiles', error);
@@ -285,6 +292,13 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
           const next = { ...prev };
           for (const row of data as { id: string; full_name: string | null }[]) {
             next[row.id] = row.full_name || 'Member';
+          }
+          return next;
+        });
+        setProfileAvatars((prev) => {
+          const next = { ...prev };
+          for (const row of data as { id: string; avatar_url: string | null }[]) {
+            next[row.id] = row.avatar_url;
           }
           return next;
         });
@@ -308,7 +322,7 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
       if (resetNotifiedRef.current.has(key)) continue;
       resetNotifiedRef.current.add(key);
       const when = days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`;
-      notifySelf(userId, 'budget_reset', key, 'Budget reset reminder', `"${row.label}" resets ${when}.`);
+      notifySelf(userId, 'budget_reset', key, 'Budget reset reminder', `"${row.label}" resets ${when}.`, { type: 'card', id: row.id });
     }
   }, [cardRows, userId]);
 
@@ -414,10 +428,15 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
     if (!card) return [];
     const cardRow = cardRows.find((c) => c.id === card.id);
     if (!cardRow) return [];
-    const owner: CardMember = { userId: cardRow.owner_id, name: profileNames[cardRow.owner_id] ?? 'Owner', isOwner: true };
+    const owner: CardMember = {
+      userId: cardRow.owner_id,
+      name: profileNames[cardRow.owner_id] ?? 'Owner',
+      isOwner: true,
+      avatarUrl: profileAvatars[cardRow.owner_id] ?? null,
+    };
     const members = memberRows
       .filter((r) => r.card_id === card.id)
-      .map((r) => ({ userId: r.user_id, name: profileNames[r.user_id] ?? 'Member', isOwner: false }));
+      .map((r) => ({ userId: r.user_id, name: profileNames[r.user_id] ?? 'Member', isOwner: false, avatarUrl: profileAvatars[r.user_id] ?? null }));
     return [owner, ...members];
   };
 
@@ -430,6 +449,18 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
       setFlyCard(null);
     }, 340);
   };
+
+  // Arriving here from a notification about a specific card — open it as
+  // soon as it shows up in the loaded deck, once per target id.
+  const lastFocusedCardIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!initialCardId || initialCardId === lastFocusedCardIdRef.current) return;
+    const idx = deck.findIndex((c) => c.id === initialCardId);
+    if (idx < 0) return;
+    lastFocusedCardIdRef.current = initialCardId;
+    openCard(idx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCardId, deck]);
 
   const backToPick = () => setPage('pick');
 
@@ -465,7 +496,10 @@ export function ExpensesProvider({ children }: { children: React.ReactNode }) {
       const priorTotal = expenseRows.filter((r) => r.card_id === cardId).reduce((sum, r) => sum + r.amount, 0);
       const newTotal = priorTotal + amount;
       if (priorTotal < cardRow.amount && newTotal >= cardRow.amount) {
-        notifySelf(userId, 'budget_alerts', `budget_alerts:${cardId}`, 'Budget alert', `"${cardRow.label}" has reached its budget of ${formatMoney(cardRow.amount)}.`);
+        notifySelf(userId, 'budget_alerts', `budget_alerts:${cardId}`, 'Budget alert', `"${cardRow.label}" has reached its budget of ${formatMoney(cardRow.amount)}.`, {
+          type: 'card',
+          id: cardId,
+        });
       }
     }
 

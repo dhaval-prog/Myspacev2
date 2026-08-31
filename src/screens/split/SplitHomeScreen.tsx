@@ -15,6 +15,7 @@ import { BottomNav } from '../../components/BottomNav';
 import { useAuth } from '../../context/AuthContext';
 import { useSplit } from '../../context/SplitContext';
 import { SPLIT_CATEGORY_MAP } from '../../data/splitCategories';
+import type { NotificationTarget } from '../../utils/notify';
 
 const DELETE_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 const REVEAL_WIDTH = 84;
@@ -23,10 +24,11 @@ interface SplitHomeScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenAccount: () => void;
+  onOpenNotificationTarget?: (target: NotificationTarget) => void;
 }
 
 /** The Split home: total balance across every split, then the list of your splits. */
-export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount }: SplitHomeScreenProps) {
+export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount, onOpenNotificationTarget }: SplitHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
@@ -323,7 +325,7 @@ export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount }: Split
         reduceMotion={reduceMotion}
       />
       <JoinSplitSheet visible={joinOpen} onClose={() => setJoinOpen(false)} />
-      <NotificationsSheet visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
+      <NotificationsSheet visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} onNavigate={onOpenNotificationTarget} />
 
       <Modal visible={!!deleteTarget} transparent animationType="fade" onRequestClose={() => setDeleteTarget(null)}>
         <View style={styles.deleteModalWrap}>
