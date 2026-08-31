@@ -60,9 +60,10 @@ interface LiveLocationsScreenProps {
  * Friends' locations on a map — opt-in, time-boxed live sharing plus a
  * lightweight automatic "last seen" while MySpace is open, backed by
  * real Supabase tables (RLS-scoped to accepted friends) and Realtime.
- * Mobile-only: react-native-maps has no web renderer, so the web build
- * falls back to an illustrative map (see MapCanvas.web.tsx) and never
- * requests location permission.
+ * The map itself is platform-split: react-native-maps natively on iOS/
+ * Android (MapCanvas.native.tsx), Leaflet + OpenStreetMap on web
+ * (MapCanvas.web.tsx) — expo-location works on both via the browser's
+ * geolocation API on web, so capture isn't gated by platform.
  */
 export function LiveLocationsScreen({ onBack }: LiveLocationsScreenProps) {
   const [page, setPage] = useState<'map' | 'privacy'>('map');
@@ -95,7 +96,7 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
   // this screen opens. Nothing runs when the screen (or app) isn't open —
   // no background task, no expo-task-manager.
   useEffect(() => {
-    if (Platform.OS === 'web' || !userId) return;
+    if (!userId) return;
     let cancelled = false;
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -118,7 +119,7 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
   // While actively sharing, keep pinging the share row with fresh
   // coordinates. Stops the moment `sharing` goes false — no lingering watch.
   useEffect(() => {
-    if (Platform.OS === 'web' || !sharing) return;
+    if (!sharing) return;
     let sub: Location.LocationSubscription | null = null;
     let cancelled = false;
     (async () => {
@@ -186,11 +187,7 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
         </Pressable>
       </View>
 
-      {Platform.OS === 'web' ? (
-        <View style={styles.previewNote}>
-          <Text style={styles.previewNoteText}>Live Locations is a mobile feature — this is a preview.</Text>
-        </View>
-      ) : Platform.OS === 'android' ? (
+      {Platform.OS === 'android' ? (
         <View style={styles.previewNote}>
           <Text style={styles.previewNoteText}>Add a Google Maps API key to app.json to see the real map.</Text>
         </View>
