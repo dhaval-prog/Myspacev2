@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { colors, fontFamily, noOutline, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
+import { BottomSheet } from '../../components/expenses/BottomSheet';
+import { ActionButton } from '../../components/account/rows';
 import { useFriends } from '../../context/FriendsContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -15,6 +17,9 @@ const MORE_ICON = 'M12 6.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM12 13a1 1 0 1 0 0-2 1 1 
 const CHECK_ICON = 'M5 12.5l4.5 4.5L19 7';
 const ATTACH_ICON = 'M12 6v12M6 12h12';
 const PIN_ICON = 'M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11z M12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z';
+const IMAGE_ICON = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4L15 13l5 5';
+const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
+const PERSON_X_ICON = 'M4 19c0-3.3 2.7-6 6-6s6 2.7 6 6M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM17 8l4 4M21 8l-4 4';
 
 function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
@@ -27,6 +32,28 @@ function isToday(iso: string | null): boolean {
   return d.toDateString() === now.toDateString();
 }
 
+/** One tappable row inside a bottom-sheet menu. */
+function SheetOption({
+  icon,
+  label,
+  destructive,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  destructive?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.sheetOption, pressed && styles.sheetOptionPressed]}>
+      <View style={[styles.sheetOptionIcon, destructive && styles.sheetOptionIconDestructive]}>
+        <Icon path={icon} color={destructive ? colors.danger : colors.textPrimary} size={17} strokeWidth={1.9} />
+      </View>
+      <Text style={[styles.sheetOptionLabel, destructive && styles.sheetOptionLabelDestructive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 /** The unlocked 1:1 conversation (6p-7) — messages, with the accept moment marked inline. */
 export function ChatThreadScreen() {
   const insets = useSafeAreaInsets();
@@ -35,6 +62,10 @@ export function ChatThreadScreen() {
   const [text, setText] = useState('');
   const [sendingAttachment, setSendingAttachment] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -52,6 +83,7 @@ export function ChatThreadScreen() {
   const showFriendsChip = isToday(focusedFriend.acceptedAt);
 
   const pickPhoto = async () => {
+    setAttachOpen(false);
     setAttachError(null);
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -68,6 +100,7 @@ export function ChatThreadScreen() {
   };
 
   const shareLocation = async () => {
+    setAttachOpen(false);
     setAttachError(null);
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) {
@@ -86,34 +119,14 @@ export function ChatThreadScreen() {
     }
   };
 
-  const openAttachOptions = () => {
-    Alert.alert('Share', undefined, [
-      { text: 'Photo', onPress: pickPhoto },
-      { text: 'Location', onPress: shareLocation },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+  const doClearChat = () => {
+    setConfirmClearOpen(false);
+    clearChat(focusedFriend.connectionId);
   };
 
-  const confirmClearChat = () => {
-    Alert.alert('Delete chat', `Delete every message with ${focusedFriend.name}? This can't be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete chat', style: 'destructive', onPress: () => clearChat(focusedFriend.connectionId) },
-    ]);
-  };
-
-  const confirmRemoveFriend = () => {
-    Alert.alert('Remove friend', `Remove ${focusedFriend.name}? This deletes your chat history too.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => removeFriend(focusedFriend.connectionId) },
-    ]);
-  };
-
-  const openThreadOptions = () => {
-    Alert.alert(focusedFriend.name, undefined, [
-      { text: 'Delete chat', onPress: confirmClearChat },
-      { text: 'Remove friend', style: 'destructive', onPress: confirmRemoveFriend },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+  const doRemoveFriend = () => {
+    setConfirmRemoveOpen(false);
+    removeFriend(focusedFriend.connectionId);
   };
 
   return (
@@ -126,7 +139,7 @@ export function ChatThreadScreen() {
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>{focusedFriend.name}</Text>
         </View>
-        <Pressable onPress={openThreadOptions} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="More options">
+        <Pressable onPress={() => setOptionsOpen(true)} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="More options">
           <Icon path={MORE_ICON} color="rgba(255,255,255,.6)" size={19} strokeWidth={1.8} />
         </Pressable>
       </View>
@@ -182,7 +195,7 @@ export function ChatThreadScreen() {
       {attachError && <Text style={styles.attachError}>{attachError}</Text>}
 
       <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <Pressable onPress={openAttachOptions} style={styles.attachButton} accessibilityRole="button" accessibilityLabel="Share a photo or your location">
+        <Pressable onPress={() => setAttachOpen(true)} style={styles.attachButton} accessibilityRole="button" accessibilityLabel="Share a photo or your location">
           <Icon path={ATTACH_ICON} color={colors.ink} size={19} strokeWidth={2} />
         </Pressable>
         <TextInput
@@ -198,6 +211,49 @@ export function ChatThreadScreen() {
           <Icon path={SEND_ICON} color={colors.lime} size={19} strokeWidth={2} />
         </Pressable>
       </View>
+
+      <BottomSheet visible={optionsOpen} onClose={() => setOptionsOpen(false)}>
+        <Text style={styles.sheetTitle}>{focusedFriend.name}</Text>
+        <SheetOption icon={TRASH_ICON} label="Delete chat" onPress={() => { setOptionsOpen(false); setConfirmClearOpen(true); }} />
+        <SheetOption
+          icon={PERSON_X_ICON}
+          label="Remove friend"
+          destructive
+          onPress={() => { setOptionsOpen(false); setConfirmRemoveOpen(true); }}
+        />
+      </BottomSheet>
+
+      <BottomSheet visible={attachOpen} onClose={() => setAttachOpen(false)}>
+        <Text style={styles.sheetTitle}>Share</Text>
+        <SheetOption icon={IMAGE_ICON} label="Photo" onPress={pickPhoto} />
+        <SheetOption icon={PIN_ICON} label="Current location" onPress={shareLocation} />
+      </BottomSheet>
+
+      <BottomSheet visible={confirmClearOpen} onClose={() => setConfirmClearOpen(false)}>
+        <Text style={styles.sheetTitle}>Delete chat</Text>
+        <Text style={styles.sheetBody}>Delete every message with {focusedFriend.name}? This can't be undone.</Text>
+        <View style={styles.sheetActions}>
+          <View style={styles.sheetActionFlex}>
+            <ActionButton label="Cancel" variant="secondary" onPress={() => setConfirmClearOpen(false)} />
+          </View>
+          <View style={styles.sheetActionFlex}>
+            <ActionButton label="Delete chat" variant="destructive" onPress={doClearChat} />
+          </View>
+        </View>
+      </BottomSheet>
+
+      <BottomSheet visible={confirmRemoveOpen} onClose={() => setConfirmRemoveOpen(false)}>
+        <Text style={styles.sheetTitle}>Remove friend</Text>
+        <Text style={styles.sheetBody}>Remove {focusedFriend.name}? This deletes your chat history too.</Text>
+        <View style={styles.sheetActions}>
+          <View style={styles.sheetActionFlex}>
+            <ActionButton label="Cancel" variant="secondary" onPress={() => setConfirmRemoveOpen(false)} />
+          </View>
+          <View style={styles.sheetActionFlex}>
+            <ActionButton label="Remove" variant="destructive" onPress={doRemoveFriend} />
+          </View>
+        </View>
+      </BottomSheet>
     </KeyboardAvoidingView>
   );
 }
@@ -386,5 +442,54 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sheetTitle: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 18,
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+  },
+  sheetBody: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  sheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.ms,
+    paddingVertical: 13,
+  },
+  sheetOptionPressed: {
+    opacity: 0.6,
+  },
+  sheetOptionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.pressWash,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetOptionIconDestructive: {
+    backgroundColor: colors.splitDangerBg,
+  },
+  sheetOptionLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  sheetOptionLabelDestructive: {
+    color: colors.danger,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  sheetActionFlex: {
+    flex: 1,
   },
 });
