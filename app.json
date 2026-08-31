@@ -15,6 +15,7 @@
       }
     },
     "android": {
+      "package": "com.dhaval.myspacev2",
       "adaptiveIcon": {
         "backgroundColor": "#C3EA4F",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -22,6 +23,11 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyB-swu0jHgJ2kYC4phZr76aBM-gPUwvB8k"
+        }
+      },
       "manifestQueries": {
         "intent": [
           {
