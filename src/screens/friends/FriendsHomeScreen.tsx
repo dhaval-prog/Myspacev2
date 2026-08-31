@@ -7,6 +7,7 @@ import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { useFriends } from '../../context/FriendsContext';
 
 const CHAT_ICON = 'M4 4h16v12H8l-4 4z';
+const BACK_ICON = 'M15 5l-7 7 7 7';
 const CHEVRON_ICON = 'M9 6l6 6-6 6';
 const QR_ICON = 'M4 4h6v6H4zM6 6.5h2v1H6zM14 4h6v6h-6zM16 6.5h2v1h-2zM4 14h6v6H4zM6 16.5h2v1H6zM14 14h3v3h-3zM19 14v3h-3M14 20h3M19 20v-3';
 
@@ -42,17 +43,20 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
     <View style={styles.screen}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerRow}>
-          <Pressable onPress={onHome} accessibilityRole="button" accessibilityLabel="Back to Home" hitSlop={8}>
-            <View>
-              <Text style={styles.title}>Friends</Text>
-              <Text style={styles.sub}>
-                {friends.length} connected{receivedRequests.length > 0 ? ` · ${receivedRequests.length} waiting` : ''}
-              </Text>
-            </View>
-          </Pressable>
-          <Pressable onPress={goChats} style={styles.chatButton} accessibilityRole="button" accessibilityLabel="Chats">
-            <Icon path={CHAT_ICON} color={colors.lime} size={20} strokeWidth={1.9} />
-          </Pressable>
+          <View>
+            <Text style={styles.title}>Friends</Text>
+            <Text style={styles.sub}>
+              {friends.length} connected{receivedRequests.length > 0 ? ` · ${receivedRequests.length} waiting` : ''}
+            </Text>
+          </View>
+          <View style={styles.headerActions}>
+            <Pressable onPress={onHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Home">
+              <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
+            </Pressable>
+            <Pressable onPress={goChats} style={styles.chatButton} accessibilityRole="button" accessibilityLabel="Chats">
+              <Icon path={CHAT_ICON} color={colors.lime} size={20} strokeWidth={1.9} />
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.searchField}>
@@ -170,6 +174,24 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans400,
     fontSize: 13.5,
     color: colors.textSecondary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  iconButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    elevation: 1,
   },
   chatButton: {
     width: 52,
