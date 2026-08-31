@@ -1,5 +1,7 @@
-import React, { forwardRef, useImperativeHandle } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { colors, fontFamily } from '../../theme';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
@@ -7,43 +9,96 @@ import type { MapCanvasHandle, MapCanvasProps } from './mapTypes';
 
 const CLOCK_ICON = 'M12 7v5l3.5 2M12 21a9 9 0 100-18 9 9 0 000 18z';
 
-// Fixed illustrative slots on the canvas — react-native-maps has no web
-// support, so real coordinates can't be projected here. Only pins with a
-// real coordinate (from a friend's own last-seen/share) are shown; the
-// slot is just where they land visually, cycled by list order.
-const PIN_SLOTS = [
-  { x: 66, y: 176 },
-  { x: 252, y: 148 },
-  { x: 292, y: 300 },
-  { x: 122, y: 344 },
-  { x: 58, y: 430 },
-  { x: 262, y: 410 },
-];
+// Bangalore — a reasonable default center when neither the account nor any
+// friend has a real position yet, rather than dropping the map at (0, 0).
+const FALLBACK_CENTER: [number, number] = [12.9716, 77.5946];
+const FALLBACK_ZOOM = 12;
+const FOCUSED_ZOOM = 15;
 
-/** Web fallback: an original abstract map illustration (not a real map provider) — Live Locations is a mobile-only feature. */
-export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas({ pins, amSharing, onSelectPin }, ref) {
-  useImperativeHandle(ref, () => ({ recenter: () => {} }));
-  const located = pins.filter((p) => p.latitude !== null && p.longitude !== null);
+/**
+ * Real web map — Leaflet + OpenStreetMap tiles, no API key required. Friend
+ * pins stay our own FriendAvatar-based React views, absolutely positioned
+ * over the Leaflet canvas by projecting lat/lng to screen coordinates on
+ * every pan/zoom, rather than handing avatar rendering to Leaflet's own
+ * (HTML-string-based) marker/icon system.
+ */
+export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas({ pins, myPosition, amSharing, onSelectPin }, ref) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const hasFitRef = useRef(false);
+  const [, forceRender] = useState(0);
+
+  const located = pins.filter((p): p is typeof p & { latitude: number; longitude: number } => p.latitude !== null && p.longitude !== null);
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+    const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(FALLBACK_CENTER, FALLBACK_ZOOM);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+    const rerender = () => forceRender((n) => n + 1);
+    map.on('move', rerender);
+    map.on('zoom', rerender);
+    map.on('resize', rerender);
+    mapRef.current = map;
+    rerender();
+    return () => {
+      map.off('move', rerender);
+      map.off('zoom', rerender);
+      map.off('resize', rerender);
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  const fitToPoints = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    const points: [number, number][] = located.map((p) => [p.latitude, p.longitude]);
+    if (myPosition) points.push([myPosition.latitude, myPosition.longitude]);
+    if (points.length === 0) return;
+    if (points.length === 1) {
+      map.setView(points[0], FOCUSED_ZOOM, { animate: true });
+    } else {
+      map.fitBounds(L.latLngBounds(points), { padding: [60, 60], animate: true });
+    }
+  };
+
+  // Auto-fit once, the first time we actually have something to show —
+  // afterwards the user's own pan/zoom (or the recenter button) drives it.
+  useEffect(() => {
+    if (hasFitRef.current || !mapRef.current) return;
+    if (located.length === 0 && !myPosition) return;
+    hasFitRef.current = true;
+    fitToPoints();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [located.length, myPosition]);
+
+  useImperativeHandle(ref, () => ({ recenter: fitToPoints }));
+
+  const project = (lat: number, lng: number) => {
+    const map = mapRef.current;
+    if (!map) return null;
+    const point = map.latLngToContainerPoint([lat, lng]);
+    return { x: point.x, y: point.y };
+  };
 
   return (
-    <View style={styles.mapBg}>
-      <View style={[styles.road, { top: 214, transform: [{ rotate: '-3deg' }] }]} />
-      <View style={[styles.road, { top: 398, transform: [{ rotate: '2.5deg' }] }]} />
-      <View style={[styles.road, { top: 560, transform: [{ rotate: '-1.5deg' }] }]} />
-      <View style={[styles.roadV, { left: 118, transform: [{ rotate: '5deg' }] }]} />
-      <View style={[styles.roadV, { left: 276, transform: [{ rotate: '-4deg' }] }]} />
-      <View style={[styles.block, { left: 22, top: 118, width: 76, height: 52 }]} />
-      <View style={[styles.block, { left: 168, top: 96, width: 92, height: 64 }]} />
-      <View style={[styles.block, { left: 24, top: 262, width: 64, height: 44 }]} />
-      <View style={[styles.block, { left: 300, top: 210, width: 60, height: 80 }]} />
-      <View style={[styles.block, { left: 170, top: 420, width: 80, height: 52 }]} />
-      <View style={styles.parkA} />
-      <View style={styles.parkB} />
+    <View style={StyleSheet.absoluteFill}>
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
 
-      {located.map((p, i) => {
-        const slot = PIN_SLOTS[i % PIN_SLOTS.length];
+      {located.map((p) => {
+        const pos = project(p.latitude, p.longitude);
+        if (!pos) return null;
         return (
-          <Pressable key={p.userId} onPress={() => onSelectPin(p.userId)} style={[styles.pinWrap, { left: slot.x, top: slot.y }]} accessibilityRole="button" accessibilityLabel={p.name}>
+          <Pressable
+            key={p.userId}
+            onPress={() => onSelectPin(p.userId)}
+            style={[styles.pinWrap, { left: pos.x - 25, top: pos.y - 25 }]}
+            accessibilityRole="button"
+            accessibilityLabel={p.name}
+          >
             <FriendAvatar userId={p.userId} name={p.name} size={50} />
             {p.live ? (
               <View style={styles.liveBadge}>
@@ -59,66 +114,28 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         );
       })}
 
-      {amSharing ? (
-        <View style={[styles.pinWrap, { left: 190, top: 236 }]}>
-          <View style={styles.youTile}>
-            <Text style={styles.youTileText}>You</Text>
-          </View>
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveBadgeText}>LIVE</Text>
-          </View>
-        </View>
-      ) : null}
+      {amSharing && myPosition
+        ? (() => {
+            const pos = project(myPosition.latitude, myPosition.longitude);
+            if (!pos) return null;
+            return (
+              <View style={[styles.pinWrap, { left: pos.x - 27, top: pos.y - 27 }]}>
+                <View style={styles.youTile}>
+                  <Text style={styles.youTileText}>You</Text>
+                </View>
+                <View style={styles.liveBadge}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveBadgeText}>LIVE</Text>
+                </View>
+              </View>
+            );
+          })()
+        : null}
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  mapBg: {
-    flex: 1,
-    backgroundColor: '#EDF2EA',
-    overflow: 'hidden',
-  },
-  road: {
-    position: 'absolute',
-    left: -30,
-    width: 450,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  roadV: {
-    position: 'absolute',
-    top: -20,
-    width: 9,
-    height: 884,
-    borderRadius: 5,
-    backgroundColor: 'rgba(255,255,255,0.55)',
-  },
-  block: {
-    position: 'absolute',
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
-  parkA: {
-    position: 'absolute',
-    left: 206,
-    top: 246,
-    width: 150,
-    height: 118,
-    borderRadius: 60,
-    backgroundColor: 'rgba(195,234,79,0.38)',
-  },
-  parkB: {
-    position: 'absolute',
-    left: 14,
-    top: 436,
-    width: 130,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(195,234,79,0.3)',
-  },
   pinWrap: {
     position: 'absolute',
   },

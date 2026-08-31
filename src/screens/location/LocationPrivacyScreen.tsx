@@ -71,8 +71,7 @@ export function LocationPrivacyScreen({ onBack }: LocationPrivacyScreenProps) {
 
         <InlineNote>
           MySpace never tracks your location in the background. Last-seen only updates while the app is open, and a live share
-          always has an end time you control. The real map only renders on a native build — this screen still works fully on
-          web, just without it.
+          always has an end time you control.
         </InlineNote>
       </ScrollView>
     </View>
