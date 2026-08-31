@@ -1,92 +1,117 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fontFamily, spacing } from '../../theme';
+import { colors, fontFamily, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
-import { MemberAvatar } from '../../components/split/MemberAvatar';
+import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { useFriends } from '../../context/FriendsContext';
+import { timeAgo } from '../../utils/relativeTime';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
-const CHECK_ICON = 'M5 12.5l4.5 4.5L19 7';
-const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 
 type Tab = 'received' | 'sent';
 
-/** Incoming and outgoing friend requests. */
+/** Requests inbox (6p-5) — accepting is what unlocks a chat. */
 export function FriendRequestsScreen() {
   const insets = useSafeAreaInsets();
-  const { receivedRequests, sentRequests, goHome, acceptRequest, declineRequest, cancelRequest } = useFriends();
+  const { receivedRequests, sentRequests, justAccepted, goHome, acceptRequest, declineRequest, cancelRequest, openChat } = useFriends();
   const [tab, setTab] = useState<Tab>('received');
-
-  const list = tab === 'received' ? receivedRequests : sentRequests;
 
   return (
     <View style={styles.screen}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.topRow}>
           <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
-            <Icon path={BACK_ICON} color={colors.friendsInk} size={19} strokeWidth={2} />
+            <Icon path={BACK_ICON} color={colors.textPrimary} size={19} strokeWidth={2} />
           </Pressable>
           <Text style={styles.title}>Requests</Text>
-          <View style={styles.iconButton} />
         </View>
 
-        <View style={styles.tabRow}>
-          <Pressable onPress={() => setTab('received')} style={[styles.tab, tab === 'received' && styles.tabOn]}>
-            <Text style={[styles.tabLabel, tab === 'received' && styles.tabLabelOn]}>
-              Received{receivedRequests.length > 0 ? ` (${receivedRequests.length})` : ''}
-            </Text>
+        <View style={styles.segmented}>
+          <Pressable onPress={() => setTab('received')} style={[styles.segment, tab === 'received' && styles.segmentOn]}>
+            <Text style={[styles.segmentLabel, tab === 'received' && styles.segmentLabelOn]}>Received · {receivedRequests.length}</Text>
           </Pressable>
-          <Pressable onPress={() => setTab('sent')} style={[styles.tab, tab === 'sent' && styles.tabOn]}>
-            <Text style={[styles.tabLabel, tab === 'sent' && styles.tabLabelOn]}>Sent{sentRequests.length > 0 ? ` (${sentRequests.length})` : ''}</Text>
+          <Pressable onPress={() => setTab('sent')} style={[styles.segment, tab === 'sent' && styles.segmentOn]}>
+            <Text style={[styles.segmentLabel, tab === 'sent' && styles.segmentLabelOn]}>Sent · {sentRequests.length}</Text>
           </Pressable>
         </View>
 
-        {list.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyBody}>{tab === 'received' ? 'No requests waiting on you.' : "You haven't sent any requests."}</Text>
-          </View>
-        ) : (
-          <View style={styles.list}>
-            {list.map((r) => (
-              <View key={r.connectionId} style={styles.row}>
-                <MemberAvatar userId={r.userId} name={r.name} size={46} />
-                <View style={styles.rowText}>
-                  <Text style={styles.rowName}>{r.name}</Text>
-                  {r.username && <Text style={styles.rowMeta}>@{r.username}</Text>}
-                </View>
-                {tab === 'received' ? (
-                  <View style={styles.rowActions}>
-                    <Pressable
-                      onPress={() => declineRequest(r.connectionId)}
-                      style={[styles.iconButtonSm, styles.declineButton]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Decline ${r.name}`}
-                    >
-                      <Icon path={CLOSE_ICON} color={colors.splitDangerFg} size={15} strokeWidth={2.2} />
+        {tab === 'received' ? (
+          receivedRequests.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>No requests waiting on you.</Text>
+            </View>
+          ) : (
+            <View style={styles.cards}>
+              {receivedRequests.map((r) => (
+                <View key={r.connectionId} style={styles.card}>
+                  <View style={styles.cardTopRow}>
+                    <FriendAvatar userId={r.userId} name={r.name} size={48} />
+                    <View style={styles.cardText}>
+                      <Text style={styles.cardName}>{r.name}</Text>
+                      <Text style={styles.cardMeta}>{r.username ? `@${r.username}` : 'via invite code'}</Text>
+                    </View>
+                    <Text style={styles.cardAge}>{timeAgo(r.createdAt)}</Text>
+                  </View>
+                  {r.introMessage && (
+                    <View style={styles.introBubble}>
+                      <Text style={styles.introText}>{r.introMessage}</Text>
+                    </View>
+                  )}
+                  <View style={styles.cardActions}>
+                    <Pressable onPress={() => acceptRequest(r.connectionId)} style={styles.acceptButton}>
+                      <Text style={styles.acceptLabel}>Accept</Text>
                     </Pressable>
-                    <Pressable
-                      onPress={() => acceptRequest(r.connectionId)}
-                      style={[styles.iconButtonSm, styles.acceptButton]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Accept ${r.name}`}
-                    >
-                      <Icon path={CHECK_ICON} color="#fff" size={15} strokeWidth={2.4} />
+                    <Pressable onPress={() => declineRequest(r.connectionId)} style={styles.declineButton}>
+                      <Text style={styles.declineLabel}>Decline</Text>
                     </Pressable>
                   </View>
-                ) : (
-                  <Pressable
-                    onPress={() => cancelRequest(r.connectionId)}
-                    style={styles.cancelButton}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Cancel request to ${r.name}`}
-                  >
-                    <Text style={styles.cancelLabel}>Cancel</Text>
-                  </Pressable>
-                )}
+                </View>
+              ))}
+            </View>
+          )
+        ) : sentRequests.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>You haven't sent any requests.</Text>
+          </View>
+        ) : (
+          <View style={styles.cards}>
+            {sentRequests.map((r) => (
+              <View key={r.connectionId} style={styles.card}>
+                <View style={styles.cardTopRow}>
+                  <FriendAvatar userId={r.userId} name={r.name} size={48} />
+                  <View style={styles.cardText}>
+                    <Text style={styles.cardName}>{r.name}</Text>
+                    <Text style={styles.cardMeta}>{r.username ? `@${r.username}` : 'via invite code'}</Text>
+                  </View>
+                  <Text style={styles.cardAge}>{timeAgo(r.createdAt)}</Text>
+                </View>
+                <Pressable onPress={() => cancelRequest(r.connectionId)} style={styles.cancelButton}>
+                  <Text style={styles.cancelLabel}>Cancel request</Text>
+                </Pressable>
               </View>
             ))}
           </View>
+        )}
+
+        {justAccepted.length > 0 && (
+          <>
+            <Text style={styles.eyebrow}>JUST ACCEPTED</Text>
+            <View style={styles.cards}>
+              {justAccepted.map((f) => (
+                <View key={f.connectionId} style={styles.acceptedRow}>
+                  <FriendAvatar userId={f.userId} name={f.name} size={40} />
+                  <View style={styles.cardText}>
+                    <Text style={styles.acceptedName}>{f.name}</Text>
+                    <Text style={styles.acceptedSub}>You're friends — chat unlocked</Text>
+                  </View>
+                  <Pressable onPress={() => openChat(f.connectionId)} style={styles.chatPill}>
+                    <Text style={styles.chatPillLabel}>Chat</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          </>
         )}
       </ScrollView>
     </View>
@@ -96,118 +121,185 @@ export function FriendRequestsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.friendsBg,
+    backgroundColor: colors.pale,
   },
   scroll: {
-    paddingHorizontal: spacing.xxxl,
+    paddingHorizontal: 26,
     paddingBottom: spacing.huge,
-    gap: spacing.xl,
+    gap: spacing.lg,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.ms,
   },
   iconButton: {
     width: 44,
     height: 44,
-    borderRadius: 16,
-    backgroundColor: colors.friendsSurface,
+    borderRadius: 22,
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
     fontFamily: fontFamily.sans700,
-    fontSize: 19,
-    color: colors.friendsInk,
+    fontSize: 25,
+    letterSpacing: -0.5,
+    color: colors.textPrimary,
   },
-  tabRow: {
+  segmented: {
     flexDirection: 'row',
-    gap: spacing.xs,
-    backgroundColor: colors.friendsSurface,
-    borderRadius: 16,
+    gap: 8,
+    backgroundColor: 'rgba(22,33,12,0.07)',
+    borderRadius: radius.pill,
     padding: 5,
   },
-  tab: {
+  segment: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: radius.pill,
     paddingVertical: 11,
     alignItems: 'center',
   },
-  tabOn: {
-    backgroundColor: colors.friendsInk,
+  segmentOn: {
+    backgroundColor: colors.ink,
   },
-  tabLabel: {
-    fontFamily: fontFamily.sans500,
-    fontSize: 13,
-    color: colors.friendsInkFaint55,
-  },
-  tabLabelOn: {
+  segmentLabel: {
     fontFamily: fontFamily.sans600,
-    color: '#fff',
+    fontSize: 13.5,
+    color: colors.textSecondary,
+  },
+  segmentLabelOn: {
+    color: colors.lime,
   },
   empty: {
-    borderRadius: 24,
-    backgroundColor: colors.friendsSurface,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,.7)',
     padding: spacing.xxl,
     alignItems: 'center',
   },
-  emptyBody: {
+  emptyText: {
     fontFamily: fontFamily.sans400,
     fontSize: 13,
-    color: colors.friendsInkFaint45,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
-  list: {
-    gap: spacing.xs,
+  cards: {
+    gap: spacing.ms,
   },
-  row: {
+  card: {
+    backgroundColor: 'rgba(255,255,255,.9)',
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    gap: spacing.ms,
+  },
+  cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.ms,
-    backgroundColor: colors.friendsSurface,
-    borderRadius: 20,
-    padding: spacing.ms,
   },
-  rowText: {
+  cardText: {
     flex: 1,
   },
-  rowName: {
+  cardName: {
     fontFamily: fontFamily.sans600,
-    fontSize: 14.5,
-    color: colors.friendsInk,
+    fontSize: 16,
+    color: colors.textPrimary,
   },
-  rowMeta: {
+  cardMeta: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 12.5,
+    color: colors.textFaint,
+  },
+  cardAge: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 11.5,
+    color: colors.textFaint,
+  },
+  introBubble: {
+    backgroundColor: 'rgba(22,33,12,0.05)',
+    borderRadius: 16,
+    borderBottomLeftRadius: 6,
+    padding: 12,
+  },
+  introText: {
     fontFamily: fontFamily.sans400,
-    fontSize: 12,
-    color: colors.friendsInkFaint45,
+    fontSize: 14.5,
+    lineHeight: 21,
+    color: colors.textSecondary,
   },
-  rowActions: {
+  cardActions: {
     flexDirection: 'row',
     gap: spacing.xs,
   },
-  iconButtonSm: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+  acceptButton: {
+    flex: 1,
+    borderRadius: radius.pill,
+    backgroundColor: colors.lime,
+    paddingVertical: 14,
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  acceptLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 14.5,
+    color: colors.ink,
   },
   declineButton: {
-    backgroundColor: colors.splitDangerBg,
+    flex: 1,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(22,33,12,0.07)',
+    paddingVertical: 14,
+    alignItems: 'center',
   },
-  acceptButton: {
-    backgroundColor: colors.friendsAccent,
+  declineLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 14.5,
+    color: colors.textSecondary,
   },
   cancelButton: {
-    borderRadius: 999,
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    backgroundColor: colors.friendsInkFaint08,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(22,33,12,0.07)',
+    paddingVertical: 12,
+    alignItems: 'center',
   },
   cancelLabel: {
     fontFamily: fontFamily.sans600,
+    fontSize: 13.5,
+    color: colors.textSecondary,
+  },
+  eyebrow: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 11.5,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+  },
+  acceptedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.ms,
+    backgroundColor: colors.ink,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+  },
+  acceptedName: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15,
+    color: '#fff',
+  },
+  acceptedSub: {
+    fontFamily: fontFamily.sans400,
     fontSize: 12.5,
-    color: colors.friendsInk,
+    color: 'rgba(255,255,255,.6)',
+  },
+  chatPill: {
+    borderRadius: radius.pill,
+    backgroundColor: colors.lime,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  chatPillLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 13,
+    color: colors.ink,
   },
 });

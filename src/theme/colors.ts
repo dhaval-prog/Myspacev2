@@ -85,20 +85,17 @@ export const colors = {
   splitDangerFg: '#D33243',
 
   // --- Friends / chat screens ---
-  // Warm amber-to-coral, sociable and distinct from Split's magenta and
-  // the dark wallet — over the same soft off-white surface as Split.
-  friendsBg: '#FFF9F2',
-  friendsSurface: '#FFFFFF',
-  friendsInk: '#3A2413',
-  friendsInkFaint30: 'rgba(58,36,19,0.3)',
-  friendsInkFaint45: 'rgba(58,36,19,0.45)',
-  friendsInkFaint55: 'rgba(58,36,19,0.55)',
-  friendsInkFaint08: 'rgba(58,36,19,0.08)',
-  friendsGradient: ['#FFB86B', '#FF7A59', '#E8456B'] as string[],
-  friendsAccent: '#FF7A45',
-  friendsAccentSoftBg: '#FFE9DA',
-  friendsLockedBg: 'rgba(58,36,19,0.06)',
-  friendsLockedFg: 'rgba(58,36,19,0.32)',
+  // Reuses the core lime/ink/pale identity (not a separate feature color,
+  // unlike Split/Expenses) — Friends & chat is a continuation of Home.
+  nearBlack: '#111111',
+  coral: '#FF8A6B',
+  onlineDot: '#3FBF6A',
+  onlineDotOnInk: '#8BE07E',
+  friendsCanvas: ['#C6E9A8', '#DDEDDF', '#EDF2EA', '#F6F5DF'] as string[],
+  friendsCanvasStops: [0, 0.26, 0.58, 1] as number[],
+  friendsChatCanvas: ['#DDEDDF', '#EDF2EA', '#F6F5DF'] as string[],
+  friendsChatCanvasStops: [0, 0.4, 1] as number[],
+  friendsScannerCanvas: ['#2C3A1C', '#151E0C', '#0B1006'] as string[],
 } as const;
 
 export type ColorToken = keyof typeof colors;

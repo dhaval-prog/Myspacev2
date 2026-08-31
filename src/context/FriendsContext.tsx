@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import type { DirectMessage, Friend, FriendProfile, FriendRequest } from '../types/friends';
+import type { DirectMessage, Friend, FriendProfile, FriendRequest, MatchRelationship } from '../types/friends';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
-export type FriendsPage = 'home' | 'add' | 'scan' | 'match' | 'requests' | 'chats' | 'chat';
+export type FriendsPage = 'home' | 'add' | 'scan' | 'match' | 'requests' | 'chats' | 'chat' | 'locked-chat';
 
 interface ConnectionRow {
   id: string;
@@ -12,6 +12,7 @@ interface ConnectionRow {
   status: 'pending' | 'accepted';
   created_at: string;
   responded_at: string | null;
+  intro_message: string | null;
 }
 
 interface MessageRow {
@@ -42,25 +43,36 @@ interface FriendsContextValue {
   friends: Friend[];
   receivedRequests: FriendRequest[];
   sentRequests: FriendRequest[];
+  /** Connections that flipped to accepted during this session — surfaced once in Requests, then gone on next load. */
+  justAccepted: Friend[];
   matchFound: FriendProfile | null;
+  matchRelationship: MatchRelationship;
   focusedConnectionId: string | null;
   focusedFriend: Friend | undefined;
+  focusedPendingRequest: FriendRequest | undefined;
   messages: DirectMessage[];
   loading: boolean;
+  /** Latest message per accepted connection, for the Chats list preview. */
+  lastMessageFor: (connectionId: string) => DirectMessage | undefined;
+  isUnread: (connectionId: string) => boolean;
 
   goHome: () => void;
   goAdd: () => void;
   goScan: () => void;
   goRequests: () => void;
   goChats: () => void;
+  /** Opens the right thread view for a connection — the live chat if accepted, the locked view if still pending. */
   openChat: (connectionId: string) => void;
+  /** Looks up the connection with this user and opens its thread — used by the "already friends" match state. */
+  openChatWithUser: (targetUserId: string) => void;
 
   lookupCode: (code: string) => Promise<{ error: string | null }>;
-  sendRequest: () => Promise<{ error: string | null }>;
+  sendRequest: (introMessage: string) => Promise<{ error: string | null }>;
   acceptRequest: (connectionId: string) => Promise<void>;
   declineRequest: (connectionId: string) => Promise<void>;
   cancelRequest: (connectionId: string) => Promise<void>;
   removeFriend: (connectionId: string) => Promise<void>;
+  nudge: (connectionId: string) => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
 }
 
@@ -80,9 +92,11 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const [connectionRows, setConnectionRows] = useState<ConnectionRow[]>([]);
   const [profiles, setProfiles] = useState<Record<string, ProfileInfo>>({});
   const [loading, setLoading] = useState(true);
+  const [justAcceptedIds, setJustAcceptedIds] = useState<string[]>([]);
 
   const [page, setPage] = useState<FriendsPage>('home');
-  const [matchFound, setMatchFound] = useState<FriendProfile | null>(null);
+  const [matchFoundUserId, setMatchFoundUserId] = useState<string | null>(null);
+  const [matchProfile, setMatchProfile] = useState<FriendProfile | null>(null);
   const [matchCode, setMatchCode] = useState<string | null>(null);
   const [focusedConnectionId, setFocusedConnectionId] = useState<string | null>(null);
   const [messageRows, setMessageRows] = useState<MessageRow[]>([]);
@@ -123,7 +137,13 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !isSupabaseConfigured) return;
     const upsert = (row: ConnectionRow) =>
-      setConnectionRows((prev) => (prev.some((c) => c.id === row.id) ? prev.map((c) => (c.id === row.id ? row : c)) : [row, ...prev]));
+      setConnectionRows((prev) => {
+        const existing = prev.find((c) => c.id === row.id);
+        if (existing && existing.status === 'pending' && row.status === 'accepted') {
+          setJustAcceptedIds((ids) => (ids.includes(row.id) ? ids : [row.id, ...ids]));
+        }
+        return existing ? prev.map((c) => (c.id === row.id ? row : c)) : [row, ...prev];
+      });
     const remove = (id: string) => setConnectionRows((prev) => prev.filter((c) => c.id !== id));
 
     const channel = supabase
@@ -177,7 +197,20 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionRows, userId]);
 
-  const toEntry = (row: ConnectionRow): Friend & FriendRequest => {
+  const toFriend = (row: ConnectionRow): Friend => {
+    const id = counterpartId(row, userId ?? '');
+    const info = profiles[id];
+    return {
+      connectionId: row.id,
+      userId: id,
+      name: info?.name ?? 'Someone',
+      username: info?.username ?? null,
+      avatarUrl: info?.avatarUrl ?? null,
+      acceptedAt: row.responded_at,
+    };
+  };
+
+  const toRequest = (row: ConnectionRow): FriendRequest => {
     const id = counterpartId(row, userId ?? '');
     const info = profiles[id];
     return {
@@ -187,19 +220,109 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
       username: info?.username ?? null,
       avatarUrl: info?.avatarUrl ?? null,
       createdAt: row.created_at,
+      introMessage: row.intro_message,
     };
   };
 
-  const friends = useMemo(() => connectionRows.filter((c) => c.status === 'accepted').map(toEntry), [connectionRows, profiles, userId]);
+  const friends = useMemo(() => connectionRows.filter((c) => c.status === 'accepted').map(toFriend), [connectionRows, profiles, userId]);
   const receivedRequests = useMemo(
-    () => connectionRows.filter((c) => c.status === 'pending' && c.addressee_id === userId).map(toEntry),
+    () => connectionRows.filter((c) => c.status === 'pending' && c.addressee_id === userId).map(toRequest),
     [connectionRows, profiles, userId],
   );
   const sentRequests = useMemo(
-    () => connectionRows.filter((c) => c.status === 'pending' && c.requester_id === userId).map(toEntry),
+    () => connectionRows.filter((c) => c.status === 'pending' && c.requester_id === userId).map(toRequest),
     [connectionRows, profiles, userId],
   );
-  const focusedFriend = friends.find((f) => f.connectionId === focusedConnectionId);
+  const justAccepted = useMemo(
+    () => justAcceptedIds.map((id) => connectionRows.find((c) => c.id === id)).filter((r): r is ConnectionRow => !!r).map(toFriend),
+    [justAcceptedIds, connectionRows, profiles, userId],
+  );
+  const [lastMessages, setLastMessages] = useState<Record<string, MessageRow>>({});
+  const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set());
+
+  // Load the latest message per accepted connection, for the Chats list preview.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured || friends.length === 0) {
+      setLastMessages({});
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('direct_messages')
+      .select('*')
+      .in('connection_id', friends.map((f) => f.connectionId))
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        warn('load thread previews', error);
+        if (cancelled || !data) return;
+        const next: Record<string, MessageRow> = {};
+        for (const row of data as MessageRow[]) {
+          if (!next[row.connection_id]) next[row.connection_id] = row;
+        }
+        setLastMessages(next);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, friends]);
+
+  // Live preview + unread updates for every accepted thread at once — the
+  // Chats list needs to react to a message even while some other screen is open.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured || friends.length === 0) return;
+    let channel = supabase.channel(`friend-thread-previews-${userId}`);
+    for (const f of friends) {
+      channel = channel.on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'direct_messages', filter: `connection_id=eq.${f.connectionId}` },
+        (payload) => {
+          const row = payload.new as MessageRow;
+          setLastMessages((prev) => ({ ...prev, [row.connection_id]: row }));
+          if (row.sender_id !== userId && row.connection_id !== focusedConnectionId) {
+            setUnreadIds((prev) => new Set(prev).add(row.connection_id));
+          }
+        },
+      );
+    }
+    channel.subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // focusedConnectionId deliberately excluded — this channel shouldn't
+    // resubscribe on every thread open, only when the friend list changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, friends]);
+
+  const lastMessageFor = (connectionId: string): DirectMessage | undefined => {
+    const row = lastMessages[connectionId];
+    if (!row) return undefined;
+    return { id: row.id, connectionId: row.connection_id, senderId: row.sender_id, text: row.text, createdAt: row.created_at };
+  };
+  const isUnread = (connectionId: string) => unreadIds.has(connectionId);
+
+  const focusedConnectionRow = connectionRows.find((c) => c.id === focusedConnectionId);
+  const focusedFriend = focusedConnectionRow?.status === 'accepted' ? toFriend(focusedConnectionRow) : undefined;
+  const focusedPendingRequest =
+    focusedConnectionRow?.status === 'pending' && focusedConnectionRow.requester_id === userId ? toRequest(focusedConnectionRow) : undefined;
+
+  const matchRelationship: MatchRelationship = useMemo(() => {
+    if (!matchFoundUserId || !userId) return 'none';
+    if (matchFoundUserId === userId) return 'self';
+    const row = connectionRows.find(
+      (c) => (c.requester_id === userId && c.addressee_id === matchFoundUserId) || (c.requester_id === matchFoundUserId && c.addressee_id === userId),
+    );
+    if (!row) return 'none';
+    if (row.status === 'accepted') return 'already_friends';
+    return 'already_pending';
+  }, [matchFoundUserId, userId, connectionRows]);
+
+  /** For the "already friends" match state — jumps straight into the existing thread. */
+  const openChatWithUser = (targetUserId: string) => {
+    const row = connectionRows.find(
+      (c) => (c.requester_id === userId && c.addressee_id === targetUserId) || (c.requester_id === targetUserId && c.addressee_id === userId),
+    );
+    if (row) openChat(row.id);
+  };
 
   const goHome = () => setPage('home');
   const goAdd = () => setPage('add');
@@ -207,8 +330,15 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const goRequests = () => setPage('requests');
   const goChats = () => setPage('chats');
   const openChat = (connectionId: string) => {
+    const row = connectionRows.find((c) => c.id === connectionId);
     setFocusedConnectionId(connectionId);
-    setPage('chat');
+    setPage(row?.status === 'accepted' ? 'chat' : 'locked-chat');
+    setUnreadIds((prev) => {
+      if (!prev.has(connectionId)) return prev;
+      const next = new Set(prev);
+      next.delete(connectionId);
+      return next;
+    });
   };
 
   const lookupCode = async (code: string): Promise<{ error: string | null }> => {
@@ -219,23 +349,34 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.rpc('find_profile_by_friend_code', { p_code: trimmed });
     if (error) return { error: error.message };
     const row = (data as { id: string; full_name: string | null; username: string | null; avatar_url: string | null }[] | null)?.[0];
-    if (!row) return { error: 'No one has that code.' };
+    if (!row) {
+      if (trimmed === friendCode) {
+        setMatchFoundUserId(userId);
+        setMatchProfile({ userId, name: 'You', username: null, avatarUrl: null });
+        setMatchCode(trimmed);
+        setPage('match');
+        return { error: null };
+      }
+      return { error: 'No one has that code.' };
+    }
 
-    setMatchFound({ userId: row.id, name: row.full_name || 'Someone', username: row.username, avatarUrl: row.avatar_url });
+    setMatchFoundUserId(row.id);
+    setMatchProfile({ userId: row.id, name: row.full_name || 'Someone', username: row.username, avatarUrl: row.avatar_url });
     setMatchCode(trimmed);
     setPage('match');
     return { error: null };
   };
 
-  const sendRequest = async (): Promise<{ error: string | null }> => {
+  const sendRequest = async (introMessage: string): Promise<{ error: string | null }> => {
     if (!matchCode || !userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
-    const { data, error } = await supabase.rpc('send_friend_request', { p_code: matchCode });
+    const { data, error } = await supabase.rpc('send_friend_request', { p_code: matchCode, p_message: introMessage.trim() || null });
     if (error) return { error: error.message };
     const row = data as ConnectionRow;
     setConnectionRows((prev) => (prev.some((c) => c.id === row.id) ? prev.map((c) => (c.id === row.id ? row : c)) : [row, ...prev]));
-    setMatchFound(null);
+    setMatchFoundUserId(null);
+    setMatchProfile(null);
     setMatchCode(null);
-    setPage(row.status === 'accepted' ? 'chats' : 'requests');
+    setPage(row.status === 'accepted' ? 'chats' : 'home');
     return { error: null };
   };
 
@@ -246,6 +387,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     if (data) {
       const row = data as ConnectionRow;
       setConnectionRows((prev) => prev.map((c) => (c.id === row.id ? row : c)));
+      setJustAcceptedIds((ids) => (ids.includes(row.id) ? ids : [row.id, ...ids]));
     }
   };
 
@@ -261,6 +403,10 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.rpc('remove_friend_connection', { p_connection_id: connectionId });
     warn('cancel request', error);
     setConnectionRows((prev) => prev.filter((c) => c.id !== connectionId));
+    if (focusedConnectionId === connectionId) {
+      setFocusedConnectionId(null);
+      setPage('chats');
+    }
   };
 
   const removeFriend = async (connectionId: string) => {
@@ -272,6 +418,12 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
       setFocusedConnectionId(null);
       setPage('chats');
     }
+  };
+
+  const nudge = async (connectionId: string) => {
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.rpc('nudge_friend_request', { p_connection_id: connectionId });
+    warn('nudge', error);
   };
 
   const messages: DirectMessage[] = useMemo(
@@ -327,23 +479,30 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     friends,
     receivedRequests,
     sentRequests,
-    matchFound,
+    justAccepted,
+    matchFound: matchProfile,
+    matchRelationship,
     focusedConnectionId,
     focusedFriend,
+    focusedPendingRequest,
     messages,
     loading,
+    lastMessageFor,
+    isUnread,
     goHome,
     goAdd,
     goScan,
     goRequests,
     goChats,
     openChat,
+    openChatWithUser,
     lookupCode,
     sendRequest,
     acceptRequest,
     declineRequest,
     cancelRequest,
     removeFriend,
+    nudge,
     sendMessage,
   };
 

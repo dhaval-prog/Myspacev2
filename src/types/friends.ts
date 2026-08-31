@@ -6,6 +6,9 @@ export interface FriendProfile {
   avatarUrl: string | null;
 }
 
+/** The relationship between the signed-in account and a matched profile. */
+export type MatchRelationship = 'none' | 'self' | 'already_friends' | 'already_pending';
+
 /** An accepted connection — a real friend. */
 export interface Friend {
   connectionId: string;
@@ -13,6 +16,7 @@ export interface Friend {
   name: string;
   username: string | null;
   avatarUrl: string | null;
+  acceptedAt: string | null;
 }
 
 /** A pending connection, from either side. */
@@ -23,6 +27,7 @@ export interface FriendRequest {
   username: string | null;
   avatarUrl: string | null;
   createdAt: string;
+  introMessage: string | null;
 }
 
 export interface DirectMessage {
