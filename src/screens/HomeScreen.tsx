@@ -5,6 +5,7 @@ import { colors, radius, spacing } from '../theme';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useAuth } from '../context/AuthContext';
 import { useSpace } from '../context/SpaceContext';
+import { useFriends } from '../context/FriendsContext';
 import { getAttentionEntries } from '../utils/attention';
 import { notifySelf } from '../utils/notify';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -21,6 +22,7 @@ interface HomeScreenProps {
   onOpenDetail: (viewId: ViewId, initialIndex?: number) => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
+  onOpenFriends: () => void;
   onOpenAccount: () => void;
 }
 
@@ -30,12 +32,13 @@ interface HomeScreenProps {
  * it. "Needs attention" only joins the list once an item has an expiry
  * date that's due or coming up — it's an alarm, not a starting tab.
  */
-export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenAccount }: HomeScreenProps) {
+export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenFriends, onOpenAccount }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const userId = user?.id ?? null;
   const { rooms, items } = useSpace();
+  const { receivedRequests } = useFriends();
   const [activeViewId, setActiveViewId] = useState<ViewId>('rooms');
   const [previewViewId, setPreviewViewId] = useState<ViewId>('rooms');
   const [activeNavId, setActiveNavId] = useState('home');
@@ -75,8 +78,13 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenAc
     if (showAttention) {
       list.push({ id: 'attention', label: 'Needs attention', count: String(attentionEntries.length) });
     }
+    list.push({
+      id: 'friends',
+      label: 'Make friends & chat',
+      count: receivedRequests.length ? String(receivedRequests.length) : '→',
+    });
     return list;
-  }, [rooms.length, items.length, showAttention, attentionEntries.length]);
+  }, [rooms.length, items.length, showAttention, attentionEntries.length, receivedRequests.length]);
 
   // Ambient preview: while the user is just looking, the context card on
   // its own quietly cycles through every section every 3s — a tour, not
@@ -85,8 +93,10 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenAc
   // appears to change on its own. A real tap always navigates away
   // immediately. Off entirely when the OS asks for reduced motion.
   useEffect(() => {
-    if (reduceMotion || rows.length <= 1) return;
-    const ids = rows.map((r) => r.id);
+    // "Make friends & chat" opens a whole separate section, not a detail
+    // rail — it never joins the ambient preview rotation.
+    const ids = rows.map((r) => r.id).filter((id) => id !== 'friends');
+    if (reduceMotion || ids.length <= 1) return;
     const timer = setInterval(() => {
       setPreviewViewId((current) => {
         const idx = ids.indexOf(current);
@@ -145,6 +155,10 @@ export function HomeScreen({ onOpenDetail, onOpenExpenses, onOpenSplit, onOpenAc
             rows={rows}
             activeId={activeViewId}
             onSelect={(id) => {
+              if (id === 'friends') {
+                onOpenFriends();
+                return;
+              }
               setActiveViewId(id as ViewId);
               onOpenDetail(id as ViewId);
             }}

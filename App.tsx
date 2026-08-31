@@ -7,6 +7,7 @@ import { colors, fontsToLoad } from './src/theme';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { SpaceProvider } from './src/context/SpaceContext';
 import { NotificationsProvider } from './src/context/NotificationsContext';
+import { FriendsProvider } from './src/context/FriendsContext';
 import { LaunchIntro } from './src/components/LaunchIntro';
 import { SignUpScreen } from './src/screens/SignUpScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
@@ -14,6 +15,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { DetailScreen } from './src/screens/DetailScreen';
 import { ExpensesScreen } from './src/screens/expenses/ExpensesScreen';
 import { SplitScreen } from './src/screens/split/SplitScreen';
+import { FriendsScreen } from './src/screens/friends/FriendsScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
 import type { ViewId } from './src/data/views';
 
@@ -25,7 +27,8 @@ type Screen =
   | { name: 'detail'; viewId: ViewId; initialIndex?: number }
   | { name: 'expenses' }
   | { name: 'split' }
-  | { name: 'account'; from: 'home' | 'expenses' | 'split' };
+  | { name: 'friends' }
+  | { name: 'account'; from: 'home' | 'expenses' | 'split' | 'friends' };
 
 function AuthNavigator() {
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
@@ -66,6 +69,14 @@ function AppNavigator() {
       />
     );
   }
+  if (screen.name === 'friends') {
+    return (
+      <FriendsScreen
+        onHome={() => setScreen({ name: 'home' })}
+        onOpenAccount={() => setScreen({ name: 'account', from: 'friends' })}
+      />
+    );
+  }
   if (screen.name === 'account') {
     return <AccountSettingsScreen onBack={() => setScreen({ name: screen.from } as Screen)} />;
   }
@@ -74,6 +85,7 @@ function AppNavigator() {
       onOpenDetail={(viewId, initialIndex) => setScreen({ name: 'detail', viewId, initialIndex })}
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
       onOpenSplit={() => setScreen({ name: 'split' })}
+      onOpenFriends={() => setScreen({ name: 'friends' })}
       onOpenAccount={() => setScreen({ name: 'account', from: 'home' })}
     />
   );
@@ -93,7 +105,9 @@ function RootNavigator() {
   return (
     <SpaceProvider>
       <NotificationsProvider>
-        <AppNavigator />
+        <FriendsProvider>
+          <AppNavigator />
+        </FriendsProvider>
       </NotificationsProvider>
     </SpaceProvider>
   );
