@@ -34,7 +34,13 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "MySpace uses your photos to read a join QR code from an image."
+          "photosPermission": "MySpace uses your photos to read QR codes and share photos in chat."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "MySpace uses your location to share it in a chat message."
         }
       ],
       [

@@ -19,7 +19,9 @@ interface MessageRow {
   id: string;
   connection_id: string;
   sender_id: string;
-  text: string;
+  kind: 'text' | 'image' | 'location';
+  text: string | null;
+  attachment_url: string | null;
   created_at: string;
 }
 
@@ -35,6 +37,25 @@ function warn(action: string, error: { message: string } | null) {
 
 function counterpartId(row: ConnectionRow, userId: string): string {
   return row.requester_id === userId ? row.addressee_id : row.requester_id;
+}
+
+function toDirectMessage(row: MessageRow): DirectMessage {
+  return {
+    id: row.id,
+    connectionId: row.connection_id,
+    senderId: row.sender_id,
+    kind: row.kind,
+    text: row.text ?? '',
+    attachmentUrl: row.attachment_url,
+    createdAt: row.created_at,
+  };
+}
+
+/** Short list-preview text for a message that has no caption of its own. */
+function previewFor(row: MessageRow): string {
+  if (row.kind === 'image') return row.text?.trim() ? row.text : '📷 Photo';
+  if (row.kind === 'location') return '📍 Location';
+  return row.text ?? '';
 }
 
 interface FriendsContextValue {
@@ -55,6 +76,7 @@ interface FriendsContextValue {
   /** Latest message per accepted connection, for the Chats list preview. */
   lastMessageFor: (connectionId: string) => DirectMessage | undefined;
   isUnread: (connectionId: string) => boolean;
+  isOnline: (userId: string) => boolean;
 
   goHome: () => void;
   goAdd: () => void;
@@ -74,6 +96,9 @@ interface FriendsContextValue {
   removeFriend: (connectionId: string) => Promise<void>;
   nudge: (connectionId: string) => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
+  sendPhoto: (localUri: string) => Promise<{ error: string | null }>;
+  sendLocation: (latitude: number, longitude: number) => Promise<{ error: string | null }>;
+  clearChat: (connectionId: string) => Promise<void>;
 }
 
 const FriendsContext = createContext<FriendsContextValue | null>(null);
@@ -100,6 +125,30 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const [matchCode, setMatchCode] = useState<string | null>(null);
   const [focusedConnectionId, setFocusedConnectionId] = useState<string | null>(null);
   const [messageRows, setMessageRows] = useState<MessageRow[]>([]);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+
+  // Tracks this account's own online presence and listens for everyone
+  // else's, via one shared Realtime presence channel for the whole app.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured) {
+      setOnlineUserIds(new Set());
+      return;
+    }
+    const channel = supabase.channel('presence:online', { config: { presence: { key: userId } } });
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        setOnlineUserIds(new Set(Object.keys(channel.presenceState())));
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') channel.track({ online_at: new Date().toISOString() });
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
+  const isOnline = (targetUserId: string) => onlineUserIds.has(targetUserId);
 
   // Initial load: own code + every connection this account is party to.
   useEffect(() => {
@@ -296,7 +345,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const lastMessageFor = (connectionId: string): DirectMessage | undefined => {
     const row = lastMessages[connectionId];
     if (!row) return undefined;
-    return { id: row.id, connectionId: row.connection_id, senderId: row.sender_id, text: row.text, createdAt: row.created_at };
+    return { ...toDirectMessage(row), text: previewFor(row) };
   };
   const isUnread = (connectionId: string) => unreadIds.has(connectionId);
 
@@ -426,16 +475,59 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     warn('nudge', error);
   };
 
-  const messages: DirectMessage[] = useMemo(
-    () => messageRows.map((m) => ({ id: m.id, connectionId: m.connection_id, senderId: m.sender_id, text: m.text, createdAt: m.created_at })),
-    [messageRows],
-  );
+  const messages: DirectMessage[] = useMemo(() => messageRows.map(toDirectMessage), [messageRows]);
 
   const sendMessage = async (text: string) => {
     if (!focusedConnectionId || !text.trim() || !userId || !isSupabaseConfigured) return;
-    const { error } = await supabase.from('direct_messages').insert({ connection_id: focusedConnectionId, sender_id: userId, text: text.trim() });
+    const { error } = await supabase.from('direct_messages').insert({ connection_id: focusedConnectionId, sender_id: userId, kind: 'text', text: text.trim() });
     warn('send message', error);
     // The row itself arrives back through the Realtime subscription below.
+  };
+
+  /** Uploads a local photo to the connection's own storage folder, then sends it as an image message. */
+  const sendPhoto = async (localUri: string): Promise<{ error: string | null }> => {
+    if (!focusedConnectionId || !userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    try {
+      const response = await fetch(localUri);
+      const blob = await response.blob();
+      const ext = (localUri.split('.').pop() || 'jpg').split('?')[0].toLowerCase();
+      const path = `${userId}/${focusedConnectionId}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('chat-media').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
+      if (upErr) return { error: upErr.message };
+      const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path);
+      const { error } = await supabase
+        .from('direct_messages')
+        .insert({ connection_id: focusedConnectionId, sender_id: userId, kind: 'image', attachment_url: pub.publicUrl });
+      if (error) return { error: error.message };
+      return { error: null };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Could not send that photo.' };
+    }
+  };
+
+  /** Sends the device's current location as a tappable Google Maps link. */
+  const sendLocation = async (latitude: number, longitude: number): Promise<{ error: string | null }> => {
+    if (!focusedConnectionId || !userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+    const { error } = await supabase
+      .from('direct_messages')
+      .insert({ connection_id: focusedConnectionId, sender_id: userId, kind: 'location', attachment_url: mapsUrl });
+    if (error) return { error: error.message };
+    return { error: null };
+  };
+
+  /** Wipes every message in a thread for both people — the friend connection itself stays intact. */
+  const clearChat = async (connectionId: string) => {
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.from('direct_messages').delete().eq('connection_id', connectionId);
+    warn('clear chat', error);
+    if (connectionId === focusedConnectionId) setMessageRows([]);
+    setLastMessages((prev) => {
+      if (!(connectionId in prev)) return prev;
+      const next = { ...prev };
+      delete next[connectionId];
+      return next;
+    });
   };
 
   // Load + subscribe to messages for the focused thread only.
@@ -489,6 +581,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     loading,
     lastMessageFor,
     isUnread,
+    isOnline,
     goHome,
     goAdd,
     goScan,
@@ -504,6 +597,9 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     removeFriend,
     nudge,
     sendMessage,
+    sendPhoto,
+    sendLocation,
+    clearChat,
   };
 
   return <FriendsContext.Provider value={value}>{children}</FriendsContext.Provider>;
