@@ -16,6 +16,7 @@ import { DetailScreen } from './src/screens/DetailScreen';
 import { ExpensesScreen } from './src/screens/expenses/ExpensesScreen';
 import { SplitScreen } from './src/screens/split/SplitScreen';
 import { FriendsScreen } from './src/screens/friends/FriendsScreen';
+import { LiveLocationsScreen } from './src/screens/location/LiveLocationsScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
 import type { ViewId } from './src/data/views';
 
@@ -28,6 +29,7 @@ type Screen =
   | { name: 'expenses' }
   | { name: 'split' }
   | { name: 'friends' }
+  | { name: 'liveLocations' }
   | { name: 'account'; from: 'home' | 'expenses' | 'split' };
 
 function AuthNavigator() {
@@ -72,6 +74,9 @@ function AppNavigator() {
   if (screen.name === 'friends') {
     return <FriendsScreen onHome={() => setScreen({ name: 'home' })} />;
   }
+  if (screen.name === 'liveLocations') {
+    return <LiveLocationsScreen onBack={() => setScreen({ name: 'home' })} />;
+  }
   if (screen.name === 'account') {
     return <AccountSettingsScreen onBack={() => setScreen({ name: screen.from } as Screen)} />;
   }
@@ -81,6 +86,7 @@ function AppNavigator() {
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
       onOpenSplit={() => setScreen({ name: 'split' })}
       onOpenFriends={() => setScreen({ name: 'friends' })}
+      onOpenLiveLocations={() => setScreen({ name: 'liveLocations' })}
       onOpenAccount={() => setScreen({ name: 'account', from: 'home' })}
     />
   );

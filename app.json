@@ -51,7 +51,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "MySpace uses your location to share it in a chat message."
+          "locationWhenInUsePermission": "MySpace uses your location to share it in a chat message, and to show you and your friends on the Live Locations map."
         }
       ],
       [
