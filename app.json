@@ -9,7 +9,10 @@
     "userInterfaceStyle": "light",
     "backgroundColor": "#C3EA4F",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["upi", "tez", "phonepe", "paytmmp", "bhim"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +21,15 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "manifestQueries": {
+        "intent": [
+          {
+            "action": "android.intent.action.VIEW",
+            "data": { "scheme": "upi" }
+          }
+        ]
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png",

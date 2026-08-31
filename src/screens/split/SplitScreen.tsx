@@ -7,6 +7,8 @@ import { ItemSplitScreen } from './ItemSplitScreen';
 import { SettleUpScreen } from './SettleUpScreen';
 import { SplitChatScreen } from './SplitChatScreen';
 import { CreateSplitScreen } from './CreateSplitScreen';
+import { PaymentConfirmScreen } from './PaymentConfirmScreen';
+import { PaymentStatusScreen } from './PaymentStatusScreen';
 
 interface SplitScreenProps {
   onHome: () => void;
@@ -29,6 +31,10 @@ function SplitRoot({ onHome, onOpenExpenses, onOpenAccount }: SplitScreenProps) 
       return <SplitChatScreen />;
     case 'create':
       return <CreateSplitScreen />;
+    case 'pay-confirm':
+      return <PaymentConfirmScreen />;
+    case 'pay-status':
+      return <PaymentStatusScreen />;
     default:
       return <SplitHomeScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenAccount={onOpenAccount} />;
   }

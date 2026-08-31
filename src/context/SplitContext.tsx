@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { Balance, ChatMessage, ExpenseShare, Settlement, SplitExpense, SplitGroup, SplitMember } from '../types/split';
+import type { PaymentAttempt, PaymentAttemptStatus, UpiProfile } from '../types/payments';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { randomRid } from '../utils/expensesFormat';
 
-export type SplitPage = 'home' | 'dashboard' | 'add' | 'items' | 'settle' | 'chat' | 'create';
+export type SplitPage = 'home' | 'dashboard' | 'add' | 'items' | 'settle' | 'chat' | 'create' | 'pay-confirm' | 'pay-status';
 
 interface GroupRow {
   id: string;
@@ -43,6 +44,8 @@ interface SettlementRow {
   to_user_id: string;
   amount: number;
   created_at: string;
+  source: 'manual' | 'upi';
+  payment_attempt_id: string | null;
 }
 
 interface ChatRow {
@@ -51,6 +54,50 @@ interface ChatRow {
   user_id: string;
   text: string;
   created_at: string;
+}
+
+interface PaymentAttemptRow {
+  id: string;
+  reference: string;
+  split_id: string;
+  payer_user_id: string;
+  recipient_user_id: string;
+  recipient_upi_id: string;
+  amount: number;
+  currency: string;
+  status: PaymentAttemptStatus;
+  provider: string;
+  upi_app: string | null;
+  failure_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  verified_at: string | null;
+}
+
+interface PaymentProfileRow {
+  user_id: string;
+  upi_id: string | null;
+  upi_verified: boolean;
+}
+
+function toPaymentAttempt(row: PaymentAttemptRow): PaymentAttempt {
+  return {
+    id: row.id,
+    reference: row.reference,
+    splitId: row.split_id,
+    payerUserId: row.payer_user_id,
+    recipientUserId: row.recipient_user_id,
+    recipientUpiId: row.recipient_upi_id,
+    amount: row.amount,
+    currency: row.currency,
+    status: row.status,
+    provider: row.provider,
+    upiApp: row.upi_app,
+    failureReason: row.failure_reason,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    verifiedAt: row.verified_at,
+  };
 }
 
 function toGroup(row: GroupRow, userId: string | null): SplitGroup {
@@ -101,6 +148,14 @@ interface SplitContextValue {
   /** Net balance of every OTHER member relative to the signed-in account — positive = they owe you. */
   balancesFor: (groupId: string) => Balance[];
   nameFor: (userId: string) => string;
+  /** UPI receiving profile for a member, if loaded — undefined means "not fetched yet", not "has none". */
+  upiProfileFor: (userId: string) => UpiProfile | undefined;
+  /** This user's own UPI payment attempts (as payer or recipient) for one split. */
+  paymentAttemptsFor: (groupId: string) => PaymentAttempt[];
+  /** The payment attempt currently focused by the pay-status screen, if any. */
+  focusedPaymentAttempt: PaymentAttempt | undefined;
+  /** Staged recipient/amount for the pay-confirm screen, set by goPayConfirm before an attempt exists. */
+  pendingPayment: { recipientUserId: string; amount: number } | null;
 
   goHome: () => void;
   /** Back to the focused group's dashboard (from Add/Items/Settle/Chat) — keeps the group focused, unlike goHome. */
@@ -111,6 +166,10 @@ interface SplitContextValue {
   goItems: () => void;
   goSettle: () => void;
   goChat: () => void;
+  /** Stages a recipient + amount and opens the "Pay ₹X" confirmation screen — no attempt is created yet. */
+  goPayConfirm: (recipientUserId: string, amount: number) => void;
+  /** Opens the payment status screen for an existing attempt (freshly created, or re-opened from history). */
+  goPayStatus: (attemptId: string) => void;
 
   createGroup: (input: NewGroupInput) => Promise<SplitGroup | null>;
   updateGroup: (id: string, input: NewGroupInput) => Promise<void>;
@@ -122,6 +181,19 @@ interface SplitContextValue {
   addExpense: (input: NewExpenseInput) => Promise<void>;
   settleUp: (toUserId: string, amount: number) => Promise<void>;
   sendChat: (text: string) => Promise<void>;
+
+  /** Creates a server-tracked payment attempt for the focused group (validates amount, dedupes in-flight attempts). */
+  createUpiPayment: (recipientUserId: string, amount: number) => Promise<{ attempt: PaymentAttempt | null; error: string | null }>;
+  /** Payer-only: records that the UPI app was launched — informational, never settles anything on its own. */
+  markUpiPaymentSent: (attemptId: string, upiApp?: string) => Promise<{ error: string | null }>;
+  /** Recipient-only: the sole action that actually settles a payment — inserts the matching split_settlements row server-side. */
+  confirmUpiPayment: (attemptId: string) => Promise<{ error: string | null }>;
+  /** Payer-only: gives up on an in-flight attempt so "Try Again" can start a fresh one. */
+  cancelUpiPayment: (attemptId: string) => Promise<{ error: string | null }>;
+  /** Nudges a co-member who hasn't set up a UPI ID yet. */
+  remindUpiSetup: (targetUserId: string) => Promise<{ error: string | null }>;
+  /** Re-fetches one attempt from the backend directly — a defensive fallback for the status screen's "Check again", in case a realtime update was missed. */
+  refreshPaymentAttempt: (attemptId: string) => Promise<void>;
 
   addMembersOpen: boolean;
   openAddMembers: () => void;
@@ -148,10 +220,14 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
   const [chatRows, setChatRows] = useState<ChatRow[]>([]);
   const [memberRows, setMemberRows] = useState<{ group_id: string; user_id: string }[]>([]);
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
+  const [paymentAttemptRows, setPaymentAttemptRows] = useState<PaymentAttemptRow[]>([]);
+  const [paymentProfiles, setPaymentProfiles] = useState<Record<string, UpiProfile>>({});
 
   const [page, setPage] = useState<SplitPage>('home');
   const [focusedGroupId, setFocusedGroupId] = useState<string | null>(null);
   const [addMembersOpen, setAddMembersOpen] = useState(false);
+  const [pendingPayment, setPendingPayment] = useState<{ recipientUserId: string; amount: number } | null>(null);
+  const [focusedPaymentAttemptId, setFocusedPaymentAttemptId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,15 +237,17 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
       setShareRows([]);
       setSettlementRows([]);
       setMemberRows([]);
+      setPaymentAttemptRows([]);
       return;
     }
 
     (async () => {
-      const [groupsRes, expensesRes, membersRes, settlementsRes] = await Promise.all([
+      const [groupsRes, expensesRes, membersRes, settlementsRes, paymentAttemptsRes] = await Promise.all([
         supabase.from('split_groups').select('*').order('created_at', { ascending: true }),
         supabase.from('split_expenses').select('*').order('created_at', { ascending: false }),
         supabase.from('split_members').select('group_id,user_id'),
         supabase.from('split_settlements').select('*').order('created_at', { ascending: false }),
+        supabase.from('payment_attempts').select('*').order('created_at', { ascending: false }),
       ]);
       if (cancelled) return;
 
@@ -177,6 +255,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
       warn('load expenses', expensesRes.error);
       warn('load members', membersRes.error);
       warn('load settlements', settlementsRes.error);
+      warn('load payment attempts', paymentAttemptsRes.error);
 
       const groups = (groupsRes.data as GroupRow[] | null) ?? [];
       setGroupRows(groups);
@@ -184,6 +263,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
       setExpenseRows(expenses);
       setMemberRows((membersRes.data as { group_id: string; user_id: string }[] | null) ?? []);
       setSettlementRows((settlementsRes.data as SettlementRow[] | null) ?? []);
+      setPaymentAttemptRows((paymentAttemptsRes.data as PaymentAttemptRow[] | null) ?? []);
 
       if (expenses.length > 0) {
         const sharesRes = await supabase
@@ -233,6 +313,37 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupRows, memberRows, expenseRows, userId]);
 
+  // Same lazy-backfill shape as profileNames above, but for UPI receiving
+  // profiles — needed to know whether a member can be paid (and is
+  // verified) before showing a "Pay" button for them.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured) return;
+    const ids = new Set<string>();
+    for (const g of groupRows) ids.add(g.owner_id);
+    for (const m of memberRows) ids.add(m.user_id);
+    const missing = Array.from(ids).filter((id) => !(id in paymentProfiles));
+    if (missing.length === 0) return;
+
+    supabase
+      .from('user_payment_profiles')
+      .select('user_id, upi_id, upi_verified')
+      .in('user_id', missing)
+      .then(({ data, error }) => {
+        warn('load payment profiles', error);
+        setPaymentProfiles((prev) => {
+          const next = { ...prev };
+          // Anyone with no row yet still gets an entry, so we don't refetch them forever.
+          for (const id of missing) next[id] = prev[id] ?? { userId: id, upiId: null, upiVerified: false };
+          for (const row of (data as PaymentProfileRow[] | null) ?? []) {
+            next[row.user_id] = { userId: row.user_id, upiId: row.upi_id, upiVerified: row.upi_verified };
+          }
+          return next;
+        });
+      });
+    // paymentProfiles deliberately excluded — read to find gaps, not to retrigger on every fill.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupRows, memberRows, userId]);
+
   const groups = useMemo(() => groupRows.map((g) => toGroup(g, userId)), [groupRows, userId]);
   const focusedGroup = groups.find((g) => g.id === focusedGroupId);
 
@@ -266,12 +377,33 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
   const settlementsFor = (groupId: string): Settlement[] =>
     settlementRows
       .filter((s) => s.group_id === groupId)
-      .map((s) => ({ id: s.id, groupId: s.group_id, fromUserId: s.from_user_id, toUserId: s.to_user_id, amount: s.amount, createdAt: s.created_at }));
+      .map((s) => ({
+        id: s.id,
+        groupId: s.group_id,
+        fromUserId: s.from_user_id,
+        toUserId: s.to_user_id,
+        amount: s.amount,
+        createdAt: s.created_at,
+        source: s.source,
+        paymentAttemptId: s.payment_attempt_id,
+      }));
 
   const chatFor = (groupId: string): ChatMessage[] =>
     chatRows
       .filter((m) => m.group_id === groupId)
       .map((m) => ({ id: m.id, groupId: m.group_id, userId: m.user_id, text: m.text, createdAt: m.created_at }));
+
+  const upiProfileFor = (id: string): UpiProfile | undefined => paymentProfiles[id];
+
+  const paymentAttemptsFor = (groupId: string): PaymentAttempt[] =>
+    paymentAttemptRows.filter((r) => r.split_id === groupId).map(toPaymentAttempt);
+
+  const focusedPaymentAttempt = focusedPaymentAttemptId
+    ? (() => {
+        const row = paymentAttemptRows.find((r) => r.id === focusedPaymentAttemptId);
+        return row ? toPaymentAttempt(row) : undefined;
+      })()
+    : undefined;
 
   /**
    * Pairwise ledger: for every expense, each non-payer owes the payer their
@@ -321,6 +453,14 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
   const goItems = () => setPage('items');
   const goSettle = () => setPage('settle');
   const goChat = () => setPage('chat');
+  const goPayConfirm = (recipientUserId: string, amount: number) => {
+    setPendingPayment({ recipientUserId, amount });
+    setPage('pay-confirm');
+  };
+  const goPayStatus = (attemptId: string) => {
+    setFocusedPaymentAttemptId(attemptId);
+    setPage('pay-status');
+  };
 
   /**
    * Creates the group but deliberately does NOT navigate — the create
@@ -510,7 +650,16 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
 
     if (!isSupabaseConfigured) {
       setSettlementRows((prev) => [
-        { id: `local-settle-${Date.now()}`, group_id: groupId, from_user_id: userId, to_user_id: toUserId, amount, created_at: new Date().toISOString() },
+        {
+          id: `local-settle-${Date.now()}`,
+          group_id: groupId,
+          from_user_id: userId,
+          to_user_id: toUserId,
+          amount,
+          created_at: new Date().toISOString(),
+          source: 'manual',
+          payment_attempt_id: null,
+        },
         ...prev,
       ]);
       return;
@@ -523,6 +672,56 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
       .single();
     warn('settle up', error);
     if (data) setSettlementRows((prev) => [data as SettlementRow, ...prev]);
+  };
+
+  const createUpiPayment = async (recipientUserId: string, amount: number): Promise<{ attempt: PaymentAttempt | null; error: string | null }> => {
+    if (!focusedGroup || !userId || !isSupabaseConfigured) return { attempt: null, error: 'Not signed in.' };
+    const { data, error } = await supabase.rpc('create_upi_payment', {
+      p_split_id: focusedGroup.id,
+      p_recipient_id: recipientUserId,
+      p_amount: amount,
+    });
+    if (error) return { attempt: null, error: error.message };
+    const row = data as PaymentAttemptRow;
+    setPaymentAttemptRows((prev) => [row, ...prev.filter((r) => r.id !== row.id)]);
+    return { attempt: toPaymentAttempt(row), error: null };
+  };
+
+  const markUpiPaymentSent = async (attemptId: string, upiApp?: string): Promise<{ error: string | null }> => {
+    if (!isSupabaseConfigured) return { error: 'Not signed in.' };
+    const { data, error } = await supabase.rpc('mark_upi_payment_sent', { p_attempt_id: attemptId, p_upi_app: upiApp ?? null });
+    if (error) return { error: error.message };
+    if (data) setPaymentAttemptRows((prev) => prev.map((r) => (r.id === attemptId ? (data as PaymentAttemptRow) : r)));
+    return { error: null };
+  };
+
+  const confirmUpiPayment = async (attemptId: string): Promise<{ error: string | null }> => {
+    if (!isSupabaseConfigured) return { error: 'Not signed in.' };
+    const { data, error } = await supabase.rpc('confirm_upi_payment', { p_attempt_id: attemptId });
+    if (error) return { error: error.message };
+    if (data) setPaymentAttemptRows((prev) => prev.map((r) => (r.id === attemptId ? (data as PaymentAttemptRow) : r)));
+    return { error: null };
+  };
+
+  const cancelUpiPayment = async (attemptId: string): Promise<{ error: string | null }> => {
+    if (!isSupabaseConfigured) return { error: 'Not signed in.' };
+    const { data, error } = await supabase.rpc('cancel_upi_payment', { p_attempt_id: attemptId });
+    if (error) return { error: error.message };
+    if (data) setPaymentAttemptRows((prev) => prev.map((r) => (r.id === attemptId ? (data as PaymentAttemptRow) : r)));
+    return { error: null };
+  };
+
+  const remindUpiSetup = async (targetUserId: string): Promise<{ error: string | null }> => {
+    if (!focusedGroup || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    const { error } = await supabase.rpc('remind_upi_setup', { p_user_id: targetUserId, p_split_id: focusedGroup.id });
+    return { error: error ? error.message : null };
+  };
+
+  const refreshPaymentAttempt = async (attemptId: string): Promise<void> => {
+    if (!isSupabaseConfigured) return;
+    const { data, error } = await supabase.from('payment_attempts').select('*').eq('id', attemptId).maybeSingle();
+    warn('refresh payment attempt', error);
+    if (data) setPaymentAttemptRows((prev) => [data as PaymentAttemptRow, ...prev.filter((r) => r.id !== attemptId)]);
   };
 
   const sendChat = async (text: string) => {
@@ -614,6 +813,40 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     };
   }, [focusedGroupId, userId]);
 
+  // Settlements and payment attempts are both loaded eagerly for every
+  // group up front (unlike chat/members, which are per-focused-group), so
+  // their realtime subscriptions stay unscoped too — RLS already limits
+  // what actually arrives (settlements: any split member; attempts: payer
+  // or recipient only). This is what makes balances update live for
+  // everyone in a group the instant `confirm_upi_payment` settles one.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured) return;
+    const channel = supabase
+      .channel('split-settlements-all')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'split_settlements' }, (payload) => {
+        const row = payload.new as SettlementRow;
+        setSettlementRows((prev) => (prev.some((s) => s.id === row.id) ? prev : [row, ...prev]));
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured) return;
+    const upsert = (row: PaymentAttemptRow) =>
+      setPaymentAttemptRows((prev) => [row, ...prev.filter((r) => r.id !== row.id)]);
+    const channel = supabase
+      .channel('split-payment-attempts-all')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payment_attempts' }, (payload) => upsert(payload.new as PaymentAttemptRow))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'payment_attempts' }, (payload) => upsert(payload.new as PaymentAttemptRow))
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   const value: SplitContextValue = {
     page,
     groups,
@@ -624,6 +857,10 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     chatFor,
     balancesFor,
     nameFor,
+    upiProfileFor,
+    paymentAttemptsFor,
+    focusedPaymentAttempt,
+    pendingPayment,
     goHome,
     goDashboard,
     openGroup,
@@ -632,6 +869,8 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     goItems,
     goSettle,
     goChat,
+    goPayConfirm,
+    goPayStatus,
     createGroup,
     updateGroup,
     joinGroup,
@@ -640,6 +879,12 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     addExpense,
     settleUp,
     sendChat,
+    createUpiPayment,
+    markUpiPaymentSent,
+    confirmUpiPayment,
+    cancelUpiPayment,
+    remindUpiSetup,
+    refreshPaymentAttempt,
     addMembersOpen,
     openAddMembers: () => setAddMembersOpen(true),
     closeAddMembers: () => setAddMembersOpen(false),
