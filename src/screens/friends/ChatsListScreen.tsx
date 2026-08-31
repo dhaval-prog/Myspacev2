@@ -7,9 +7,10 @@ import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { useFriends } from '../../context/FriendsContext';
 import { timeAgo } from '../../utils/relativeTime';
 
-const CHAT_ICON = 'M4 4h16v12H8l-4 4z';
 const PLUS_ICON = 'M12 6v12M6 12h12';
 const LOCK_ICON = 'M6 11V8a6 6 0 0 1 12 0v3M5 11h14v9H5z';
+const BACK_ICON = 'M15 5l-7 7 7 7';
+const ADD_FRIEND_ICON = 'M15 19c0-3.3-2.7-6-6-6s-6 2.7-6 6M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM18 8v6M15 11h6';
 
 /** Chats (6p-6) — only accepted friends get a thread here. */
 export function ChatsListScreen() {
@@ -20,12 +21,15 @@ export function ChatsListScreen() {
     <View style={styles.screen}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.topRow}>
-          <Pressable onPress={goHome} accessibilityRole="button" accessibilityLabel="Back to Friends">
-            <Text style={styles.title}>Chats</Text>
-          </Pressable>
-          <Pressable onPress={goAdd} style={styles.newButton} accessibilityRole="button" accessibilityLabel="Start a new chat">
-            <Icon path={CHAT_ICON} color={colors.lime} size={19} strokeWidth={1.9} />
-          </Pressable>
+          <Text style={styles.title}>Chats</Text>
+          <View style={styles.headerActions}>
+            <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Friends">
+              <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
+            </Pressable>
+            <Pressable onPress={goAdd} style={styles.newButton} accessibilityRole="button" accessibilityLabel="Add a friend">
+              <Icon path={ADD_FRIEND_ICON} color={colors.lime} size={19} strokeWidth={1.9} />
+            </Pressable>
+          </View>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
@@ -117,6 +121,24 @@ const styles = StyleSheet.create({
     fontSize: 30,
     letterSpacing: -0.6,
     color: colors.textPrimary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  iconButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    elevation: 1,
   },
   newButton: {
     width: 52,
