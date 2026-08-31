@@ -198,6 +198,13 @@ interface SplitContextValue {
   addMembersOpen: boolean;
   openAddMembers: () => void;
   closeAddMembers: () => void;
+
+  /** Non-owner only: whether the "leave this split?" confirm is open. */
+  confirmLeaveOpen: boolean;
+  askLeave: () => void;
+  cancelLeave: () => void;
+  /** Non-owner only: removes the signed-in account from the focused group and returns home. No-op for owners. */
+  leaveGroup: () => void;
 }
 
 const SplitContext = createContext<SplitContextValue | null>(null);
@@ -228,6 +235,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
   const [addMembersOpen, setAddMembersOpen] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<{ recipientUserId: string; amount: number } | null>(null);
   const [focusedPaymentAttemptId, setFocusedPaymentAttemptId] = useState<string | null>(null);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -356,7 +364,7 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     const group = groupRows.find((g) => g.id === groupId);
     if (!group) return [];
     const ids = new Set<string>([group.owner_id, ...memberRows.filter((m) => m.group_id === groupId).map((m) => m.user_id)]);
-    return Array.from(ids).map((id) => ({ userId: id, name: nameFor(id) }));
+    return Array.from(ids).map((id) => ({ userId: id, name: nameFor(id), isOwner: id === group.owner_id }));
   };
 
   const expensesFor = (groupId: string): SplitExpense[] =>
@@ -599,6 +607,32 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     if (focusedGroupId === groupId) {
       setFocusedGroupId(null);
       setPage('home');
+    }
+  };
+
+  /** Strips the group from local state (a leave, not a delete — the group and its data live on for everyone else) and removes only this account's membership row. */
+  const leaveGroup = () => {
+    if (!focusedGroup || focusedGroup.isOwner) return;
+    const groupId = focusedGroup.id;
+    const expenseIdSet = new Set(expenseRows.filter((e) => e.group_id === groupId).map((e) => e.id));
+
+    setGroupRows((prev) => prev.filter((g) => g.id !== groupId));
+    setExpenseRows((prev) => prev.filter((e) => e.group_id !== groupId));
+    setShareRows((prev) => prev.filter((s) => !expenseIdSet.has(s.expense_id)));
+    setSettlementRows((prev) => prev.filter((s) => s.group_id !== groupId));
+    setChatRows((prev) => prev.filter((m) => m.group_id !== groupId));
+    setMemberRows((prev) => prev.filter((m) => m.group_id !== groupId));
+    setConfirmLeaveOpen(false);
+    setFocusedGroupId(null);
+    setPage('home');
+
+    if (userId && isSupabaseConfigured) {
+      supabase
+        .from('split_members')
+        .delete()
+        .eq('group_id', groupId)
+        .eq('user_id', userId)
+        .then(({ error }) => warn('leave group', error));
     }
   };
 
@@ -888,6 +922,12 @@ export function SplitProvider({ children }: { children: React.ReactNode }) {
     addMembersOpen,
     openAddMembers: () => setAddMembersOpen(true),
     closeAddMembers: () => setAddMembersOpen(false),
+    confirmLeaveOpen,
+    askLeave: () => {
+      if (focusedGroup && !focusedGroup.isOwner) setConfirmLeaveOpen(true);
+    },
+    cancelLeave: () => setConfirmLeaveOpen(false),
+    leaveGroup,
   };
 
   return <SplitContext.Provider value={value}>{children}</SplitContext.Provider>;

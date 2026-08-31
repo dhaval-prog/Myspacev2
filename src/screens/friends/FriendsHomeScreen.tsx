@@ -105,9 +105,6 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
                       <Text style={styles.rowName}>{p.name}</Text>
                       {p.username && <Text style={styles.rowMeta}>@{p.username}</Text>}
                     </View>
-                    <View style={styles.rowChatButton}>
-                      <Icon path={CHAT_ICON} color={colors.lime} size={15} strokeWidth={1.9} />
-                    </View>
                   </Pressable>
                 ) : (
                   <View key={p.connectionId} style={[styles.row, styles.rowPending]}>
@@ -294,14 +291,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.mono500,
     fontSize: 12.5,
     color: colors.textFaint,
-  },
-  rowChatButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   cancelPill: {
     borderRadius: radius.pill,

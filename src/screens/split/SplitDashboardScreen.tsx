@@ -4,8 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { initialsOf } from '../../components/split/MemberAvatar';
 import { InviteSplitSheet } from '../../components/split/InviteSplitSheet';
+import { SplitMembersSheet } from '../../components/split/SplitMembersSheet';
 import { useSplit } from '../../context/SplitContext';
 import { SPLIT_EXPENSE_ICON_DEFAULT, SPLIT_EXPENSE_ICON_MAP } from '../../data/splitExpenseCategories';
 
@@ -16,9 +18,26 @@ const CHAT_ICON = 'M4 4h16v12H8l-4 4z';
 /** One split group's dashboard: totals, balances, recent expenses. */
 export function SplitDashboardScreen() {
   const insets = useSafeAreaInsets();
-  const { focusedGroup, membersFor, expensesFor, balancesFor, goHome, goAdd, goItems, goSettle, goChat } = useSplit();
+  const {
+    focusedGroup,
+    membersFor,
+    expensesFor,
+    balancesFor,
+    goHome,
+    goAdd,
+    goItems,
+    goSettle,
+    goChat,
+    askLeave,
+    cancelLeave,
+    leaveGroup,
+    confirmLeaveOpen,
+    deleteGroup,
+  } = useSplit();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   if (!focusedGroup) return null;
 
@@ -82,6 +101,9 @@ export function SplitDashboardScreen() {
         </LinearGradient>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+          <Pressable onPress={() => setMembersOpen(true)} style={styles.chip}>
+            <Text style={styles.chipLabel}>Members</Text>
+          </Pressable>
           <Pressable onPress={goChat} style={styles.chip}>
             <Text style={styles.chipLabel}>Chat</Text>
           </Pressable>
@@ -91,6 +113,15 @@ export function SplitDashboardScreen() {
           <Pressable onPress={() => setInviteOpen(true)} style={styles.chip}>
             <Text style={styles.chipLabel}>Invite</Text>
           </Pressable>
+          {focusedGroup.isOwner ? (
+            <Pressable onPress={() => setConfirmDeleteOpen(true)} style={styles.chip}>
+              <Text style={styles.chipLabel}>Delete</Text>
+            </Pressable>
+          ) : (
+            <Pressable onPress={askLeave} style={styles.chip}>
+              <Text style={styles.chipLabel}>Leave</Text>
+            </Pressable>
+          )}
         </ScrollView>
 
         <View style={styles.sectionHeaderRow}>
@@ -174,6 +205,30 @@ export function SplitDashboardScreen() {
 
       <InviteSplitSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} />
       <InviteSplitSheet visible={qrOpen} onClose={() => setQrOpen(false)} qrOnly />
+      <SplitMembersSheet visible={membersOpen} onClose={() => setMembersOpen(false)} groupName={focusedGroup.name} members={members} />
+      <ConfirmDialog
+        visible={confirmLeaveOpen}
+        title="Leave split?"
+        message={`You'll lose access to "${focusedGroup.name}" and its expenses. You can rejoin later with an invite code.`}
+        confirmLabel="Leave"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={leaveGroup}
+        onCancel={cancelLeave}
+      />
+      <ConfirmDialog
+        visible={confirmDeleteOpen}
+        title={`Delete ${focusedGroup.name}?`}
+        message="All expenses, chat, and history in this split will be deleted permanently for everyone. This can't be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => {
+          setConfirmDeleteOpen(false);
+          deleteGroup(focusedGroup.id);
+        }}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
     </View>
   );
 }
