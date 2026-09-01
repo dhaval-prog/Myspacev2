@@ -74,11 +74,24 @@ export function LiveLocationsScreen({ onBack, onOpenChat }: LiveLocationsScreenP
 
   return (
     <LocationProvider>
-      {page === 'privacy' ? (
-        <LocationPrivacyScreen onBack={() => setPage('map')} />
-      ) : (
+      {/*
+        MapPage stays mounted underneath even while viewing privacy settings
+        — LocationPrivacyScreen is a full opaque screen laid on top, not a
+        replacement. Unmounting MapPage here used to reset it entirely on
+        every round trip: a fresh GPS fix, a brand new Leaflet map instance,
+        and its one-time auto-fit firing again — on a real device a second
+        fix can land meaningfully different from the first (worse initial
+        accuracy, a few meters off), which re-fit the map to a visibly wrong
+        view and left the "You" pin looking like it had vanished.
+      */}
+      <View style={{ flex: 1 }}>
         <MapPage onBack={onBack} onOpenPrivacy={() => setPage('privacy')} onOpenChat={onOpenChat} />
-      )}
+        {page === 'privacy' ? (
+          <View style={StyleSheet.absoluteFill}>
+            <LocationPrivacyScreen onBack={() => setPage('map')} />
+          </View>
+        ) : null}
+      </View>
     </LocationProvider>
   );
 }
