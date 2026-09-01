@@ -67,6 +67,10 @@ interface FriendsContextValue {
   /** Connections that flipped to accepted during this session — surfaced once in Requests, then gone on next load. */
   justAccepted: Friend[];
   matchFound: FriendProfile | null;
+  /** The 6-character code that produced the current match — e.g. "@riyash · M4K·7QP" on the match-found screen. */
+  matchCode: string | null;
+  /** Real mutual-friend count for the current match, loaded via count_mutual_friends. Null while loading/unavailable. */
+  mutualFriendCount: number | null;
   matchRelationship: MatchRelationship;
   focusedConnectionId: string | null;
   focusedFriend: Friend | undefined;
@@ -87,6 +91,8 @@ interface FriendsContextValue {
   goHome: () => void;
   goAdd: () => void;
   goScan: () => void;
+  /** Advances from the scanner's "Code found" confirmation card into the full match-found screen. */
+  goMatch: () => void;
   goRequests: () => void;
   goChats: () => void;
   /** Opens the right thread view for a connection — the live chat if accepted, the locked view if still pending. */
@@ -96,7 +102,8 @@ interface FriendsContextValue {
 
   /** The relationship between the signed-in account and any userId — usable outside the code-lookup match flow, e.g. from a Members list. */
   relationshipWith: (targetUserId: string) => MatchRelationship;
-  lookupCode: (code: string) => Promise<{ error: string | null }>;
+  /** Looks up a code and populates matchProfile/matchCode. Navigates straight to the match screen unless `navigate: false` (the scanner shows its own "Code found" card first). */
+  lookupCode: (code: string, opts?: { navigate?: boolean }) => Promise<{ error: string | null }>;
   sendRequest: (introMessage: string) => Promise<{ error: string | null }>;
   /** Sends a friend request straight to a known userId (no code lookup) — used from a shared card/split's Members list. */
   sendRequestToUser: (targetUserId: string, introMessage?: string) => Promise<{ error: string | null }>;
@@ -133,6 +140,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const [matchFoundUserId, setMatchFoundUserId] = useState<string | null>(null);
   const [matchProfile, setMatchProfile] = useState<FriendProfile | null>(null);
   const [matchCode, setMatchCode] = useState<string | null>(null);
+  const [mutualFriendCount, setMutualFriendCount] = useState<number | null>(null);
   const [focusedConnectionId, setFocusedConnectionId] = useState<string | null>(null);
   const [messageRows, setMessageRows] = useState<MessageRow[]>([]);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
@@ -159,6 +167,22 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   }, [userId]);
 
   const isOnline = (targetUserId: string) => onlineUserIds.has(targetUserId);
+
+  // Real mutual-friend count for whoever the current match is, via count_mutual_friends.
+  useEffect(() => {
+    if (!matchFoundUserId || !userId || matchFoundUserId === userId || !isSupabaseConfigured) {
+      setMutualFriendCount(null);
+      return;
+    }
+    let cancelled = false;
+    supabase.rpc('count_mutual_friends', { p_target_user_id: matchFoundUserId }).then(({ data, error }) => {
+      warn('load mutual friend count', error);
+      if (!cancelled) setMutualFriendCount(typeof data === 'number' ? data : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [matchFoundUserId, userId]);
 
   // Initial load: own code + every connection this account is party to.
   useEffect(() => {
@@ -460,6 +484,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const goHome = () => setPage('home');
   const goAdd = () => setPage('add');
   const goScan = () => setPage('scan');
+  const goMatch = () => setPage('match');
   const goRequests = () => setPage('requests');
   const goChats = () => setPage('chats');
   const openChat = (connectionId: string) => {
@@ -474,7 +499,8 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const lookupCode = async (code: string): Promise<{ error: string | null }> => {
+  const lookupCode = async (code: string, opts?: { navigate?: boolean }): Promise<{ error: string | null }> => {
+    const navigate = opts?.navigate ?? true;
     const trimmed = code.trim().toUpperCase();
     if (trimmed.length !== 6) return { error: 'Enter the full 6-character code.' };
     if (!userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
@@ -487,7 +513,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         setMatchFoundUserId(userId);
         setMatchProfile({ userId, name: 'You', username: null, avatarUrl: null });
         setMatchCode(trimmed);
-        setPage('match');
+        if (navigate) setPage('match');
         return { error: null };
       }
       return { error: 'No one has that code.' };
@@ -496,7 +522,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     setMatchFoundUserId(row.id);
     setMatchProfile({ userId: row.id, name: row.full_name || 'Someone', username: row.username, avatarUrl: row.avatar_url });
     setMatchCode(trimmed);
-    setPage('match');
+    if (navigate) setPage('match');
     return { error: null };
   };
 
@@ -669,6 +695,8 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     sentRequests,
     justAccepted,
     matchFound: matchProfile,
+    matchCode,
+    mutualFriendCount,
     matchRelationship,
     focusedConnectionId,
     focusedFriend,
@@ -684,6 +712,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     goHome,
     goAdd,
     goScan,
+    goMatch,
     goRequests,
     goChats,
     openChat,

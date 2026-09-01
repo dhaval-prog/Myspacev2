@@ -33,6 +33,10 @@ interface FriendAvatarProps {
    * rail avatar wanting an exact dot size/ring regardless of avatar size.
    */
   onlineDotOverride?: { size: number; ringWidth: number; ringColor: string };
+  /** Overrides the default perfect-circle radius (size/2) — e.g. a squircle avatar. */
+  radius?: number;
+  /** Overrides the default 700-weight initials font — e.g. an 800-weight hero avatar. */
+  initialsFontFamily?: string;
 }
 
 /** Photo (once set), else a lime/ice/coral initials circle — shared by every Friends & chat screen. */
@@ -47,9 +51,11 @@ export function FriendAvatar({
   initialsFontSize,
   colorOverride,
   onlineDotOverride,
+  radius,
+  initialsFontFamily,
 }: FriendAvatarProps) {
   const skin: AvatarSkin = colorOverride ?? (pending ? { bg: colors.ink10, fg: colors.ink55 } : avatarSkinFor(userId));
-  const dim = { width: size, height: size, borderRadius: size / 2 };
+  const dim = { width: size, height: size, borderRadius: radius ?? size / 2 };
   const dotSize = onlineDotOverride?.size ?? Math.max(10, Math.round(size * 0.3));
   const dotRingWidth = onlineDotOverride?.ringWidth ?? Math.max(2, Math.round(dotSize * 0.18));
   const dotRingColor = onlineDotOverride?.ringColor ?? '#fff';
@@ -66,7 +72,18 @@ export function FriendAvatar({
       {avatarUrl ? (
         <Image source={{ uri: avatarUrl }} style={dim} />
       ) : (
-        <Text style={[styles.initials, { color: skin.fg, fontSize: initialsFontSize ?? Math.round(size * 0.34) }]}>{initialsOf(name)}</Text>
+        <Text
+          style={[
+            styles.initials,
+            {
+              color: skin.fg,
+              fontSize: initialsFontSize ?? Math.round(size * 0.34),
+              fontFamily: initialsFontFamily ?? fontFamily.sans700,
+            },
+          ]}
+        >
+          {initialsOf(name)}
+        </Text>
       )}
       {online ? (
         <View

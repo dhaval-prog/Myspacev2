@@ -1,19 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 import { colors, fontFamily, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
+import { CopyIcon } from '../../components/icons/CopyIcon';
 import { useFriends } from '../../context/FriendsContext';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
-const SHARE_ICON = 'M12 4v10M8 8l4-4 4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4';
+const SHARE_ICON = 'M12 15V4M8 7.5 12 3.5l4 4 M5 14v4.5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V14';
 const SCAN_ICON =
-  'M4 8V5.6A1.6 1.6 0 0 1 5.6 4H8M16 4h2.4A1.6 1.6 0 0 1 20 5.6V8M20 16v2.4a1.6 1.6 0 0 1-1.6 1.6H16M8 20H5.6A1.6 1.6 0 0 1 4 18.4V16M7 12h10';
-const COPY_ICON = 'M8 8h11v11H8zM5 5h11v3M5 5v11h3';
+  'M3.5 8V5.5a2 2 0 0 1 2-2H8M16 3.5h2.5a2 2 0 0 1 2 2V8M20.5 16v2.5a2 2 0 0 1-2 2H16M8 20.5H5.5a2 2 0 0 1-2-2V16 M3.5 12h17';
 
 const QR_BOX = 196;
+const QR_PADDING = 14;
 const CELL_COUNT = 6;
 
 function formatDisplayCode(code: string): string {
@@ -69,7 +71,13 @@ export function AddFriendScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <LinearGradient
+      colors={colors.friendsCanvas as [string, string, ...string[]]}
+      locations={colors.friendsCanvasStops as [number, number, ...number[]]}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.screen}
+    >
       <View style={[styles.topRow, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
           <Icon path={BACK_ICON} color={colors.textPrimary} size={19} strokeWidth={2} />
@@ -87,7 +95,7 @@ export function AddFriendScreen() {
         <View style={styles.qrPanel}>
           <View style={styles.qrTile}>
             {friendCode ? (
-              <QRCode value={`myspace://add/${friendCode}`} size={QR_BOX - spacing.ms * 2} color={colors.ink} backgroundColor="transparent" />
+              <QRCode value={`myspace://add/${friendCode}`} size={QR_BOX - QR_PADDING * 2} color={colors.ink} backgroundColor="transparent" />
             ) : null}
             <View style={styles.qrBadge}>
               <Image source={require('../../../assets/logos/logo-lime.png')} style={styles.qrBadgeImage} />
@@ -97,7 +105,7 @@ export function AddFriendScreen() {
           <View style={styles.qrCodeRow}>
             <Text style={styles.qrCode}>{friendCode ? formatDisplayCode(friendCode) : '——— · ———'}</Text>
             <Pressable onPress={copyCode} style={styles.copyButton} accessibilityRole="button" accessibilityLabel="Copy your invite code">
-              <Icon path={COPY_ICON} color="#fff" size={14} strokeWidth={2} />
+              <CopyIcon color="#fff" size={14} strokeWidth={1.8} />
             </Pressable>
           </View>
           {copied && <Text style={styles.copiedNote}>Copied</Text>}
@@ -109,7 +117,7 @@ export function AddFriendScreen() {
           <View style={styles.dividerLine} />
         </View>
 
-        <Pressable onPress={() => inputRef.current?.focus()} accessibilityRole="button" accessibilityLabel="Enter a friend code">
+        <Pressable onPress={() => inputRef.current?.focus()} accessibilityRole="button" accessibilityLabel="Enter a friend code" style={styles.cellsPress}>
           <Animated.View
             style={[
               styles.cellsRow,
@@ -152,14 +160,13 @@ export function AddFriendScreen() {
           <Text style={styles.scanLabel}>Scan their code</Text>
         </Pressable>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.pale,
   },
   topRow: {
     flexDirection: 'row',
@@ -197,37 +204,39 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 26,
     paddingTop: spacing.xl,
-    gap: spacing.lg,
   },
   title: {
     fontFamily: fontFamily.sans700,
     fontSize: 31,
     lineHeight: 33.5,
+    letterSpacing: -0.868,
     color: colors.textPrimary,
   },
   sub: {
-    marginTop: -spacing.sm,
+    marginTop: 10,
     fontFamily: fontFamily.sans400,
     fontSize: 14,
     lineHeight: 20.3,
-    color: colors.textSecondary,
+    color: colors.ink62,
   },
   qrPanel: {
+    marginTop: 26,
     alignItems: 'center',
     gap: 9,
     backgroundColor: colors.ink,
     borderRadius: radius.organic,
-    paddingVertical: 26,
+    paddingTop: 26,
     paddingHorizontal: 26,
+    paddingBottom: 22,
   },
   qrTile: {
     width: QR_BOX,
     height: QR_BOX,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.ms,
+    padding: QR_PADDING,
     backgroundColor: '#fff',
-    borderRadius: radius.md,
+    borderRadius: 24,
   },
   qrBadge: {
     position: 'absolute',
@@ -247,8 +256,8 @@ const styles = StyleSheet.create({
   },
   qrEyebrow: {
     marginTop: spacing.sm,
-    fontFamily: fontFamily.mono500,
-    fontSize: 10,
+    fontFamily: fontFamily.sans600,
+    fontSize: 11.5,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
     color: 'rgba(255,255,255,.5)',
@@ -278,9 +287,10 @@ const styles = StyleSheet.create({
     color: colors.lime,
   },
   dividerRow: {
+    marginTop: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.ms,
+    gap: 14,
   },
   dividerLine: {
     flex: 1,
@@ -290,7 +300,10 @@ const styles = StyleSheet.create({
   dividerLabel: {
     fontFamily: fontFamily.sans400,
     fontSize: 13,
-    color: colors.textMuted,
+    color: colors.ink55,
+  },
+  cellsPress: {
+    marginTop: 20,
   },
   cellsRow: {
     flexDirection: 'row',
