@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, fontFamily } from '../../theme';
-import { avatarSkinFor, initialsOf } from '../../utils/friendAvatar';
+import { avatarSkinFor, initialsOf, type AvatarSkin } from '../../utils/friendAvatar';
 
 interface FriendAvatarProps {
   userId: string;
@@ -21,13 +21,38 @@ interface FriendAvatarProps {
   pending?: boolean;
   /** Pixel-exact override for the initials size, when the default size-scaled formula isn't precise enough (e.g. two same-size overlapping avatars with intentionally different initial sizes). */
   initialsFontSize?: number;
+  /**
+   * Forces a specific fill/text color regardless of the userId hash-rotation
+   * or `pending` — e.g. a chat thread header that's always lime, or a
+   * locked-thread header that's always a flat on-ink chip with white text.
+   */
+  colorOverride?: { bg: string; fg: string };
+  /**
+   * Pixel-exact override for the presence dot, when the default size-scaled
+   * formula (`online` alone) isn't precise enough — e.g. a fixed-size story
+   * rail avatar wanting an exact dot size/ring regardless of avatar size.
+   */
+  onlineDotOverride?: { size: number; ringWidth: number; ringColor: string };
 }
 
 /** Photo (once set), else a lime/ice/coral initials circle — shared by every Friends & chat screen. */
-export function FriendAvatar({ userId, name, size = 44, style, online, avatarUrl, pending, initialsFontSize }: FriendAvatarProps) {
-  const skin = pending ? { bg: colors.ink10, fg: colors.ink55 } : avatarSkinFor(userId);
+export function FriendAvatar({
+  userId,
+  name,
+  size = 44,
+  style,
+  online,
+  avatarUrl,
+  pending,
+  initialsFontSize,
+  colorOverride,
+  onlineDotOverride,
+}: FriendAvatarProps) {
+  const skin: AvatarSkin = colorOverride ?? (pending ? { bg: colors.ink10, fg: colors.ink55 } : avatarSkinFor(userId));
   const dim = { width: size, height: size, borderRadius: size / 2 };
-  const dotSize = Math.max(10, Math.round(size * 0.3));
+  const dotSize = onlineDotOverride?.size ?? Math.max(10, Math.round(size * 0.3));
+  const dotRingWidth = onlineDotOverride?.ringWidth ?? Math.max(2, Math.round(dotSize * 0.18));
+  const dotRingColor = onlineDotOverride?.ringColor ?? '#fff';
   return (
     <View
       style={[
@@ -51,7 +76,8 @@ export function FriendAvatar({ userId, name, size = 44, style, online, avatarUrl
               width: dotSize,
               height: dotSize,
               borderRadius: dotSize / 2,
-              borderWidth: Math.max(2, Math.round(dotSize * 0.18)),
+              borderWidth: dotRingWidth,
+              borderColor: dotRingColor,
             },
           ]}
         />
