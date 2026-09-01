@@ -7,6 +7,8 @@ export interface CategoryRowData {
   label: string;
   count: string;
   locked?: boolean;
+  /** Overrides the badge's count text with an icon — e.g. Orbit/Radar, which have no count of their own. */
+  icon?: string;
 }
 
 interface CategoryNavigationProps {
@@ -24,6 +26,7 @@ export function CategoryNavigation({ rows, activeId, onSelect, reduceMotion }: C
         <CategoryRow
           key={row.id}
           count={row.count}
+          icon={row.icon}
           label={row.label}
           active={row.id === activeId}
           locked={row.locked}
