@@ -55,7 +55,7 @@ export const VIEWS: Record<'add', ViewDef> = {
         mono: '🔔',
         rail: 'Alerts',
         title: 'Alerts',
-        desc: 'Everything expired or coming up within a week.',
+        desc: 'Set a reminder — it shows up here, and in Needs attention, when it is due.',
         gated: false,
       },
       {
