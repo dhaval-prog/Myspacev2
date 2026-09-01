@@ -85,10 +85,10 @@ export function HomeScreen({
     }
     list.push({
       id: 'friends',
-      label: 'Make friends & chat',
+      label: 'Orbit - Find Your Circle',
       count: receivedRequests.length ? String(receivedRequests.length) : '→',
     });
-    list.push({ id: 'liveLocations', label: 'Live Locations', count: '→' });
+    list.push({ id: 'liveLocations', label: 'Radar - Find Your People', count: '→' });
     return list;
   }, [items.length, showAttention, attentionEntries.length, receivedRequests.length]);
 
@@ -99,8 +99,9 @@ export function HomeScreen({
   // appears to change on its own. A real tap always navigates away
   // immediately. Off entirely when the OS asks for reduced motion.
   useEffect(() => {
-    // "Make friends & chat" and "Live Locations" each open a whole separate
-    // section, not a detail rail — they never join the ambient preview rotation.
+    // "Orbit" (friends & chat) and "Radar" (live locations) each open a
+    // whole separate section, not a detail rail — they never join the
+    // ambient preview rotation.
     const ids = rows.map((r) => r.id).filter((id) => id !== 'friends' && id !== 'liveLocations');
     if (reduceMotion || ids.length <= 1) return;
     const timer = setInterval(() => {
