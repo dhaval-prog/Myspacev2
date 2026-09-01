@@ -1,6 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import MapView, { Circle, Marker, type Region } from 'react-native-maps';
+import MapView, { Circle, Marker, Polyline, type Region } from 'react-native-maps';
 import { colors, fontFamily } from '../../theme';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
@@ -46,7 +46,7 @@ type ProjectedPin = { id: string; x: number; y: number; pin: LocatedPin };
 
 /** The real map — Apple Maps on iOS out of the box, Google Maps on Android once a Maps API key is added to app.json. */
 export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
-  { pins, myPosition, amSharing, myAccuracy, onSelectPin },
+  { pins, myPosition, amSharing, myAccuracy, routeCoords, onSelectPin },
   ref
 ) {
   const mapRef = useRef<MapView>(null);
@@ -91,6 +91,16 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     fitToPoints();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [located.length, myPosition]);
+
+  // Auto-fit to the straight-line route whenever it's set (or cleared and
+  // re-set to a new friend) — same reasoning as the initial auto-fit above.
+  useEffect(() => {
+    if (!routeCoords || routeCoords.length < 2) return;
+    mapRef.current?.fitToCoordinates(routeCoords, {
+      edgePadding: { top: 80, right: 80, bottom: 80, left: 80 },
+      animated: true,
+    });
+  }, [routeCoords]);
 
   const onLayout = (e: LayoutChangeEvent) => {
     setLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height });
@@ -184,6 +194,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
           </Marker>
         );
       })}
+
+      {routeCoords && routeCoords.length >= 2 ? (
+        // A straight "as the crow flies" dashed line — not a real
+        // turn-by-turn route, this app has no directions API/key.
+        <Polyline coordinates={routeCoords} strokeColor={colors.ink} strokeWidth={3} lineDashPattern={[2, 10]} lineCap="round" />
+      ) : null}
 
       {myPosition && myAccuracy ? (
         <Circle
