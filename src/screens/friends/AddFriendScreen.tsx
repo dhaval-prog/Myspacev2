@@ -32,11 +32,10 @@ interface AddFriendScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
-  onOpenAddItem: () => void;
 }
 
 /** Add a friend (6p-2): show your own code/QR, or enter theirs cell by cell. */
-export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAddItem }: AddFriendScreenProps) {
+export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFriendScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friendCode, goHome, goScan, lookupCode } = useFriends();
@@ -201,7 +200,9 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAdd
           if (id === 'expenses') onOpenExpenses();
           if (id === 'split') onOpenSplit();
         }}
-        onAdd={onOpenAddItem}
+        onAdd={goHome}
+        fabIconPath={BACK_ICON}
+        fabAccessibilityLabel="Back"
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
       />

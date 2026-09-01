@@ -100,7 +100,6 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'home' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
-        onOpenAddItem={() => setScreen({ name: 'detail', viewId: 'add' })}
       />
     );
   }

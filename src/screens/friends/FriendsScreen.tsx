@@ -14,15 +14,14 @@ interface FriendsScreenProps {
   /** Threaded through to the bottom nav dock on the Friends home, Chats list, and Add-a-friend screens. */
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
-  onOpenAddItem: () => void;
 }
 
 /** The Friends & chat feature: friend requests and direct messaging, and every screen it opens. */
-export function FriendsScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAddItem }: FriendsScreenProps) {
+export function FriendsScreen({ onHome, onOpenExpenses, onOpenSplit }: FriendsScreenProps) {
   const { page } = useFriends();
   switch (page) {
     case 'add':
-      return <AddFriendScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} onOpenAddItem={onOpenAddItem} />;
+      return <AddFriendScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} />;
     case 'scan':
       return <FriendsScannerScreen />;
     case 'match':
@@ -30,12 +29,12 @@ export function FriendsScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAddIt
     case 'requests':
       return <FriendRequestsScreen />;
     case 'chats':
-      return <ChatsListScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} onOpenAddItem={onOpenAddItem} />;
+      return <ChatsListScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} />;
     case 'chat':
       return <ChatThreadScreen />;
     case 'locked-chat':
       return <LockedThreadScreen />;
     default:
-      return <FriendsHomeScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} onOpenAddItem={onOpenAddItem} />;
+      return <FriendsHomeScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} />;
   }
 }
