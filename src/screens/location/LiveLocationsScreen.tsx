@@ -121,23 +121,52 @@ function MapPage({
     if (!userId) return;
     let cancelled = false;
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        if (!cancelled) setPermissionDenied(true);
-        return;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          if (!cancelled) setPermissionDenied(true);
+          return;
+        }
+        const pos = await Location.getCurrentPositionAsync({});
+        if (cancelled) return;
+        const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        setMyPosition(coords);
+        setMyAccuracy(pos.coords.accuracy ?? null);
+        setLocationError(null);
+        upsertLastSeen(coords.latitude, coords.longitude);
+      } catch {
+        // A rejected/timed-out geolocation call (denied at the OS level,
+        // no GPS fix, insecure context, etc.) otherwise failed completely
+        // silently — myPosition just stayed null forever with no feedback.
+        if (!cancelled) setLocationError("Couldn't get your location — check your browser or device location settings, then try again.");
       }
-      const pos = await Location.getCurrentPositionAsync({});
-      if (cancelled) return;
-      const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-      setMyPosition(coords);
-      setMyAccuracy(pos.coords.accuracy ?? null);
-      upsertLastSeen(coords.latitude, coords.longitude);
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  // Manual retry — the same fetch as above, without the mount-effect's
+  // cancellation dance, for the recenter FAB to call when there's no
+  // position yet instead of recentering on nothing.
+  const retryMyPosition = async () => {
+    setLocationError(null);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setPermissionDenied(true);
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({});
+      const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      setMyPosition(coords);
+      setMyAccuracy(pos.coords.accuracy ?? null);
+      upsertLastSeen(coords.latitude, coords.longitude);
+    } catch {
+      setLocationError("Couldn't get your location — check your browser or device location settings, then try again.");
+    }
+  };
 
   // While actively sharing, keep pinging the share row with fresh
   // coordinates. Stops the moment `sharing` goes false — no lingering watch.
@@ -146,13 +175,17 @@ function MapPage({
     let sub: Location.LocationSubscription | null = null;
     let cancelled = false;
     (async () => {
-      sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 25 }, (pos) => {
-        if (cancelled) return;
-        const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-        setMyPosition(coords);
-        setMyAccuracy(pos.coords.accuracy ?? null);
-        pingShare(coords.latitude, coords.longitude);
-      });
+      try {
+        sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 25 }, (pos) => {
+          if (cancelled) return;
+          const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+          setMyPosition(coords);
+          setMyAccuracy(pos.coords.accuracy ?? null);
+          pingShare(coords.latitude, coords.longitude);
+        });
+      } catch {
+        if (!cancelled) setLocationError("Lost your location while sharing — check your browser or device location settings.");
+      }
     })();
     return () => {
       cancelled = true;
@@ -195,7 +228,10 @@ function MapPage({
 
   const handleStartSharing = async () => {
     if (!myPosition) {
-      setLocationError('Still finding your location — try again in a moment.');
+      // Only overwrite an existing error if we don't already have a more
+      // specific one — a genuine failure from the fetch effect above is
+      // more useful than this generic "still working on it" message.
+      setLocationError((current) => current ?? 'Still finding your location — try again in a moment.');
       return;
     }
     await startShare(shareDurationKey, myPosition.latitude, myPosition.longitude);
@@ -269,7 +305,12 @@ function MapPage({
       ) : null}
 
       {/* Recenter */}
-      <Pressable onPress={() => mapRef.current?.recenter()} style={styles.recenterFab} accessibilityRole="button" accessibilityLabel="Recenter map">
+      <Pressable
+        onPress={() => (myPosition ? mapRef.current?.recenter() : retryMyPosition())}
+        style={styles.recenterFab}
+        accessibilityRole="button"
+        accessibilityLabel={myPosition ? 'Recenter map' : 'Find my location'}
+      >
         <Icon path={RECENTER_ICON} color={colors.textPrimary} size={19} strokeWidth={1.9} />
       </Pressable>
 
