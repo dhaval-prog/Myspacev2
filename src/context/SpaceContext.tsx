@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { DosageType, Item, Room } from '../types/space';
+import type { DosageType, Item } from '../types/space';
 import { CATEGORY_MONO } from '../data/itemCategories';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
@@ -31,13 +31,9 @@ interface EditItemInput {
 }
 
 interface SpaceContextValue {
-  rooms: Room[];
   items: Item[];
-  /** True while the initial rooms/items fetch for the signed-in user is in flight. */
+  /** True while the initial items fetch for the signed-in user is in flight. */
   loading: boolean;
-  addRoom: (category: string) => void;
-  renameRoom: (id: string, label: string) => void;
-  removeRoom: (id: string) => void;
   addItem: (input: NewItemInput) => void;
   editItem: (index: number, input: EditItemInput) => void;
   removeItem: (index: number) => void;
@@ -56,17 +52,18 @@ function warn(action: string, error: { message: string } | null) {
 }
 
 /**
- * Rooms and items for the signed-in user, persisted to Supabase.
- * State updates optimistically (the UI never waits on a round trip) and
- * mirrors the write to Supabase in the background; a failed write is
- * logged rather than rolled back, matching how the rest of this app treats
- * network errors on non-critical writes.
+ * Items for the signed-in user, persisted to Supabase. Each item's `room`
+ * is a plain string picked from the fixed default set (see
+ * `src/data/rooms.ts`) at add time — there's no separate room entity to
+ * manage. State updates optimistically (the UI never waits on a round
+ * trip) and mirrors the write to Supabase in the background; a failed
+ * write is logged rather than rolled back, matching how the rest of this
+ * app treats network errors on non-critical writes.
  */
 export function SpaceProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
 
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [itemRows, setItemRows] = useState<ItemRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -74,7 +71,6 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     if (!userId || !isSupabaseConfigured) {
-      setRooms([]);
       setItemRows([]);
       setLoading(false);
       return;
@@ -82,26 +78,15 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
 
     setLoading(true);
     (async () => {
-      const [roomsRes, itemsRes] = await Promise.all([
-        supabase.from('rooms').select('id,category,label').eq('user_id', userId).order('created_at', { ascending: true }),
-        supabase
-          .from('items')
-          .select('id,name,category,room,expiry,mono,dosage_type,dosage_amount,reminders_enabled,doses_per_day,reminder_times,photo_url')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false }),
-      ]);
+      const itemsRes = await supabase
+        .from('items')
+        .select('id,name,category,room,expiry,mono,dosage_type,dosage_amount,reminders_enabled,doses_per_day,reminder_times,photo_url')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
       if (cancelled) return;
 
-      warn('load rooms', roomsRes.error);
       warn('load items', itemsRes.error);
 
-      setRooms(
-        (roomsRes.data ?? []).map((r) => ({
-          id: r.id as string,
-          category: r.category as string,
-          label: r.label as string,
-        })),
-      );
       setItemRows(
         (itemsRes.data ?? []).map((row) => ({
           id: row.id as string,
@@ -129,87 +114,6 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
   }, [userId]);
 
   const items = useMemo(() => itemRows.map((r) => r.item), [itemRows]);
-
-  const addRoom = useCallback(
-    (category: string) => {
-      // Defensive re-check: the picker already disables an occupied
-      // category's row, but this keeps the guarantee at the data layer too.
-      if (rooms.some((r) => r.category === category)) return;
-
-      if (!userId || !isSupabaseConfigured) {
-        setRooms((prev) => [...prev, { id: `local-${Date.now()}`, category, label: category }]);
-        return;
-      }
-
-      supabase
-        .from('rooms')
-        .insert({ user_id: userId, category, label: category })
-        .select('id')
-        .single()
-        .then(({ data, error }) => {
-          warn('add room', error);
-          if (data) setRooms((prev) => [...prev, { id: data.id as string, category, label: category }]);
-        });
-    },
-    [userId, rooms],
-  );
-
-  const renameRoom = useCallback(
-    (id: string, label: string) => {
-      const target = rooms.find((r) => r.id === id);
-      if (!target) return;
-      const trimmed = label.trim() || target.label;
-      const fromLabel = target.label;
-
-      setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, label: trimmed } : r)));
-      // Every item that pointed at the old label follows the rename, so the
-      // new name is what shows up everywhere an item's room is displayed.
-      setItemRows((prev) =>
-        prev.map((r) => (r.item.room === fromLabel ? { ...r, item: { ...r.item, room: trimmed } } : r)),
-      );
-      if (userId && isSupabaseConfigured) {
-        supabase
-          .from('rooms')
-          .update({ label: trimmed })
-          .eq('id', id)
-          .then(({ error }) => warn('rename room', error));
-        supabase
-          .from('items')
-          .update({ room: trimmed })
-          .eq('user_id', userId)
-          .eq('room', fromLabel)
-          .then(({ error }) => warn('rename items room', error));
-      }
-    },
-    [userId, rooms],
-  );
-
-  const removeRoom = useCallback(
-    (id: string) => {
-      const target = rooms.find((r) => r.id === id);
-      if (!target) return;
-      const { label } = target;
-
-      setRooms((prev) => prev.filter((r) => r.id !== id));
-      // Deleting a room deletes everything filed under it — the confirm
-      // dialog on the way here already warned the user this is permanent.
-      setItemRows((prev) => prev.filter((r) => r.item.room !== label));
-      if (userId && isSupabaseConfigured) {
-        supabase
-          .from('rooms')
-          .delete()
-          .eq('id', id)
-          .then(({ error }) => warn('remove room', error));
-        supabase
-          .from('items')
-          .delete()
-          .eq('user_id', userId)
-          .eq('room', label)
-          .then(({ error }) => warn('remove items in room', error));
-      }
-    },
-    [userId, rooms],
-  );
 
   const addItem = useCallback(
     (input: NewItemInput) => {
@@ -299,8 +203,8 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<SpaceContextValue>(
-    () => ({ rooms, items, loading, addRoom, renameRoom, removeRoom, addItem, editItem, removeItem }),
-    [rooms, items, loading, addRoom, renameRoom, removeRoom, addItem, editItem, removeItem],
+    () => ({ items, loading, addItem, editItem, removeItem }),
+    [items, loading, addItem, editItem, removeItem],
   );
 
   return <SpaceContext.Provider value={value}>{children}</SpaceContext.Provider>;

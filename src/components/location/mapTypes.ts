@@ -13,6 +13,14 @@ export interface MapCanvasProps {
   myPosition: { latitude: number; longitude: number } | null;
   /** True only while this account has an active, unexpired share of its own. */
   amSharing: boolean;
+  /** GPS accuracy radius in meters for `myPosition`, when known — drawn as a soft ring around the "You" pin. */
+  myAccuracy?: number | null;
+  /**
+   * A straight "as the crow flies" path to draw and auto-fit to — not a
+   * real turn-by-turn route (that needs a paid/keyed directions API this
+   * app doesn't have), just origin + destination.
+   */
+  routeCoords?: { latitude: number; longitude: number }[] | null;
   onSelectPin: (userId: string) => void;
 }
 

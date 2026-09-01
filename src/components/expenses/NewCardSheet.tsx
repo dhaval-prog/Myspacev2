@@ -13,6 +13,7 @@ export function NewCardSheet() {
   const [amount, setAmount] = useState('');
   const [resetDay, setResetDay] = useState(RESET_DAY_OPTIONS[0]);
   const [customOpen, setCustomOpen] = useState(false);
+  const [calMonthOffset, setCalMonthOffset] = useState(0);
 
   useEffect(() => {
     if (newCardOpen) {
@@ -20,6 +21,7 @@ export function NewCardSheet() {
       setAmount('');
       setResetDay(RESET_DAY_OPTIONS[0]);
       setCustomOpen(false);
+      setCalMonthOffset(0);
     }
   }, [newCardOpen]);
 
@@ -32,7 +34,9 @@ export function NewCardSheet() {
   };
 
   const now = new Date();
-  const days = daysInCurrentMonth(now);
+  const calMonth = new Date(now.getFullYear(), now.getMonth() + calMonthOffset, 1);
+  const days = daysInCurrentMonth(calMonth);
+  const calMonthLabel = calMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
   return (
     <BottomSheet visible={newCardOpen} onClose={closeNewCard}>
@@ -78,6 +82,27 @@ export function NewCardSheet() {
 
         {customOpen && (
           <View style={styles.calGrid}>
+            <View style={styles.calHeader}>
+              <Pressable
+                onPress={() => setCalMonthOffset((v) => Math.max(0, v - 1))}
+                disabled={calMonthOffset === 0}
+                style={[styles.calNavButton, calMonthOffset === 0 && styles.calNavButtonDisabled]}
+                accessibilityRole="button"
+                accessibilityLabel="Previous month"
+              >
+                <Text style={[styles.calNavLabel, calMonthOffset === 0 && styles.calNavLabelDisabled]}>‹</Text>
+              </Pressable>
+              <Text style={styles.calMonthLabel}>{calMonthLabel}</Text>
+              <Pressable
+                onPress={() => setCalMonthOffset((v) => v + 1)}
+                style={styles.calNavButton}
+                accessibilityRole="button"
+                accessibilityLabel="Next month"
+              >
+                <Text style={styles.calNavLabel}>›</Text>
+              </Pressable>
+            </View>
+            <View style={styles.calDaysWrap}>
             {Array.from({ length: days }, (_, k) => {
               const label = ordinalDay(k + 1);
               const on = resetDay === label;
@@ -94,6 +119,7 @@ export function NewCardSheet() {
                 </Pressable>
               );
             })}
+            </View>
           </View>
         )}
       </View>
@@ -184,12 +210,46 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   calGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
+    gap: 10,
     backgroundColor: colors.walletSheetMuted,
     borderRadius: 16,
     padding: 11,
+  },
+  calHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  calMonthLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 13,
+    color: colors.walletSheetTextPrimary,
+  },
+  calNavButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: colors.walletSheetBorder,
+  },
+  calNavButtonDisabled: {
+    opacity: 0.35,
+  },
+  calNavLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15,
+    color: colors.walletSheetTextPrimary,
+  },
+  calNavLabelDisabled: {
+    color: colors.walletSheetTextFaint,
+  },
+  calDaysWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   calDay: {
     width: 38,

@@ -57,18 +57,18 @@ export const typography = {
   // Category row label — active/selected
   categoryLabelActive: {
     fontFamily: fontFamily.sans600,
-    fontSize: 30,
-    lineHeight: 34,
-    letterSpacing: em(30, -0.022),
+    fontSize: 19,
+    lineHeight: 22,
+    letterSpacing: em(19, -0.02),
     color: colors.textPrimary,
   } satisfies TextStyle,
 
   // Category row label — inactive
   categoryLabelInactive: {
     fontFamily: fontFamily.sans500,
-    fontSize: 30,
-    lineHeight: 34,
-    letterSpacing: em(30, -0.022),
+    fontSize: 19,
+    lineHeight: 22,
+    letterSpacing: em(19, -0.02),
     color: colors.textDisabled,
   } satisfies TextStyle,
 
@@ -166,22 +166,6 @@ export const typography = {
     letterSpacing: em(9, 0.16),
     textTransform: 'uppercase',
     color: colors.textMuted,
-  } satisfies TextStyle,
-
-  // Room picker chip label
-  pickerLabel: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 18.5,
-    letterSpacing: em(18.5, -0.01),
-    color: colors.textPrimary,
-  } satisfies TextStyle,
-
-  // Room list row label
-  roomLabel: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 15,
-    letterSpacing: em(15, -0.015),
-    color: colors.textPrimary,
   } satisfies TextStyle,
 
   // Item card title

@@ -1,4 +1,4 @@
-export type ViewId = 'rooms' | 'add' | 'attention';
+export type ViewId = 'add' | 'attention';
 
 export interface RailItemDef {
   /** Stable key, also used as the rail index lookup ("view-all" | "add" | "edit" | "delete"). */
@@ -9,7 +9,7 @@ export interface RailItemDef {
   /** Title shown in the detail column when this tile is selected. */
   title: string;
   desc: string;
-  /** Locked until the relevant collection (rooms, then items) is non-empty. */
+  /** Locked until the relevant collection (items) is non-empty. */
   gated: boolean;
 }
 
@@ -22,53 +22,16 @@ export interface ViewDef {
 }
 
 /**
- * The two ways into a first-time space: add a room, then add items to it.
- * "Needs attention" is not listed here — it only exists once an item has
- * an expiry date, and is composed dynamically from live data.
+ * The one way into a space: add items directly, picking a room (a fixed
+ * default set — see `src/data/rooms.ts`) right in the add form's
+ * "Where is it?" step. "Needs attention" is not listed here — it only
+ * exists once an item has an expiry date, and is composed dynamically
+ * from live data.
  */
-export const VIEWS: Record<'rooms' | 'add', ViewDef> = {
-  rooms: {
-    id: 'rooms',
-    tabLabel: 'Add Rooms',
-    kicker: 'Room',
-    items: [
-      {
-        id: 'view-all',
-        mono: '▤',
-        rail: 'View all',
-        title: 'Rooms',
-        desc: 'Every room you have set up, with the places inside each one.',
-        gated: true,
-      },
-      {
-        id: 'add',
-        mono: '＋',
-        rail: 'Add Rooms',
-        title: 'Which room are you adding?',
-        desc: 'Pick the rooms you have. Each one arrives with its usual places.',
-        gated: false,
-      },
-      {
-        id: 'edit',
-        mono: '⌨',
-        rail: 'Edit',
-        title: 'Name the room',
-        desc: 'Rename a room or change the places inside it.',
-        gated: true,
-      },
-      {
-        id: 'delete',
-        mono: '⌫',
-        rail: 'Delete',
-        title: 'Remove a room',
-        desc: 'Delete a room and everything filed inside it.',
-        gated: true,
-      },
-    ],
-  },
+export const VIEWS: Record<'add', ViewDef> = {
   add: {
     id: 'add',
-    tabLabel: 'Add Items',
+    tabLabel: 'Add Items & Alerts',
     kicker: 'New thing',
     items: [
       {

@@ -5,13 +5,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { MapCanvas } from '../../components/location/MapCanvas';
 import type { MapCanvasHandle } from '../../components/location/mapTypes';
+import { PinPreviewCard } from '../../components/location/PinPreviewCard';
 import { useAuth } from '../../context/AuthContext';
 import { useFriends } from '../../context/FriendsContext';
 import { LocationProvider, useLocationData } from '../../context/LocationContext';
 import type { ShareDurationKey } from '../../types/location';
+import { haversineMeters, formatDistance } from '../../utils/geo';
 import { LocationPrivacyScreen } from './LocationPrivacyScreen';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
@@ -54,6 +57,7 @@ function timeLeftLabel(expiresAt: string | null): string {
 
 interface LiveLocationsScreenProps {
   onBack: () => void;
+  onOpenChat: (userId: string) => void;
 }
 
 /**
@@ -65,17 +69,29 @@ interface LiveLocationsScreenProps {
  * (MapCanvas.web.tsx) — expo-location works on both via the browser's
  * geolocation API on web, so capture isn't gated by platform.
  */
-export function LiveLocationsScreen({ onBack }: LiveLocationsScreenProps) {
+export function LiveLocationsScreen({ onBack, onOpenChat }: LiveLocationsScreenProps) {
   const [page, setPage] = useState<'map' | 'privacy'>('map');
 
   return (
     <LocationProvider>
-      {page === 'privacy' ? <LocationPrivacyScreen onBack={() => setPage('map')} /> : <MapPage onBack={onBack} onOpenPrivacy={() => setPage('privacy')} />}
+      {page === 'privacy' ? (
+        <LocationPrivacyScreen onBack={() => setPage('map')} />
+      ) : (
+        <MapPage onBack={onBack} onOpenPrivacy={() => setPage('privacy')} onOpenChat={onOpenChat} />
+      )}
     </LocationProvider>
   );
 }
 
-function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy: () => void }) {
+function MapPage({
+  onBack,
+  onOpenPrivacy,
+  onOpenChat,
+}: {
+  onBack: () => void;
+  onOpenPrivacy: () => void;
+  onOpenChat: (userId: string) => void;
+}) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const userId = user?.id ?? null;
@@ -84,30 +100,37 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
 
   const [sheetView, setSheetView] = useState<'none' | 'share' | 'detail'>('none');
   const [detailFriendId, setDetailFriendId] = useState<string | null>(null);
+  const [previewFriendId, setPreviewFriendId] = useState<string | null>(null);
+  const [routeTarget, setRouteTarget] = useState<{ userId: string; name: string; latitude: number; longitude: number } | null>(null);
   const [shareDurationKey, setShareDurationKey] = useState<ShareDurationKey>('1h');
   const [myPosition, setMyPosition] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [myAccuracy, setMyAccuracy] = useState<number | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [sheetHeight, setSheetHeight] = useState(0);
   const mapRef = useRef<MapCanvasHandle>(null);
 
   const ownShare = userId ? shareFor(userId) : undefined;
   const sharing = !!ownShare;
 
-  // Foreground-only capture: request permission and get one fix as soon as
-  // this screen opens. Nothing runs when the screen (or app) isn't open —
-  // no background task, no expo-task-manager.
+  // Radar is pointless without your own position, so it asks up front —
+  // approve and you're pinned on the map immediately; decline (or it's
+  // already denied at the OS level) and there's nothing useful to show, so
+  // the permissionDenied dialog below sends the user straight back home.
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        if (!cancelled) setLocationError('Enable location access in your device settings to see yourself on the map.');
+        if (!cancelled) setPermissionDenied(true);
         return;
       }
       const pos = await Location.getCurrentPositionAsync({});
       if (cancelled) return;
       const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
       setMyPosition(coords);
+      setMyAccuracy(pos.coords.accuracy ?? null);
       upsertLastSeen(coords.latitude, coords.longitude);
     })();
     return () => {
@@ -127,6 +150,7 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
         if (cancelled) return;
         const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
         setMyPosition(coords);
+        setMyAccuracy(pos.coords.accuracy ?? null);
         pingShare(coords.latitude, coords.longitude);
       });
     })();
@@ -143,18 +167,31 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
     const live = !!share;
     const coord = share ?? seen;
     const statusText = live ? 'Live · updating now' : seen ? `Last seen ${timeAgoLabel(seen.updatedAt)}` : 'No location shared yet';
-    return { ...f, live, latitude: coord?.latitude ?? null, longitude: coord?.longitude ?? null, statusText };
+    const distanceMeters =
+      myPosition && coord && coord.latitude !== null && coord.longitude !== null
+        ? haversineMeters(myPosition, { latitude: coord.latitude, longitude: coord.longitude })
+        : null;
+    const distanceText = distanceMeters !== null ? formatDistance(distanceMeters) : null;
+    return { ...f, live, latitude: coord?.latitude ?? null, longitude: coord?.longitude ?? null, statusText, distanceText };
   });
   const detailFriend = rows.find((f) => f.userId === detailFriendId) ?? rows[0];
+  const previewFriend = rows.find((f) => f.userId === previewFriendId) ?? null;
 
   const closeSheet = () => {
     setSheetView('none');
     setDetailFriendId(null);
   };
   const openDetail = (userId: string) => {
+    setPreviewFriendId(null);
     setDetailFriendId(userId);
     setSheetView('detail');
   };
+  const togglePreview = (userId: string) => {
+    setPreviewFriendId((current) => (current === userId ? null : userId));
+    setRouteTarget(null);
+  };
+
+  const routeCoords = routeTarget && myPosition ? [myPosition, { latitude: routeTarget.latitude, longitude: routeTarget.longitude }] : null;
 
   const handleStartSharing = async () => {
     if (!myPosition) {
@@ -168,8 +205,41 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
   return (
     <View style={styles.screen}>
       <View style={StyleSheet.absoluteFill}>
-        <MapCanvas ref={mapRef} pins={rows} myPosition={myPosition} amSharing={sharing} onSelectPin={openDetail} />
+        <MapCanvas
+          ref={mapRef}
+          pins={rows}
+          myPosition={myPosition}
+          amSharing={sharing}
+          myAccuracy={myAccuracy}
+          routeCoords={routeCoords}
+          onSelectPin={togglePreview}
+        />
       </View>
+
+      {routeTarget ? (
+        <View style={[styles.routeBanner, { bottom: sheetHeight + spacing.md }]}>
+          <Icon path={DIRECTIONS_ICON} color={colors.textPrimary} size={14} strokeWidth={2} />
+          <Text style={styles.routeBannerText} numberOfLines={1}>
+            Straight-line path to {routeTarget.name.split(' ')[0]}
+          </Text>
+          <Pressable onPress={() => setRouteTarget(null)} style={styles.routeBannerClose} accessibilityRole="button" accessibilityLabel="Clear route">
+            <Icon path={CLOSE_ICON} color={colors.textPrimary} size={11} strokeWidth={2.4} />
+          </Pressable>
+        </View>
+      ) : null}
+
+      {previewFriend ? (
+        <PinPreviewCard
+          userId={previewFriend.userId}
+          name={previewFriend.name}
+          statusText={previewFriend.statusText}
+          distanceText={previewFriend.distanceText}
+          live={previewFriend.live}
+          onOpen={() => openDetail(previewFriend.userId)}
+          onClose={() => setPreviewFriendId(null)}
+          style={[styles.previewCard, { bottom: sheetHeight + spacing.md }]}
+        />
+      ) : null}
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
@@ -203,7 +273,10 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
       </Pressable>
 
       {/* Bottom sheet peek */}
-      <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.md }]}>
+      <View
+        style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.md }]}
+        onLayout={(e) => setSheetHeight(e.nativeEvent.layout.height)}
+      >
         <View style={styles.sheetHandle} />
 
         {sharing ? (
@@ -231,6 +304,7 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
                   <Text style={styles.rowName}>{f.name}</Text>
                   <Text style={styles.rowStatus}>{f.statusText}</Text>
                 </View>
+                {f.distanceText ? <Text style={styles.rowDistance}>{f.distanceText}</Text> : null}
                 <Icon path={CHEVRON_ICON} color={colors.textFaint} size={15} strokeWidth={2} />
               </Pressable>
             ))}
@@ -298,11 +372,19 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
               </Text>
             </View>
             <View style={styles.sheetActions}>
-              <Pressable style={[styles.sheetButton, styles.sheetButtonPrimary]}>
+              <Pressable onPress={() => onOpenChat(detailFriend.userId)} style={[styles.sheetButton, styles.sheetButtonPrimary]}>
                 <Icon path={CHAT_ICON} color={colors.lime} size={16} strokeWidth={1.8} />
                 <Text style={styles.sheetButtonLabelPrimary}>Message</Text>
               </Pressable>
-              <Pressable style={[styles.sheetButton, styles.sheetButtonSecondary]}>
+              <Pressable
+                onPress={() => {
+                  if (detailFriend.latitude === null || detailFriend.longitude === null || !myPosition) return;
+                  setRouteTarget({ userId: detailFriend.userId, name: detailFriend.name, latitude: detailFriend.latitude, longitude: detailFriend.longitude });
+                  closeSheet();
+                }}
+                disabled={detailFriend.latitude === null || !myPosition}
+                style={[styles.sheetButton, styles.sheetButtonSecondary, (detailFriend.latitude === null || !myPosition) && styles.sheetButtonDisabled]}
+              >
                 <Icon path={DIRECTIONS_ICON} color={colors.textPrimary} size={16} strokeWidth={1.8} />
                 <Text style={styles.sheetButtonLabelSecondary}>Directions</Text>
               </Pressable>
@@ -310,6 +392,16 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
           </>
         ) : null}
       </BottomSheet>
+
+      <ConfirmDialog
+        visible={permissionDenied}
+        title="Location access needed"
+        message="Radar shows you and your friends on a map, so it needs your location to work. Enable it to use Radar."
+        confirmLabel="OK"
+        hideCancel
+        onConfirm={onBack}
+        onCancel={onBack}
+      />
     </View>
   );
 }
@@ -497,6 +589,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
   },
+  rowDistance: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 10.5,
+    color: colors.textFaint,
+  },
+  previewCard: {
+    position: 'absolute',
+    left: spacing.xxxl,
+    right: spacing.xxxl,
+  },
+  routeBanner: {
+    position: 'absolute',
+    left: spacing.xxxl,
+    right: spacing.xxxl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#fff',
+    borderRadius: 999,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.lg,
+    shadowColor: colors.ink,
+    shadowOpacity: 0.14,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 4,
+  },
+  routeBannerText: {
+    flex: 1,
+    fontFamily: fontFamily.sans600,
+    fontSize: 12.5,
+    color: colors.textPrimary,
+  },
+  routeBannerClose: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(22,33,12,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sheetTitle: {
     fontFamily: fontFamily.sans700,
     fontSize: 19,
@@ -583,6 +716,9 @@ const styles = StyleSheet.create({
   },
   sheetButtonSecondary: {
     backgroundColor: 'rgba(22,33,12,0.06)',
+  },
+  sheetButtonDisabled: {
+    opacity: 0.4,
   },
   sheetButtonLabelPrimary: {
     fontFamily: fontFamily.sans600,

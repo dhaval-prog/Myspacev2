@@ -148,7 +148,7 @@ interface AccountSettingsScreenProps {
 export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
   const insets = useSafeAreaInsets();
   const { user, signOut, updatePassword, updateProfileName } = useAuth();
-  const { rooms, items } = useSpace();
+  const { items } = useSpace();
   const userId = user?.id ?? null;
 
   const [loading, setLoading] = useState(true);
@@ -520,7 +520,6 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
         exportedAt: new Date().toISOString(),
         profile,
         email: user?.email,
-        rooms,
         items,
         budgetCards: sharedCards,
         cardExpenses: cardExpensesRes.data ?? [],
@@ -795,12 +794,12 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
         <SectionLabel>Data & privacy</SectionLabel>
         <Card>
           <Row label="Download my data" sublabel="Everything below, as one JSON file" value={exportingKey === 'all' ? 'Preparing…' : undefined} onPress={downloadAllData} />
-          <Row label="Export inventory" sublabel="Rooms & items, CSV" value={exportingKey === 'inventory' ? 'Preparing…' : undefined} onPress={exportInventory} />
+          <Row label="Export inventory" sublabel="Items, CSV" value={exportingKey === 'inventory' ? 'Preparing…' : undefined} onPress={exportInventory} />
           <Row label="Export budgets" sublabel="Budget card spending, CSV" value={exportingKey === 'budgets' ? 'Preparing…' : undefined} onPress={exportBudgets} />
           <Row label="Export expense history" sublabel="Split expenses, CSV" value={exportingKey === 'expenses' ? 'Preparing…' : undefined} onPress={exportExpenseHistory} />
           <Row
             label="Data usage"
-            value={`${rooms.length} rooms · ${items.length} items · ${sharedCards.length} cards · ${sharedGroups.length} splits`}
+            value={`${items.length} items · ${sharedCards.length} cards · ${sharedGroups.length} splits`}
             last
           />
         </Card>
@@ -832,7 +831,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
         <SectionLabel>Danger zone</SectionLabel>
         <Card style={styles.dangerCard}>
           <Row label="Log out" onPress={() => setLogoutConfirm(true)} />
-          <Row label="Delete all my data" sublabel="Rooms, items, budgets, splits — keeps your account" destructive onPress={() => setDeleteDataModal(true)} />
+          <Row label="Delete all my data" sublabel="Items, budgets, splits — keeps your account" destructive onPress={() => setDeleteDataModal(true)} />
           <Row label="Delete MySpace account" sublabel="Permanently removes everything" destructive onPress={() => setDeleteAccountModal(true)} last />
         </Card>
       </ScrollView>
@@ -910,7 +909,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       <BottomSheet visible={deleteDataModal} onClose={() => setDeleteDataModal(false)}>
         <Text style={sheetStyles.title}>Delete all my data</Text>
         <Text style={sheetStyles.body}>
-          This permanently deletes every room, item, budget card, and split you own — for everyone they're shared with. Your
+          This permanently deletes every item, budget card, and split you own — for everyone they're shared with. Your
           account itself stays active. This can't be undone.
         </Text>
         <TextField label="Password" value={deleteDataPassword} onChangeText={setDeleteDataPassword} secureTextEntry placeholder="Confirm your password" />
