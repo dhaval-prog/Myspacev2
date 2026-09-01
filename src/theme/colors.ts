@@ -26,24 +26,30 @@ export const colors = {
   ink75: 'rgba(22,33,12,0.75)',
   ink70: 'rgba(22,33,12,0.7)',
   ink65: 'rgba(22,33,12,0.65)',
+  ink62: 'rgba(22,33,12,0.62)',
   ink55: 'rgba(22,33,12,0.55)',
   ink50: 'rgba(22,33,12,0.5)',
   ink38: 'rgba(22,33,12,0.38)',
   ink30: 'rgba(22,33,12,0.3)',
+  ink14: 'rgba(22,33,12,0.14)',
   ink10: 'rgba(22,33,12,0.1)',
   ink07: 'rgba(22,33,12,0.07)',
   ink06: 'rgba(22,33,12,0.06)',
+  ink05: 'rgba(22,33,12,0.05)',
 
   // White-on-ink opacity steps — text and buttons on the dark chat header
   onInk60: 'rgba(255,255,255,0.6)',
   onInk55: 'rgba(255,255,255,0.55)',
   onInk50: 'rgba(255,255,255,0.5)',
+  onInk14: 'rgba(255,255,255,0.14)',
+  onInk10: 'rgba(255,255,255,0.1)',
   onInkChip: 'rgba(255,255,255,0.16)',
   onInkBtn: 'rgba(255,255,255,0.13)',
   onInkBtnSoft: 'rgba(255,255,255,0.12)',
 
   // Translucent white card surfaces over a gradient (never opaque #FFF)
   surface90: 'rgba(255,255,255,0.9)',
+  surface86: 'rgba(255,255,255,0.86)',
   surface70: 'rgba(255,255,255,0.7)',
   surface60: 'rgba(255,255,255,0.6)',
   surface55: 'rgba(255,255,255,0.55)',
@@ -124,6 +130,8 @@ export const colors = {
   friendsChatCanvas: ['#DDEDDF', '#EDF2EA', '#F6F5DF'] as string[],
   friendsChatCanvasStops: [0, 0.4, 1] as number[],
   friendsScannerCanvas: ['#2C3A1C', '#151E0C', '#0B1006'] as string[],
+  friendsScannerCanvasStops: [0, 0.55, 1] as number[],
+  scannerBase: '#101709',
 } as const;
 
 export type ColorToken = keyof typeof colors;

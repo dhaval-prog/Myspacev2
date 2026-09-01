@@ -1,17 +1,23 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, fontFamily, noOutline, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
+import { LockIcon } from '../../components/icons/LockIcon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { useFriends } from '../../context/FriendsContext';
 
-const LOCK_ICON = 'M6 11V8a6 6 0 0 1 12 0v3M5 11h14v9H5z';
+const BACK_ICON = 'M15 5l-7 7 7 7';
+
+function formatDisplayCode(code: string): string {
+  return code.length > 3 ? `${code.slice(0, 3)}·${code.slice(3)}` : code;
+}
 
 /** Match found / send request (6p-4) — establishes the gate: chat does not exist yet. */
 export function MatchFoundScreen() {
   const insets = useSafeAreaInsets();
-  const { matchFound, matchRelationship, goHome, sendRequest, openChatWithUser } = useFriends();
+  const { matchFound, matchCode, mutualFriendCount, matchRelationship, goAdd, goHome, sendRequest, openChatWithUser } = useFriends();
   const [message, setMessage] = useState('Hey! Adding you on MySpace 👋');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -36,40 +42,75 @@ export function MatchFoundScreen() {
           : null;
 
   return (
-    <View style={styles.screen}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.xl }]}>
-        <FriendAvatar userId={matchFound.userId} name={matchFound.name} size={104} avatarUrl={matchFound.avatarUrl} />
-        <Text style={styles.name}>{matchFound.name}</Text>
-        {matchFound.username && <Text style={styles.meta}>@{matchFound.username}</Text>}
+    <LinearGradient
+      colors={colors.friendsCanvas as [string, string, ...string[]]}
+      locations={colors.friendsCanvasStops as [number, number, ...number[]]}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.screen}
+    >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.sm }]}>
+        <Pressable onPress={goAdd} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back">
+          <Icon path={BACK_ICON} color={colors.textPrimary} size={19} strokeWidth={2} />
+        </Pressable>
 
-        {relationshipNote ? (
-          <View style={styles.relationshipCard}>
-            <Text style={styles.relationshipText}>{relationshipNote}</Text>
-          </View>
-        ) : (
-          <>
-            <View style={styles.introCard}>
-              <Text style={styles.introEyebrow}>SAY HI WITH YOUR REQUEST</Text>
-              <TextInput
-                value={message}
-                onChangeText={setMessage}
-                multiline
-                placeholder="Say hi…"
-                placeholderTextColor={colors.textFaint}
-                style={[styles.introInput, noOutline]}
-              />
+        <View style={styles.body}>
+          <FriendAvatar
+            userId={matchFound.userId}
+            name={matchFound.name}
+            size={104}
+            radius={38}
+            avatarUrl={matchFound.avatarUrl}
+            colorOverride={{ bg: colors.lime, fg: colors.ink }}
+            initialsFontFamily={fontFamily.sans800}
+            initialsFontSize={36}
+          />
+          <Text style={styles.name}>{matchFound.name}</Text>
+          {matchFound.username && (
+            <Text style={styles.meta}>
+              @{matchFound.username}
+              {matchCode ? ` · ${formatDisplayCode(matchCode)}` : ''}
+            </Text>
+          )}
+
+          {relationshipNote ? (
+            <View style={styles.relationshipCard}>
+              <Text style={styles.relationshipText}>{relationshipNote}</Text>
             </View>
+          ) : (
+            <>
+              {mutualFriendCount !== null ? (
+                <View style={styles.statRow}>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{mutualFriendCount}</Text>
+                    <Text style={styles.statLabel}>{mutualFriendCount === 1 ? 'mutual friend' : 'mutual friends'}</Text>
+                  </View>
+                </View>
+              ) : null}
 
-            <View style={styles.lockNotice}>
-              <Icon path={LOCK_ICON} color={colors.textMuted} size={16} strokeWidth={1.8} />
-              <Text style={styles.lockText}>
-                Chat unlocks once {matchFound.name.split(' ')[0]} accepts. Until then they'll only see your name and message.
-              </Text>
-            </View>
+              <View style={styles.introCard}>
+                <Text style={styles.introEyebrow}>SAY HI WITH YOUR REQUEST</Text>
+                <TextInput
+                  value={message}
+                  onChangeText={setMessage}
+                  multiline
+                  placeholder="Say hi…"
+                  placeholderTextColor={colors.textFaint}
+                  style={[styles.introInput, noOutline]}
+                />
+              </View>
 
-            {error && <Text style={styles.error}>{error}</Text>}
-          </>
-        )}
+              <View style={styles.lockNotice}>
+                <LockIcon color={colors.textMuted} size={18} strokeWidth={1.7} />
+                <Text style={styles.lockText}>
+                  Chat unlocks once {matchFound.name.split(' ')[0]} accepts. Until then they'll only see your name and message.
+                </Text>
+              </View>
+
+              {error && <Text style={styles.error}>{error}</Text>}
+            </>
+          )}
+        </View>
       </ScrollView>
 
       <View style={[styles.pinned, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
@@ -85,40 +126,57 @@ export function MatchFoundScreen() {
         <Pressable onPress={goHome} accessibilityRole="button" accessibilityLabel="Not now">
           <Text style={styles.notNow}>{matchRelationship === 'none' ? 'Not now' : 'Back'}</Text>
         </Pressable>
+        <View style={styles.homeIndicator} />
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.pale,
   },
   scroll: {
     paddingHorizontal: 26,
     paddingBottom: spacing.xxl,
+  },
+  backButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#fff',
     alignItems: 'center',
-    gap: spacing.ms,
+    justifyContent: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  body: {
+    marginTop: 30,
+    alignItems: 'center',
   },
   name: {
-    marginTop: spacing.sm,
+    marginTop: 20,
     fontFamily: fontFamily.sans700,
     fontSize: 29,
-    lineHeight: 32,
-    letterSpacing: -0.7,
+    lineHeight: 31.9,
+    letterSpacing: -0.725,
     color: colors.textPrimary,
+    textAlign: 'center',
   },
   meta: {
+    marginTop: 7,
     fontFamily: fontFamily.mono500,
     fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.ink55,
   },
   relationshipCard: {
     marginTop: spacing.lg,
     width: '100%',
     borderRadius: radius.md,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface86,
     padding: spacing.xl,
     alignItems: 'center',
   },
@@ -129,45 +187,76 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  introCard: {
-    marginTop: spacing.lg,
+  statRow: {
+    marginTop: 22,
     width: '100%',
-    borderRadius: radius.lg,
-    backgroundColor: '#fff',
-    padding: spacing.xl,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.surface86,
+    borderRadius: 22,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 21,
+    color: colors.textPrimary,
+  },
+  statLabel: {
+    marginTop: 3,
+    fontFamily: fontFamily.sans400,
+    fontSize: 12,
+    color: colors.ink55,
+  },
+  introCard: {
+    marginTop: 16,
+    width: '100%',
+    borderRadius: 26,
+    backgroundColor: colors.surface86,
+    paddingTop: 18,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
     gap: 8,
   },
   introEyebrow: {
-    fontFamily: fontFamily.mono500,
-    fontSize: 11,
-    letterSpacing: 1.3,
+    fontFamily: fontFamily.sans600,
+    fontSize: 11.5,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: colors.textMuted,
+    color: colors.textFaint,
   },
   introInput: {
     fontFamily: fontFamily.sans400,
     fontSize: 15,
     lineHeight: 21.75,
-    color: colors.textSecondary,
+    color: colors.ink75,
     minHeight: 44,
   },
   lockNotice: {
+    marginTop: 16,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.sm,
+    gap: 11,
     width: '100%',
     borderRadius: radius.md,
-    backgroundColor: 'rgba(22,33,12,0.06)',
-    padding: spacing.lg,
+    backgroundColor: colors.ink06,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
   },
   lockText: {
     flex: 1,
+    marginTop: 1,
     fontFamily: fontFamily.sans400,
     fontSize: 13,
     lineHeight: 18.85,
-    color: colors.textMuted,
+    color: colors.ink62,
   },
   error: {
+    marginTop: spacing.sm,
     fontFamily: fontFamily.sans500,
     fontSize: 12.5,
     color: colors.danger,
@@ -176,7 +265,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 26,
     paddingTop: spacing.ms,
     alignItems: 'center',
-    gap: spacing.ms,
   },
   primaryButton: {
     width: '100%',
@@ -184,6 +272,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
     paddingVertical: 20,
     alignItems: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.26,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 26,
+    elevation: 4,
   },
   primaryButtonDisabled: {
     opacity: 0.6,
@@ -194,8 +287,16 @@ const styles = StyleSheet.create({
     color: colors.lime,
   },
   notNow: {
-    fontFamily: fontFamily.sans500,
-    fontSize: 14,
-    color: colors.textSecondary,
+    marginTop: 12,
+    fontFamily: fontFamily.sans600,
+    fontSize: 14.5,
+    color: colors.textMuted,
+  },
+  homeIndicator: {
+    marginTop: 16,
+    width: 140,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: colors.ink,
   },
 });

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, fontFamily, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
@@ -18,7 +19,13 @@ export function FriendRequestsScreen() {
   const [tab, setTab] = useState<Tab>('received');
 
   return (
-    <View style={styles.screen}>
+    <LinearGradient
+      colors={colors.friendsCanvas as [string, string, ...string[]]}
+      locations={colors.friendsCanvasStops as [number, number, ...number[]]}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.screen}
+    >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.topRow}>
           <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
@@ -42,7 +49,7 @@ export function FriendRequestsScreen() {
               <Text style={styles.emptyText}>No requests waiting on you.</Text>
             </View>
           ) : (
-            <View style={styles.cards}>
+            <View style={[styles.cards, styles.cardsSpaced]}>
               {receivedRequests.map((r) => (
                 <View key={r.connectionId} style={styles.card}>
                   <View style={styles.cardTopRow}>
@@ -75,7 +82,7 @@ export function FriendRequestsScreen() {
             <Text style={styles.emptyText}>You haven't sent any requests.</Text>
           </View>
         ) : (
-          <View style={styles.cards}>
+          <View style={[styles.cards, styles.cardsSpaced]}>
             {sentRequests.map((r) => (
               <View key={r.connectionId} style={styles.card}>
                 <View style={styles.cardTopRow}>
@@ -100,7 +107,7 @@ export function FriendRequestsScreen() {
             <View style={styles.cards}>
               {justAccepted.map((f) => (
                 <View key={f.connectionId} style={styles.acceptedRow}>
-                  <FriendAvatar userId={f.userId} name={f.name} size={40} avatarUrl={f.avatarUrl} />
+                  <FriendAvatar userId={f.userId} name={f.name} size={44} avatarUrl={f.avatarUrl} />
                   <View style={styles.cardText}>
                     <Text style={styles.acceptedName}>{f.name}</Text>
                     <Text style={styles.acceptedSub}>You're friends — chat unlocked</Text>
@@ -113,44 +120,51 @@ export function FriendRequestsScreen() {
             </View>
           </>
         )}
+
+        <View style={styles.homeIndicator} />
       </ScrollView>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.pale,
   },
   scroll: {
     paddingHorizontal: 26,
     paddingBottom: spacing.huge,
-    gap: spacing.lg,
   },
   topRow: {
+    marginTop: 22,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.ms,
+    gap: 14,
   },
   iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 14,
+    elevation: 2,
   },
   title: {
     fontFamily: fontFamily.sans700,
     fontSize: 25,
-    letterSpacing: -0.5,
+    letterSpacing: -0.625,
     color: colors.textPrimary,
   },
   segmented: {
+    marginTop: 22,
     flexDirection: 'row',
     gap: 8,
-    backgroundColor: 'rgba(22,33,12,0.07)',
+    backgroundColor: colors.ink07,
     borderRadius: radius.pill,
     padding: 5,
   },
@@ -166,12 +180,13 @@ const styles = StyleSheet.create({
   segmentLabel: {
     fontFamily: fontFamily.sans600,
     fontSize: 13.5,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   segmentLabelOn: {
     color: colors.lime,
   },
   empty: {
+    marginTop: 18,
     borderRadius: radius.md,
     backgroundColor: 'rgba(255,255,255,.7)',
     padding: spacing.xxl,
@@ -186,16 +201,21 @@ const styles = StyleSheet.create({
   cards: {
     gap: spacing.ms,
   },
+  cardsSpaced: {
+    marginTop: 18,
+  },
   card: {
-    backgroundColor: 'rgba(255,255,255,.9)',
+    backgroundColor: colors.surface90,
     borderRadius: radius.lg,
-    padding: spacing.xl,
+    paddingTop: 18,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
     gap: spacing.ms,
   },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.ms,
+    gap: 14,
   },
   cardText: {
     flex: 1,
@@ -206,20 +226,22 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   cardMeta: {
+    marginTop: 2,
     fontFamily: fontFamily.mono500,
     fontSize: 12.5,
-    color: colors.textFaint,
+    color: colors.ink50,
   },
   cardAge: {
     fontFamily: fontFamily.mono500,
     fontSize: 11.5,
-    color: colors.textFaint,
+    color: colors.textDisabled,
   },
   introBubble: {
-    backgroundColor: 'rgba(22,33,12,0.05)',
+    backgroundColor: colors.ink05,
     borderRadius: 16,
     borderBottomLeftRadius: 6,
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   introText: {
     fontFamily: fontFamily.sans400,
@@ -229,7 +251,7 @@ const styles = StyleSheet.create({
   },
   cardActions: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    gap: 10,
   },
   acceptButton: {
     flex: 1,
@@ -253,7 +275,7 @@ const styles = StyleSheet.create({
   declineLabel: {
     fontFamily: fontFamily.sans600,
     fontSize: 14.5,
-    color: colors.textSecondary,
+    color: colors.ink70,
   },
   cancelButton: {
     borderRadius: radius.pill,
@@ -267,19 +289,23 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   eyebrow: {
-    fontFamily: fontFamily.mono500,
+    marginTop: 26,
+    marginBottom: 12,
+    fontFamily: fontFamily.sans600,
     fontSize: 11.5,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: colors.textMuted,
+    color: colors.textFaint,
   },
   acceptedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.ms,
     backgroundColor: colors.ink,
-    borderRadius: radius.md,
-    padding: spacing.lg,
+    borderRadius: 24,
+    paddingTop: 15,
+    paddingHorizontal: 18,
+    paddingBottom: 15,
   },
   acceptedName: {
     fontFamily: fontFamily.sans600,
@@ -287,6 +313,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   acceptedSub: {
+    marginTop: 2,
     fontFamily: fontFamily.sans400,
     fontSize: 12.5,
     color: 'rgba(255,255,255,.6)',
@@ -294,12 +321,20 @@ const styles = StyleSheet.create({
   chatPill: {
     borderRadius: radius.pill,
     backgroundColor: colors.lime,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 9,
+    paddingHorizontal: 15,
   },
   chatPillLabel: {
     fontFamily: fontFamily.sans600,
     fontSize: 13,
     color: colors.ink,
+  },
+  homeIndicator: {
+    marginTop: 24,
+    alignSelf: 'center',
+    width: 140,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: colors.ink,
   },
 });
