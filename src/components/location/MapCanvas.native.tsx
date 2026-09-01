@@ -1,4 +1,4 @@
-import React, { forwardRef, useImperativeHandle, useRef } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { colors, fontFamily } from '../../theme';
@@ -16,14 +16,35 @@ const DELTA = { latitudeDelta: 0.02, longitudeDelta: 0.02 };
 /** The real map — Apple Maps on iOS out of the box, Google Maps on Android once a Maps API key is added to app.json. */
 export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas({ pins, myPosition, amSharing, onSelectPin }, ref) {
   const mapRef = useRef<MapView>(null);
+  const hasFitRef = useRef(false);
   const located = pins.filter((p): p is typeof p & { latitude: number; longitude: number } => p.latitude !== null && p.longitude !== null);
 
-  useImperativeHandle(ref, () => ({
-    recenter: () => {
-      const target = myPosition ?? (located[0] ? { latitude: located[0].latitude, longitude: located[0].longitude } : null);
-      if (target) mapRef.current?.animateToRegion({ ...target, ...DELTA }, 350);
-    },
-  }));
+  const fitToPoints = () => {
+    const points = located.map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
+    if (myPosition) points.push(myPosition);
+    if (points.length === 0) return;
+    if (points.length === 1) {
+      mapRef.current?.animateToRegion({ ...points[0], ...DELTA }, 350);
+    } else {
+      mapRef.current?.fitToCoordinates(points, {
+        edgePadding: { top: 80, right: 80, bottom: 80, left: 80 },
+        animated: true,
+      });
+    }
+  };
+
+  useImperativeHandle(ref, () => ({ recenter: fitToPoints }));
+
+  // Auto-fit once, the first time we actually have something to show — the
+  // map otherwise stays put wherever `initialRegion` first landed (usually
+  // before location permission resolves), leaving the "You" pin off-screen.
+  useEffect(() => {
+    if (hasFitRef.current) return;
+    if (located.length === 0 && !myPosition) return;
+    hasFitRef.current = true;
+    fitToPoints();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [located.length, myPosition]);
 
   const initialRegion = myPosition
     ? { ...myPosition, ...DELTA }
