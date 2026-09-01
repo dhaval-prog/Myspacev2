@@ -37,7 +37,7 @@ type ProjectedPin = { id: string; x: number; y: number; pin: LocatedPin };
  * (HTML-string-based) marker/icon system.
  */
 export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
-  { pins, myPosition, amSharing, myAccuracy, routeCoords, onSelectPin },
+  { pins, myPosition, amSharing, myAccuracy, routeCoords, bottomInset = 0, onSelectPin },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -77,11 +77,18 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     const points: [number, number][] = located.map((p) => [p.latitude, p.longitude]);
     if (myPosition) points.push([myPosition.latitude, myPosition.longitude]);
     if (points.length === 0) return;
-    if (points.length === 1) {
-      map.setView(points[0], FOCUSED_ZOOM, { animate: true });
-    } else {
-      map.fitBounds(L.latLngBounds(points), { padding: [60, 60], animate: true });
-    }
+    // fitBounds (rather than setView) even for a single point — a
+    // zero-size bounds still respects maxZoom for the zoom level, but
+    // crucially also respects asymmetric padding, which setView has no
+    // equivalent for. Without it, the center point lands geographically in
+    // the middle of the whole screen, which is usually right behind the
+    // opaque "Nearby friends" sheet docked at the bottom.
+    map.fitBounds(L.latLngBounds(points), {
+      paddingTopLeft: [60, 60],
+      paddingBottomRight: [60, 60 + bottomInset],
+      maxZoom: FOCUSED_ZOOM,
+      animate: true,
+    });
   };
 
   // Auto-fit once, the first time we actually have something to show —
@@ -92,7 +99,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     hasFitRef.current = true;
     fitToPoints();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [located.length, myPosition]);
+  }, [located.length, myPosition, bottomInset]);
 
   useImperativeHandle(ref, () => ({ recenter: fitToPoints }));
 
@@ -138,8 +145,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     } else {
       routeLineRef.current.setLatLngs(latlngs);
     }
-    map.fitBounds(L.latLngBounds(latlngs), { padding: [70, 70], animate: true });
-  }, [routeCoords]);
+    map.fitBounds(L.latLngBounds(latlngs), {
+      paddingTopLeft: [70, 70],
+      paddingBottomRight: [70, 70 + bottomInset],
+      animate: true,
+    });
+  }, [routeCoords, bottomInset]);
 
   const project = (lat: number, lng: number) => {
     const map = mapRef.current;

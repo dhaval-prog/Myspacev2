@@ -46,7 +46,7 @@ type ProjectedPin = { id: string; x: number; y: number; pin: LocatedPin };
 
 /** The real map — Apple Maps on iOS out of the box, Google Maps on Android once a Maps API key is added to app.json. */
 export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
-  { pins, myPosition, amSharing, myAccuracy, routeCoords, onSelectPin },
+  { pins, myPosition, amSharing, myAccuracy, routeCoords, bottomInset = 0, onSelectPin },
   ref
 ) {
   const mapRef = useRef<MapView>(null);
@@ -70,10 +70,18 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     if (myPosition) points.push(myPosition);
     if (points.length === 0) return;
     if (points.length === 1) {
-      mapRef.current?.animateToRegion({ ...points[0], ...DELTA }, 350);
+      // A fixed region always centers geographically on screen — with the
+      // opaque "Nearby friends" sheet docked at the bottom, that usually
+      // puts the pin right behind it. Nudge the region's center south so
+      // the point renders in the upper, unobstructed portion instead —
+      // only possible once layout.height is known, so this degrades to a
+      // plain center on the very first fit if that hasn't measured yet.
+      const target = points[0];
+      const centerLat = layout.height > 0 ? target.latitude - (bottomInset / 2 / layout.height) * DELTA.latitudeDelta : target.latitude;
+      mapRef.current?.animateToRegion({ latitude: centerLat, longitude: target.longitude, ...DELTA }, 350);
     } else {
       mapRef.current?.fitToCoordinates(points, {
-        edgePadding: { top: 80, right: 80, bottom: 80, left: 80 },
+        edgePadding: { top: 80, right: 80, bottom: 80 + bottomInset, left: 80 },
         animated: true,
       });
     }
@@ -90,17 +98,17 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     hasFitRef.current = true;
     fitToPoints();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [located.length, myPosition]);
+  }, [located.length, myPosition, bottomInset]);
 
   // Auto-fit to the straight-line route whenever it's set (or cleared and
   // re-set to a new friend) — same reasoning as the initial auto-fit above.
   useEffect(() => {
     if (!routeCoords || routeCoords.length < 2) return;
     mapRef.current?.fitToCoordinates(routeCoords, {
-      edgePadding: { top: 80, right: 80, bottom: 80, left: 80 },
+      edgePadding: { top: 80, right: 80, bottom: 80 + bottomInset, left: 80 },
       animated: true,
     });
-  }, [routeCoords]);
+  }, [routeCoords, bottomInset]);
 
   const onLayout = (e: LayoutChangeEvent) => {
     setLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height });
