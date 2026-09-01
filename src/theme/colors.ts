@@ -23,10 +23,30 @@ export const colors = {
 
   // Raw ink-opacity steps named to match design-token handoffs directly
   // (6p-series mockups) — used where no existing semantic token lines up.
+  ink75: 'rgba(22,33,12,0.75)',
+  ink70: 'rgba(22,33,12,0.7)',
   ink65: 'rgba(22,33,12,0.65)',
   ink55: 'rgba(22,33,12,0.55)',
   ink50: 'rgba(22,33,12,0.5)',
+  ink38: 'rgba(22,33,12,0.38)',
+  ink30: 'rgba(22,33,12,0.3)',
   ink10: 'rgba(22,33,12,0.1)',
+  ink07: 'rgba(22,33,12,0.07)',
+  ink06: 'rgba(22,33,12,0.06)',
+
+  // White-on-ink opacity steps — text and buttons on the dark chat header
+  onInk60: 'rgba(255,255,255,0.6)',
+  onInk55: 'rgba(255,255,255,0.55)',
+  onInk50: 'rgba(255,255,255,0.5)',
+  onInkChip: 'rgba(255,255,255,0.16)',
+  onInkBtn: 'rgba(255,255,255,0.13)',
+  onInkBtnSoft: 'rgba(255,255,255,0.12)',
+
+  // Translucent white card surfaces over a gradient (never opaque #FFF)
+  surface90: 'rgba(255,255,255,0.9)',
+  surface70: 'rgba(255,255,255,0.7)',
+  surface60: 'rgba(255,255,255,0.6)',
+  surface55: 'rgba(255,255,255,0.55)',
 
   // Inactive circular badge (category count)
   badgeInactiveBg: 'rgba(22,33,12,0.12)',
@@ -98,6 +118,7 @@ export const colors = {
   coral: '#FF8A6B',
   onlineDot: '#3FBF6A',
   onlineDotOnInk: '#8BE07E',
+  onlineDotRing: '#E4EFE2',
   friendsCanvas: ['#C6E9A8', '#DDEDDF', '#EDF2EA', '#F6F5DF'] as string[],
   friendsCanvasStops: [0, 0.26, 0.58, 1] as number[],
   friendsChatCanvas: ['#DDEDDF', '#EDF2EA', '#F6F5DF'] as string[],

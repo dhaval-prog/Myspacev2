@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, radius, spacing } from '../../theme';
-import { Icon } from '../../components/Icon';
+import { LockIcon } from '../../components/icons/LockIcon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { useFriends } from '../../context/FriendsContext';
 
-const BACK_ICON = 'M15 5l-7 7 7 7';
-const LOCK_ICON = 'M6 11V8a6 6 0 0 1 12 0v3M5 11h14v9H5z';
+const HEADER_AVATAR_COLOR = { bg: colors.onInkChip, fg: '#FFFFFF' };
 
 /** What a pending, not-yet-accepted thread looks like (6p-8) — proves the gate. */
 export function LockedThreadScreen() {
@@ -24,16 +24,22 @@ export function LockedThreadScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <LinearGradient
+      colors={colors.friendsChatCanvas as [string, string, ...string[]]}
+      locations={colors.friendsChatCanvasStops as [number, number, ...number[]]}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.screen}
+    >
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <Pressable onPress={goChats} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Icon path={BACK_ICON} color="#fff" size={19} strokeWidth={2} />
+          <Text style={styles.backArrow}>←</Text>
         </Pressable>
         <FriendAvatar
           userId={focusedPendingRequest.userId}
           name={focusedPendingRequest.name}
           size={44}
-          style={styles.avatarDim}
+          colorOverride={HEADER_AVATAR_COLOR}
           avatarUrl={focusedPendingRequest.avatarUrl}
         />
         <View style={styles.headerText}>
@@ -42,20 +48,18 @@ export function LockedThreadScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <View style={styles.body}>
         <View style={styles.lockTile}>
-          <Icon path={LOCK_ICON} color={colors.textMuted} size={34} strokeWidth={1.6} />
+          <LockIcon size={38} color={colors.ink55} strokeWidth={1.5} withKeyhole />
         </View>
         <Text style={styles.title}>Chat is locked</Text>
-        <Text style={styles.body}>
+        <Text style={styles.bodyCopy}>
           {focusedPendingRequest.name.split(' ')[0]} hasn't accepted yet. Your intro message is the only thing they can see for now.
         </Text>
 
         {focusedPendingRequest.introMessage && (
-          <View style={styles.sentBubbleWrap}>
-            <View style={styles.sentBubble}>
-              <Text style={styles.sentBubbleText}>{focusedPendingRequest.introMessage}</Text>
-            </View>
+          <View style={styles.sentBubble}>
+            <Text style={styles.sentBubbleText}>{focusedPendingRequest.introMessage}</Text>
             <Text style={styles.sentFooter}>Sent · awaiting reply</Text>
           </View>
         )}
@@ -68,43 +72,43 @@ export function LockedThreadScreen() {
             <Text style={styles.nudgeLabel}>{nudged ? 'Nudged!' : 'Nudge'}</Text>
           </Pressable>
         </View>
-      </ScrollView>
+      </View>
 
       <View style={[styles.pinned, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <View style={styles.disabledComposer}>
-          <Icon path={LOCK_ICON} color={colors.textDisabled} size={15} strokeWidth={1.8} />
+          <LockIcon size={18} color={colors.textDisabled} strokeWidth={1.7} />
           <Text style={styles.disabledComposerText}>Messaging unlocks after accept</Text>
         </View>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.pale,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.ms,
+    gap: 13,
     paddingHorizontal: 22,
-    paddingBottom: spacing.lg,
+    paddingBottom: 18,
     backgroundColor: colors.ink,
-    borderBottomLeftRadius: radius.organic - 4,
-    borderBottomRightRadius: radius.organic - 4,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
   iconButton: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,.12)',
+    backgroundColor: colors.onInkBtn,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarDim: {
-    opacity: 0.55,
+  backArrow: {
+    fontSize: 19,
+    color: '#FFFFFF',
   },
   headerText: {
     flex: 1,
@@ -117,80 +121,79 @@ const styles = StyleSheet.create({
   headerSub: {
     fontFamily: fontFamily.sans400,
     fontSize: 12,
-    color: 'rgba(255,255,255,.55)',
+    marginTop: 2,
+    color: colors.onInk55,
   },
-  scroll: {
-    flexGrow: 1,
+  body: {
+    flex: 1,
     alignItems: 'center',
     paddingHorizontal: 26,
     paddingTop: 70,
-    gap: spacing.ms,
   },
   lockTile: {
     width: 88,
     height: 88,
     borderRadius: 32,
-    backgroundColor: 'rgba(22,33,12,0.08)',
+    backgroundColor: colors.divider,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    marginTop: spacing.sm,
+    marginTop: 24,
     fontFamily: fontFamily.sans700,
     fontSize: 24,
     lineHeight: 27.6,
+    letterSpacing: -0.48,
     color: colors.textPrimary,
   },
-  body: {
+  bodyCopy: {
+    marginTop: 10,
     maxWidth: 280,
     fontFamily: fontFamily.sans400,
     fontSize: 14.5,
     lineHeight: 21.75,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     textAlign: 'center',
   },
-  sentBubbleWrap: {
-    marginTop: spacing.lg,
-    alignSelf: 'flex-end',
-    alignItems: 'flex-end',
-    maxWidth: '85%',
-    gap: 4,
-  },
   sentBubble: {
-    backgroundColor: 'rgba(255,255,255,.7)',
+    marginTop: 26,
+    width: '100%',
+    backgroundColor: colors.surface70,
     borderRadius: 22,
     borderBottomRightRadius: 7,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 17,
   },
   sentBubbleText: {
     fontFamily: fontFamily.sans400,
-    fontSize: 14,
-    lineHeight: 20,
-    color: 'rgba(22,33,12,0.65)',
+    fontSize: 14.5,
+    lineHeight: 20.3,
+    color: colors.ink65,
   },
   sentFooter: {
+    marginTop: 6,
+    textAlign: 'right',
     fontFamily: fontFamily.mono500,
     fontSize: 10.5,
-    color: colors.textFaint,
+    color: colors.textDisabled,
   },
   actionsRow: {
-    marginTop: spacing.lg,
+    marginTop: 16,
     width: '100%',
     flexDirection: 'row',
-    gap: spacing.xs,
+    gap: 10,
   },
   cancelButton: {
     flex: 1,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(22,33,12,0.07)',
+    backgroundColor: colors.ink07,
     paddingVertical: 15,
     alignItems: 'center',
   },
   cancelLabel: {
     fontFamily: fontFamily.sans600,
-    fontSize: 14,
-    color: colors.textPrimary,
+    fontSize: 14.5,
+    color: colors.ink70,
   },
   nudgeButton: {
     flex: 1,
@@ -201,7 +204,7 @@ const styles = StyleSheet.create({
   },
   nudgeLabel: {
     fontFamily: fontFamily.sans600,
-    fontSize: 14,
+    fontSize: 14.5,
     color: colors.lime,
   },
   pinned: {
@@ -214,12 +217,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,.55)',
+    backgroundColor: colors.surface55,
     paddingVertical: 18,
+    paddingHorizontal: 20,
   },
   disabledComposerText: {
-    fontFamily: fontFamily.sans500,
+    fontFamily: fontFamily.sans400,
     fontSize: 14.5,
-    color: colors.textDisabled,
+    color: colors.ink38,
   },
 });

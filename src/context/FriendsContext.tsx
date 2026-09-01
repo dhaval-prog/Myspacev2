@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { DirectMessage, Friend, FriendProfile, FriendRequest, MatchRelationship } from '../types/friends';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
@@ -76,7 +76,13 @@ interface FriendsContextValue {
   /** Latest message per accepted connection, for the Chats list preview. */
   lastMessageFor: (connectionId: string) => DirectMessage | undefined;
   isUnread: (connectionId: string) => boolean;
+  /** Real unread message count for a connection — persisted server-side via mark_thread_read, not just a same-session flag. */
+  unreadCountFor: (connectionId: string) => number;
   isOnline: (userId: string) => boolean;
+  /** True while the other side of this connection is actively typing. */
+  isTyping: (connectionId: string) => boolean;
+  /** Call on every composer keystroke — broadcasts "typing", auto-clears after a pause. */
+  notifyTyping: (connectionId: string) => void;
 
   goHome: () => void;
   goAdd: () => void;
@@ -291,7 +297,10 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     [justAcceptedIds, connectionRows, profiles, userId],
   );
   const [lastMessages, setLastMessages] = useState<Record<string, MessageRow>>({});
-  const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set());
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [typingConnectionIds, setTypingConnectionIds] = useState<Set<string>>(new Set());
+  const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const typingChannelsRef = useRef<Record<string, ReturnType<typeof supabase.channel>>>({});
 
   // Load the latest message per accepted connection, for the Chats list preview.
   useEffect(() => {
@@ -319,6 +328,28 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [userId, friends]);
 
+  // Real, persisted unread counts (survives app restart) — computed
+  // server-side from direct_message_reads via get_unread_counts().
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured || friends.length === 0) {
+      setUnreadCounts({});
+      return;
+    }
+    let cancelled = false;
+    supabase.rpc('get_unread_counts').then(({ data, error }) => {
+      warn('load unread counts', error);
+      if (cancelled || !data) return;
+      const next: Record<string, number> = {};
+      for (const row of data as { connection_id: string; unread_count: number }[]) {
+        next[row.connection_id] = row.unread_count;
+      }
+      setUnreadCounts(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, friends]);
+
   // Live preview + unread updates for every accepted thread at once — the
   // Chats list needs to react to a message even while some other screen is open.
   useEffect(() => {
@@ -332,7 +363,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
           const row = payload.new as MessageRow;
           setLastMessages((prev) => ({ ...prev, [row.connection_id]: row }));
           if (row.sender_id !== userId && row.connection_id !== focusedConnectionId) {
-            setUnreadIds((prev) => new Set(prev).add(row.connection_id));
+            setUnreadCounts((prev) => ({ ...prev, [row.connection_id]: (prev[row.connection_id] ?? 0) + 1 }));
           }
         },
       );
@@ -346,12 +377,56 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, friends]);
 
+  // Live typing presence — one broadcast channel per accepted connection,
+  // both sides listen and send on it. Ephemeral (not persisted), unlike
+  // the unread-count tracking above.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured || friends.length === 0) return;
+    const channels: ReturnType<typeof supabase.channel>[] = [];
+    for (const f of friends) {
+      const channel = supabase.channel(`typing-${f.connectionId}`);
+      channel
+        .on('broadcast', { event: 'typing' }, (msg) => {
+          const payload = msg.payload as { userId: string; typing: boolean };
+          if (payload.userId === userId) return;
+          setTypingConnectionIds((prev) => {
+            const next = new Set(prev);
+            if (payload.typing) next.add(f.connectionId);
+            else next.delete(f.connectionId);
+            return next;
+          });
+        })
+        .subscribe();
+      typingChannelsRef.current[f.connectionId] = channel;
+      channels.push(channel);
+    }
+    return () => {
+      for (const channel of channels) supabase.removeChannel(channel);
+      typingChannelsRef.current = {};
+      for (const timer of Object.values(typingTimersRef.current)) clearTimeout(timer);
+      typingTimersRef.current = {};
+    };
+  }, [userId, friends]);
+
+  const isTyping = (connectionId: string) => typingConnectionIds.has(connectionId);
+
+  const notifyTyping = (connectionId: string) => {
+    const channel = typingChannelsRef.current[connectionId];
+    if (!channel || !userId) return;
+    channel.send({ type: 'broadcast', event: 'typing', payload: { userId, typing: true } });
+    clearTimeout(typingTimersRef.current[connectionId]);
+    typingTimersRef.current[connectionId] = setTimeout(() => {
+      channel.send({ type: 'broadcast', event: 'typing', payload: { userId, typing: false } });
+    }, 2500);
+  };
+
   const lastMessageFor = (connectionId: string): DirectMessage | undefined => {
     const row = lastMessages[connectionId];
     if (!row) return undefined;
     return { ...toDirectMessage(row), text: previewFor(row) };
   };
-  const isUnread = (connectionId: string) => unreadIds.has(connectionId);
+  const unreadCountFor = (connectionId: string) => unreadCounts[connectionId] ?? 0;
+  const isUnread = (connectionId: string) => unreadCountFor(connectionId) > 0;
 
   const focusedConnectionRow = connectionRows.find((c) => c.id === focusedConnectionId);
   const focusedFriend = focusedConnectionRow?.status === 'accepted' ? toFriend(focusedConnectionRow) : undefined;
@@ -391,12 +466,12 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     const row = connectionRows.find((c) => c.id === connectionId);
     setFocusedConnectionId(connectionId);
     setPage(row?.status === 'accepted' ? 'chat' : 'locked-chat');
-    setUnreadIds((prev) => {
-      if (!prev.has(connectionId)) return prev;
-      const next = new Set(prev);
-      next.delete(connectionId);
-      return next;
-    });
+    if (row?.status === 'accepted') {
+      setUnreadCounts((prev) => (prev[connectionId] ? { ...prev, [connectionId]: 0 } : prev));
+      if (isSupabaseConfigured) {
+        supabase.rpc('mark_thread_read', { p_connection_id: connectionId }).then(({ error }) => warn('mark thread read', error));
+      }
+    }
   };
 
   const lookupCode = async (code: string): Promise<{ error: string | null }> => {
@@ -602,7 +677,10 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     loading,
     lastMessageFor,
     isUnread,
+    unreadCountFor,
     isOnline,
+    isTyping,
+    notifyTyping,
     goHome,
     goAdd,
     goScan,
