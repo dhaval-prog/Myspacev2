@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
@@ -57,6 +57,7 @@ function timeLeftLabel(expiresAt: string | null): string {
 
 interface LiveLocationsScreenProps {
   onBack: () => void;
+  onOpenChat: (userId: string) => void;
 }
 
 /**
@@ -68,17 +69,29 @@ interface LiveLocationsScreenProps {
  * (MapCanvas.web.tsx) — expo-location works on both via the browser's
  * geolocation API on web, so capture isn't gated by platform.
  */
-export function LiveLocationsScreen({ onBack }: LiveLocationsScreenProps) {
+export function LiveLocationsScreen({ onBack, onOpenChat }: LiveLocationsScreenProps) {
   const [page, setPage] = useState<'map' | 'privacy'>('map');
 
   return (
     <LocationProvider>
-      {page === 'privacy' ? <LocationPrivacyScreen onBack={() => setPage('map')} /> : <MapPage onBack={onBack} onOpenPrivacy={() => setPage('privacy')} />}
+      {page === 'privacy' ? (
+        <LocationPrivacyScreen onBack={() => setPage('map')} />
+      ) : (
+        <MapPage onBack={onBack} onOpenPrivacy={() => setPage('privacy')} onOpenChat={onOpenChat} />
+      )}
     </LocationProvider>
   );
 }
 
-function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy: () => void }) {
+function MapPage({
+  onBack,
+  onOpenPrivacy,
+  onOpenChat,
+}: {
+  onBack: () => void;
+  onOpenPrivacy: () => void;
+  onOpenChat: (userId: string) => void;
+}) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const userId = user?.id ?? null;
@@ -335,11 +348,18 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
               </Text>
             </View>
             <View style={styles.sheetActions}>
-              <Pressable style={[styles.sheetButton, styles.sheetButtonPrimary]}>
+              <Pressable onPress={() => onOpenChat(detailFriend.userId)} style={[styles.sheetButton, styles.sheetButtonPrimary]}>
                 <Icon path={CHAT_ICON} color={colors.lime} size={16} strokeWidth={1.8} />
                 <Text style={styles.sheetButtonLabelPrimary}>Message</Text>
               </Pressable>
-              <Pressable style={[styles.sheetButton, styles.sheetButtonSecondary]}>
+              <Pressable
+                onPress={() => {
+                  if (detailFriend.latitude === null || detailFriend.longitude === null) return;
+                  Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${detailFriend.latitude},${detailFriend.longitude}`);
+                }}
+                disabled={detailFriend.latitude === null}
+                style={[styles.sheetButton, styles.sheetButtonSecondary, detailFriend.latitude === null && styles.sheetButtonDisabled]}
+              >
                 <Icon path={DIRECTIONS_ICON} color={colors.textPrimary} size={16} strokeWidth={1.8} />
                 <Text style={styles.sheetButtonLabelSecondary}>Directions</Text>
               </Pressable>
@@ -640,6 +660,9 @@ const styles = StyleSheet.create({
   },
   sheetButtonSecondary: {
     backgroundColor: 'rgba(22,33,12,0.06)',
+  },
+  sheetButtonDisabled: {
+    opacity: 0.4,
   },
   sheetButtonLabelPrimary: {
     fontFamily: fontFamily.sans600,
