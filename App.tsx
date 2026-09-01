@@ -95,7 +95,14 @@ function AppNavigator() {
     );
   }
   if (screen.name === 'friends') {
-    return <FriendsScreen onHome={() => setScreen({ name: 'home' })} />;
+    return (
+      <FriendsScreen
+        onHome={() => setScreen({ name: 'home' })}
+        onOpenExpenses={() => setScreen({ name: 'expenses' })}
+        onOpenSplit={() => setScreen({ name: 'split' })}
+        onOpenAddItem={() => setScreen({ name: 'detail', viewId: 'add' })}
+      />
+    );
   }
   if (screen.name === 'liveLocations') {
     return (

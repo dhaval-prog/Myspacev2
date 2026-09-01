@@ -293,19 +293,24 @@ function MapPage({
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <View style={styles.headerLeft}>
-          <Pressable onPress={onBack} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Home">
-            <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2.2} />
-          </Pressable>
-          <View>
-            <Text style={styles.title}>Nearby friends</Text>
-            <Text style={styles.sub}>{rows.length} friend{rows.length === 1 ? '' : 's'}</Text>
-          </View>
+        <View>
+          <Text style={styles.title}>Nearby friends</Text>
+          <Text style={styles.sub}>{rows.length} friend{rows.length === 1 ? '' : 's'}</Text>
         </View>
         <Pressable onPress={onOpenPrivacy} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Location & privacy settings">
           <Icon path={GEAR_ICON} color={colors.textPrimary} size={18} strokeWidth={1.7} />
         </Pressable>
       </View>
+
+      {/* Back — floats just above the bottom sheet, over "Share my location" */}
+      <Pressable
+        onPress={onBack}
+        style={[styles.backFab, { bottom: sheetHeight + spacing.md }]}
+        accessibilityRole="button"
+        accessibilityLabel="Back to Home"
+      >
+        <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2.2} />
+      </Pressable>
 
       {Platform.OS === 'android' ? (
         <View style={styles.previewNote}>
@@ -473,11 +478,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxxl,
     paddingBottom: spacing.sm,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.ms,
-  },
   iconButton: {
     width: 46,
     height: 46,
@@ -521,6 +521,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.danger,
     marginTop: spacing.xs,
+  },
+  backFab: {
+    position: 'absolute',
+    left: spacing.xxxl,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    elevation: 2,
   },
   recenterFab: {
     position: 'absolute',

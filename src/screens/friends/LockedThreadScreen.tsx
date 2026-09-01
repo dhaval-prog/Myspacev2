@@ -32,9 +32,6 @@ export function LockedThreadScreen() {
       style={styles.screen}
     >
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <Pressable onPress={goChats} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Text style={styles.backArrow}>←</Text>
-        </Pressable>
         <FriendAvatar
           userId={focusedPendingRequest.userId}
           name={focusedPendingRequest.name}
@@ -75,6 +72,9 @@ export function LockedThreadScreen() {
       </View>
 
       <View style={[styles.pinned, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+        <Pressable onPress={goChats} style={styles.pinnedIconButton} accessibilityRole="button" accessibilityLabel="Back">
+          <Text style={styles.pinnedBackArrow}>←</Text>
+        </Pressable>
         <View style={styles.disabledComposer}>
           <LockIcon size={18} color={colors.textDisabled} strokeWidth={1.7} />
           <Text style={styles.disabledComposerText}>Messaging unlocks after accept</Text>
@@ -210,6 +210,24 @@ const styles = StyleSheet.create({
   pinned: {
     paddingHorizontal: 26,
     paddingTop: spacing.ms,
+  },
+  pinnedIconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginBottom: spacing.ms,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  pinnedBackArrow: {
+    fontSize: 19,
+    color: colors.textPrimary,
   },
   disabledComposer: {
     flexDirection: 'row',

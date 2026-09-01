@@ -8,6 +8,8 @@ import { colors, fontFamily, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { CopyIcon } from '../../components/icons/CopyIcon';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
+import { BottomNav } from '../../components/BottomNav';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFriends } from '../../context/FriendsContext';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
@@ -26,9 +28,17 @@ function formatDisplayCode(code: string): string {
   return code.length > 3 ? `${code.slice(0, 3)} · ${code.slice(3)}` : code;
 }
 
+interface AddFriendScreenProps {
+  onHome: () => void;
+  onOpenExpenses: () => void;
+  onOpenSplit: () => void;
+  onOpenAddItem: () => void;
+}
+
 /** Add a friend (6p-2): show your own code/QR, or enter theirs cell by cell. */
-export function AddFriendScreen() {
+export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAddItem }: AddFriendScreenProps) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { friendCode, goHome, goScan, lookupCode } = useFriends();
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -96,9 +106,6 @@ export function AddFriendScreen() {
       style={styles.screen}
     >
       <View style={[styles.topRow, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Icon path={BACK_ICON} color={colors.textPrimary} size={19} strokeWidth={2} />
-        </Pressable>
         <Pressable onPress={() => setShareOpen(true)} style={styles.sharePill} accessibilityRole="button" accessibilityLabel="Share your invite code">
           <Icon path={SHARE_ICON} color={colors.textPrimary} size={15} strokeWidth={2} />
           <Text style={styles.shareLabel}>Share</Text>
@@ -177,12 +184,27 @@ export function AddFriendScreen() {
         {error && <Text style={styles.error}>{error}</Text>}
       </View>
 
-      <View style={[styles.pinned, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+      <View style={styles.pinned}>
+        <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
+          <Icon path={BACK_ICON} color={colors.textPrimary} size={19} strokeWidth={2} />
+        </Pressable>
         <Pressable onPress={goScan} style={({ pressed }) => [styles.scanButton, pressed && styles.scanButtonPressed]}>
           <Icon path={SCAN_ICON} color={colors.ink} size={18} strokeWidth={1.9} />
           <Text style={styles.scanLabel}>Scan their code</Text>
         </Pressable>
       </View>
+
+      <BottomNav
+        activeId="friends"
+        onSelect={(id) => {
+          if (id === 'home') onHome();
+          if (id === 'expenses') onOpenExpenses();
+          if (id === 'split') onOpenSplit();
+        }}
+        onAdd={onOpenAddItem}
+        bottomInset={insets.bottom}
+        reduceMotion={reduceMotion}
+      />
 
       <BottomSheet visible={shareOpen} onClose={() => setShareOpen(false)}>
         <Text style={styles.sheetTitle}>Share your invite code</Text>
@@ -218,13 +240,14 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: 26,
   },
   iconButton: {
     width: 52,
     height: 52,
     borderRadius: 26,
+    marginBottom: spacing.ms,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
@@ -406,6 +429,7 @@ const styles = StyleSheet.create({
   pinned: {
     paddingHorizontal: 26,
     paddingTop: spacing.ms,
+    paddingBottom: spacing.ms,
   },
   scanButton: {
     flexDirection: 'row',

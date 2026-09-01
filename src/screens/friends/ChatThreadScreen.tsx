@@ -147,9 +147,6 @@ export function ChatThreadScreen() {
     >
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <Pressable onPress={goChats} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Text style={styles.backArrow}>←</Text>
-        </Pressable>
         <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} colorOverride={HEADER_AVATAR_COLOR} avatarUrl={focusedFriend.avatarUrl} />
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>{focusedFriend.name}</Text>
@@ -225,6 +222,12 @@ export function ChatThreadScreen() {
       </ScrollView>
 
       {attachError && <Text style={styles.attachError}>{attachError}</Text>}
+
+      <View style={styles.bottomBackRow}>
+        <Pressable onPress={goChats} style={styles.pinnedIconButton} accessibilityRole="button" accessibilityLabel="Back">
+          <Text style={styles.pinnedBackArrow}>←</Text>
+        </Pressable>
+      </View>
 
       <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <View style={styles.composer}>
@@ -495,6 +498,27 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans500,
     fontSize: 12,
     color: colors.danger,
+  },
+  bottomBackRow: {
+    paddingHorizontal: spacing.xxl,
+    paddingTop: spacing.ms,
+  },
+  pinnedIconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  pinnedBackArrow: {
+    fontSize: 19,
+    color: colors.textPrimary,
   },
   inputRow: {
     paddingHorizontal: spacing.xxl,
