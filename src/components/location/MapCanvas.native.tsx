@@ -57,16 +57,22 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         </Marker>
       ))}
 
-      {amSharing && myPosition ? (
+      {myPosition ? (
         <Marker coordinate={myPosition} tracksViewChanges={false}>
           <View style={styles.pinWrap}>
             <View style={styles.youTile}>
               <Text style={styles.youTileText}>You</Text>
             </View>
-            <View style={styles.liveBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveBadgeText}>LIVE</Text>
-            </View>
+            {amSharing ? (
+              <View style={styles.liveBadge}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveBadgeText}>LIVE</Text>
+              </View>
+            ) : (
+              <View style={styles.lastSeenBadge}>
+                <Icon path={CLOCK_ICON} color={colors.lime} size={9} strokeWidth={2.4} />
+              </View>
+            )}
           </View>
         </Marker>
       ) : null}

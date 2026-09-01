@@ -114,7 +114,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         );
       })}
 
-      {amSharing && myPosition
+      {myPosition
         ? (() => {
             const pos = project(myPosition.latitude, myPosition.longitude);
             if (!pos) return null;
@@ -123,10 +123,16 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
                 <View style={styles.youTile}>
                   <Text style={styles.youTileText}>You</Text>
                 </View>
-                <View style={styles.liveBadge}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.liveBadgeText}>LIVE</Text>
-                </View>
+                {amSharing ? (
+                  <View style={styles.liveBadge}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.liveBadgeText}>LIVE</Text>
+                  </View>
+                ) : (
+                  <View style={styles.lastSeenBadge}>
+                    <Icon path={CLOCK_ICON} color={colors.lime} size={10} strokeWidth={2.4} />
+                  </View>
+                )}
               </View>
             );
           })()
