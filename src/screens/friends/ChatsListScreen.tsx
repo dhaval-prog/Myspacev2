@@ -20,11 +20,10 @@ interface ChatsListScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
-  onOpenAddItem: () => void;
 }
 
 /** Chats (6p-6) — only accepted friends get a thread here. */
-export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAddItem }: ChatsListScreenProps) {
+export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit }: ChatsListScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friends, sentRequests, goHome, goAdd, openChat, lastMessageFor, isUnread, unreadCountFor, isOnline, isTyping } = useFriends();
@@ -40,10 +39,6 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAdd
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.topRow}>
           <Text style={styles.title}>Chats</Text>
-          <View style={styles.spacer} />
-          <Pressable onPress={goAdd} style={styles.fab} accessibilityRole="button" accessibilityLabel="Add a friend">
-            <Icon path={CHAT_PLUS_ICON} color={colors.lime} size={22} strokeWidth={1.8} />
-          </Pressable>
         </View>
 
         <View style={styles.spacerUnderHeader} />
@@ -138,7 +133,9 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAdd
           if (id === 'expenses') onOpenExpenses();
           if (id === 'split') onOpenSplit();
         }}
-        onAdd={onOpenAddItem}
+        onAdd={goAdd}
+        fabIconPath={CHAT_PLUS_ICON}
+        fabAccessibilityLabel="Add a friend"
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
       />
@@ -164,9 +161,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.ms,
   },
-  spacer: {
-    flex: 1,
-  },
   title: {
     fontFamily: fontFamily.sans700,
     fontSize: 30,
@@ -185,19 +179,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 14,
     elevation: 1,
-  },
-  fab: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 22,
-    elevation: 6,
   },
   spacerUnderHeader: {
     height: 20,

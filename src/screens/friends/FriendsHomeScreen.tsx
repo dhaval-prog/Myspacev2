@@ -19,11 +19,10 @@ interface FriendsHomeScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
-  onOpenAddItem: () => void;
 }
 
 /** Friends list (6p-1): pending requests surfaced at the top, then everyone connected or waiting. */
-export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAddItem }: FriendsHomeScreenProps) {
+export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit }: FriendsHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friends, receivedRequests, sentRequests, goAdd, goRequests, goChats, openChat, cancelRequest } = useFriends();
@@ -149,17 +148,7 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenA
             <Text style={styles.emptyBody}>Share your code or scan someone else's to start connecting.</Text>
           </View>
         )}
-      </ScrollView>
 
-      <View style={styles.pinned}>
-        <View style={styles.bottomIconRow}>
-          <Pressable onPress={onHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Home">
-            <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
-          </Pressable>
-          <Pressable onPress={goChats} style={styles.chatButton} accessibilityRole="button" accessibilityLabel="Chats">
-            <Icon path={CHAT_ICON} color={colors.lime} size={20} strokeWidth={1.9} />
-          </Pressable>
-        </View>
         <Pressable
           onPress={goAdd}
           style={({ pressed }) => [styles.ctaButton, pressed && styles.pressed]}
@@ -168,6 +157,12 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenA
         >
           <Icon path={QR_ICON} color={colors.ink} size={19} strokeWidth={1.8} />
           <Text style={styles.ctaLabel}>Add a friend</Text>
+        </Pressable>
+      </ScrollView>
+
+      <View style={styles.pinned}>
+        <Pressable onPress={onHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Home">
+          <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
         </Pressable>
       </View>
 
@@ -178,7 +173,9 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenA
           if (id === 'expenses') onOpenExpenses();
           if (id === 'split') onOpenSplit();
         }}
-        onAdd={onOpenAddItem}
+        onAdd={goChats}
+        fabIconPath={CHAT_ICON}
+        fabAccessibilityLabel="Chats"
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
       />
@@ -201,12 +198,7 @@ const styles = StyleSheet.create({
   pinned: {
     paddingHorizontal: 26,
     paddingTop: spacing.ms,
-  },
-  bottomIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.ms,
+    paddingBottom: spacing.ms,
   },
   ctaButton: {
     flexDirection: 'row',
@@ -254,14 +246,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 14,
     elevation: 1,
-  },
-  chatButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   pressed: {
     opacity: 0.85,
