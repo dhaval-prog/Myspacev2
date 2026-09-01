@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import type { Item, Room } from '../types/space';
+import type { Item } from '../types/space';
 
 export type SearchSection = 'home' | 'expenses' | 'split';
 
@@ -24,8 +24,8 @@ interface GroupRow {
 const DEBOUNCE_MS = 300;
 const LIMIT = 6;
 
-/** Matches Home's rooms/items locally, and searches Expenses' budget cards + Split's groups via Supabase (RLS already scopes results to what the signed-in account can see). */
-export function useGlobalSearch(query: string, rooms: Room[], items: Item[]) {
+/** Matches Home's items locally, and searches Expenses' budget cards + Split's groups via Supabase (RLS already scopes results to what the signed-in account can see). */
+export function useGlobalSearch(query: string, items: Item[]) {
   const [remote, setRemote] = useState<{ expenses: SearchResult[]; split: SearchResult[] }>({ expenses: [], split: [] });
   const seqRef = useRef(0);
 
@@ -66,21 +66,15 @@ export function useGlobalSearch(query: string, rooms: Room[], items: Item[]) {
   const q = query.trim().toLowerCase();
   const home: SearchResult[] = !q
     ? []
-    : [
-        ...rooms
-          .filter((r) => r.label.toLowerCase().includes(q))
-          .slice(0, LIMIT)
-          .map((r) => ({ id: `room-${r.id}`, section: 'home' as const, title: r.label, subtitle: 'Room' })),
-        ...items
-          .filter((it) => it.name.toLowerCase().includes(q))
-          .slice(0, LIMIT)
-          .map((it, i) => ({
-            id: `item-${i}-${it.name}`,
-            section: 'home' as const,
-            title: it.name,
-            subtitle: it.room ? `In ${it.room}` : 'Item',
-          })),
-      ];
+    : items
+        .filter((it) => it.name.toLowerCase().includes(q))
+        .slice(0, LIMIT)
+        .map((it, i) => ({
+          id: `item-${i}-${it.name}`,
+          section: 'home' as const,
+          title: it.name,
+          subtitle: it.room ? `In ${it.room}` : 'Item',
+        }));
 
   return { home, expenses: remote.expenses, split: remote.split };
 }
