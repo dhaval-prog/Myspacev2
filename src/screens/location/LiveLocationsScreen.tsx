@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { MapCanvas } from '../../components/location/MapCanvas';
 import type { MapCanvasHandle } from '../../components/location/mapTypes';
@@ -91,22 +92,24 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
   const [myPosition, setMyPosition] = useState<{ latitude: number; longitude: number } | null>(null);
   const [myAccuracy, setMyAccuracy] = useState<number | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const [sheetHeight, setSheetHeight] = useState(0);
   const mapRef = useRef<MapCanvasHandle>(null);
 
   const ownShare = userId ? shareFor(userId) : undefined;
   const sharing = !!ownShare;
 
-  // Foreground-only capture: request permission and get one fix as soon as
-  // this screen opens. Nothing runs when the screen (or app) isn't open —
-  // no background task, no expo-task-manager.
+  // Radar is pointless without your own position, so it asks up front —
+  // approve and you're pinned on the map immediately; decline (or it's
+  // already denied at the OS level) and there's nothing useful to show, so
+  // the permissionDenied dialog below sends the user straight back home.
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        if (!cancelled) setLocationError('Enable location access in your device settings to see yourself on the map.');
+        if (!cancelled) setPermissionDenied(true);
         return;
       }
       const pos = await Location.getCurrentPositionAsync({});
@@ -344,6 +347,16 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
           </>
         ) : null}
       </BottomSheet>
+
+      <ConfirmDialog
+        visible={permissionDenied}
+        title="Location access needed"
+        message="Radar shows you and your friends on a map, so it needs your location to work. Enable it to use Radar."
+        confirmLabel="OK"
+        hideCancel
+        onConfirm={onBack}
+        onCancel={onBack}
+      />
     </View>
   );
 }
