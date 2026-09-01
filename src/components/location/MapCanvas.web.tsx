@@ -37,13 +37,14 @@ type ProjectedPin = { id: string; x: number; y: number; pin: LocatedPin };
  * (HTML-string-based) marker/icon system.
  */
 export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
-  { pins, myPosition, amSharing, myAccuracy, onSelectPin },
+  { pins, myPosition, amSharing, myAccuracy, routeCoords, onSelectPin },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const hasFitRef = useRef(false);
   const accuracyCircleRef = useRef<L.Circle | null>(null);
+  const routeLineRef = useRef<L.Polyline | null>(null);
   const [, forceRender] = useState(0);
 
   const located = pins.filter((p): p is LocatedPin => p.latitude !== null && p.longitude !== null);
@@ -120,6 +121,25 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
       accuracyCircleRef.current.setRadius(myAccuracy);
     }
   }, [myPosition, myAccuracy]);
+
+  // A straight "as the crow flies" dashed line — not a real turn-by-turn
+  // route, this app has no directions API/key — auto-fit to it whenever it
+  // changes so both ends are actually visible.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !routeCoords || routeCoords.length < 2) {
+      routeLineRef.current?.remove();
+      routeLineRef.current = null;
+      return;
+    }
+    const latlngs: [number, number][] = routeCoords.map((p) => [p.latitude, p.longitude]);
+    if (!routeLineRef.current) {
+      routeLineRef.current = L.polyline(latlngs, { color: colors.ink, weight: 3, opacity: 0.75, dashArray: '2, 10', lineCap: 'round' }).addTo(map);
+    } else {
+      routeLineRef.current.setLatLngs(latlngs);
+    }
+    map.fitBounds(L.latLngBounds(latlngs), { padding: [70, 70], animate: true });
+  }, [routeCoords]);
 
   const project = (lat: number, lng: number) => {
     const map = mapRef.current;

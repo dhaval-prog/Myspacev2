@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
@@ -101,6 +101,7 @@ function MapPage({
   const [sheetView, setSheetView] = useState<'none' | 'share' | 'detail'>('none');
   const [detailFriendId, setDetailFriendId] = useState<string | null>(null);
   const [previewFriendId, setPreviewFriendId] = useState<string | null>(null);
+  const [routeTarget, setRouteTarget] = useState<{ userId: string; name: string; latitude: number; longitude: number } | null>(null);
   const [shareDurationKey, setShareDurationKey] = useState<ShareDurationKey>('1h');
   const [myPosition, setMyPosition] = useState<{ latitude: number; longitude: number } | null>(null);
   const [myAccuracy, setMyAccuracy] = useState<number | null>(null);
@@ -187,7 +188,10 @@ function MapPage({
   };
   const togglePreview = (userId: string) => {
     setPreviewFriendId((current) => (current === userId ? null : userId));
+    setRouteTarget(null);
   };
+
+  const routeCoords = routeTarget && myPosition ? [myPosition, { latitude: routeTarget.latitude, longitude: routeTarget.longitude }] : null;
 
   const handleStartSharing = async () => {
     if (!myPosition) {
@@ -201,8 +205,28 @@ function MapPage({
   return (
     <View style={styles.screen}>
       <View style={StyleSheet.absoluteFill}>
-        <MapCanvas ref={mapRef} pins={rows} myPosition={myPosition} amSharing={sharing} myAccuracy={myAccuracy} onSelectPin={togglePreview} />
+        <MapCanvas
+          ref={mapRef}
+          pins={rows}
+          myPosition={myPosition}
+          amSharing={sharing}
+          myAccuracy={myAccuracy}
+          routeCoords={routeCoords}
+          onSelectPin={togglePreview}
+        />
       </View>
+
+      {routeTarget ? (
+        <View style={[styles.routeBanner, { bottom: sheetHeight + spacing.md }]}>
+          <Icon path={DIRECTIONS_ICON} color={colors.textPrimary} size={14} strokeWidth={2} />
+          <Text style={styles.routeBannerText} numberOfLines={1}>
+            Straight-line path to {routeTarget.name.split(' ')[0]}
+          </Text>
+          <Pressable onPress={() => setRouteTarget(null)} style={styles.routeBannerClose} accessibilityRole="button" accessibilityLabel="Clear route">
+            <Icon path={CLOSE_ICON} color={colors.textPrimary} size={11} strokeWidth={2.4} />
+          </Pressable>
+        </View>
+      ) : null}
 
       {previewFriend ? (
         <PinPreviewCard
@@ -354,11 +378,12 @@ function MapPage({
               </Pressable>
               <Pressable
                 onPress={() => {
-                  if (detailFriend.latitude === null || detailFriend.longitude === null) return;
-                  Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${detailFriend.latitude},${detailFriend.longitude}`);
+                  if (detailFriend.latitude === null || detailFriend.longitude === null || !myPosition) return;
+                  setRouteTarget({ userId: detailFriend.userId, name: detailFriend.name, latitude: detailFriend.latitude, longitude: detailFriend.longitude });
+                  closeSheet();
                 }}
-                disabled={detailFriend.latitude === null}
-                style={[styles.sheetButton, styles.sheetButtonSecondary, detailFriend.latitude === null && styles.sheetButtonDisabled]}
+                disabled={detailFriend.latitude === null || !myPosition}
+                style={[styles.sheetButton, styles.sheetButtonSecondary, (detailFriend.latitude === null || !myPosition) && styles.sheetButtonDisabled]}
               >
                 <Icon path={DIRECTIONS_ICON} color={colors.textPrimary} size={16} strokeWidth={1.8} />
                 <Text style={styles.sheetButtonLabelSecondary}>Directions</Text>
@@ -573,6 +598,37 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.xxxl,
     right: spacing.xxxl,
+  },
+  routeBanner: {
+    position: 'absolute',
+    left: spacing.xxxl,
+    right: spacing.xxxl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#fff',
+    borderRadius: 999,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.lg,
+    shadowColor: colors.ink,
+    shadowOpacity: 0.14,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 4,
+  },
+  routeBannerText: {
+    flex: 1,
+    fontFamily: fontFamily.sans600,
+    fontSize: 12.5,
+    color: colors.textPrimary,
+  },
+  routeBannerClose: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(22,33,12,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sheetTitle: {
     fontFamily: fontFamily.sans700,
