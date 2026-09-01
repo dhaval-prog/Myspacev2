@@ -44,7 +44,7 @@ function AuthNavigator() {
 
 function AppNavigator() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
-  const { openChat, receivedRequests, goRequests } = useFriends();
+  const { openChat, openChatWithUser, receivedRequests, goRequests } = useFriends();
 
   const openNotificationTarget = (target: NotificationTarget) => {
     if (target.screen === 'expenses') setScreen({ name: 'expenses', focusCardId: target.cardId });
@@ -98,7 +98,15 @@ function AppNavigator() {
     return <FriendsScreen onHome={() => setScreen({ name: 'home' })} />;
   }
   if (screen.name === 'liveLocations') {
-    return <LiveLocationsScreen onBack={() => setScreen({ name: 'home' })} />;
+    return (
+      <LiveLocationsScreen
+        onBack={() => setScreen({ name: 'home' })}
+        onOpenChat={(userId) => {
+          openChatWithUser(userId);
+          setScreen({ name: 'friends' });
+        }}
+      />
+    );
   }
   if (screen.name === 'account') {
     return <AccountSettingsScreen onBack={() => setScreen({ name: screen.from } as Screen)} />;
