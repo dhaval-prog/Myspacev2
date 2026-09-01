@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
@@ -7,15 +7,19 @@ import QRCode from 'react-native-qrcode-svg';
 import { colors, fontFamily, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { CopyIcon } from '../../components/icons/CopyIcon';
+import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { useFriends } from '../../context/FriendsContext';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const SHARE_ICON = 'M12 15V4M8 7.5 12 3.5l4 4 M5 14v4.5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V14';
 const SCAN_ICON =
   'M3.5 8V5.5a2 2 0 0 1 2-2H8M16 3.5h2.5a2 2 0 0 1 2 2V8M20.5 16v2.5a2 2 0 0 1-2 2H16M8 20.5H5.5a2 2 0 0 1-2-2V16 M3.5 12h17';
+const CHAT_BUBBLE_ICON = 'M4 5h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-5 4v-4H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z';
+const ENVELOPE_ICON = 'M4 6h16v12H4z M4 7l8 6 8-6';
 
 const QR_BOX = 196;
 const QR_PADDING = 14;
+const QR_BADGE_SIZE = 46;
 const CELL_COUNT = 6;
 
 function formatDisplayCode(code: string): string {
@@ -30,6 +34,7 @@ export function AddFriendScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const shake = useRef(new Animated.Value(0)).current;
 
@@ -65,9 +70,21 @@ export function AddFriendScreen() {
     setTimeout(() => setCopied(false), 1600);
   };
 
-  const shareCode = () => {
-    if (!friendCode) return;
-    Share.share({ message: `Add me on MySpace — my invite code is ${friendCode} (myspace://add/${friendCode})` }).catch(() => {});
+  const shareMessage = friendCode ? `Add me on MySpace — my invite code is ${friendCode} (myspace://add/${friendCode})` : '';
+
+  const shareViaWhatsApp = () => {
+    setShareOpen(false);
+    Linking.openURL(`https://wa.me/?text=${encodeURIComponent(shareMessage)}`);
+  };
+
+  const shareViaMessage = () => {
+    setShareOpen(false);
+    Linking.openURL(`sms:?body=${encodeURIComponent(shareMessage)}`);
+  };
+
+  const shareViaEmail = () => {
+    setShareOpen(false);
+    Linking.openURL(`mailto:?subject=${encodeURIComponent('Add me on MySpace')}&body=${encodeURIComponent(shareMessage)}`);
   };
 
   return (
@@ -82,7 +99,7 @@ export function AddFriendScreen() {
         <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
           <Icon path={BACK_ICON} color={colors.textPrimary} size={19} strokeWidth={2} />
         </Pressable>
-        <Pressable onPress={shareCode} style={styles.sharePill} accessibilityRole="button" accessibilityLabel="Share your invite code">
+        <Pressable onPress={() => setShareOpen(true)} style={styles.sharePill} accessibilityRole="button" accessibilityLabel="Share your invite code">
           <Icon path={SHARE_ICON} color={colors.textPrimary} size={15} strokeWidth={2} />
           <Text style={styles.shareLabel}>Share</Text>
         </Pressable>
@@ -95,7 +112,13 @@ export function AddFriendScreen() {
         <View style={styles.qrPanel}>
           <View style={styles.qrTile}>
             {friendCode ? (
-              <QRCode value={`myspace://add/${friendCode}`} size={QR_BOX - QR_PADDING * 2} color={colors.ink} backgroundColor="transparent" />
+              <QRCode
+                value={`myspace://add/${friendCode}`}
+                size={QR_BOX - QR_PADDING * 2}
+                color={colors.ink}
+                backgroundColor="#fff"
+                onError={(e: Error) => console.warn('[AddFriendScreen] QR render failed:', e)}
+              />
             ) : null}
             <View style={styles.qrBadge}>
               <Image source={require('../../../assets/logos/logo-lime.png')} style={styles.qrBadgeImage} />
@@ -160,6 +183,30 @@ export function AddFriendScreen() {
           <Text style={styles.scanLabel}>Scan their code</Text>
         </Pressable>
       </View>
+
+      <BottomSheet visible={shareOpen} onClose={() => setShareOpen(false)}>
+        <Text style={styles.sheetTitle}>Share your invite code</Text>
+        <View style={styles.sheetRows}>
+          <Pressable onPress={shareViaWhatsApp} style={styles.sheetRow} accessibilityRole="button" accessibilityLabel="Share via WhatsApp">
+            <View style={[styles.sheetIcon, { backgroundColor: '#25D366' }]}>
+              <Icon path={CHAT_BUBBLE_ICON} color="#fff" size={19} strokeWidth={1.8} />
+            </View>
+            <Text style={styles.sheetRowLabel}>WhatsApp</Text>
+          </Pressable>
+          <Pressable onPress={shareViaMessage} style={styles.sheetRow} accessibilityRole="button" accessibilityLabel="Share via Message">
+            <View style={[styles.sheetIcon, { backgroundColor: colors.ink }]}>
+              <Icon path={CHAT_BUBBLE_ICON} color={colors.lime} size={19} strokeWidth={1.8} />
+            </View>
+            <Text style={styles.sheetRowLabel}>Message</Text>
+          </Pressable>
+          <Pressable onPress={shareViaEmail} style={styles.sheetRow} accessibilityRole="button" accessibilityLabel="Share via Email">
+            <View style={[styles.sheetIcon, { backgroundColor: colors.ink10 }]}>
+              <Icon path={ENVELOPE_ICON} color={colors.ink} size={19} strokeWidth={1.8} />
+            </View>
+            <Text style={styles.sheetRowLabel}>Email</Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
     </LinearGradient>
   );
 }
@@ -237,11 +284,14 @@ const styles = StyleSheet.create({
     padding: QR_PADDING,
     backgroundColor: '#fff',
     borderRadius: 24,
+    overflow: 'hidden',
   },
   qrBadge: {
     position: 'absolute',
-    width: 46,
-    height: 46,
+    top: (QR_BOX - QR_BADGE_SIZE) / 2,
+    left: (QR_BOX - QR_BADGE_SIZE) / 2,
+    width: QR_BADGE_SIZE,
+    height: QR_BADGE_SIZE,
     borderRadius: 14,
     borderWidth: 5,
     borderColor: '#fff',
@@ -378,5 +428,31 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans600,
     fontSize: 16,
     color: colors.ink,
+  },
+  sheetTitle: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 21,
+    color: colors.textPrimary,
+  },
+  sheetRows: {
+    marginTop: spacing.xs,
+  },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.ms,
+    paddingVertical: 13,
+  },
+  sheetIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetRowLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 15.5,
+    color: colors.textPrimary,
   },
 });
