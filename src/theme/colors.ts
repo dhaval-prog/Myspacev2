@@ -21,6 +21,13 @@ export const colors = {
   textLocked: 'rgba(22,33,12,0.28)',
   placeholder: 'rgba(22,33,12,0.42)',
 
+  // Raw ink-opacity steps named to match design-token handoffs directly
+  // (6p-series mockups) — used where no existing semantic token lines up.
+  ink65: 'rgba(22,33,12,0.65)',
+  ink55: 'rgba(22,33,12,0.55)',
+  ink50: 'rgba(22,33,12,0.5)',
+  ink10: 'rgba(22,33,12,0.1)',
+
   // Inactive circular badge (category count)
   badgeInactiveBg: 'rgba(22,33,12,0.12)',
   badgeInactiveFg: 'rgba(22,33,12,0.50)',

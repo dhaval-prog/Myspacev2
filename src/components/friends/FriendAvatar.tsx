@@ -12,11 +12,20 @@ interface FriendAvatarProps {
   online?: boolean;
   /** Profile photo URL — shown in place of the initials circle when present. */
   avatarUrl?: string | null;
+  /**
+   * An outgoing/pending connection always renders as a flat ink-10 circle
+   * with ink-55 initials — never the lime/mist/coral rotation, and never
+   * that rotation just dimmed with opacity (which used to leave a pending
+   * row showing a random faded color depending on the user's id).
+   */
+  pending?: boolean;
+  /** Pixel-exact override for the initials size, when the default size-scaled formula isn't precise enough (e.g. two same-size overlapping avatars with intentionally different initial sizes). */
+  initialsFontSize?: number;
 }
 
 /** Photo (once set), else a lime/ice/coral initials circle — shared by every Friends & chat screen. */
-export function FriendAvatar({ userId, name, size = 44, style, online, avatarUrl }: FriendAvatarProps) {
-  const skin = avatarSkinFor(userId);
+export function FriendAvatar({ userId, name, size = 44, style, online, avatarUrl, pending, initialsFontSize }: FriendAvatarProps) {
+  const skin = pending ? { bg: colors.ink10, fg: colors.ink55 } : avatarSkinFor(userId);
   const dim = { width: size, height: size, borderRadius: size / 2 };
   const dotSize = Math.max(10, Math.round(size * 0.3));
   return (
@@ -32,7 +41,7 @@ export function FriendAvatar({ userId, name, size = 44, style, online, avatarUrl
       {avatarUrl ? (
         <Image source={{ uri: avatarUrl }} style={dim} />
       ) : (
-        <Text style={[styles.initials, { color: skin.fg, fontSize: Math.round(size * 0.34) }]}>{initialsOf(name)}</Text>
+        <Text style={[styles.initials, { color: skin.fg, fontSize: initialsFontSize ?? Math.round(size * 0.34) }]}>{initialsOf(name)}</Text>
       )}
       {online ? (
         <View

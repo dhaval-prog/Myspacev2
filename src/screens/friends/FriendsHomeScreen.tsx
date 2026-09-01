@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, noOutline, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
+import { SearchIcon } from '../../components/icons/SearchIcon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { useFriends } from '../../context/FriendsContext';
 
-const CHAT_ICON = 'M4 4h16v12H8l-4 4z';
+const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const CHEVRON_ICON = 'M9 6l6 6-6 6';
 const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
@@ -40,7 +42,13 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
         : `${requestNames.join(' and ')} want to connect`;
 
   return (
-    <View style={styles.screen}>
+    <LinearGradient
+      colors={colors.friendsCanvas as [string, string, ...string[]]}
+      locations={colors.friendsCanvasStops as [number, number, ...number[]]}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.screen}
+    >
       <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
@@ -60,7 +68,7 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
         </View>
 
         <View style={styles.searchField}>
-          <Text style={styles.searchIcon}>⌕</Text>
+          <SearchIcon size={19} color={colors.ink55} />
           <TextInput
             value={query}
             onChangeText={setQuery}
@@ -79,6 +87,7 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
                   userId={r.userId}
                   name={r.name}
                   size={38}
+                  initialsFontSize={i > 0 ? 13 : 14}
                   style={i > 0 ? styles.requestsAvatarOverlap : undefined}
                   avatarUrl={r.avatarUrl}
                 />
@@ -112,13 +121,16 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
                       <Text style={styles.rowName}>{p.name}</Text>
                       {p.username && <Text style={styles.rowMeta}>@{p.username}</Text>}
                     </View>
+                    <View style={styles.rowAction} pointerEvents="none">
+                      <Icon path={CHAT_ICON} color={colors.lime} size={16} strokeWidth={1.9} />
+                    </View>
                   </Pressable>
                 ) : (
                   <View key={p.connectionId} style={[styles.row, styles.rowPending]}>
-                    <FriendAvatar userId={p.userId} name={p.name} size={44} style={styles.rowPendingAvatar} avatarUrl={p.avatarUrl} />
+                    <FriendAvatar userId={p.userId} name={p.name} size={44} pending avatarUrl={p.avatarUrl} />
                     <View style={styles.rowText}>
                       <Text style={[styles.rowName, styles.rowNamePending]}>{p.name}</Text>
-                      <Text style={styles.rowMeta}>Request sent · pending</Text>
+                      <Text style={styles.rowMetaPending}>Request sent · pending</Text>
                     </View>
                     <Pressable
                       onPress={() => cancelRequest(p.connectionId)}
@@ -154,14 +166,13 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
           <Text style={styles.ctaLabel}>Add a friend</Text>
         </Pressable>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.pale,
   },
   scrollFlex: {
     flex: 1,
@@ -249,11 +260,6 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 20,
   },
-  searchIcon: {
-    fontSize: 15,
-    color: colors.textPrimary,
-    opacity: 0.5,
-  },
   searchInput: {
     flex: 1,
     fontFamily: fontFamily.sans400,
@@ -292,11 +298,11 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,.6)',
   },
   eyebrow: {
-    fontFamily: fontFamily.mono500,
+    fontFamily: fontFamily.sans600,
     fontSize: 11.5,
-    letterSpacing: 1.5,
+    letterSpacing: 1.495,
     textTransform: 'uppercase',
-    color: colors.textMuted,
+    color: colors.textFaint,
   },
   list: {
     gap: 10,
@@ -306,7 +312,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     backgroundColor: 'rgba(255,255,255,.86)',
-    borderRadius: radius.md,
+    borderRadius: 24,
     paddingVertical: 14,
     paddingHorizontal: 18,
   },
@@ -315,9 +321,6 @@ const styles = StyleSheet.create({
   },
   rowPending: {
     backgroundColor: 'rgba(255,255,255,.5)',
-  },
-  rowPendingAvatar: {
-    opacity: 0.5,
   },
   rowText: {
     flex: 1,
@@ -328,12 +331,25 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   rowNamePending: {
-    color: colors.textFaint,
+    color: colors.ink65,
   },
   rowMeta: {
     fontFamily: fontFamily.mono500,
     fontSize: 12.5,
-    color: colors.textFaint,
+    color: colors.ink50,
+  },
+  rowMetaPending: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 12.5,
+    color: colors.placeholder,
+  },
+  rowAction: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelPill: {
     borderRadius: radius.pill,
@@ -345,7 +361,7 @@ const styles = StyleSheet.create({
   cancelLabel: {
     fontFamily: fontFamily.sans600,
     fontSize: 11.5,
-    color: colors.textPrimary,
+    color: colors.ink50,
   },
   empty: {
     borderRadius: radius.md,
