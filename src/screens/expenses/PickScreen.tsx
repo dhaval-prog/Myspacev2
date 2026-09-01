@@ -44,9 +44,9 @@ export function PickScreen({ onHome, onOpenSplit, onOpenAccount, onOpenNotificat
           Scroll through your cards · pull one up to open
         </Text>
         <CardStack reduceMotion={reduceMotion} />
-        <Pressable onPress={openNewCard} style={styles.addButton} accessibilityRole="button" accessibilityLabel="Add budget card">
+        <Pressable onPress={openNewCard} style={styles.addButton} accessibilityRole="button" accessibilityLabel="Add expense card">
           <Text style={styles.addPlus}>+</Text>
-          <Text style={styles.addLabel}>ADD BUDGET CARD</Text>
+          <Text style={styles.addLabel}>ADD EXPENSE CARD</Text>
         </Pressable>
         <Pressable onPress={openJoin} style={styles.joinLink} accessibilityRole="button" accessibilityLabel="Join a budget card with an invite code">
           <Text style={styles.joinLinkText}>Have an invite code?</Text>

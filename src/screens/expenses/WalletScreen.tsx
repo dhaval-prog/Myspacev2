@@ -64,13 +64,9 @@ export function WalletScreen({ onHome }: WalletScreenProps) {
         ]}
       >
         <View style={[styles.header, { paddingTop: insets.top + spacing.huge }]}>
-          <Pressable onPress={backToPick} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back">
-            <Text style={styles.backArrow}>←</Text>
-          </Pressable>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {focusedCard?.label ?? ''}
           </Text>
-          <View style={{ width: 40 }} />
         </View>
 
         <View style={styles.carouselWrap}>
@@ -98,6 +94,15 @@ export function WalletScreen({ onHome }: WalletScreenProps) {
           </ScrollView>
         </View>
       </Animated.View>
+
+      <Pressable
+        onPress={backToPick}
+        style={[styles.backButtonFloating, { bottom: Math.max(insets.bottom, spacing.md) + spacing.md }]}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+      >
+        <Text style={styles.backArrow}>←</Text>
+      </Pressable>
     </View>
   );
 }
@@ -113,18 +118,20 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.xxxl,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  backButtonFloating: {
+    position: 'absolute',
+    left: spacing.xxxl,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.walletSurface,
     borderWidth: 1,
     borderColor: colors.walletBorder,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 20,
   },
   backArrow: {
     fontSize: 17,
