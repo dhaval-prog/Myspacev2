@@ -6,6 +6,8 @@ import { colors, fontFamily, noOutline, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { SearchIcon } from '../../components/icons/SearchIcon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
+import { BottomNav } from '../../components/BottomNav';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFriends } from '../../context/FriendsContext';
 
 const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
@@ -15,11 +17,15 @@ const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6
 
 interface FriendsHomeScreenProps {
   onHome: () => void;
+  onOpenExpenses: () => void;
+  onOpenSplit: () => void;
+  onOpenAddItem: () => void;
 }
 
 /** Friends list (6p-1): pending requests surfaced at the top, then everyone connected or waiting. */
-export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
+export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAddItem }: FriendsHomeScreenProps) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { friends, receivedRequests, sentRequests, goAdd, goRequests, goChats, openChat, cancelRequest } = useFriends();
   const [query, setQuery] = useState('');
 
@@ -51,20 +57,10 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
     >
       <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerRow}>
-          <View style={styles.headerLeft}>
-            <Pressable onPress={onHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Home">
-              <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
-            </Pressable>
-            <View>
-              <Text style={styles.title}>Friends</Text>
-              <Text style={styles.sub}>
-                {friends.length} connected{receivedRequests.length > 0 ? ` · ${receivedRequests.length} waiting` : ''}
-              </Text>
-            </View>
-          </View>
-          <Pressable onPress={goChats} style={styles.chatButton} accessibilityRole="button" accessibilityLabel="Chats">
-            <Icon path={CHAT_ICON} color={colors.lime} size={20} strokeWidth={1.9} />
-          </Pressable>
+          <Text style={styles.title}>Friends</Text>
+          <Text style={styles.sub}>
+            {friends.length} connected{receivedRequests.length > 0 ? ` · ${receivedRequests.length} waiting` : ''}
+          </Text>
         </View>
 
         <View style={styles.searchField}>
@@ -155,7 +151,15 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
         )}
       </ScrollView>
 
-      <View style={[styles.pinned, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+      <View style={styles.pinned}>
+        <View style={styles.bottomIconRow}>
+          <Pressable onPress={onHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Home">
+            <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
+          </Pressable>
+          <Pressable onPress={goChats} style={styles.chatButton} accessibilityRole="button" accessibilityLabel="Chats">
+            <Icon path={CHAT_ICON} color={colors.lime} size={20} strokeWidth={1.9} />
+          </Pressable>
+        </View>
         <Pressable
           onPress={goAdd}
           style={({ pressed }) => [styles.ctaButton, pressed && styles.pressed]}
@@ -166,6 +170,18 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
           <Text style={styles.ctaLabel}>Add a friend</Text>
         </Pressable>
       </View>
+
+      <BottomNav
+        activeId="friends"
+        onSelect={(id) => {
+          if (id === 'home') onHome();
+          if (id === 'expenses') onOpenExpenses();
+          if (id === 'split') onOpenSplit();
+        }}
+        onAdd={onOpenAddItem}
+        bottomInset={insets.bottom}
+        reduceMotion={reduceMotion}
+      />
     </LinearGradient>
   );
 }
@@ -185,6 +201,12 @@ const styles = StyleSheet.create({
   pinned: {
     paddingHorizontal: 26,
     paddingTop: spacing.ms,
+  },
+  bottomIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.ms,
   },
   ctaButton: {
     flexDirection: 'row',
@@ -206,9 +228,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 2,
   },
   title: {
     fontFamily: fontFamily.sans700,
@@ -221,11 +241,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans400,
     fontSize: 13.5,
     color: colors.textSecondary,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.ms,
   },
   iconButton: {
     width: 52,

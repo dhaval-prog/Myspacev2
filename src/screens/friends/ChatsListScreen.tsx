@@ -6,6 +6,8 @@ import { colors, fontFamily, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { LockIcon } from '../../components/icons/LockIcon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
+import { BottomNav } from '../../components/BottomNav';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFriends } from '../../context/FriendsContext';
 import { timeAgo } from '../../utils/relativeTime';
 
@@ -14,9 +16,17 @@ const BACK_ICON = 'M15 5l-7 7 7 7';
 
 const STORY_DOT_OVERRIDE = { size: 14, ringWidth: 2.5, ringColor: colors.onlineDotRing };
 
+interface ChatsListScreenProps {
+  onHome: () => void;
+  onOpenExpenses: () => void;
+  onOpenSplit: () => void;
+  onOpenAddItem: () => void;
+}
+
 /** Chats (6p-6) — only accepted friends get a thread here. */
-export function ChatsListScreen() {
+export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAddItem }: ChatsListScreenProps) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { friends, sentRequests, goHome, goAdd, openChat, lastMessageFor, isUnread, unreadCountFor, isOnline, isTyping } = useFriends();
 
   return (
@@ -29,9 +39,6 @@ export function ChatsListScreen() {
     >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.topRow}>
-          <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Friends">
-            <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
-          </Pressable>
           <Text style={styles.title}>Chats</Text>
           <View style={styles.spacer} />
           <Pressable onPress={goAdd} style={styles.fab} accessibilityRole="button" accessibilityLabel="Add a friend">
@@ -117,6 +124,24 @@ export function ChatsListScreen() {
           </>
         )}
       </ScrollView>
+
+      <View style={styles.pinned}>
+        <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Friends">
+          <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
+        </Pressable>
+      </View>
+
+      <BottomNav
+        activeId="friends"
+        onSelect={(id) => {
+          if (id === 'home') onHome();
+          if (id === 'expenses') onOpenExpenses();
+          if (id === 'split') onOpenSplit();
+        }}
+        onAdd={onOpenAddItem}
+        bottomInset={insets.bottom}
+        reduceMotion={reduceMotion}
+      />
     </LinearGradient>
   );
 }
@@ -128,6 +153,11 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 26,
     paddingBottom: spacing.huge,
+  },
+  pinned: {
+    paddingHorizontal: 26,
+    paddingTop: spacing.ms,
+    paddingBottom: spacing.ms,
   },
   topRow: {
     flexDirection: 'row',
