@@ -18,6 +18,9 @@ import { CategoryNavigation, type CategoryRowData } from '../components/Category
 import { ContextCard } from '../components/ContextCard';
 import { BottomNav } from '../components/BottomNav';
 
+const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
+const PIN_ICON = 'M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z M12 11.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5';
+
 interface HomeScreenProps {
   onOpenNotificationTarget?: (target: NotificationTarget) => void;
   onOpenDetail: (viewId: ViewId, initialIndex?: number) => void;
@@ -86,9 +89,10 @@ export function HomeScreen({
     list.push({
       id: 'friends',
       label: 'Orbit - Find Your Circle',
-      count: receivedRequests.length ? String(receivedRequests.length) : '→',
+      count: receivedRequests.length ? String(receivedRequests.length) : '',
+      icon: receivedRequests.length ? undefined : CHAT_ICON,
     });
-    list.push({ id: 'liveLocations', label: 'Radar - Find Your People', count: '→' });
+    list.push({ id: 'liveLocations', label: 'Radar - Find Your People', count: '', icon: PIN_ICON });
     return list;
   }, [items.length, showAttention, attentionEntries.length, receivedRequests.length]);
 

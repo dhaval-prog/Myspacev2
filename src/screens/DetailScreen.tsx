@@ -13,6 +13,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { VIEWS, type ViewId } from '../data/views';
 import { ROOM_OPTIONS } from '../data/rooms';
 import { RAIL_ICON } from '../data/railIcons';
+import { CATEGORY_ICON } from '../data/itemCategories';
 import { getAttentionEntries, formatDate } from '../utils/attention';
 import { formatTime12 } from '../utils/time';
 import { recurAlertDate } from '../utils/alerts';
@@ -54,6 +55,7 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
       id: entry.item.name + entry.index,
       mono: entry.item.mono,
       label: entry.item.name,
+      path: entry.item.category === 'Alert' ? CATEGORY_ICON.Alert : undefined,
       locked: false,
     }));
   }, [isFormView, gateOn, attentionEntries]);
