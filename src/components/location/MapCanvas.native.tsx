@@ -135,11 +135,20 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
       showsMyLocationButton={false}
       customMapStyle={Platform.OS === 'android' ? ANDROID_MAP_STYLE : undefined}
     >
+      {/*
+        tracksViewChanges is true on every Marker below — false skips
+        re-snapshotting a custom marker view after its first render, but on
+        a real device that first snapshot can land before the view has
+        actually laid out (fonts, layout pass), leaving a permanently blank
+        pin. True costs a bit more on every re-render, cheap at the handful
+        of pins this screen ever shows, and it's what actually renders
+        reliably.
+      */}
       {clusters.map((cluster) => {
         if (cluster.points.length === 1) {
           const { pin } = cluster.points[0];
           return (
-            <Marker key={pin.userId} coordinate={{ latitude: pin.latitude, longitude: pin.longitude }} onPress={() => onSelectPin(pin.userId)} tracksViewChanges={false}>
+            <Marker key={pin.userId} coordinate={{ latitude: pin.latitude, longitude: pin.longitude }} onPress={() => onSelectPin(pin.userId)} zIndex={1} tracksViewChanges={true}>
               <View style={styles.pinWrap}>
                 {pin.live ? <PulseRing avatarSize={44} /> : null}
                 <FriendAvatar userId={pin.userId} name={pin.name} size={44} />
@@ -164,7 +173,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
             key={`cluster-${cluster.points.map((p) => p.id).join('-')}`}
             coordinate={{ latitude: lat, longitude: lng }}
             onPress={() => zoomToCluster(cluster)}
-            tracksViewChanges={false}
+            zIndex={1}
+            tracksViewChanges={true}
           >
             <View style={styles.pinWrap}>
               <View style={styles.clusterBadge}>
@@ -186,9 +196,13 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
       ) : null}
 
       {myPosition ? (
-        // zIndex below friend markers — this one has no onPress, so if it
-        // ever sits right on top of a friend's pin, theirs should still win.
-        <Marker coordinate={myPosition} zIndex={-1} tracksViewChanges={false}>
+        // No zIndex here (a negative one previously made this marker
+        // disappear on iOS — it renders behind the map's own tile layer
+        // rather than just behind other markers). Friend markers above are
+        // bumped to zIndex 1 instead, which is enough to win any tap
+        // conflict when this one sits right on top of a friend's pin —
+        // this one has no onPress of its own anyway.
+        <Marker coordinate={myPosition} tracksViewChanges={true}>
           <View style={styles.pinWrap}>
             {amSharing ? <PulseRing avatarSize={48} /> : null}
             <View style={styles.youTile}>
