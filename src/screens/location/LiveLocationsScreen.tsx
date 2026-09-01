@@ -212,6 +212,7 @@ function MapPage({
           amSharing={sharing}
           myAccuracy={myAccuracy}
           routeCoords={routeCoords}
+          bottomInset={sheetHeight}
           onSelectPin={togglePreview}
         />
       </View>

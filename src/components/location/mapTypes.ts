@@ -16,6 +16,12 @@ export interface MapCanvasProps {
   /** GPS accuracy radius in meters for `myPosition`, when known — drawn as a soft ring around the "You" pin. */
   myAccuracy?: number | null;
   /**
+   * Height, in pixels, of opaque UI docked to the bottom of the map (the
+   * "Nearby friends" sheet) — auto-fit/recenter keeps pins clear of this
+   * band instead of centering them right behind it.
+   */
+  bottomInset?: number;
+  /**
    * A straight "as the crow flies" path to draw and auto-fit to — not a
    * real turn-by-turn route (that needs a paid/keyed directions API this
    * app doesn't have), just origin + destination.
