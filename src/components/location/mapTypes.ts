@@ -13,6 +13,8 @@ export interface MapCanvasProps {
   myPosition: { latitude: number; longitude: number } | null;
   /** True only while this account has an active, unexpired share of its own. */
   amSharing: boolean;
+  /** GPS accuracy radius in meters for `myPosition`, when known — drawn as a soft ring around the "You" pin. */
+  myAccuracy?: number | null;
   onSelectPin: (userId: string) => void;
 }
 

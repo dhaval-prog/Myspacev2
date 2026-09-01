@@ -8,10 +8,12 @@ import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { MapCanvas } from '../../components/location/MapCanvas';
 import type { MapCanvasHandle } from '../../components/location/mapTypes';
+import { PinPreviewCard } from '../../components/location/PinPreviewCard';
 import { useAuth } from '../../context/AuthContext';
 import { useFriends } from '../../context/FriendsContext';
 import { LocationProvider, useLocationData } from '../../context/LocationContext';
 import type { ShareDurationKey } from '../../types/location';
+import { haversineMeters, formatDistance } from '../../utils/geo';
 import { LocationPrivacyScreen } from './LocationPrivacyScreen';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
@@ -84,9 +86,12 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
 
   const [sheetView, setSheetView] = useState<'none' | 'share' | 'detail'>('none');
   const [detailFriendId, setDetailFriendId] = useState<string | null>(null);
+  const [previewFriendId, setPreviewFriendId] = useState<string | null>(null);
   const [shareDurationKey, setShareDurationKey] = useState<ShareDurationKey>('1h');
   const [myPosition, setMyPosition] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [myAccuracy, setMyAccuracy] = useState<number | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [sheetHeight, setSheetHeight] = useState(0);
   const mapRef = useRef<MapCanvasHandle>(null);
 
   const ownShare = userId ? shareFor(userId) : undefined;
@@ -108,6 +113,7 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
       if (cancelled) return;
       const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
       setMyPosition(coords);
+      setMyAccuracy(pos.coords.accuracy ?? null);
       upsertLastSeen(coords.latitude, coords.longitude);
     })();
     return () => {
@@ -127,6 +133,7 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
         if (cancelled) return;
         const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
         setMyPosition(coords);
+        setMyAccuracy(pos.coords.accuracy ?? null);
         pingShare(coords.latitude, coords.longitude);
       });
     })();
@@ -143,17 +150,27 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
     const live = !!share;
     const coord = share ?? seen;
     const statusText = live ? 'Live · updating now' : seen ? `Last seen ${timeAgoLabel(seen.updatedAt)}` : 'No location shared yet';
-    return { ...f, live, latitude: coord?.latitude ?? null, longitude: coord?.longitude ?? null, statusText };
+    const distanceMeters =
+      myPosition && coord && coord.latitude !== null && coord.longitude !== null
+        ? haversineMeters(myPosition, { latitude: coord.latitude, longitude: coord.longitude })
+        : null;
+    const distanceText = distanceMeters !== null ? formatDistance(distanceMeters) : null;
+    return { ...f, live, latitude: coord?.latitude ?? null, longitude: coord?.longitude ?? null, statusText, distanceText };
   });
   const detailFriend = rows.find((f) => f.userId === detailFriendId) ?? rows[0];
+  const previewFriend = rows.find((f) => f.userId === previewFriendId) ?? null;
 
   const closeSheet = () => {
     setSheetView('none');
     setDetailFriendId(null);
   };
   const openDetail = (userId: string) => {
+    setPreviewFriendId(null);
     setDetailFriendId(userId);
     setSheetView('detail');
+  };
+  const togglePreview = (userId: string) => {
+    setPreviewFriendId((current) => (current === userId ? null : userId));
   };
 
   const handleStartSharing = async () => {
@@ -168,8 +185,21 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
   return (
     <View style={styles.screen}>
       <View style={StyleSheet.absoluteFill}>
-        <MapCanvas ref={mapRef} pins={rows} myPosition={myPosition} amSharing={sharing} onSelectPin={openDetail} />
+        <MapCanvas ref={mapRef} pins={rows} myPosition={myPosition} amSharing={sharing} myAccuracy={myAccuracy} onSelectPin={togglePreview} />
       </View>
+
+      {previewFriend ? (
+        <PinPreviewCard
+          userId={previewFriend.userId}
+          name={previewFriend.name}
+          statusText={previewFriend.statusText}
+          distanceText={previewFriend.distanceText}
+          live={previewFriend.live}
+          onOpen={() => openDetail(previewFriend.userId)}
+          onClose={() => setPreviewFriendId(null)}
+          style={[styles.previewCard, { bottom: sheetHeight + spacing.md }]}
+        />
+      ) : null}
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
@@ -203,7 +233,10 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
       </Pressable>
 
       {/* Bottom sheet peek */}
-      <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.md }]}>
+      <View
+        style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.md }]}
+        onLayout={(e) => setSheetHeight(e.nativeEvent.layout.height)}
+      >
         <View style={styles.sheetHandle} />
 
         {sharing ? (
@@ -231,6 +264,7 @@ function MapPage({ onBack, onOpenPrivacy }: { onBack: () => void; onOpenPrivacy:
                   <Text style={styles.rowName}>{f.name}</Text>
                   <Text style={styles.rowStatus}>{f.statusText}</Text>
                 </View>
+                {f.distanceText ? <Text style={styles.rowDistance}>{f.distanceText}</Text> : null}
                 <Icon path={CHEVRON_ICON} color={colors.textFaint} size={15} strokeWidth={2} />
               </Pressable>
             ))}
@@ -496,6 +530,16 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans400,
     fontSize: 12,
     color: colors.textMuted,
+  },
+  rowDistance: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 10.5,
+    color: colors.textFaint,
+  },
+  previewCard: {
+    position: 'absolute',
+    left: spacing.xxxl,
+    right: spacing.xxxl,
   },
   sheetTitle: {
     fontFamily: fontFamily.sans700,
