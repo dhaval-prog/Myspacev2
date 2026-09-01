@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography, radius, EASE, duration } from '../theme';
 import { Rail, type RailTile } from '../components/Rail';
 import { ItemForm } from '../components/ItemForm';
+import { AlertForm } from '../components/AlertForm';
 import { ItemList } from '../components/ItemList';
 import { Icon } from '../components/Icon';
 import { BottomNav } from '../components/BottomNav';
@@ -12,7 +13,8 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { VIEWS, type ViewId } from '../data/views';
 import { ROOM_OPTIONS } from '../data/rooms';
 import { RAIL_ICON } from '../data/railIcons';
-import { getAttentionEntries, formatDate, type AttentionEntry } from '../utils/attention';
+import { getAttentionEntries, formatDate } from '../utils/attention';
+import { formatTime12 } from '../utils/time';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
 
@@ -108,13 +110,7 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
           {viewId === 'add' && selectedTileId === 'view-all' && items.length > 0 && (
             <ItemList items={items} rooms={ROOM_OPTIONS} mode="view" />
           )}
-          {viewId === 'add' && selectedTileId === 'alerts' && (
-            <AlertsSection
-              entries={attentionEntries}
-              onResolve={(index) => editItem(index, { expiry: '' })}
-              onRemove={removeItem}
-            />
-          )}
+          {viewId === 'add' && selectedTileId === 'alerts' && <AlertForm onSubmit={addItem} />}
           {viewId === 'add' && selectedTileId === 'delete' && items.length > 0 && (
             <ItemList items={items} rooms={ROOM_OPTIONS} mode="delete" onDelete={removeItem} />
           )}
@@ -164,9 +160,13 @@ function AttentionDetail({
   onResolve: () => void;
   onRemove: () => void;
 }) {
+  const time = entry.item.reminderTimes?.[0];
   return (
     <View style={attentionStyles.card}>
-      <Text style={typography.formLabel}>Expires {formatDate(entry.item.expiry)}</Text>
+      <Text style={typography.formLabel}>
+        Expires {formatDate(entry.item.expiry)}
+        {time ? ` at ${formatTime12(time)}` : ''}
+      </Text>
       <View style={attentionStyles.actions}>
         <Pressable onPress={onResolve} style={[attentionStyles.button, { backgroundColor: colors.ink }]}>
           <Text style={[typography.buttonLabel, { fontSize: 13, color: colors.lime }]}>Mark used</Text>
@@ -197,42 +197,6 @@ const attentionStyles = StyleSheet.create({
     alignItems: 'center',
   },
 });
-
-/** The "Alerts" rail tile's content: every item due a look, each with its own resolve/remove actions. */
-function AlertsSection({
-  entries,
-  onResolve,
-  onRemove,
-}: {
-  entries: AttentionEntry[];
-  onResolve: (index: number) => void;
-  onRemove: (index: number) => void;
-}) {
-  if (entries.length === 0) {
-    return <Text style={typography.body}>Nothing needs attention right now.</Text>;
-  }
-
-  return (
-    <View style={{ gap: spacing.ms }}>
-      {entries.map((entry) => (
-        <View key={entry.index} style={attentionStyles.card}>
-          <View>
-            <Text style={typography.itemTitle}>{entry.item.name}</Text>
-            <Text style={typography.formLabel}>{entry.badge} · Expires {formatDate(entry.item.expiry)}</Text>
-          </View>
-          <View style={attentionStyles.actions}>
-            <Pressable onPress={() => onResolve(entry.index)} style={[attentionStyles.button, { backgroundColor: colors.ink }]}>
-              <Text style={[typography.buttonLabel, { fontSize: 13, color: colors.lime }]}>Mark used</Text>
-            </Pressable>
-            <Pressable onPress={() => onRemove(entry.index)} style={[attentionStyles.button, { backgroundColor: 'rgba(211,50,67,0.12)' }]}>
-              <Text style={[typography.buttonLabel, { fontSize: 13, color: '#D33243' }]}>Remove item</Text>
-            </Pressable>
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-}
 
 function ContentColumn({
   collapsed,

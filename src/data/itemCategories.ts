@@ -21,6 +21,11 @@ export const CATEGORIES: CategoryDef[] = [
   { label: 'Toys', icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M3 12h18M12 3c3.2 3 3.2 15 0 18M12 3c-3.2 3-3.2 15 0 18', mono: '◉' },
   { label: 'Sports', icon: 'M7 4h10v3.5a5 5 0 0 1-10 0zM7 5.5H4.5v1.5a3 3 0 0 0 3 3M17 5.5h2.5V7a3 3 0 0 1-3 3M12 12.5V17M8.5 21h7M10 17h4', mono: '◎' },
   { label: 'Personal', icon: 'M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8M4.5 20.5c0-3.6 3.4-5.5 7.5-5.5s7.5 1.9 7.5 5.5', mono: '◐' },
+  {
+    label: 'Alert',
+    icon: 'M12 3a4 4 0 0 0-4 4v3.2c0 .53-.21 1.04-.59 1.41L6 13v1h12v-1l-1.41-1.39A2 2 0 0 1 16 10.2V7a4 4 0 0 0-4-4z M10 17a2 2 0 0 0 4 0',
+    mono: '🔔',
+  },
   { label: 'Other', icon: 'M4 8h16v12H4zM4 8l2-4h12l2 4M12 8v12', mono: '▢' },
 ];
 

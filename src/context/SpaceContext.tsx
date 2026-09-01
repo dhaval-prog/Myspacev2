@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { DosageType, Item } from '../types/space';
+import type { AlertType, DosageType, Item } from '../types/space';
 import { CATEGORY_MONO } from '../data/itemCategories';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
@@ -15,6 +15,7 @@ interface NewItemInput {
   dosesPerDay?: number;
   reminderTimes?: string[];
   photoUrl?: string;
+  alertType?: AlertType;
 }
 
 interface EditItemInput {
@@ -28,6 +29,7 @@ interface EditItemInput {
   dosesPerDay?: number;
   reminderTimes?: string[];
   photoUrl?: string;
+  alertType?: AlertType;
 }
 
 interface SpaceContextValue {
@@ -80,7 +82,7 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       const itemsRes = await supabase
         .from('items')
-        .select('id,name,category,room,expiry,mono,dosage_type,dosage_amount,reminders_enabled,doses_per_day,reminder_times,photo_url')
+        .select('id,name,category,room,expiry,mono,dosage_type,dosage_amount,reminders_enabled,doses_per_day,reminder_times,photo_url,alert_type')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
       if (cancelled) return;
@@ -102,6 +104,7 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
             dosesPerDay: (row.doses_per_day as number | null) ?? undefined,
             reminderTimes: (row.reminder_times as string[] | null) ?? undefined,
             photoUrl: (row.photo_url as string | null) || undefined,
+            alertType: (row.alert_type as AlertType | null) ?? undefined,
           },
         })),
       );
@@ -140,6 +143,7 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
           doses_per_day: input.dosesPerDay ?? null,
           reminder_times: input.reminderTimes ?? null,
           photo_url: input.photoUrl ?? null,
+          alert_type: input.alertType ?? null,
         })
         .select('id')
         .single()
@@ -174,6 +178,7 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
               ...(input.dosesPerDay !== undefined && { doses_per_day: input.dosesPerDay }),
               ...(input.reminderTimes !== undefined && { reminder_times: input.reminderTimes }),
               ...(input.photoUrl !== undefined && { photo_url: input.photoUrl || null }),
+              ...(input.alertType !== undefined && { alert_type: input.alertType }),
             })
             .eq('id', row.id)
             .then(({ error }) => warn('update item', error));
