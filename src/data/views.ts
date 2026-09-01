@@ -31,7 +31,7 @@ export interface ViewDef {
 export const VIEWS: Record<'add', ViewDef> = {
   add: {
     id: 'add',
-    tabLabel: 'Add Items',
+    tabLabel: 'Add Items & Alerts',
     kicker: 'New thing',
     items: [
       {
