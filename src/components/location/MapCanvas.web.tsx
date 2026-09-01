@@ -5,7 +5,9 @@ import 'leaflet/dist/leaflet.css';
 import { colors, fontFamily } from '../../theme';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
-import type { MapCanvasHandle, MapCanvasProps } from './mapTypes';
+import { PulseRing } from './PulseRing';
+import { clusterPins, type PinCluster } from '../../utils/clusterPins';
+import type { MapCanvasHandle, MapCanvasProps, MapPin } from './mapTypes';
 
 const CLOCK_ICON = 'M12 7v5l3.5 2M12 21a9 9 0 100-18 9 9 0 000 18z';
 
@@ -15,27 +17,41 @@ const FALLBACK_CENTER: [number, number] = [12.9716, 77.5946];
 const FALLBACK_ZOOM = 12;
 const FOCUSED_ZOOM = 15;
 
+// Pins within this many screen pixels of each other collapse into one
+// cluster badge — cheap to recompute every render since it only ever runs
+// over a handful of friends.
+const CLUSTER_THRESHOLD_PX = 46;
+
+type LocatedPin = MapPin & { latitude: number; longitude: number };
+type ProjectedPin = { id: string; x: number; y: number; pin: LocatedPin };
+
 /**
- * Real web map — Leaflet + OpenStreetMap tiles, no API key required. Friend
+ * Real web map — Leaflet + CARTO's Positron tiles (a muted, branded basemap
+ * over free OpenStreetMap data — no API key), no API key required. Friend
  * pins stay our own FriendAvatar-based React views, absolutely positioned
  * over the Leaflet canvas by projecting lat/lng to screen coordinates on
  * every pan/zoom, rather than handing avatar rendering to Leaflet's own
  * (HTML-string-based) marker/icon system.
  */
-export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas({ pins, myPosition, amSharing, onSelectPin }, ref) {
+export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
+  { pins, myPosition, amSharing, myAccuracy, onSelectPin },
+  ref
+) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const hasFitRef = useRef(false);
+  const accuracyCircleRef = useRef<L.Circle | null>(null);
   const [, forceRender] = useState(0);
 
-  const located = pins.filter((p): p is typeof p & { latitude: number; longitude: number } => p.latitude !== null && p.longitude !== null);
+  const located = pins.filter((p): p is LocatedPin => p.latitude !== null && p.longitude !== null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(FALLBACK_CENTER, FALLBACK_ZOOM);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     }).addTo(map);
     const rerender = () => forceRender((n) => n + 1);
     map.on('move', rerender);
@@ -77,6 +93,32 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
 
   useImperativeHandle(ref, () => ({ recenter: fitToPoints }));
 
+  // A soft ring showing GPS accuracy around "You" — real-world meters, so
+  // Leaflet's own circle (not a screen-projected view) draws it correctly
+  // at every zoom level without extra math.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !myPosition || !myAccuracy) {
+      accuracyCircleRef.current?.remove();
+      accuracyCircleRef.current = null;
+      return;
+    }
+    if (!accuracyCircleRef.current) {
+      accuracyCircleRef.current = L.circle([myPosition.latitude, myPosition.longitude], {
+        radius: myAccuracy,
+        color: colors.ink,
+        weight: 1,
+        opacity: 0.25,
+        fillColor: colors.ink,
+        fillOpacity: 0.07,
+        interactive: false,
+      }).addTo(map);
+    } else {
+      accuracyCircleRef.current.setLatLng([myPosition.latitude, myPosition.longitude]);
+      accuracyCircleRef.current.setRadius(myAccuracy);
+    }
+  }, [myPosition, myAccuracy]);
+
   const project = (lat: number, lng: number) => {
     const map = mapRef.current;
     if (!map) return null;
@@ -84,59 +126,92 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     return { x: point.x, y: point.y };
   };
 
+  const projected: ProjectedPin[] = located
+    .map((p) => {
+      const pos = project(p.latitude, p.longitude);
+      return pos ? { id: p.userId, x: pos.x, y: pos.y, pin: p } : null;
+    })
+    .filter((v): v is ProjectedPin => v !== null);
+
+  const clusters = clusterPins(projected, CLUSTER_THRESHOLD_PX);
+
+  const zoomToCluster = (cluster: PinCluster<ProjectedPin>) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const lat = cluster.points.reduce((sum, p) => sum + p.pin.latitude, 0) / cluster.points.length;
+    const lng = cluster.points.reduce((sum, p) => sum + p.pin.longitude, 0) / cluster.points.length;
+    map.setView([lat, lng], Math.min(19, map.getZoom() + 3), { animate: true });
+  };
+
+  const myPos = myPosition ? project(myPosition.latitude, myPosition.longitude) : null;
+
   return (
     <View style={StyleSheet.absoluteFill}>
       <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
 
-      {located.map((p) => {
-        const pos = project(p.latitude, p.longitude);
-        if (!pos) return null;
+      {clusters.map((cluster) => {
+        if (cluster.points.length === 1) {
+          const { pin, x, y } = cluster.points[0];
+          return (
+            <Pressable
+              key={pin.userId}
+              onPress={() => onSelectPin(pin.userId)}
+              style={[styles.pinWrap, { left: x - 25, top: y - 25 }]}
+              accessibilityRole="button"
+              accessibilityLabel={pin.name}
+            >
+              {pin.live ? <PulseRing avatarSize={50} /> : null}
+              <FriendAvatar userId={pin.userId} name={pin.name} size={50} />
+              {pin.live ? (
+                <View style={styles.liveBadge}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveBadgeText}>LIVE</Text>
+                </View>
+              ) : (
+                <View style={styles.lastSeenBadge}>
+                  <Icon path={CLOCK_ICON} color={colors.lime} size={10} strokeWidth={2.4} />
+                </View>
+              )}
+            </Pressable>
+          );
+        }
         return (
           <Pressable
-            key={p.userId}
-            onPress={() => onSelectPin(p.userId)}
-            style={[styles.pinWrap, { left: pos.x - 25, top: pos.y - 25 }]}
+            key={`cluster-${cluster.points.map((p) => p.id).join('-')}`}
+            onPress={() => zoomToCluster(cluster)}
+            style={[styles.pinWrap, { left: cluster.x - 27, top: cluster.y - 27 }]}
             accessibilityRole="button"
-            accessibilityLabel={p.name}
+            accessibilityLabel={`${cluster.points.length} friends here — zoom in`}
           >
-            <FriendAvatar userId={p.userId} name={p.name} size={50} />
-            {p.live ? (
-              <View style={styles.liveBadge}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveBadgeText}>LIVE</Text>
-              </View>
-            ) : (
-              <View style={styles.lastSeenBadge}>
-                <Icon path={CLOCK_ICON} color={colors.lime} size={10} strokeWidth={2.4} />
-              </View>
-            )}
+            <View style={styles.clusterBadge}>
+              <Text style={styles.clusterCount}>{cluster.points.length}</Text>
+            </View>
           </Pressable>
         );
       })}
 
-      {myPosition
-        ? (() => {
-            const pos = project(myPosition.latitude, myPosition.longitude);
-            if (!pos) return null;
-            return (
-              <View style={[styles.pinWrap, { left: pos.x - 27, top: pos.y - 27 }]}>
-                <View style={styles.youTile}>
-                  <Text style={styles.youTileText}>You</Text>
-                </View>
-                {amSharing ? (
-                  <View style={styles.liveBadge}>
-                    <View style={styles.liveDot} />
-                    <Text style={styles.liveBadgeText}>LIVE</Text>
-                  </View>
-                ) : (
-                  <View style={styles.lastSeenBadge}>
-                    <Icon path={CLOCK_ICON} color={colors.lime} size={10} strokeWidth={2.4} />
-                  </View>
-                )}
-              </View>
-            );
-          })()
-        : null}
+      {myPosition && myPos ? (
+        // pointerEvents="none" — this is a plain non-interactive marker, but
+        // being the topmost absolutely-positioned view in DOM order it would
+        // otherwise swallow taps on any friend pin/cluster it happens to
+        // overlap (e.g. standing right next to someone).
+        <View pointerEvents="none" style={[styles.pinWrap, { left: myPos.x - 27, top: myPos.y - 27 }]}>
+          {amSharing ? <PulseRing avatarSize={54} /> : null}
+          <View style={styles.youTile}>
+            <Text style={styles.youTileText}>You</Text>
+          </View>
+          {amSharing ? (
+            <View style={styles.liveBadge}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveBadgeText}>LIVE</Text>
+            </View>
+          ) : (
+            <View style={styles.lastSeenBadge}>
+              <Icon path={CLOCK_ICON} color={colors.lime} size={10} strokeWidth={2.4} />
+            </View>
+          )}
+        </View>
+      ) : null}
     </View>
   );
 });
@@ -200,6 +275,26 @@ const styles = StyleSheet.create({
   youTileText: {
     fontFamily: fontFamily.sans700,
     fontSize: 14,
+    color: colors.lime,
+  },
+  clusterBadge: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: colors.ink,
+    borderWidth: 3,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  clusterCount: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 18,
     color: colors.lime,
   },
 });
