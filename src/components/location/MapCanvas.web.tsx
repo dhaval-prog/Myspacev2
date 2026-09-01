@@ -26,11 +26,14 @@ type LocatedPin = MapPin & { latitude: number; longitude: number };
 type ProjectedPin = { id: string; x: number; y: number; pin: LocatedPin };
 
 /**
- * Real web map — Leaflet + CARTO's Positron tiles (a muted, branded basemap
- * over free OpenStreetMap data — no API key), no API key required. Friend
- * pins stay our own FriendAvatar-based React views, absolutely positioned
- * over the Leaflet canvas by projecting lat/lng to screen coordinates on
- * every pan/zoom, rather than handing avatar rendering to Leaflet's own
+ * Real web map — Leaflet + OpenStreetMap tiles, no API key required.
+ * (CARTO's Positron basemap was tried as a more muted, branded look, but
+ * its free anonymous tile endpoint turned out to require a key — it just
+ * serves an "API KEY REQUIRED" watermark tile without one. Back to plain
+ * OSM raster tiles until that's set up properly, if ever.) Friend pins
+ * stay our own FriendAvatar-based React views, absolutely positioned over
+ * the Leaflet canvas by projecting lat/lng to screen coordinates on every
+ * pan/zoom, rather than handing avatar rendering to Leaflet's own
  * (HTML-string-based) marker/icon system.
  */
 export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
@@ -48,10 +51,9 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(FALLBACK_CENTER, FALLBACK_ZOOM);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
     const rerender = () => forceRender((n) => n + 1);
     map.on('move', rerender);
