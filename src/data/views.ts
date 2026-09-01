@@ -51,6 +51,14 @@ export const VIEWS: Record<'add', ViewDef> = {
         gated: false,
       },
       {
+        id: 'alerts',
+        mono: '🔔',
+        rail: 'Alerts',
+        title: 'Alerts',
+        desc: 'Everything expired or coming up within a week.',
+        gated: false,
+      },
+      {
         id: 'delete',
         mono: '⌫',
         rail: 'Delete',

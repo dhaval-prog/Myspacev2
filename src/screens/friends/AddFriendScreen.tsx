@@ -184,9 +184,6 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFrie
       </View>
 
       <View style={styles.pinned}>
-        <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Icon path={BACK_ICON} color={colors.textPrimary} size={19} strokeWidth={2} />
-        </Pressable>
         <Pressable onPress={goScan} style={({ pressed }) => [styles.scanButton, pressed && styles.scanButtonPressed]}>
           <Icon path={SCAN_ICON} color={colors.ink} size={18} strokeWidth={1.9} />
           <Text style={styles.scanLabel}>Scan their code</Text>
@@ -243,20 +240,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingHorizontal: 26,
-  },
-  iconButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    marginBottom: spacing.ms,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 14,
-    elevation: 2,
   },
   sharePill: {
     flexDirection: 'row',

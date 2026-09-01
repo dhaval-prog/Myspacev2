@@ -69,6 +69,8 @@ function AppNavigator() {
         viewId={screen.viewId}
         initialIndex={screen.initialIndex}
         onBack={() => setScreen({ name: 'home' })}
+        onOpenExpenses={() => setScreen({ name: 'expenses' })}
+        onOpenSplit={() => setScreen({ name: 'split' })}
       />
     );
   }

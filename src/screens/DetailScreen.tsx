@@ -5,20 +5,26 @@ import { colors, spacing, typography, radius, EASE, duration } from '../theme';
 import { Rail, type RailTile } from '../components/Rail';
 import { ItemForm } from '../components/ItemForm';
 import { ItemList } from '../components/ItemList';
+import { Icon } from '../components/Icon';
+import { BottomNav } from '../components/BottomNav';
 import { useSpace } from '../context/SpaceContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { VIEWS, type ViewId } from '../data/views';
 import { ROOM_OPTIONS } from '../data/rooms';
 import { RAIL_ICON } from '../data/railIcons';
-import { getAttentionEntries, formatDate } from '../utils/attention';
+import { getAttentionEntries, formatDate, type AttentionEntry } from '../utils/attention';
+
+const BACK_ICON = 'M15 5l-7 7 7 7';
 
 interface DetailScreenProps {
   viewId: ViewId;
   initialIndex?: number;
   onBack: () => void;
+  onOpenExpenses: () => void;
+  onOpenSplit: () => void;
 }
 
-export function DetailScreen({ viewId, initialIndex, onBack }: DetailScreenProps) {
+export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onOpenSplit }: DetailScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { items, addItem, editItem, removeItem } = useSpace();
@@ -78,9 +84,6 @@ export function DetailScreen({ viewId, initialIndex, onBack }: DetailScreenProps
         <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back" style={styles.backButton}>
           <Text style={typography.backLabel}>‹ Back</Text>
         </Pressable>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarIcon}>◎</Text>
-        </View>
       </View>
 
       <View style={styles.body}>
@@ -101,14 +104,21 @@ export function DetailScreen({ viewId, initialIndex, onBack }: DetailScreenProps
             <Text style={[typography.detailSubline, styles.subline]}>{subline}</Text>
           </View>
 
-          {viewId === 'add' && ri === 1 && <ItemForm rooms={ROOM_OPTIONS} onSubmit={addItem} />}
-          {viewId === 'add' && ri === 0 && items.length > 0 && (
+          {viewId === 'add' && selectedTileId === 'add' && <ItemForm rooms={ROOM_OPTIONS} onSubmit={addItem} />}
+          {viewId === 'add' && selectedTileId === 'view-all' && items.length > 0 && (
             <ItemList items={items} rooms={ROOM_OPTIONS} mode="view" />
           )}
-          {viewId === 'add' && ri === 2 && items.length > 0 && (
+          {viewId === 'add' && selectedTileId === 'alerts' && (
+            <AlertsSection
+              entries={attentionEntries}
+              onResolve={(index) => editItem(index, { expiry: '' })}
+              onRemove={removeItem}
+            />
+          )}
+          {viewId === 'add' && selectedTileId === 'delete' && items.length > 0 && (
             <ItemList items={items} rooms={ROOM_OPTIONS} mode="delete" onDelete={removeItem} />
           )}
-          {viewId === 'add' && ri === 3 && items.length > 0 && (
+          {viewId === 'add' && selectedTileId === 'edit' && items.length > 0 && (
             <ItemList items={items} rooms={ROOM_OPTIONS} mode="edit" onEditSave={editItem} />
           )}
 
@@ -121,6 +131,26 @@ export function DetailScreen({ viewId, initialIndex, onBack }: DetailScreenProps
           )}
         </ContentColumn>
       </View>
+
+      {viewId === 'add' && (
+        <>
+          <View style={[styles.pinnedBack, { paddingBottom: spacing.ms }]}>
+            <Pressable onPress={onBack} style={styles.backCircle} accessibilityRole="button" accessibilityLabel="Back">
+              <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
+            </Pressable>
+          </View>
+          <BottomNav
+            activeId="home"
+            onSelect={(id) => {
+              if (id === 'home') onBack();
+              if (id === 'expenses') onOpenExpenses();
+              if (id === 'split') onOpenSplit();
+            }}
+            bottomInset={insets.bottom}
+            reduceMotion={reduceMotion}
+          />
+        </>
+      )}
     </View>
   );
 }
@@ -168,6 +198,42 @@ const attentionStyles = StyleSheet.create({
   },
 });
 
+/** The "Alerts" rail tile's content: every item due a look, each with its own resolve/remove actions. */
+function AlertsSection({
+  entries,
+  onResolve,
+  onRemove,
+}: {
+  entries: AttentionEntry[];
+  onResolve: (index: number) => void;
+  onRemove: (index: number) => void;
+}) {
+  if (entries.length === 0) {
+    return <Text style={typography.body}>Nothing needs attention right now.</Text>;
+  }
+
+  return (
+    <View style={{ gap: spacing.ms }}>
+      {entries.map((entry) => (
+        <View key={entry.index} style={attentionStyles.card}>
+          <View>
+            <Text style={typography.itemTitle}>{entry.item.name}</Text>
+            <Text style={typography.formLabel}>{entry.badge} · Expires {formatDate(entry.item.expiry)}</Text>
+          </View>
+          <View style={attentionStyles.actions}>
+            <Pressable onPress={() => onResolve(entry.index)} style={[attentionStyles.button, { backgroundColor: colors.ink }]}>
+              <Text style={[typography.buttonLabel, { fontSize: 13, color: colors.lime }]}>Mark used</Text>
+            </Pressable>
+            <Pressable onPress={() => onRemove(entry.index)} style={[attentionStyles.button, { backgroundColor: 'rgba(211,50,67,0.12)' }]}>
+              <Text style={[typography.buttonLabel, { fontSize: 13, color: '#D33243' }]}>Remove item</Text>
+            </Pressable>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function ContentColumn({
   collapsed,
   reduceMotion,
@@ -214,17 +280,22 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    backgroundColor: colors.pale,
+  pinnedBack: {
+    paddingHorizontal: spacing.xxxl,
+    paddingTop: spacing.ms,
+  },
+  backCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  avatarIcon: {
-    fontSize: 15,
-    color: colors.textPrimary,
+    shadowColor: colors.ink,
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    elevation: 1,
   },
   body: {
     flex: 1,
