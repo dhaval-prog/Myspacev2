@@ -3,13 +3,12 @@ import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, EASE, duration, fontFamily, noOutline, radius, spacing, typography } from '../theme';
 import { useGlobalSearch, type SearchResult, type SearchSection } from '../hooks/useGlobalSearch';
-import type { Item, Room } from '../types/space';
+import type { Item } from '../types/space';
 import type { ViewId } from '../data/views';
 
 interface SearchOverlayProps {
   visible: boolean;
   onClose: () => void;
-  rooms: Room[];
   items: Item[];
   onOpenHome: () => void;
   onOpenDetail: (viewId: ViewId) => void;
@@ -29,16 +28,15 @@ const SECTION_LABEL: Record<SearchSection, string> = {
   split: 'Split',
 };
 
-/** Full-screen animated search popup — spans Home's own rooms/items plus Expenses' budget cards and Split's groups. */
-export function SearchOverlay({ visible, onClose, rooms, items, onOpenHome, onOpenDetail, onOpenExpenses, onOpenSplit, reduceMotion }: SearchOverlayProps) {
+/** Full-screen animated search popup — spans Home's own items plus Expenses' budget cards and Split's groups. */
+export function SearchOverlay({ visible, onClose, items, onOpenHome, onOpenDetail, onOpenExpenses, onOpenSplit, reduceMotion }: SearchOverlayProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(0)).current;
-  const results = useGlobalSearch(query, rooms, items);
+  const results = useGlobalSearch(query, items);
 
   const shortcuts: Shortcut[] = [
-    { label: 'Add room', onPress: () => onOpenDetail('rooms') },
     { label: 'Add item', onPress: () => onOpenDetail('add') },
     { label: 'Needs attention', onPress: () => onOpenDetail('attention') },
     { label: 'Add budget card', onPress: onOpenExpenses },
@@ -108,7 +106,7 @@ export function SearchOverlay({ visible, onClose, rooms, items, onOpenHome, onOp
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.results}>
           {!hasQuery ? (
             <View style={styles.shortcutsWrap}>
-              <Text style={styles.hint}>Search rooms and items in Home, budget cards in Expenses, and splits in Split.</Text>
+              <Text style={styles.hint}>Search items in Home, budget cards in Expenses, and splits in Split.</Text>
               <View style={styles.chipRow}>
                 {shortcuts.map((s) => (
                   <Pressable

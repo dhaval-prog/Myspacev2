@@ -3,18 +3,14 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography, radius, EASE, duration } from '../theme';
 import { Rail, type RailTile } from '../components/Rail';
-import { RoomPicker } from '../components/RoomPicker';
-import { RoomList } from '../components/RoomList';
-import { RenameSheet } from '../components/RenameSheet';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ItemForm } from '../components/ItemForm';
 import { ItemList } from '../components/ItemList';
 import { useSpace } from '../context/SpaceContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { VIEWS, type ViewId } from '../data/views';
+import { ROOM_OPTIONS } from '../data/rooms';
 import { RAIL_ICON } from '../data/railIcons';
 import { getAttentionEntries, formatDate } from '../utils/attention';
-import type { Room } from '../types/space';
 
 interface DetailScreenProps {
   viewId: ViewId;
@@ -25,23 +21,19 @@ interface DetailScreenProps {
 export function DetailScreen({ viewId, initialIndex, onBack }: DetailScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { rooms, items, addRoom, renameRoom, removeRoom, addItem, editItem, removeItem } = useSpace();
+  const { items, addItem, editItem, removeItem } = useSpace();
 
   const [railIndex, setRailIndex] = useState(initialIndex ?? 1);
   const [collapsed, setCollapsed] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<Room | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Room | null>(null);
-  const roomLabels = useMemo(() => rooms.map((r) => r.label), [rooms]);
 
   const attentionEntries = useMemo(() => getAttentionEntries(items), [items]);
 
-  const isFormView = viewId === 'rooms' || viewId === 'add';
-  const gateOn = viewId === 'add' ? items.length === 0 : rooms.length === 0;
+  const isFormView = viewId === 'add';
+  const gateOn = items.length === 0;
 
   const tiles: RailTile[] = useMemo(() => {
     if (isFormView) {
-      const v = VIEWS[viewId as 'rooms' | 'add'];
-      return v.items.map((it) => ({
+      return VIEWS.add.items.map((it) => ({
         id: it.id,
         mono: it.mono,
         label: it.rail,
@@ -55,7 +47,7 @@ export function DetailScreen({ viewId, initialIndex, onBack }: DetailScreenProps
       label: entry.item.name,
       locked: false,
     }));
-  }, [isFormView, viewId, gateOn, attentionEntries]);
+  }, [isFormView, gateOn, attentionEntries]);
 
   const ri = Math.min(railIndex, Math.max(tiles.length - 1, 0));
   const selectedTileId = tiles[ri]?.id;
@@ -69,8 +61,7 @@ export function DetailScreen({ viewId, initialIndex, onBack }: DetailScreenProps
   let subline = '';
 
   if (isFormView) {
-    const v = VIEWS[viewId as 'rooms' | 'add'];
-    const sel = v.items[ri];
+    const sel = VIEWS.add.items[ri];
     title = sel?.title ?? '';
     subline = sel?.desc ?? '';
   } else {
@@ -110,26 +101,15 @@ export function DetailScreen({ viewId, initialIndex, onBack }: DetailScreenProps
             <Text style={[typography.detailSubline, styles.subline]}>{subline}</Text>
           </View>
 
-          {viewId === 'rooms' && ri === 1 && (
-            <RoomPicker lockedCategories={rooms.map((r) => r.category)} onSelect={addRoom} />
-          )}
-          {viewId === 'rooms' && ri === 0 && rooms.length > 0 && <RoomList rooms={rooms} mode="view" />}
-          {viewId === 'rooms' && ri === 2 && rooms.length > 0 && (
-            <RoomList rooms={rooms} mode="edit" onEdit={setRenameTarget} />
-          )}
-          {viewId === 'rooms' && ri === 3 && rooms.length > 0 && (
-            <RoomList rooms={rooms} mode="delete" onDelete={setDeleteTarget} />
-          )}
-
-          {viewId === 'add' && ri === 1 && <ItemForm rooms={roomLabels} onSubmit={addItem} />}
+          {viewId === 'add' && ri === 1 && <ItemForm rooms={ROOM_OPTIONS} onSubmit={addItem} />}
           {viewId === 'add' && ri === 0 && items.length > 0 && (
-            <ItemList items={items} rooms={roomLabels} mode="view" />
+            <ItemList items={items} rooms={ROOM_OPTIONS} mode="view" />
           )}
           {viewId === 'add' && ri === 2 && items.length > 0 && (
-            <ItemList items={items} rooms={roomLabels} mode="delete" onDelete={removeItem} />
+            <ItemList items={items} rooms={ROOM_OPTIONS} mode="delete" onDelete={removeItem} />
           )}
           {viewId === 'add' && ri === 3 && items.length > 0 && (
-            <ItemList items={items} rooms={roomLabels} mode="edit" onEditSave={editItem} />
+            <ItemList items={items} rooms={ROOM_OPTIONS} mode="edit" onEditSave={editItem} />
           )}
 
           {viewId === 'attention' && attentionEntries[ri] && (
@@ -141,29 +121,6 @@ export function DetailScreen({ viewId, initialIndex, onBack }: DetailScreenProps
           )}
         </ContentColumn>
       </View>
-
-      <RenameSheet
-        visible={renameTarget !== null}
-        initialValue={renameTarget?.label ?? ''}
-        onCancel={() => setRenameTarget(null)}
-        onSave={(value) => {
-          if (renameTarget) renameRoom(renameTarget.id, value);
-          setRenameTarget(null);
-        }}
-      />
-
-      <ConfirmDialog
-        visible={deleteTarget !== null}
-        title="Delete this room?"
-        message={`All items in "${deleteTarget?.label ?? ''}" will be deleted permanently.`}
-        confirmLabel="Delete"
-        destructive
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (deleteTarget) removeRoom(deleteTarget.id);
-          setDeleteTarget(null);
-        }}
-      />
     </View>
   );
 }

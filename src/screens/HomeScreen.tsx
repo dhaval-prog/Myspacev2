@@ -30,9 +30,10 @@ interface HomeScreenProps {
 
 /**
  * MySpace V2 — Home, first-run state.
- * A brand-new space only has two ways in: add a room, then add items to
- * it. "Needs attention" only joins the list once an item has an expiry
- * date that's due or coming up — it's an alarm, not a starting tab.
+ * Items are added directly — no separate "add a room" step; the add form's
+ * own "Where is it?" picker covers the fixed default rooms. "Needs
+ * attention" only joins the list once an item has an expiry date that's
+ * due or coming up — it's an alarm, not a starting tab.
  */
 export function HomeScreen({
   onOpenNotificationTarget,
@@ -47,10 +48,10 @@ export function HomeScreen({
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const userId = user?.id ?? null;
-  const { rooms, items } = useSpace();
+  const { items } = useSpace();
   const { receivedRequests, goRequests } = useFriends();
-  const [activeViewId, setActiveViewId] = useState<ViewId>('rooms');
-  const [previewViewId, setPreviewViewId] = useState<ViewId>('rooms');
+  const [activeViewId, setActiveViewId] = useState<ViewId>('add');
+  const [previewViewId, setPreviewViewId] = useState<ViewId>('add');
   const [activeNavId, setActiveNavId] = useState('home');
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -77,13 +78,7 @@ export function HomeScreen({
 
   const rows: CategoryRowData[] = useMemo(() => {
     const list: CategoryRowData[] = [
-      { id: 'rooms', label: VIEWS.rooms.tabLabel, count: rooms.length ? String(rooms.length) : '＋' },
-      {
-        id: 'add',
-        label: VIEWS.add.tabLabel,
-        count: rooms.length === 0 ? '⊘' : items.length ? String(items.length) : '＋',
-        locked: rooms.length === 0,
-      },
+      { id: 'add', label: VIEWS.add.tabLabel, count: items.length ? String(items.length) : '＋' },
     ];
     if (showAttention) {
       list.push({ id: 'attention', label: 'Needs attention', count: String(attentionEntries.length) });
@@ -95,7 +90,7 @@ export function HomeScreen({
     });
     list.push({ id: 'liveLocations', label: 'Live Locations', count: '→' });
     return list;
-  }, [rooms.length, items.length, showAttention, attentionEntries.length, receivedRequests.length]);
+  }, [items.length, showAttention, attentionEntries.length, receivedRequests.length]);
 
   // Ambient preview: while the user is just looking, the context card on
   // its own quietly cycles through every section every 3s — a tour, not
@@ -126,12 +121,9 @@ export function HomeScreen({
     receivedRequests.length > 0 ? ` ${receivedRequests.length} friend request${receivedRequests.length === 1 ? '' : 's'} waiting.` : '';
 
   const heroLine =
-    activeViewId === 'rooms'
-      ? (rooms.length ? `${rooms.length} room${rooms.length === 1 ? '' : 's'} set up.` : 'Start with a room. Add the things after.') +
-        friendRequestNote
-      : activeViewId === 'attention'
-        ? 'Set an expiry date and we will nudge you here.'
-        : 'Say it, scan it, or type it — it files itself.';
+    activeViewId === 'attention'
+      ? 'Set an expiry date and we will nudge you here.'
+      : `Say it, scan it, or type it — it files itself.${friendRequestNote}`;
 
   // The friend-requests card takes over the ambient context card outright
   // (not just a stop in its rotation) whenever there's something waiting —
@@ -143,20 +135,12 @@ export function HomeScreen({
     onOpenFriends();
   };
 
-  const contextLabel = showFriendsCard
-    ? 'MAKE FRIENDS'
-    : previewViewId === 'rooms'
-      ? VIEWS.rooms.tabLabel
-      : previewViewId === 'add'
-        ? VIEWS.add.tabLabel
-        : 'Needs attention';
+  const contextLabel = showFriendsCard ? 'MAKE FRIENDS' : previewViewId === 'add' ? VIEWS.add.tabLabel : 'Needs attention';
   const contextTitle = showFriendsCard
     ? `${requestNames.length === 1 ? requestNames[0] : requestNames.join(' and ')} want${requestNames.length === 1 ? 's' : ''} to connect`
-    : previewViewId === 'rooms'
-      ? VIEWS.rooms.items[1].title
-      : previewViewId === 'add'
-        ? VIEWS.add.items[1].title
-        : (attentionEntries[0]?.item.name ?? 'All caught up');
+    : previewViewId === 'add'
+      ? VIEWS.add.items[1].title
+      : (attentionEntries[0]?.item.name ?? 'All caught up');
 
   return (
     <View style={styles.screen}>
@@ -222,9 +206,8 @@ export function HomeScreen({
       <SearchOverlay
         visible={searchOpen}
         onClose={() => setSearchOpen(false)}
-        rooms={rooms}
         items={items}
-        onOpenHome={() => onOpenDetail('rooms')}
+        onOpenHome={() => onOpenDetail('add')}
         onOpenDetail={onOpenDetail}
         onOpenExpenses={onOpenExpenses}
         onOpenSplit={onOpenSplit}

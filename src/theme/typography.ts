@@ -168,22 +168,6 @@ export const typography = {
     color: colors.textMuted,
   } satisfies TextStyle,
 
-  // Room picker chip label
-  pickerLabel: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 18.5,
-    letterSpacing: em(18.5, -0.01),
-    color: colors.textPrimary,
-  } satisfies TextStyle,
-
-  // Room list row label
-  roomLabel: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 15,
-    letterSpacing: em(15, -0.015),
-    color: colors.textPrimary,
-  } satisfies TextStyle,
-
   // Item card title
   itemTitle: {
     fontFamily: fontFamily.sans600,
