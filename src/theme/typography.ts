@@ -57,18 +57,18 @@ export const typography = {
   // Category row label — active/selected
   categoryLabelActive: {
     fontFamily: fontFamily.sans600,
-    fontSize: 30,
-    lineHeight: 34,
-    letterSpacing: em(30, -0.022),
+    fontSize: 19,
+    lineHeight: 22,
+    letterSpacing: em(19, -0.02),
     color: colors.textPrimary,
   } satisfies TextStyle,
 
   // Category row label — inactive
   categoryLabelInactive: {
     fontFamily: fontFamily.sans500,
-    fontSize: 30,
-    lineHeight: 34,
-    letterSpacing: em(30, -0.022),
+    fontSize: 19,
+    lineHeight: 22,
+    letterSpacing: em(19, -0.02),
     color: colors.textDisabled,
   } satisfies TextStyle,
 
