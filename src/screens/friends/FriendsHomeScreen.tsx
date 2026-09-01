@@ -4,12 +4,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, noOutline, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
-import { AddFriendFab } from '../../components/friends/AddFriendFab';
 import { useFriends } from '../../context/FriendsContext';
 
 const CHAT_ICON = 'M4 4h16v12H8l-4 4z';
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const CHEVRON_ICON = 'M9 6l6 6-6 6';
+const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
 
 interface FriendsHomeScreenProps {
   onHome: () => void;
@@ -41,7 +41,7 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
 
   return (
     <View style={styles.screen}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
+      <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
             <Pressable onPress={onHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Home">
@@ -143,7 +143,17 @@ export function FriendsHomeScreen({ onHome }: FriendsHomeScreenProps) {
         )}
       </ScrollView>
 
-      <AddFriendFab onPress={goAdd} bottomInset={insets.bottom} />
+      <View style={[styles.pinned, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+        <Pressable
+          onPress={goAdd}
+          style={({ pressed }) => [styles.ctaButton, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Add a friend"
+        >
+          <Icon path={QR_ICON} color={colors.ink} size={19} strokeWidth={1.8} />
+          <Text style={styles.ctaLabel}>Add a friend</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -153,10 +163,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.pale,
   },
+  scrollFlex: {
+    flex: 1,
+  },
   scroll: {
     paddingHorizontal: 26,
-    paddingBottom: 110,
+    paddingBottom: spacing.lg,
     gap: 14,
+  },
+  pinned: {
+    paddingHorizontal: 26,
+    paddingTop: spacing.ms,
+  },
+  ctaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.lime,
+    paddingVertical: 19,
+    shadowColor: '#7AA82C',
+    shadowOpacity: 0.32,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 24,
+    elevation: 4,
+  },
+  ctaLabel: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 16,
+    color: colors.ink,
   },
   headerRow: {
     flexDirection: 'row',
