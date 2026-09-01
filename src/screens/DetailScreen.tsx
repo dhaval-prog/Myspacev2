@@ -15,6 +15,7 @@ import { ROOM_OPTIONS } from '../data/rooms';
 import { RAIL_ICON } from '../data/railIcons';
 import { getAttentionEntries, formatDate } from '../utils/attention';
 import { formatTime12 } from '../utils/time';
+import { recurAlertDate } from '../utils/alerts';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
 
@@ -82,13 +83,7 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back" style={styles.backButton}>
-          <Text style={typography.backLabel}>‹ Back</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.body}>
+      <View style={[styles.body, { paddingTop: insets.top + spacing.md }]}>
         {(isFormView || tiles.length > 0) && (
           <Rail
             tiles={tiles}
@@ -121,31 +116,38 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
           {viewId === 'attention' && attentionEntries[ri] && (
             <AttentionDetail
               entry={attentionEntries[ri]}
-              onResolve={() => editItem(attentionEntries[ri].index, { expiry: '' })}
+              onResolve={() => {
+                const entry = attentionEntries[ri];
+                const alertType = entry.item.alertType;
+                editItem(entry.index, { expiry: alertType ? recurAlertDate(alertType) : '' });
+              }}
               onRemove={() => removeItem(attentionEntries[ri].index)}
             />
           )}
         </ContentColumn>
       </View>
 
+      <View
+        style={[
+          styles.pinnedBack,
+          { paddingBottom: viewId === 'add' ? spacing.ms : Math.max(insets.bottom, spacing.md) + spacing.ms },
+        ]}
+      >
+        <Pressable onPress={onBack} style={styles.backCircle} accessibilityRole="button" accessibilityLabel="Back">
+          <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
+        </Pressable>
+      </View>
       {viewId === 'add' && (
-        <>
-          <View style={[styles.pinnedBack, { paddingBottom: spacing.ms }]}>
-            <Pressable onPress={onBack} style={styles.backCircle} accessibilityRole="button" accessibilityLabel="Back">
-              <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
-            </Pressable>
-          </View>
-          <BottomNav
-            activeId="home"
-            onSelect={(id) => {
-              if (id === 'home') onBack();
-              if (id === 'expenses') onOpenExpenses();
-              if (id === 'split') onOpenSplit();
-            }}
-            bottomInset={insets.bottom}
-            reduceMotion={reduceMotion}
-          />
-        </>
+        <BottomNav
+          activeId="home"
+          onSelect={(id) => {
+            if (id === 'home') onBack();
+            if (id === 'expenses') onOpenExpenses();
+            if (id === 'split') onOpenSplit();
+          }}
+          bottomInset={insets.bottom}
+          reduceMotion={reduceMotion}
+        />
       )}
     </View>
   );
@@ -234,16 +236,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.lime,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xxxl,
-  },
-  backButton: {
-    minHeight: 44,
-    justifyContent: 'center',
-  },
   pinnedBack: {
     paddingHorizontal: spacing.xxxl,
     paddingTop: spacing.ms,
@@ -263,7 +255,6 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-    marginTop: spacing.huge,
   },
   contentColumn: {
     flex: 1,

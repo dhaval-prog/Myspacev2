@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
@@ -104,7 +104,8 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFrie
       end={{ x: 0.5, y: 1 }}
       style={styles.screen}
     >
-      <View style={[styles.topRow, { paddingTop: insets.top + spacing.sm }]}>
+      <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + spacing.sm }}>
+      <View style={styles.topRow}>
         <Pressable onPress={() => setShareOpen(true)} style={styles.sharePill} accessibilityRole="button" accessibilityLabel="Share your invite code">
           <Icon path={SHARE_ICON} color={colors.textPrimary} size={15} strokeWidth={2} />
           <Text style={styles.shareLabel}>Share</Text>
@@ -182,6 +183,7 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFrie
         />
         {error && <Text style={styles.error}>{error}</Text>}
       </View>
+      </ScrollView>
 
       <View style={styles.pinned}>
         <Pressable onPress={goScan} style={({ pressed }) => [styles.scanButton, pressed && styles.scanButtonPressed]}>
@@ -233,6 +235,9 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFrie
 
 const styles = StyleSheet.create({
   screen: {
+    flex: 1,
+  },
+  scrollFlex: {
     flex: 1,
   },
   topRow: {
