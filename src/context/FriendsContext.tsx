@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { DirectMessage, Friend, FriendProfile, FriendRequest, MatchRelationship } from '../types/friends';
+import type { ChatGroup, GroupMessage, GroupPoll } from '../types/groups';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
-export type FriendsPage = 'home' | 'add' | 'scan' | 'match' | 'requests' | 'chats' | 'chat' | 'locked-chat';
+export type FriendsPage = 'home' | 'add' | 'scan' | 'match' | 'requests' | 'chats' | 'chat' | 'locked-chat' | 'create-group' | 'group-chat';
 
 interface ConnectionRow {
   id: string;
@@ -31,8 +32,106 @@ interface ProfileInfo {
   avatarUrl: string | null;
 }
 
+interface GroupRow {
+  id: string;
+  owner_id: string;
+  name: string;
+  created_at: string;
+}
+
+interface GroupMemberRow {
+  group_id: string;
+  user_id: string;
+  joined_at: string;
+}
+
+interface GroupMessageRow {
+  id: string;
+  group_id: string;
+  sender_id: string;
+  kind: 'text' | 'image' | 'location' | 'poll';
+  text: string | null;
+  attachment_url: string | null;
+  poll_id: string | null;
+  created_at: string;
+}
+
+interface GroupPollRow {
+  id: string;
+  group_id: string;
+  created_by: string;
+  question: string;
+  allow_multiple: boolean;
+  created_at: string;
+}
+
+interface GroupPollOptionRow {
+  id: string;
+  poll_id: string;
+  group_id: string;
+  label: string;
+  position: number;
+}
+
+interface GroupPollVoteRow {
+  poll_id: string;
+  option_id: string;
+  group_id: string;
+  user_id: string;
+}
+
 function warn(action: string, error: { message: string } | null) {
   if (error) console.warn(`[friends] failed to ${action}:`, error.message);
+}
+
+function toChatGroup(row: GroupRow): ChatGroup {
+  return { id: row.id, ownerId: row.owner_id, name: row.name, createdAt: row.created_at };
+}
+
+function toGroupMessage(row: GroupMessageRow): GroupMessage {
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    senderId: row.sender_id,
+    kind: row.kind,
+    text: row.text ?? '',
+    attachmentUrl: row.attachment_url,
+    pollId: row.poll_id,
+    createdAt: row.created_at,
+  };
+}
+
+/** Short list-preview text for a group message that has no caption of its own. */
+function previewForGroupMessage(row: GroupMessageRow): string {
+  if (row.kind === 'image') return row.text?.trim() ? row.text : '📷 Photo';
+  if (row.kind === 'location') return '📍 Location';
+  if (row.kind === 'poll') return '📊 Poll';
+  return row.text ?? '';
+}
+
+/** Assembles poll rows + their options + votes into the GroupPoll shape the UI wants. */
+function buildPolls(polls: GroupPollRow[], options: GroupPollOptionRow[], votes: GroupPollVoteRow[]): Record<string, GroupPoll> {
+  const result: Record<string, GroupPoll> = {};
+  for (const p of polls) {
+    const pollOptions = options
+      .filter((o) => o.poll_id === p.id)
+      .sort((a, b) => a.position - b.position)
+      .map((o) => ({ id: o.id, label: o.label, position: o.position }));
+    const votesByUser: Record<string, string[]> = {};
+    for (const v of votes.filter((v) => v.poll_id === p.id)) {
+      votesByUser[v.user_id] = [...(votesByUser[v.user_id] ?? []), v.option_id];
+    }
+    result[p.id] = {
+      id: p.id,
+      groupId: p.group_id,
+      createdBy: p.created_by,
+      question: p.question,
+      allowMultiple: p.allow_multiple,
+      options: pollOptions,
+      votesByUser,
+    };
+  }
+  return result;
 }
 
 function counterpartId(row: ConnectionRow, userId: string): string {
@@ -116,6 +215,29 @@ interface FriendsContextValue {
   sendPhoto: (localUri: string) => Promise<{ error: string | null }>;
   sendLocation: (latitude: number, longitude: number) => Promise<{ error: string | null }>;
   clearChat: (connectionId: string) => Promise<void>;
+
+  /** Every group this account belongs to. */
+  groups: ChatGroup[];
+  focusedGroup: ChatGroup | undefined;
+  groupMessages: GroupMessage[];
+  /** Polls referenced by the focused group's messages, keyed by poll id. */
+  groupPolls: Record<string, GroupPoll>;
+  /** Member userIds for a group, including the owner. */
+  groupMemberIdsFor: (groupId: string) => string[];
+  /** Display names for a group's members, for the chat header/composer. */
+  groupMemberNamesFor: (groupId: string) => string[];
+  lastGroupMessageFor: (groupId: string) => GroupMessage | undefined;
+  goCreateGroup: () => void;
+  /** Creates a group owned by the signed-in account with the given friend userIds as co-members, then opens its thread. */
+  createGroup: (name: string, memberUserIds: string[]) => Promise<{ error: string | null }>;
+  openGroupChat: (groupId: string) => void;
+  sendGroupMessage: (text: string) => Promise<void>;
+  sendGroupPhoto: (localUri: string) => Promise<{ error: string | null }>;
+  sendGroupLocation: (latitude: number, longitude: number) => Promise<{ error: string | null }>;
+  /** Creates a two-option poll and posts it as a message in the focused group. */
+  createGroupPoll: (question: string, options: [string, string], allowMultiple: boolean) => Promise<{ error: string | null }>;
+  /** Casts (or retracts) this account's vote for one option of a poll. */
+  voteOnPoll: (pollId: string, optionId: string) => Promise<void>;
 }
 
 const FriendsContext = createContext<FriendsContextValue | null>(null);
@@ -144,6 +266,15 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const [focusedConnectionId, setFocusedConnectionId] = useState<string | null>(null);
   const [messageRows, setMessageRows] = useState<MessageRow[]>([]);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+
+  const [groupRows, setGroupRows] = useState<GroupRow[]>([]);
+  const [groupMemberRows, setGroupMemberRows] = useState<GroupMemberRow[]>([]);
+  const [focusedGroupId, setFocusedGroupId] = useState<string | null>(null);
+  const [groupMessageRows, setGroupMessageRows] = useState<GroupMessageRow[]>([]);
+  const [groupPollRows, setGroupPollRows] = useState<GroupPollRow[]>([]);
+  const [groupPollOptionRows, setGroupPollOptionRows] = useState<GroupPollOptionRow[]>([]);
+  const [groupPollVoteRows, setGroupPollVoteRows] = useState<GroupPollVoteRow[]>([]);
+  const [groupLastMessages, setGroupLastMessages] = useState<Record<string, GroupMessageRow>>({});
 
   // Tracks this account's own online presence and listens for everyone
   // else's, via one shared Realtime presence channel for the whole app.
@@ -687,6 +818,388 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [focusedConnectionId, userId]);
 
+  // --- Groups -------------------------------------------------------
+
+  // Initial load: every group this account is a member of.
+  useEffect(() => {
+    let cancelled = false;
+    if (!userId || !isSupabaseConfigured) {
+      setGroupRows([]);
+      setGroupMemberRows([]);
+      return;
+    }
+    (async () => {
+      const memberRes = await supabase.from('chat_group_members').select('*').eq('user_id', userId);
+      warn('load group memberships', memberRes.error);
+      const myGroupIds = ((memberRes.data as GroupMemberRow[] | null) ?? []).map((r) => r.group_id);
+      if (myGroupIds.length === 0) {
+        if (!cancelled) {
+          setGroupRows([]);
+          setGroupMemberRows([]);
+        }
+        return;
+      }
+      const [groupsRes, allMembersRes] = await Promise.all([
+        supabase.from('chat_groups').select('*').in('id', myGroupIds).order('created_at', { ascending: false }),
+        supabase.from('chat_group_members').select('*').in('group_id', myGroupIds),
+      ]);
+      if (cancelled) return;
+      warn('load groups', groupsRes.error);
+      warn('load group members', allMembersRes.error);
+      setGroupRows((groupsRes.data as GroupRow[] | null) ?? []);
+      setGroupMemberRows((allMembersRes.data as GroupMemberRow[] | null) ?? []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // Being added to a new group shows up without a reload.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured) return;
+    const channel = supabase
+      .channel(`chat-group-memberships-${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_group_members', filter: `user_id=eq.${userId}` }, async (p) => {
+        const row = p.new as GroupMemberRow;
+        setGroupMemberRows((prev) => (prev.some((m) => m.group_id === row.group_id && m.user_id === row.user_id) ? prev : [...prev, row]));
+        const [groupRes, membersRes] = await Promise.all([
+          supabase.from('chat_groups').select('*').eq('id', row.group_id).single(),
+          supabase.from('chat_group_members').select('*').eq('group_id', row.group_id),
+        ]);
+        if (groupRes.data) setGroupRows((prev) => (prev.some((g) => g.id === row.group_id) ? prev : [groupRes.data as GroupRow, ...prev]));
+        if (membersRes.data) {
+          setGroupMemberRows((prev) => [...prev.filter((m) => m.group_id !== row.group_id), ...(membersRes.data as GroupMemberRow[])]);
+        }
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
+  const groups = useMemo(() => groupRows.map(toChatGroup), [groupRows]);
+
+  const groupMemberIdsFor = (groupId: string): string[] => groupMemberRows.filter((m) => m.group_id === groupId).map((m) => m.user_id);
+
+  const groupMemberNamesFor = (groupId: string): string[] =>
+    groupMemberIdsFor(groupId)
+      .filter((id) => id !== userId)
+      .map((id) => profiles[id]?.name ?? 'Someone');
+
+  // Backfill display info for every group member seen, reusing the same profiles cache as friends.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured) return;
+    const ids = Array.from(new Set(groupMemberRows.map((m) => m.user_id))).filter((id) => !(id in profiles));
+    if (ids.length === 0) return;
+    supabase
+      .from('profiles')
+      .select('id, full_name, username, avatar_url')
+      .in('id', ids)
+      .then(({ data, error }) => {
+        warn('load group member profiles', error);
+        if (!data) return;
+        setProfiles((prev) => {
+          const next = { ...prev };
+          for (const row of data as { id: string; full_name: string | null; username: string | null; avatar_url: string | null }[]) {
+            next[row.id] = { name: row.full_name || 'Someone', username: row.username, avatarUrl: row.avatar_url };
+          }
+          return next;
+        });
+      });
+    // profiles deliberately excluded — read to find gaps, not to retrigger on every fill.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupMemberRows, userId]);
+
+  // Load the latest message per group, for the Chats list preview.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured || groups.length === 0) {
+      setGroupLastMessages({});
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('group_messages')
+      .select('*')
+      .in(
+        'group_id',
+        groups.map((g) => g.id),
+      )
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        warn('load group thread previews', error);
+        if (cancelled || !data) return;
+        const next: Record<string, GroupMessageRow> = {};
+        for (const row of data as GroupMessageRow[]) {
+          if (!next[row.group_id]) next[row.group_id] = row;
+        }
+        setGroupLastMessages(next);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, groups]);
+
+  // Live preview updates for every group at once.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured || groups.length === 0) return;
+    let channel = supabase.channel(`group-thread-previews-${userId}`);
+    for (const g of groups) {
+      channel = channel.on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'group_messages', filter: `group_id=eq.${g.id}` },
+        (payload) => {
+          const row = payload.new as GroupMessageRow;
+          setGroupLastMessages((prev) => ({ ...prev, [row.group_id]: row }));
+        },
+      );
+    }
+    channel.subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, groups]);
+
+  const lastGroupMessageFor = (groupId: string): GroupMessage | undefined => {
+    const row = groupLastMessages[groupId];
+    if (!row) return undefined;
+    return { ...toGroupMessage(row), text: previewForGroupMessage(row) };
+  };
+
+  const focusedGroup = groups.find((g) => g.id === focusedGroupId);
+  const groupMessages: GroupMessage[] = useMemo(() => groupMessageRows.map(toGroupMessage), [groupMessageRows]);
+  const groupPolls = useMemo(
+    () => buildPolls(groupPollRows, groupPollOptionRows, groupPollVoteRows),
+    [groupPollRows, groupPollOptionRows, groupPollVoteRows],
+  );
+
+  const goCreateGroup = () => setPage('create-group');
+
+  const createGroup = async (name: string, memberUserIds: string[]): Promise<{ error: string | null }> => {
+    if (!userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    const trimmed = name.trim();
+    if (!trimmed) return { error: 'Give the group a name.' };
+    const { data: group, error: groupErr } = await supabase
+      .from('chat_groups')
+      .insert({ owner_id: userId, name: trimmed })
+      .select('*')
+      .single();
+    if (groupErr || !group) return { error: groupErr?.message ?? 'Could not create the group.' };
+    const groupRow = group as GroupRow;
+    const memberIds = Array.from(new Set([userId, ...memberUserIds]));
+    const { error: membersErr } = await supabase
+      .from('chat_group_members')
+      .insert(memberIds.map((id) => ({ group_id: groupRow.id, user_id: id })));
+    if (membersErr) return { error: membersErr.message };
+    setGroupRows((prev) => [groupRow, ...prev]);
+    setGroupMemberRows((prev) => [...prev, ...memberIds.map((id) => ({ group_id: groupRow.id, user_id: id, joined_at: new Date().toISOString() }))]);
+    openGroupChat(groupRow.id);
+    return { error: null };
+  };
+
+  const openGroupChat = (groupId: string) => {
+    setFocusedGroupId(groupId);
+    setPage('group-chat');
+  };
+
+  /** Appends a just-sent row to local state right away — the sender shouldn't have to wait on Realtime's echo to see their own message. */
+  const appendGroupMessage = (row: GroupMessageRow) => {
+    setGroupMessageRows((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+    setGroupLastMessages((prev) => ({ ...prev, [row.group_id]: row }));
+  };
+
+  const sendGroupMessage = async (text: string) => {
+    if (!focusedGroupId || !text.trim() || !userId || !isSupabaseConfigured) return;
+    const { data, error } = await supabase
+      .from('group_messages')
+      .insert({ group_id: focusedGroupId, sender_id: userId, kind: 'text', text: text.trim() })
+      .select('*')
+      .single();
+    warn('send group message', error);
+    if (data) appendGroupMessage(data as GroupMessageRow);
+  };
+
+  const sendGroupPhoto = async (localUri: string): Promise<{ error: string | null }> => {
+    if (!focusedGroupId || !userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    try {
+      const response = await fetch(localUri);
+      const blob = await response.blob();
+      const ext = (localUri.split('.').pop() || 'jpg').split('?')[0].toLowerCase();
+      const path = `${userId}/group-${focusedGroupId}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('chat-media').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
+      if (upErr) return { error: upErr.message };
+      const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path);
+      const { data, error } = await supabase
+        .from('group_messages')
+        .insert({ group_id: focusedGroupId, sender_id: userId, kind: 'image', attachment_url: pub.publicUrl })
+        .select('*')
+        .single();
+      if (error) return { error: error.message };
+      if (data) appendGroupMessage(data as GroupMessageRow);
+      return { error: null };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Could not send that photo.' };
+    }
+  };
+
+  const sendGroupLocation = async (latitude: number, longitude: number): Promise<{ error: string | null }> => {
+    if (!focusedGroupId || !userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+    const { data, error } = await supabase
+      .from('group_messages')
+      .insert({ group_id: focusedGroupId, sender_id: userId, kind: 'location', attachment_url: mapsUrl })
+      .select('*')
+      .single();
+    if (error) return { error: error.message };
+    if (data) appendGroupMessage(data as GroupMessageRow);
+    return { error: null };
+  };
+
+  const createGroupPoll = async (question: string, options: [string, string], allowMultiple: boolean): Promise<{ error: string | null }> => {
+    if (!focusedGroupId || !userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    const trimmedQuestion = question.trim();
+    const trimmedOptions = options.map((o) => o.trim());
+    if (!trimmedQuestion) return { error: 'Add a question.' };
+    if (trimmedOptions.some((o) => !o)) return { error: 'Both options need a label.' };
+
+    const { data: poll, error: pollErr } = await supabase
+      .from('group_polls')
+      .insert({ group_id: focusedGroupId, created_by: userId, question: trimmedQuestion, allow_multiple: allowMultiple })
+      .select('*')
+      .single();
+    if (pollErr || !poll) return { error: pollErr?.message ?? 'Could not create the poll.' };
+    const pollRow = poll as GroupPollRow;
+
+    const { data: optionRows, error: optionsErr } = await supabase
+      .from('group_poll_options')
+      .insert(trimmedOptions.map((label, position) => ({ poll_id: pollRow.id, group_id: focusedGroupId, label, position })))
+      .select('*');
+    if (optionsErr) return { error: optionsErr.message };
+
+    const { data: msgRow, error: msgErr } = await supabase
+      .from('group_messages')
+      .insert({ group_id: focusedGroupId, sender_id: userId, kind: 'poll', poll_id: pollRow.id })
+      .select('*')
+      .single();
+    if (msgErr) return { error: msgErr.message };
+
+    setGroupPollRows((prev) => [...prev, pollRow]);
+    setGroupPollOptionRows((prev) => [...prev, ...((optionRows as GroupPollOptionRow[] | null) ?? [])]);
+    if (msgRow) appendGroupMessage(msgRow as GroupMessageRow);
+    return { error: null };
+  };
+
+  const voteOnPoll = async (pollId: string, optionId: string) => {
+    if (!userId || !isSupabaseConfigured || !focusedGroupId) return;
+    const poll = groupPolls[pollId];
+    if (!poll) return;
+    const myVotes = poll.votesByUser[userId] ?? [];
+
+    if (poll.allowMultiple) {
+      if (myVotes.includes(optionId)) {
+        const { error } = await supabase.from('group_poll_votes').delete().eq('poll_id', pollId).eq('option_id', optionId).eq('user_id', userId);
+        warn('retract vote', error);
+        if (!error) setGroupPollVoteRows((prev) => prev.filter((v) => !(v.poll_id === pollId && v.option_id === optionId && v.user_id === userId)));
+      } else {
+        const { error } = await supabase.from('group_poll_votes').insert({ poll_id: pollId, option_id: optionId, group_id: focusedGroupId, user_id: userId });
+        warn('cast vote', error);
+        if (!error) setGroupPollVoteRows((prev) => [...prev, { poll_id: pollId, option_id: optionId, group_id: focusedGroupId, user_id: userId }]);
+      }
+      return;
+    }
+
+    const alreadyOnlyThis = myVotes.length === 1 && myVotes[0] === optionId;
+    const { error: clearErr } = await supabase.from('group_poll_votes').delete().eq('poll_id', pollId).eq('user_id', userId);
+    warn('clear previous vote', clearErr);
+    setGroupPollVoteRows((prev) => prev.filter((v) => !(v.poll_id === pollId && v.user_id === userId)));
+    if (alreadyOnlyThis) return;
+    const { error: voteErr } = await supabase.from('group_poll_votes').insert({ poll_id: pollId, option_id: optionId, group_id: focusedGroupId, user_id: userId });
+    warn('cast vote', voteErr);
+    if (!voteErr) setGroupPollVoteRows((prev) => [...prev, { poll_id: pollId, option_id: optionId, group_id: focusedGroupId, user_id: userId }]);
+  };
+
+  // Load + subscribe to messages, polls, options and votes for the focused group only.
+  useEffect(() => {
+    if (!focusedGroupId || !userId || !isSupabaseConfigured) {
+      setGroupMessageRows([]);
+      setGroupPollRows([]);
+      setGroupPollOptionRows([]);
+      setGroupPollVoteRows([]);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      supabase.from('group_messages').select('*').eq('group_id', focusedGroupId).order('created_at', { ascending: true }),
+      supabase.from('group_polls').select('*').eq('group_id', focusedGroupId),
+      supabase.from('group_poll_options').select('*').eq('group_id', focusedGroupId),
+      supabase.from('group_poll_votes').select('*').eq('group_id', focusedGroupId),
+    ]).then(([messagesRes, pollsRes, optionsRes, votesRes]) => {
+      warn('load group messages', messagesRes.error);
+      warn('load group polls', pollsRes.error);
+      warn('load group poll options', optionsRes.error);
+      warn('load group poll votes', votesRes.error);
+      if (cancelled) return;
+      setGroupMessageRows((messagesRes.data as GroupMessageRow[] | null) ?? []);
+      setGroupPollRows((pollsRes.data as GroupPollRow[] | null) ?? []);
+      setGroupPollOptionRows((optionsRes.data as GroupPollOptionRow[] | null) ?? []);
+      setGroupPollVoteRows((votesRes.data as GroupPollVoteRow[] | null) ?? []);
+    });
+
+    const channel = supabase
+      .channel(`group-messages-${focusedGroupId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'group_messages', filter: `group_id=eq.${focusedGroupId}` },
+        async (payload) => {
+          const row = payload.new as GroupMessageRow;
+          setGroupMessageRows((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+          if (row.kind === 'poll' && row.poll_id) {
+            const pollId = row.poll_id;
+            setGroupPollRows((prev) => {
+              if (prev.some((p) => p.id === pollId)) return prev;
+              supabase
+                .from('group_polls')
+                .select('*')
+                .eq('id', pollId)
+                .single()
+                .then(({ data }) => {
+                  if (data) setGroupPollRows((cur) => (cur.some((p) => p.id === pollId) ? cur : [...cur, data as GroupPollRow]));
+                });
+              return prev;
+            });
+            const { data: optionRows } = await supabase.from('group_poll_options').select('*').eq('poll_id', pollId);
+            if (optionRows) {
+              setGroupPollOptionRows((prev) => [...prev.filter((o) => o.poll_id !== pollId), ...(optionRows as GroupPollOptionRow[])]);
+            }
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'group_poll_votes', filter: `group_id=eq.${focusedGroupId}` },
+        (payload) => {
+          const row = payload.new as GroupPollVoteRow;
+          setGroupPollVoteRows((prev) =>
+            prev.some((v) => v.poll_id === row.poll_id && v.option_id === row.option_id && v.user_id === row.user_id) ? prev : [...prev, row],
+          );
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'group_poll_votes', filter: `group_id=eq.${focusedGroupId}` },
+        (payload) => {
+          const row = payload.old as GroupPollVoteRow;
+          setGroupPollVoteRows((prev) => prev.filter((v) => !(v.poll_id === row.poll_id && v.option_id === row.option_id && v.user_id === row.user_id)));
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [focusedGroupId, userId]);
+
   const value: FriendsContextValue = {
     page,
     friendCode,
@@ -730,6 +1243,21 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     sendPhoto,
     sendLocation,
     clearChat,
+    groups,
+    focusedGroup,
+    groupMessages,
+    groupPolls,
+    groupMemberIdsFor,
+    groupMemberNamesFor,
+    lastGroupMessageFor,
+    goCreateGroup,
+    createGroup,
+    openGroupChat,
+    sendGroupMessage,
+    sendGroupPhoto,
+    sendGroupLocation,
+    createGroupPoll,
+    voteOnPoll,
   };
 
   return <FriendsContext.Provider value={value}>{children}</FriendsContext.Provider>;

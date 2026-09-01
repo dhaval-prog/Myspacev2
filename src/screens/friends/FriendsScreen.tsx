@@ -8,6 +8,8 @@ import { FriendRequestsScreen } from './FriendRequestsScreen';
 import { ChatsListScreen } from './ChatsListScreen';
 import { ChatThreadScreen } from './ChatThreadScreen';
 import { LockedThreadScreen } from './LockedThreadScreen';
+import { CreateGroupScreen } from './CreateGroupScreen';
+import { GroupChatScreen } from './GroupChatScreen';
 
 interface FriendsScreenProps {
   onHome: () => void;
@@ -34,6 +36,10 @@ export function FriendsScreen({ onHome, onOpenExpenses, onOpenSplit }: FriendsSc
       return <ChatThreadScreen />;
     case 'locked-chat':
       return <LockedThreadScreen />;
+    case 'create-group':
+      return <CreateGroupScreen />;
+    case 'group-chat':
+      return <GroupChatScreen />;
     default:
       return <FriendsHomeScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} />;
   }

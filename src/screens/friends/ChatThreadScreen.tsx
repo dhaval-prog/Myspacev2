@@ -504,9 +504,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.ms,
   },
   pinnedIconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
