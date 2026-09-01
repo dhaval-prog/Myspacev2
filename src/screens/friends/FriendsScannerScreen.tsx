@@ -101,15 +101,9 @@ export function FriendsScannerScreen() {
 
   return (
     <View style={styles.screen}>
-      {permission?.granted ? (
-        <CameraView
-          style={StyleSheet.absoluteFill}
-          facing="back"
-          enableTorch={torch}
-          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-          onBarcodeScanned={handleBarcodeScanned}
-        />
-      ) : null}
+      {/* Base layer: the radial wash — visible as the fallback background before/without camera permission.
+          The live CameraView (below) renders on top and fully covers it once granted, since a camera
+          feed sits behind it in z-order, not the other way around. */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <Svg width="100%" height="100%">
           <DefsAny>
@@ -122,6 +116,15 @@ export function FriendsScannerScreen() {
           <Rect x="0" y="0" width="100%" height="100%" fill="url(#scannerWash)" />
         </Svg>
       </View>
+      {permission?.granted ? (
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          enableTorch={torch}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          onBarcodeScanned={handleBarcodeScanned}
+        />
+      ) : null}
 
       <View style={[styles.content, { paddingTop: insets.top + spacing.sm, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <View style={styles.topBar}>
