@@ -9,6 +9,7 @@ import { Icon } from '../../components/Icon';
 import { OverflowIcon } from '../../components/icons/OverflowIcon';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { ActionButton, ToggleRow } from '../../components/account/rows';
+import { MediaGalleryModal } from '../../components/chat/MediaGalleryModal';
 import { useFriends } from '../../context/FriendsContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCall } from '../../context/CallContext';
@@ -18,12 +19,14 @@ const ATTACH_ICON = 'M12 5v14M5 12h14';
 const SEND_ICON = 'M4 12 20 4l-7 16-2.5-6.5z';
 const PIN_ICON = 'M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11z M12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z';
 const IMAGE_ICON = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4L15 13l5 5';
+const GRID_ICON = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z';
 const POLL_ICON = 'M5 20V10M12 20V4M19 20v-7';
 const CHECK_ICON = 'M5 12.5 10 17.5 19 7';
 const GROUP_ICON = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
 const PHONE_ICON = 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2C9.5 21 3 14.5 3 6a2 2 0 0 1 2-2z';
 const LEAVE_ICON = 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9';
 const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
+const EDIT_ICON = 'M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3zM14 6l3 3';
 
 function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
@@ -40,13 +43,21 @@ function SheetOption({ icon, label, destructive, onPress }: { icon: string; labe
   );
 }
 
-/** One poll message: question, tappable options, live vote counts. */
+/** One poll message: question, tappable options, live vote counts. A 'rename' poll is the same card, just locked once resolved (its outcome shows up as its own activity message right after it). */
 function PollCard({ poll, myUserId, onVote }: { poll: GroupPoll; myUserId: string | undefined; onVote: (optionId: string) => void }) {
-  const totalVotes = new Set(Object.values(poll.votesByUser).flat()).size;
+  const totalVotes = Object.values(poll.votesByUser).filter((ids) => ids.length > 0).length;
   const myVotes = myUserId ? (poll.votesByUser[myUserId] ?? []) : [];
+  const isRename = poll.purpose === 'rename';
+  const locked = isRename && poll.resolved;
 
   return (
-    <View style={styles.pollCard}>
+    <View style={[styles.pollCard, locked && styles.pollCardLocked]}>
+      {isRename && (
+        <View style={styles.renamePollBadgeRow}>
+          <Icon path={EDIT_ICON} color={colors.ink55} size={12} strokeWidth={2} />
+          <Text style={styles.renamePollBadge}>{locked ? 'Rename request · closed' : 'Rename request'}</Text>
+        </View>
+      )}
       <View style={styles.pollHeaderRow}>
         <Icon path={POLL_ICON} color={colors.ink} size={16} strokeWidth={2} />
         <Text style={styles.pollQuestion}>{poll.question}</Text>
@@ -59,7 +70,8 @@ function PollCard({ poll, myUserId, onVote }: { poll: GroupPoll; myUserId: strin
           return (
             <Pressable
               key={opt.id}
-              onPress={() => onVote(opt.id)}
+              onPress={() => !locked && onVote(opt.id)}
+              disabled={locked}
               style={styles.pollOptionRow}
               accessibilityRole="button"
               accessibilityLabel={`${opt.label}, ${voteCount} vote${voteCount === 1 ? '' : 's'}`}
@@ -79,7 +91,7 @@ function PollCard({ poll, myUserId, onVote }: { poll: GroupPoll; myUserId: strin
         })}
       </View>
       <Text style={styles.pollMeta}>
-        {totalVotes} vote{totalVotes === 1 ? '' : 's'} · {poll.allowMultiple ? 'Pick any number' : 'Pick one'}
+        {totalVotes} vote{totalVotes === 1 ? '' : 's'} · {isRename ? 'Majority decides · auto-resolves in an hour' : poll.allowMultiple ? 'Pick any number' : 'Pick one'}
       </Text>
     </View>
   );
@@ -100,6 +112,7 @@ export function GroupChatScreen() {
     sendGroupLocation,
     createGroupPoll,
     voteOnPoll,
+    proposeGroupRename,
     leaveGroup,
     deleteGroup,
     goChats,
@@ -109,6 +122,7 @@ export function GroupChatScreen() {
   const [sendingAttachment, setSendingAttachment] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
   const [pollOpen, setPollOpen] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptionA, setPollOptionA] = useState('');
@@ -120,6 +134,10 @@ export function GroupChatScreen() {
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [groupActionError, setGroupActionError] = useState<string | null>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameName, setRenameName] = useState('');
+  const [renameSubmitting, setRenameSubmitting] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -131,13 +149,18 @@ export function GroupChatScreen() {
   const memberNames = groupMemberNamesFor(focusedGroup.id);
   const isOwner = focusedGroup.ownerId === user?.id;
 
+  const mediaItems = groupMessages
+    .filter((m) => m.kind === 'image' && m.attachmentUrl)
+    .map((m) => ({ id: m.id, url: m.attachmentUrl! }))
+    .reverse();
+
   const startVideoCall = () => {
     const memberIds = groupMemberIdsFor(focusedGroup.id).filter((id) => id !== user?.id);
     const participantNames: Record<string, string> = {};
     memberIds.forEach((id, i) => {
       participantNames[id] = memberNames[i] ?? 'Someone';
     });
-    startCall({ kind: 'group', title: focusedGroup.name, memberIds, participantNames });
+    startCall({ kind: 'group', title: focusedGroup.name, memberIds, participantNames, contextId: focusedGroup.id });
   };
 
   const doLeaveGroup = async () => {
@@ -152,6 +175,22 @@ export function GroupChatScreen() {
     setGroupActionError(null);
     const { error } = await deleteGroup(focusedGroup.id);
     if (error) setGroupActionError(error);
+  };
+
+  const openRename = () => {
+    setOptionsOpen(false);
+    setRenameName(focusedGroup.name);
+    setRenameError(null);
+    setRenameOpen(true);
+  };
+
+  const submitRename = async () => {
+    setRenameSubmitting(true);
+    setRenameError(null);
+    const result = await proposeGroupRename(renameName);
+    setRenameSubmitting(false);
+    if (result.error) setRenameError(result.error);
+    else setRenameOpen(false);
   };
 
   const submit = () => {
@@ -251,6 +290,13 @@ export function GroupChatScreen() {
           ) : (
             <View style={styles.bubbleStack}>
               {groupMessages.map((m) => {
+                if (m.kind === 'system') {
+                  return (
+                    <View key={m.id} style={styles.systemChip}>
+                      <Text style={styles.systemChipText}>{m.text}</Text>
+                    </View>
+                  );
+                }
                 const mine = m.senderId === user?.id;
                 const poll = m.kind === 'poll' && m.pollId ? groupPolls[m.pollId] : undefined;
                 return (
@@ -326,7 +372,17 @@ export function GroupChatScreen() {
           <SheetOption icon={IMAGE_ICON} label="Photo" onPress={pickPhoto} />
           <SheetOption icon={PIN_ICON} label="Current location" onPress={shareLocation} />
           <SheetOption icon={POLL_ICON} label="Poll" onPress={openPollComposer} />
+          <SheetOption
+            icon={GRID_ICON}
+            label="Media"
+            onPress={() => {
+              setAttachOpen(false);
+              setMediaOpen(true);
+            }}
+          />
         </BottomSheet>
+
+        <MediaGalleryModal visible={mediaOpen} onClose={() => setMediaOpen(false)} title="Media" items={mediaItems} />
 
         <BottomSheet visible={pollOpen} onClose={() => setPollOpen(false)}>
           <Text style={styles.sheetTitle}>New poll</Text>
@@ -371,6 +427,7 @@ export function GroupChatScreen() {
 
         <BottomSheet visible={optionsOpen} onClose={() => setOptionsOpen(false)}>
           <Text style={styles.sheetTitle}>{focusedGroup.name}</Text>
+          <SheetOption icon={EDIT_ICON} label="Rename group" onPress={openRename} />
           {isOwner ? (
             <SheetOption
               icon={TRASH_ICON}
@@ -416,6 +473,33 @@ export function GroupChatScreen() {
             <View style={styles.sheetActionFlex}>
               <ActionButton label="Delete" variant="destructive" onPress={doDeleteGroup} />
             </View>
+          </View>
+        </BottomSheet>
+
+        <BottomSheet visible={renameOpen} onClose={() => setRenameOpen(false)}>
+          <Text style={styles.sheetTitle}>Rename group</Text>
+          <Text style={styles.sheetBody}>
+            Everyone gets a Yes/No poll to confirm it. It renames as soon as a majority agrees, or automatically in an hour if no one votes.
+          </Text>
+          <View style={styles.pollForm}>
+            <TextInput
+              value={renameName}
+              onChangeText={setRenameName}
+              placeholder="New group name"
+              placeholderTextColor={colors.textFaint}
+              style={[styles.pollInput, noOutline]}
+              accessibilityLabel="New group name"
+            />
+            {renameError && <Text style={styles.attachError}>{renameError}</Text>}
+            <Pressable
+              onPress={submitRename}
+              disabled={renameSubmitting}
+              style={[styles.pollSubmit, renameSubmitting && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Propose rename"
+            >
+              <Text style={styles.pollSubmitLabel}>{renameSubmitting ? 'Starting…' : 'Start rename poll'}</Text>
+            </Pressable>
           </View>
         </BottomSheet>
       </KeyboardAvoidingView>
@@ -481,6 +565,22 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans400,
     fontSize: 13.5,
     color: colors.textSecondary,
+  },
+  systemChip: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.ink06,
+    borderRadius: radius.pill,
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+  },
+  systemChipText: {
+    fontFamily: fontFamily.sans500,
+    fontSize: 12,
+    color: colors.ink55,
+    textAlign: 'center',
   },
   bubbleStack: {
     marginTop: 18,
@@ -711,6 +811,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowRadius: 10,
     elevation: 1,
+  },
+  pollCardLocked: {
+    opacity: 0.7,
+  },
+  renamePollBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  renamePollBadge: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 10.5,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: colors.ink55,
   },
   pollHeaderRow: {
     flexDirection: 'row',

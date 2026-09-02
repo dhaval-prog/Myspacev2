@@ -21,6 +21,8 @@ interface CallInfo {
   memberIds: string[];
   participantNames: Record<string, string>;
   status: CallStatus;
+  /** The connection_id (dm) or group_id (group) a missed-call notice gets posted to. */
+  contextId: string;
 }
 
 interface StartCallOptions {
@@ -28,6 +30,7 @@ interface StartCallOptions {
   title: string;
   memberIds: string[];
   participantNames: Record<string, string>;
+  contextId: string;
 }
 
 interface CallContextValue {
@@ -69,6 +72,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   localStreamRef.current = localStream;
   const peersRef = useRef<Record<string, RTCPeerConnection>>({});
   const callChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  /** True the moment any remote peer's media actually connects — tells endCall() whether this was a real conversation or a missed call. */
+  const everConnectedRef = useRef(false);
 
   // Personal inbox — invites (and cancellations of them) land here regardless of what screen I'm on.
   useEffect(() => {
@@ -121,6 +126,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       }
     };
     pc.ontrack = (e) => {
+      everConnectedRef.current = true;
       setRemoteStreams((prev) => ({ ...prev, [peerId]: e.streams[0] }));
     };
     pc.onconnectionstatechange = () => {
@@ -210,8 +216,19 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       setError("Video calls aren't available on this device yet — try the web app.");
       return;
     }
+    everConnectedRef.current = false;
     const callId = `${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const info: CallInfo = { callId, kind: opts.kind, title: opts.title, fromId: userId, fromName: myName, memberIds: opts.memberIds, participantNames: opts.participantNames, status: 'outgoing' };
+    const info: CallInfo = {
+      callId,
+      kind: opts.kind,
+      title: opts.title,
+      fromId: userId,
+      fromName: myName,
+      memberIds: opts.memberIds,
+      participantNames: opts.participantNames,
+      status: 'outgoing',
+      contextId: opts.contextId,
+    };
     setCall(info);
     const stream = await getLocalMedia();
     if (!stream) {
@@ -221,7 +238,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     for (const targetId of opts.memberIds) {
       supabase
         .channel(`user-calls-${targetId}`)
-        .send({ type: 'broadcast', event: 'invite', payload: { callId, kind: opts.kind, title: opts.title, fromId: userId, fromName: myName, memberIds: opts.memberIds, participantNames: opts.participantNames } })
+        .send({ type: 'broadcast', event: 'invite', payload: { callId, kind: opts.kind, title: opts.title, fromId: userId, fromName: myName, memberIds: opts.memberIds, participantNames: opts.participantNames, contextId: opts.contextId } })
         .then((res) => warn('send invite', res === 'error' ? { message: 'broadcast failed' } : null));
     }
     joinCallRoom(callId);
@@ -231,6 +248,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const info = callRef.current;
     if (!info || info.status !== 'incoming') return;
     setError(null);
+    everConnectedRef.current = false;
     const stream = await getLocalMedia();
     if (!stream) return;
     setCall({ ...info, status: 'active' });
@@ -248,6 +266,26 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   };
 
   const endCall = () => {
+    const info = callRef.current;
+
+    // A call I placed that nobody ever picked up (they declined, or I hung
+    // up first) is a missed call from their side — let them know it
+    // happened right in the chat, and clear their still-ringing card.
+    if (info && info.fromId === userId && !everConnectedRef.current) {
+      for (const targetId of info.memberIds) {
+        supabase
+          .channel(`user-calls-${targetId}`)
+          .send({ type: 'broadcast', event: 'cancel', payload: { callId: info.callId } })
+          .catch(() => {});
+      }
+      const table = info.kind === 'dm' ? 'direct_messages' : 'group_messages';
+      const idColumn = info.kind === 'dm' ? 'connection_id' : 'group_id';
+      supabase
+        .from(table)
+        .insert({ [idColumn]: info.contextId, sender_id: userId, kind: 'system', text: 'Missed video call' })
+        .then(({ error }) => warn('log missed call', error));
+    }
+
     for (const id of Object.keys(peersRef.current)) teardownPeer(id);
     if (callChannelRef.current) {
       supabase.removeChannel(callChannelRef.current);
