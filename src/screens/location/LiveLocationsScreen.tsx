@@ -178,10 +178,19 @@ function MapPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
-  // Manual retry — the same fetch as above, without the mount-effect's
-  // cancellation dance, for the recenter FAB (and the permission dialog) to
-  // call when there's no position yet instead of recentering on nothing.
-  const retryMyPosition = async () => {
+  const applyCurrentPosition = async () => {
+    const pos = await Location.getCurrentPositionAsync({});
+    const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+    setMyPosition(coords);
+    setMyAccuracy(pos.coords.accuracy ?? null);
+    upsertLastSeen(coords.latitude, coords.longitude);
+  };
+
+  // The in-app ask — actually triggers the OS/browser permission prompt
+  // itself (when it hasn't been permanently blocked yet), so granting it
+  // never has to leave the app. Also what the recenter FAB falls back to
+  // when there's no position yet instead of recentering on nothing.
+  const requestLocationAccess = async () => {
     setLocationError(null);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -190,38 +199,52 @@ function MapPage({
         return;
       }
       setPermissionDenied(false);
-      const pos = await Location.getCurrentPositionAsync({});
-      const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-      setMyPosition(coords);
-      setMyAccuracy(pos.coords.accuracy ?? null);
-      upsertLastSeen(coords.latitude, coords.longitude);
+      await applyCurrentPosition();
+    } catch {
+      setLocationError("Couldn't get your location — check your browser or device location settings, then try again.");
+    }
+  };
+
+  // A passive re-check — never prompts — for after the user has fixed
+  // permission somewhere the app can't reach directly (the browser's own
+  // site settings, or the OS Settings app on native).
+  const recheckLocationAccess = async () => {
+    setLocationError(null);
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setPermissionDenied(true);
+        return;
+      }
+      setPermissionDenied(false);
+      await applyCurrentPosition();
     } catch {
       setLocationError("Couldn't get your location — check your browser or device location settings, then try again.");
     }
   };
 
   // On native, denying location once means the OS won't show its permission
-  // prompt again — the only way back in is the Settings app. "Open Settings"
-  // backgrounds this app; the moment it's foregrounded again, silently
-  // re-check permission so the dialog clears itself the instant the user
-  // flips the toggle, instead of leaving them stuck looking at a stale
-  // "denied" dialog after they've already fixed it.
+  // prompt again — the only way back in is the Settings app. Backgrounding
+  // this app to open Settings means the moment it's foregrounded again,
+  // silently re-check permission so the dialog clears itself the instant
+  // the user flips the toggle, instead of leaving them stuck looking at a
+  // stale "denied" dialog after they've already fixed it.
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && permissionDenied) retryMyPosition();
+      if (state === 'active' && permissionDenied) recheckLocationAccess();
     });
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [permissionDenied]);
 
-  const handleEnableLocation = () => {
+  const handleTryAgain = () => {
     if (Platform.OS === 'web') {
       // A browser that has already blocked this site won't re-show its own
       // permission prompt no matter how many times we ask — the user has to
-      // flip it in the browser's site settings first. Retrying still
+      // flip it in the browser's site settings first. Re-checking still
       // matters: it's what actually clears the dialog the moment they do.
-      retryMyPosition();
+      recheckLocationAccess();
     } else {
       Linking.openSettings();
     }
@@ -412,7 +435,7 @@ function MapPage({
             if (id === 'expenses') onOpenExpenses();
             if (id === 'split') onOpenSplit();
           }}
-          onAdd={() => (myPosition ? mapRef.current?.recenter() : retryMyPosition())}
+          onAdd={() => (myPosition ? mapRef.current?.recenter() : requestLocationAccess())}
           fabIconPath={RECENTER_ICON}
           fabAccessibilityLabel={myPosition ? 'Recenter map' : 'Find my location'}
           bottomInset={insets.bottom}
@@ -506,12 +529,14 @@ function MapPage({
         title="Location access needed"
         message={
           Platform.OS === 'web'
-            ? 'Radar shows you and your friends on a map, so it needs your location to work. Your browser has blocked it for this site — tap the location icon in your address bar, allow access, then try again.'
-            : 'Radar shows you and your friends on a map, so it needs your location to work. Turn on Location for MySpace in Settings, then come back here.'
+            ? "Radar shows you and your friends on a map, so it needs your location to work. If your browser has already blocked it for this site, allow it from the browser's own site settings first."
+            : 'Radar shows you and your friends on a map, so it needs your location to work. If Settings already has it turned off for MySpace, turn it on there first.'
         }
+        primaryLabel="Share location access"
+        onPrimary={requestLocationAccess}
         confirmLabel={Platform.OS === 'web' ? 'Try again' : 'Open Settings'}
         cancelLabel="Not now"
-        onConfirm={handleEnableLocation}
+        onConfirm={handleTryAgain}
         onCancel={onBack}
       />
     </View>
