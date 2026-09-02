@@ -8,17 +8,19 @@ import { AlertForm } from '../components/AlertForm';
 import { ItemList } from '../components/ItemList';
 import { Icon } from '../components/Icon';
 import { BottomNav } from '../components/BottomNav';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useSpace } from '../context/SpaceContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { VIEWS, type ViewId } from '../data/views';
 import { ROOM_OPTIONS } from '../data/rooms';
 import { RAIL_ICON } from '../data/railIcons';
-import { CATEGORY_ICON } from '../data/itemCategories';
-import { getAttentionEntries, formatDate } from '../utils/attention';
-import { formatTime12 } from '../utils/time';
+import { CATEGORY_ICON, EMPTY_CATEGORY_ICON } from '../data/itemCategories';
+import { getAttentionEntries } from '../utils/attention';
 import { recurAlertDate } from '../utils/alerts';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
+const CHECK_ICON = 'M5 12.5 10 17.5 19 7';
+const DELETE_PATH = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 
 interface DetailScreenProps {
   viewId: ViewId;
@@ -42,23 +44,15 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
   const gateOn = items.length === 0;
 
   const tiles: RailTile[] = useMemo(() => {
-    if (isFormView) {
-      return VIEWS.add.items.map((it) => ({
-        id: it.id,
-        mono: it.mono,
-        label: it.rail,
-        path: RAIL_ICON[it.rail],
-        locked: it.gated && gateOn,
-      }));
-    }
-    return attentionEntries.map((entry) => ({
-      id: entry.item.name + entry.index,
-      mono: entry.item.mono,
-      label: entry.item.name,
-      path: entry.item.category === 'Alert' ? CATEGORY_ICON.Alert : undefined,
-      locked: false,
+    if (!isFormView) return [];
+    return VIEWS.add.items.map((it) => ({
+      id: it.id,
+      mono: it.mono,
+      label: it.rail,
+      path: RAIL_ICON[it.rail],
+      locked: it.gated && gateOn,
     }));
-  }, [isFormView, gateOn, attentionEntries]);
+  }, [isFormView, gateOn]);
 
   const ri = Math.min(railIndex, Math.max(tiles.length - 1, 0));
   const selectedTileId = tiles[ri]?.id;
@@ -76,16 +70,16 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
     title = sel?.title ?? '';
     subline = sel?.desc ?? '';
   } else {
-    const entry = attentionEntries[ri];
-    title = entry ? entry.item.name : 'All caught up';
-    subline = entry
-      ? `${entry.badge} · ${[entry.item.category, entry.item.room].filter(Boolean).join(' · ') || 'Unfiled'}`
-      : 'Nothing is expiring soon.';
+    title = 'Needs attention';
+    subline =
+      attentionEntries.length > 0
+        ? `${attentionEntries.length} ${attentionEntries.length === 1 ? 'thing needs' : 'things need'} a look`
+        : 'Nothing is expiring soon.';
   }
 
   return (
     <View style={styles.screen}>
-      {!collapsed && (isFormView || tiles.length > 0) && (
+      {!collapsed && isFormView && (
         <Pressable
           onPress={() => setCollapsed(true)}
           style={styles.railBackdrop}
@@ -95,7 +89,7 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
       )}
 
       <View style={[styles.body, { paddingTop: insets.top + spacing.md }]}>
-        {(isFormView || tiles.length > 0) && (
+        {isFormView && (
           <Rail
             tiles={tiles}
             activeIndex={ri}
@@ -107,30 +101,41 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
           />
         )}
 
-        <ContentColumn collapsed={collapsed || tiles.length === 0} reduceMotion={reduceMotion}>
-          <View key={`${viewId}-${selectedTileId}`} style={styles.titleBlock}>
-            <Text style={typography.detailTitle}>{title}</Text>
-            <Text style={[typography.detailSubline, styles.subline]}>{subline}</Text>
+        {isFormView ? (
+          <ContentColumn collapsed={collapsed} reduceMotion={reduceMotion}>
+            <View key={selectedTileId} style={styles.titleBlock}>
+              <Text style={typography.detailTitle}>{title}</Text>
+              <Text style={[typography.detailSubline, styles.subline]}>{subline}</Text>
+            </View>
+
+            {selectedTileId === 'add' && <ItemForm rooms={ROOM_OPTIONS} onSubmit={addItem} />}
+            {selectedTileId === 'view-all' && items.length > 0 && (
+              <ItemList items={items} rooms={ROOM_OPTIONS} mode="view" onDelete={removeItem} onEditSave={editItem} />
+            )}
+            {selectedTileId === 'alerts' && <AlertForm onSubmit={addItem} />}
+          </ContentColumn>
+        ) : (
+          <View style={styles.attentionColumn}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.attentionScroll}>
+              <View style={styles.titleBlock}>
+                <Text style={typography.detailTitle}>{title}</Text>
+                <Text style={[typography.detailSubline, styles.subline]}>{subline}</Text>
+              </View>
+
+              {attentionEntries.map((entry) => (
+                <AttentionRow
+                  key={entry.item.name + entry.index}
+                  entry={entry}
+                  onResolve={() => {
+                    const alertType = entry.item.alertType;
+                    editItem(entry.index, { expiry: alertType ? recurAlertDate(alertType) : '' });
+                  }}
+                  onRemove={() => removeItem(entry.index)}
+                />
+              ))}
+            </ScrollView>
           </View>
-
-          {viewId === 'add' && selectedTileId === 'add' && <ItemForm rooms={ROOM_OPTIONS} onSubmit={addItem} />}
-          {viewId === 'add' && selectedTileId === 'view-all' && items.length > 0 && (
-            <ItemList items={items} rooms={ROOM_OPTIONS} mode="view" onDelete={removeItem} onEditSave={editItem} />
-          )}
-          {viewId === 'add' && selectedTileId === 'alerts' && <AlertForm onSubmit={addItem} />}
-
-          {viewId === 'attention' && attentionEntries[ri] && (
-            <AttentionDetail
-              entry={attentionEntries[ri]}
-              onResolve={() => {
-                const entry = attentionEntries[ri];
-                const alertType = entry.item.alertType;
-                editItem(entry.index, { expiry: alertType ? recurAlertDate(alertType) : '' });
-              }}
-              onRemove={() => removeItem(attentionEntries[ri].index)}
-            />
-          )}
-        </ContentColumn>
+        )}
       </View>
 
       <View
@@ -162,7 +167,8 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
   );
 }
 
-function AttentionDetail({
+/** One line per "needs attention" entry — icon, name + badge, mark-used/remove actions. */
+function AttentionRow({
   entry,
   onResolve,
   onRemove,
@@ -171,41 +177,97 @@ function AttentionDetail({
   onResolve: () => void;
   onRemove: () => void;
 }) {
-  const time = entry.item.reminderTimes?.[0];
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const meta = [entry.item.category, entry.item.room].filter(Boolean).join(' · ') || 'Unfiled';
+
   return (
-    <View style={attentionStyles.card}>
-      <Text style={typography.formLabel}>
-        Expires {formatDate(entry.item.expiry)}
-        {time ? ` at ${formatTime12(time)}` : ''}
-      </Text>
-      <View style={attentionStyles.actions}>
-        <Pressable onPress={onResolve} style={[attentionStyles.button, { backgroundColor: colors.ink }]}>
-          <Text style={[typography.buttonLabel, { fontSize: 13, color: colors.lime }]}>Mark used</Text>
-        </Pressable>
-        <Pressable onPress={onRemove} style={[attentionStyles.button, { backgroundColor: 'rgba(211,50,67,0.12)' }]}>
-          <Text style={[typography.buttonLabel, { fontSize: 13, color: '#D33243' }]}>Remove item</Text>
-        </Pressable>
+    <View style={attentionStyles.row}>
+      <View style={attentionStyles.rowIcon}>
+        <Icon path={CATEGORY_ICON[entry.item.category] || EMPTY_CATEGORY_ICON} color={colors.pale} size={17} />
       </View>
+      <View style={attentionStyles.rowText}>
+        <Text style={attentionStyles.rowName} numberOfLines={1}>
+          {entry.item.name}
+        </Text>
+        <Text style={[attentionStyles.rowBadge, entry.urgent && attentionStyles.rowBadgeUrgent]} numberOfLines={1}>
+          {entry.badge} · {meta}
+        </Text>
+      </View>
+      <Pressable
+        onPress={onResolve}
+        accessibilityRole="button"
+        accessibilityLabel={`Mark ${entry.item.name} used`}
+        style={[attentionStyles.actionBtn, { backgroundColor: colors.ink }]}
+      >
+        <Icon path={CHECK_ICON} color={colors.lime} size={14} strokeWidth={2.4} />
+      </Pressable>
+      <Pressable
+        onPress={() => setConfirmOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Remove ${entry.item.name}`}
+        style={[attentionStyles.actionBtn, { backgroundColor: 'rgba(211,50,67,0.12)' }]}
+      >
+        <Icon path={DELETE_PATH} color="#D33243" size={14} strokeWidth={1.9} />
+      </Pressable>
+
+      <ConfirmDialog
+        visible={confirmOpen}
+        title={`Remove ${entry.item.name}?`}
+        message="This removes it permanently — it can't be undone."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => {
+          setConfirmOpen(false);
+          onRemove();
+        }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </View>
   );
 }
 
 const attentionStyles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.pale,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    gap: spacing.ms,
-  },
-  actions: {
+  row: {
     flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  button: {
-    flex: 1,
-    paddingVertical: spacing.ms,
-    borderRadius: radius.md - 8,
     alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.pale,
+    borderRadius: radius.md - 8,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.ms,
+  },
+  rowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  rowName: {
+    fontFamily: typography.itemTitle.fontFamily,
+    fontSize: 14.5,
+    color: colors.textPrimary,
+  },
+  rowBadge: {
+    fontFamily: typography.itemSub.fontFamily,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  rowBadgeUrgent: {
+    color: '#D33243',
+  },
+  actionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
@@ -286,6 +348,17 @@ const styles = StyleSheet.create({
   contentScroll: {
     // Clears the rail's toggle notch (26 top margin + 40 tall) with room to spare.
     paddingTop: 78,
+    paddingBottom: spacing.huge,
+    gap: spacing.xxl,
+  },
+  attentionColumn: {
+    flex: 1,
+    marginLeft: spacing.xxxl,
+    marginRight: spacing.xxxl,
+    zIndex: 1,
+  },
+  attentionScroll: {
+    paddingTop: spacing.md,
     paddingBottom: spacing.huge,
     gap: spacing.xxl,
   },

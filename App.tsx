@@ -116,6 +116,8 @@ function AppNavigator() {
           openChatWithUser(userId);
           setScreen({ name: 'friends' });
         }}
+        onOpenExpenses={() => setScreen({ name: 'expenses' })}
+        onOpenSplit={() => setScreen({ name: 'split' })}
       />
     );
   }

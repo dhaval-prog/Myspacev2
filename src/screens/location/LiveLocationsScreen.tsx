@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
+import { BottomNav } from '../../components/BottomNav';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
@@ -13,11 +14,11 @@ import { PinPreviewCard } from '../../components/location/PinPreviewCard';
 import { useAuth } from '../../context/AuthContext';
 import { useFriends } from '../../context/FriendsContext';
 import { LocationProvider, useLocationData } from '../../context/LocationContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { ShareDurationKey } from '../../types/location';
 import { haversineMeters, formatDistance } from '../../utils/geo';
 import { LocationPrivacyScreen } from './LocationPrivacyScreen';
 
-const BACK_ICON = 'M15 5l-7 7 7 7';
 const GEAR_ICON =
   'M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M19 12a7 7 0 00-.1-1.1l1.8-1.4-1.5-2.6-2.1.6a7 7 0 00-1.9-1.1L16.5 5h-3l-.4 2.4a7 7 0 00-1.9 1.1l-2.1-.6-1.5 2.6 1.8 1.4A7 7 0 008.3 12a7 7 0 00.1 1.1l-1.8 1.4 1.5 2.6 2.1-.6a7 7 0 001.9 1.1l.4 2.4h3l.4-2.4a7 7 0 001.9-1.1l2.1.6 1.5-2.6-1.8-1.4c.1-.3.1-.7.1-1.1z';
 const RECENTER_ICON = 'M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 100 8 4 4 0 000-8z';
@@ -58,6 +59,8 @@ function timeLeftLabel(expiresAt: string | null): string {
 interface LiveLocationsScreenProps {
   onBack: () => void;
   onOpenChat: (userId: string) => void;
+  onOpenExpenses: () => void;
+  onOpenSplit: () => void;
 }
 
 /**
@@ -69,7 +72,7 @@ interface LiveLocationsScreenProps {
  * (MapCanvas.web.tsx) — expo-location works on both via the browser's
  * geolocation API on web, so capture isn't gated by platform.
  */
-export function LiveLocationsScreen({ onBack, onOpenChat }: LiveLocationsScreenProps) {
+export function LiveLocationsScreen({ onBack, onOpenChat, onOpenExpenses, onOpenSplit }: LiveLocationsScreenProps) {
   const [page, setPage] = useState<'map' | 'privacy'>('map');
 
   return (
@@ -85,7 +88,13 @@ export function LiveLocationsScreen({ onBack, onOpenChat }: LiveLocationsScreenP
         view and left the "You" pin looking like it had vanished.
       */}
       <View style={{ flex: 1 }}>
-        <MapPage onBack={onBack} onOpenPrivacy={() => setPage('privacy')} onOpenChat={onOpenChat} />
+        <MapPage
+          onBack={onBack}
+          onOpenPrivacy={() => setPage('privacy')}
+          onOpenChat={onOpenChat}
+          onOpenExpenses={onOpenExpenses}
+          onOpenSplit={onOpenSplit}
+        />
         {page === 'privacy' ? (
           <View style={StyleSheet.absoluteFill}>
             <LocationPrivacyScreen onBack={() => setPage('map')} />
@@ -100,12 +109,17 @@ function MapPage({
   onBack,
   onOpenPrivacy,
   onOpenChat,
+  onOpenExpenses,
+  onOpenSplit,
 }: {
   onBack: () => void;
   onOpenPrivacy: () => void;
   onOpenChat: (userId: string) => void;
+  onOpenExpenses: () => void;
+  onOpenSplit: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const userId = user?.id ?? null;
   const { friends } = useFriends();
@@ -302,16 +316,6 @@ function MapPage({
         </Pressable>
       </View>
 
-      {/* Back — floats just above the bottom sheet, over "Share my location" */}
-      <Pressable
-        onPress={onBack}
-        style={[styles.backFab, { bottom: sheetHeight + spacing.md }]}
-        accessibilityRole="button"
-        accessibilityLabel="Back to Home"
-      >
-        <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2.2} />
-      </Pressable>
-
       {Platform.OS === 'android' ? (
         <View style={styles.previewNote}>
           <Text style={styles.previewNoteText}>Add a Google Maps API key to app.json to see the real map.</Text>
@@ -322,15 +326,22 @@ function MapPage({
         </View>
       ) : null}
 
-      {/* Recenter */}
-      <Pressable
-        onPress={() => (myPosition ? mapRef.current?.recenter() : retryMyPosition())}
-        style={styles.recenterFab}
-        accessibilityRole="button"
-        accessibilityLabel={myPosition ? 'Recenter map' : 'Find my location'}
-      >
-        <Icon path={RECENTER_ICON} color={colors.textPrimary} size={19} strokeWidth={1.9} />
-      </Pressable>
+      {/* Nav dock — floats just above the bottom sheet; the right-hand FAB recenters the map instead of the default "+". */}
+      <View style={[styles.bottomNavWrap, { bottom: sheetHeight + spacing.md }]} pointerEvents="box-none">
+        <BottomNav
+          activeId="location"
+          onSelect={(id) => {
+            if (id === 'home') onBack();
+            if (id === 'expenses') onOpenExpenses();
+            if (id === 'split') onOpenSplit();
+          }}
+          onAdd={() => (myPosition ? mapRef.current?.recenter() : retryMyPosition())}
+          fabIconPath={RECENTER_ICON}
+          fabAccessibilityLabel={myPosition ? 'Recenter map' : 'Find my location'}
+          bottomInset={0}
+          reduceMotion={reduceMotion}
+        />
+      </View>
 
       {/* Bottom sheet peek */}
       <View
@@ -522,36 +533,10 @@ const styles = StyleSheet.create({
     color: colors.danger,
     marginTop: spacing.xs,
   },
-  backFab: {
+  bottomNavWrap: {
     position: 'absolute',
-    left: spacing.xxxl,
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 14,
-    elevation: 2,
-  },
-  recenterFab: {
-    position: 'absolute',
-    right: 28,
-    bottom: 424,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.14,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 18,
-    elevation: 3,
+    left: 0,
+    right: 0,
   },
   sheet: {
     position: 'absolute',
