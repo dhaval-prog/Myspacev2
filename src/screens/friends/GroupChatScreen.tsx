@@ -151,8 +151,14 @@ export function GroupChatScreen() {
 
   const mediaItems = groupMessages
     .filter((m) => m.kind === 'image' && m.attachmentUrl)
-    .map((m) => ({ id: m.id, url: m.attachmentUrl! }))
+    .map((m) => ({ id: m.id, url: m.attachmentUrl!, senderId: m.senderId }))
     .reverse();
+  const otherMemberIds = groupMemberIdsFor(focusedGroup.id).filter((id) => id !== user?.id);
+  const memberNameById: Record<string, string> = {};
+  otherMemberIds.forEach((id, i) => {
+    memberNameById[id] = memberNames[i] ?? 'Someone';
+  });
+  const mediaSenderNameFor = (senderId: string) => (senderId === user?.id ? 'You' : (memberNameById[senderId] ?? 'Someone'));
 
   const startVideoCall = () => {
     const memberIds = groupMemberIdsFor(focusedGroup.id).filter((id) => id !== user?.id);
@@ -382,7 +388,14 @@ export function GroupChatScreen() {
           />
         </BottomSheet>
 
-        <MediaGalleryModal visible={mediaOpen} onClose={() => setMediaOpen(false)} title="Media" items={mediaItems} />
+        <MediaGalleryModal
+          visible={mediaOpen}
+          onClose={() => setMediaOpen(false)}
+          title="Media"
+          bannerCaption={focusedGroup.name}
+          items={mediaItems}
+          senderNameFor={mediaSenderNameFor}
+        />
 
         <BottomSheet visible={pollOpen} onClose={() => setPollOpen(false)}>
           <Text style={styles.sheetTitle}>New poll</Text>
