@@ -123,9 +123,9 @@ const styles = StyleSheet.create({
   backButtonFloating: {
     position: 'absolute',
     left: spacing.xxxl,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.walletSurface,
     borderWidth: 1,
     borderColor: colors.walletBorder,

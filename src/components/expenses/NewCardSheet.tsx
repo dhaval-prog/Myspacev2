@@ -6,7 +6,7 @@ import { useExpenses } from '../../context/ExpensesContext';
 import { RESET_DAY_OPTIONS } from '../../data/expensesSeed';
 import { daysInCurrentMonth, ordinalDay } from '../../utils/expensesFormat';
 
-/** The "New budget card" sheet — name, reset day, budget amount. */
+/** The "New Expense Card" sheet — name, reset day, budget amount. */
 export function NewCardSheet() {
   const { newCardOpen, closeNewCard, addCard } = useExpenses();
   const [name, setName] = useState('');
@@ -40,10 +40,10 @@ export function NewCardSheet() {
 
   return (
     <BottomSheet visible={newCardOpen} onClose={closeNewCard}>
-      <Text style={styles.title}>New budget card</Text>
+      <Text style={styles.title}>New Expense Card</Text>
 
       <View style={{ gap: spacing.xs }}>
-        <Text style={styles.label}>Budget name</Text>
+        <Text style={styles.label}>Card Name</Text>
         <TextInput
           value={name}
           onChangeText={setName}

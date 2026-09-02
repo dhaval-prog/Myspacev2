@@ -94,6 +94,7 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
             onSelect={handleSelectTile}
             onToggleCollapse={() => setCollapsed((c) => !c)}
             reduceMotion={reduceMotion}
+            showLabels={isFormView}
           />
         )}
 
