@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { Animated, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography, radius, EASE, duration } from '../theme';
 import { Rail, type RailTile } from '../components/Rail';
@@ -21,6 +21,9 @@ import { recurAlertDate } from '../utils/alerts';
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const CHECK_ICON = 'M5 12.5 10 17.5 19 7';
 const DELETE_PATH = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
+
+/** How far a "Needs attention" row swipes left to swap the tick for delete. */
+const ATTENTION_SWIPE_REVEAL_WIDTH = 64;
 
 interface DetailScreenProps {
   viewId: ViewId;
@@ -167,7 +170,12 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
   );
 }
 
-/** One line per "needs attention" entry — icon, name + badge, mark-used/remove actions. */
+/**
+ * One line per "needs attention" entry — icon, name + badge, and a single
+ * action slot on the right. It shows the "mark used" tick by default;
+ * swiping the row left swaps it for Delete (swiping back right, or
+ * cancelling the confirm — including tapping outside it — swaps it back).
+ */
 function AttentionRow({
   entry,
   onResolve,
@@ -177,38 +185,64 @@ function AttentionRow({
   onResolve: () => void;
   onRemove: () => void;
 }) {
+  const [swiped, setSwiped] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const meta = [entry.item.category, entry.item.room].filter(Boolean).join(' · ') || 'Unfiled';
 
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderRelease: (_, g) => {
+        if (g.dx < -ATTENTION_SWIPE_REVEAL_WIDTH / 2) setSwiped(true);
+        else if (g.dx > ATTENTION_SWIPE_REVEAL_WIDTH / 2) setSwiped(false);
+      },
+    }),
+  ).current;
+
+  const confirmDelete = () => {
+    setConfirmOpen(false);
+    onRemove();
+  };
+
+  const cancelDelete = () => {
+    setConfirmOpen(false);
+    setSwiped(false);
+  };
+
   return (
-    <View style={attentionStyles.row}>
-      <View style={attentionStyles.rowIcon}>
-        <Icon path={CATEGORY_ICON[entry.item.category] || EMPTY_CATEGORY_ICON} color={colors.pale} size={17} />
+    <>
+      <View style={attentionStyles.row} {...panResponder.panHandlers}>
+        <View style={attentionStyles.rowIcon}>
+          <Icon path={CATEGORY_ICON[entry.item.category] || EMPTY_CATEGORY_ICON} color={colors.pale} size={17} />
+        </View>
+        <View style={attentionStyles.rowText}>
+          <Text style={attentionStyles.rowName} numberOfLines={1}>
+            {entry.item.name}
+          </Text>
+          <Text style={[attentionStyles.rowBadge, entry.urgent && attentionStyles.rowBadgeUrgent]} numberOfLines={1}>
+            {entry.badge} · {meta}
+          </Text>
+        </View>
+        {!swiped ? (
+          <Pressable
+            onPress={onResolve}
+            accessibilityRole="button"
+            accessibilityLabel={`Mark ${entry.item.name} used`}
+            style={[attentionStyles.actionBtn, { backgroundColor: colors.ink }]}
+          >
+            <Icon path={CHECK_ICON} color={colors.lime} size={14} strokeWidth={2.4} />
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => setConfirmOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${entry.item.name}`}
+            style={[attentionStyles.actionBtn, { backgroundColor: colors.danger }]}
+          >
+            <Icon path={DELETE_PATH} color="#fff" size={14} strokeWidth={1.9} />
+          </Pressable>
+        )}
       </View>
-      <View style={attentionStyles.rowText}>
-        <Text style={attentionStyles.rowName} numberOfLines={1}>
-          {entry.item.name}
-        </Text>
-        <Text style={[attentionStyles.rowBadge, entry.urgent && attentionStyles.rowBadgeUrgent]} numberOfLines={1}>
-          {entry.badge} · {meta}
-        </Text>
-      </View>
-      <Pressable
-        onPress={onResolve}
-        accessibilityRole="button"
-        accessibilityLabel={`Mark ${entry.item.name} used`}
-        style={[attentionStyles.actionBtn, { backgroundColor: colors.ink }]}
-      >
-        <Icon path={CHECK_ICON} color={colors.lime} size={14} strokeWidth={2.4} />
-      </Pressable>
-      <Pressable
-        onPress={() => setConfirmOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel={`Remove ${entry.item.name}`}
-        style={[attentionStyles.actionBtn, { backgroundColor: 'rgba(211,50,67,0.12)' }]}
-      >
-        <Icon path={DELETE_PATH} color="#D33243" size={14} strokeWidth={1.9} />
-      </Pressable>
 
       <ConfirmDialog
         visible={confirmOpen}
@@ -216,13 +250,10 @@ function AttentionRow({
         message="This removes it permanently — it can't be undone."
         confirmLabel="Remove"
         destructive
-        onConfirm={() => {
-          setConfirmOpen(false);
-          onRemove();
-        }}
-        onCancel={() => setConfirmOpen(false)}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
       />
-    </View>
+    </>
   );
 }
 
