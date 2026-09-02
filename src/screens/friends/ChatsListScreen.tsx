@@ -59,6 +59,16 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit }: ChatsLi
               </Text>
             </Pressable>
           ))}
+          {groups.map((g) => (
+            <Pressable key={g.id} onPress={() => openGroupChat(g.id)} style={styles.railItem}>
+              <View style={styles.railGroupAvatar}>
+                <Icon path={GROUP_ICON} color={colors.lime} size={22} strokeWidth={1.8} />
+              </View>
+              <Text style={styles.railLabel} numberOfLines={1}>
+                {g.name}
+              </Text>
+            </Pressable>
+          ))}
         </ScrollView>
 
         {friends.length === 0 && sentRequests.length === 0 && groups.length === 0 ? (
@@ -239,6 +249,14 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  railGroupAvatar: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
