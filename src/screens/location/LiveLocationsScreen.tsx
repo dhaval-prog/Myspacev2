@@ -19,6 +19,7 @@ import type { ShareDurationKey } from '../../types/location';
 import { haversineMeters, formatDistance } from '../../utils/geo';
 import { LocationPrivacyScreen } from './LocationPrivacyScreen';
 
+const BACK_ICON = 'M15 5l-7 7 7 7';
 const GEAR_ICON =
   'M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M19 12a7 7 0 00-.1-1.1l1.8-1.4-1.5-2.6-2.1.6a7 7 0 00-1.9-1.1L16.5 5h-3l-.4 2.4a7 7 0 00-1.9 1.1l-2.1-.6-1.5 2.6 1.8 1.4A7 7 0 008.3 12a7 7 0 00.1 1.1l-1.8 1.4 1.5 2.6 2.1-.6a7 7 0 001.9 1.1l.4 2.4h3l.4-2.4a7 7 0 001.9-1.1l2.1.6 1.5-2.6-1.8-1.4c.1-.3.1-.7.1-1.1z';
 const RECENTER_ICON = 'M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 100 8 4 4 0 000-8z';
@@ -135,6 +136,7 @@ function MapPage({
   const [locationError, setLocationError] = useState<string | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [sheetHeight, setSheetHeight] = useState(0);
+  const [navHeight, setNavHeight] = useState(0);
   const mapRef = useRef<MapCanvasHandle>(null);
 
   const ownShare = userId ? shareFor(userId) : undefined;
@@ -275,13 +277,13 @@ function MapPage({
           amSharing={sharing}
           myAccuracy={myAccuracy}
           routeCoords={routeCoords}
-          bottomInset={sheetHeight}
+          bottomInset={sheetHeight + navHeight}
           onSelectPin={togglePreview}
         />
       </View>
 
       {routeTarget ? (
-        <View style={[styles.routeBanner, { bottom: sheetHeight + spacing.md }]}>
+        <View style={[styles.routeBanner, { bottom: sheetHeight + navHeight + spacing.md }]}>
           <Icon path={DIRECTIONS_ICON} color={colors.textPrimary} size={14} strokeWidth={2} />
           <Text style={styles.routeBannerText} numberOfLines={1}>
             Straight-line path to {routeTarget.name.split(' ')[0]}
@@ -301,7 +303,7 @@ function MapPage({
           live={previewFriend.live}
           onOpen={() => openDetail(previewFriend.userId)}
           onClose={() => setPreviewFriendId(null)}
-          style={[styles.previewCard, { bottom: sheetHeight + spacing.md }]}
+          style={[styles.previewCard, { bottom: sheetHeight + navHeight + spacing.md }]}
         />
       ) : null}
 
@@ -326,26 +328,19 @@ function MapPage({
         </View>
       ) : null}
 
-      {/* Nav dock — floats just above the bottom sheet; the right-hand FAB recenters the map instead of the default "+". */}
-      <View style={[styles.bottomNavWrap, { bottom: sheetHeight + spacing.md }]} pointerEvents="box-none">
-        <BottomNav
-          activeId="location"
-          onSelect={(id) => {
-            if (id === 'home') onBack();
-            if (id === 'expenses') onOpenExpenses();
-            if (id === 'split') onOpenSplit();
-          }}
-          onAdd={() => (myPosition ? mapRef.current?.recenter() : retryMyPosition())}
-          fabIconPath={RECENTER_ICON}
-          fabAccessibilityLabel={myPosition ? 'Recenter map' : 'Find my location'}
-          bottomInset={0}
-          reduceMotion={reduceMotion}
-        />
-      </View>
+      {/* Back — floats above the sheet, over "Share my location" */}
+      <Pressable
+        onPress={onBack}
+        style={[styles.backFab, { bottom: sheetHeight + navHeight + spacing.md }]}
+        accessibilityRole="button"
+        accessibilityLabel="Back to Home"
+      >
+        <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2.2} />
+      </Pressable>
 
-      {/* Bottom sheet peek */}
+      {/* Bottom sheet peek — sits directly above the nav dock pinned at the very bottom */}
       <View
-        style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.md }]}
+        style={[styles.sheet, { bottom: navHeight, paddingBottom: spacing.lg }]}
         onLayout={(e) => setSheetHeight(e.nativeEvent.layout.height)}
       >
         <View style={styles.sheetHandle} />
@@ -381,6 +376,23 @@ function MapPage({
             ))}
           </ScrollView>
         )}
+      </View>
+
+      {/* Nav dock — pinned at the very bottom, below the sheet; the right-hand FAB recenters the map instead of the default "+". */}
+      <View style={styles.bottomNavWrap} onLayout={(e) => setNavHeight(e.nativeEvent.layout.height)} pointerEvents="box-none">
+        <BottomNav
+          activeId="location"
+          onSelect={(id) => {
+            if (id === 'home') onBack();
+            if (id === 'expenses') onOpenExpenses();
+            if (id === 'split') onOpenSplit();
+          }}
+          onAdd={() => (myPosition ? mapRef.current?.recenter() : retryMyPosition())}
+          fabIconPath={RECENTER_ICON}
+          fabAccessibilityLabel={myPosition ? 'Recenter map' : 'Find my location'}
+          bottomInset={insets.bottom}
+          reduceMotion={reduceMotion}
+        />
       </View>
 
       {/* Share sheet */}
@@ -533,16 +545,31 @@ const styles = StyleSheet.create({
     color: colors.danger,
     marginTop: spacing.xs,
   },
+  backFab: {
+    position: 'absolute',
+    left: spacing.xxxl,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    elevation: 2,
+  },
   bottomNavWrap: {
     position: 'absolute',
     left: 0,
     right: 0,
+    bottom: 0,
   },
   sheet: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 0,
     backgroundColor: '#fff',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
