@@ -136,7 +136,6 @@ function MapPage({
   const [locationError, setLocationError] = useState<string | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [sheetHeight, setSheetHeight] = useState(0);
-  const [navHeight, setNavHeight] = useState(0);
   const mapRef = useRef<MapCanvasHandle>(null);
 
   const ownShare = userId ? shareFor(userId) : undefined;
@@ -277,13 +276,13 @@ function MapPage({
           amSharing={sharing}
           myAccuracy={myAccuracy}
           routeCoords={routeCoords}
-          bottomInset={sheetHeight + navHeight}
+          bottomInset={sheetHeight}
           onSelectPin={togglePreview}
         />
       </View>
 
       {routeTarget ? (
-        <View style={[styles.routeBanner, { bottom: sheetHeight + navHeight + spacing.md }]}>
+        <View style={[styles.routeBanner, { bottom: sheetHeight + spacing.md }]}>
           <Icon path={DIRECTIONS_ICON} color={colors.textPrimary} size={14} strokeWidth={2} />
           <Text style={styles.routeBannerText} numberOfLines={1}>
             Straight-line path to {routeTarget.name.split(' ')[0]}
@@ -303,7 +302,7 @@ function MapPage({
           live={previewFriend.live}
           onOpen={() => openDetail(previewFriend.userId)}
           onClose={() => setPreviewFriendId(null)}
-          style={[styles.previewCard, { bottom: sheetHeight + navHeight + spacing.md }]}
+          style={[styles.previewCard, { bottom: sheetHeight + spacing.md }]}
         />
       ) : null}
 
@@ -331,18 +330,15 @@ function MapPage({
       {/* Back — floats above the sheet, over "Share my location" */}
       <Pressable
         onPress={onBack}
-        style={[styles.backFab, { bottom: sheetHeight + navHeight + spacing.md }]}
+        style={[styles.backFab, { bottom: sheetHeight + spacing.md }]}
         accessibilityRole="button"
         accessibilityLabel="Back to Home"
       >
         <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2.2} />
       </Pressable>
 
-      {/* Bottom sheet peek — sits directly above the nav dock pinned at the very bottom */}
-      <View
-        style={[styles.sheet, { bottom: navHeight, paddingBottom: spacing.lg }]}
-        onLayout={(e) => setSheetHeight(e.nativeEvent.layout.height)}
-      >
+      {/* Bottom sheet — pinned at the very bottom; the nav dock is its last row, below "NEARBY" */}
+      <View style={styles.sheet} onLayout={(e) => setSheetHeight(e.nativeEvent.layout.height)}>
         <View style={styles.sheetHandle} />
 
         {sharing ? (
@@ -376,10 +372,8 @@ function MapPage({
             ))}
           </ScrollView>
         )}
-      </View>
 
-      {/* Nav dock — pinned at the very bottom, below the sheet; the right-hand FAB recenters the map instead of the default "+". */}
-      <View style={styles.bottomNavWrap} onLayout={(e) => setNavHeight(e.nativeEvent.layout.height)} pointerEvents="box-none">
+        {/* Nav dock — the sheet's last row, below "NEARBY"; the right-hand FAB recenters the map instead of the default "+". */}
         <BottomNav
           activeId="location"
           onSelect={(id) => {
@@ -560,16 +554,11 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 2,
   },
-  bottomNavWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
   sheet: {
     position: 'absolute',
     left: 0,
     right: 0,
+    bottom: 0,
     backgroundColor: '#fff',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
