@@ -13,6 +13,7 @@ import { timeAgo } from '../../utils/relativeTime';
 
 const CHAT_PLUS_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z M12 8.5v6M9 11.5h6';
 const BACK_ICON = 'M15 5l-7 7 7 7';
+const GROUP_ICON = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
 
 const STORY_DOT_OVERRIDE = { size: 14, ringWidth: 2.5, ringColor: colors.onlineDotRing };
 
@@ -20,14 +21,14 @@ interface ChatsListScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
-  onOpenAddItem: () => void;
 }
 
 /** Chats (6p-6) — only accepted friends get a thread here. */
-export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAddItem }: ChatsListScreenProps) {
+export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit }: ChatsListScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { friends, sentRequests, goHome, goAdd, openChat, lastMessageFor, isUnread, unreadCountFor, isOnline, isTyping } = useFriends();
+  const { friends, sentRequests, goHome, goAdd, openChat, lastMessageFor, isUnread, unreadCountFor, isOnline, isTyping, groups, goCreateGroup, openGroupChat, lastGroupMessageFor } =
+    useFriends();
 
   return (
     <LinearGradient
@@ -40,19 +41,15 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAdd
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.topRow}>
           <Text style={styles.title}>Chats</Text>
-          <View style={styles.spacer} />
-          <Pressable onPress={goAdd} style={styles.fab} accessibilityRole="button" accessibilityLabel="Add a friend">
-            <Icon path={CHAT_PLUS_ICON} color={colors.lime} size={22} strokeWidth={1.8} />
-          </Pressable>
         </View>
 
         <View style={styles.spacerUnderHeader} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-          <Pressable onPress={goAdd} style={styles.railItem} accessibilityRole="button" accessibilityLabel="Add a new friend">
+          <Pressable onPress={goCreateGroup} style={styles.railItem} accessibilityRole="button" accessibilityLabel="Start a group">
             <View style={styles.railNewTile}>
-              <Text style={styles.railNewPlus}>+</Text>
+              <Icon path={GROUP_ICON} color={colors.ink50} size={22} strokeWidth={1.8} />
             </View>
-            <Text style={styles.railLabelNew}>New</Text>
+            <Text style={styles.railLabelNew}>Groups</Text>
           </Pressable>
           {friends.map((f) => (
             <Pressable key={f.connectionId} onPress={() => openChat(f.connectionId)} style={styles.railItem}>
@@ -64,13 +61,43 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAdd
           ))}
         </ScrollView>
 
-        {friends.length === 0 && sentRequests.length === 0 ? (
+        {friends.length === 0 && sentRequests.length === 0 && groups.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No chats yet</Text>
             <Text style={styles.emptyBody}>Add a friend to start a conversation.</Text>
           </View>
         ) : (
           <>
+            {groups.length > 0 && (
+              <View style={styles.list}>
+                {groups.map((g) => {
+                  const last = lastGroupMessageFor(g.id);
+                  return (
+                    <Pressable
+                      key={g.id}
+                      onPress={() => openGroupChat(g.id)}
+                      style={({ pressed }) => [styles.row, styles.rowRead, pressed && styles.rowPressed]}
+                    >
+                      <View style={styles.groupAvatar}>
+                        <Icon path={GROUP_ICON} color={colors.lime} size={20} strokeWidth={1.8} />
+                      </View>
+                      <View style={styles.rowText}>
+                        <View style={styles.rowNameLine}>
+                          <Text style={styles.rowName}>{g.name}</Text>
+                          {last && <Text style={styles.rowTime}>{timeAgo(last.createdAt)}</Text>}
+                        </View>
+                        <View style={styles.rowPreviewLine}>
+                          <Text style={styles.rowPreview} numberOfLines={1}>
+                            {last ? last.text : 'Say hi to the group 👋'}
+                          </Text>
+                        </View>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
             {friends.length > 0 && (
               <View style={styles.list}>
                 {friends.map((f) => {
@@ -138,7 +165,9 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAdd
           if (id === 'expenses') onOpenExpenses();
           if (id === 'split') onOpenSplit();
         }}
-        onAdd={onOpenAddItem}
+        onAdd={goAdd}
+        fabIconPath={CHAT_PLUS_ICON}
+        fabAccessibilityLabel="Add a friend"
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
       />
@@ -164,9 +193,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.ms,
   },
-  spacer: {
-    flex: 1,
-  },
   title: {
     fontFamily: fontFamily.sans700,
     fontSize: 30,
@@ -185,19 +211,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 14,
     elevation: 1,
-  },
-  fab: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 22,
-    elevation: 6,
   },
   spacerUnderHeader: {
     height: 20,
@@ -222,9 +235,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  railNewPlus: {
-    fontSize: 22,
-    color: colors.ink50,
+  groupAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   railLabel: {
     fontFamily: fontFamily.sans400,

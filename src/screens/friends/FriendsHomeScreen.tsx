@@ -14,16 +14,17 @@ const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const CHEVRON_ICON = 'M9 6l6 6-6 6';
 const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
+const PIN_ICON = 'M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z M12 11.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5';
 
 interface FriendsHomeScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
-  onOpenAddItem: () => void;
+  onOpenLiveLocations: () => void;
 }
 
 /** Friends list (6p-1): pending requests surfaced at the top, then everyone connected or waiting. */
-export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAddItem }: FriendsHomeScreenProps) {
+export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenLiveLocations }: FriendsHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friends, receivedRequests, sentRequests, goAdd, goRequests, goChats, openChat, cancelRequest } = useFriends();
@@ -62,6 +63,22 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenA
             {friends.length} connected{receivedRequests.length > 0 ? ` · ${receivedRequests.length} waiting` : ''}
           </Text>
         </View>
+
+        <Pressable
+          onPress={onOpenLiveLocations}
+          style={({ pressed }) => [styles.radarBanner, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Radar - Find Your People"
+        >
+          <View style={styles.radarIcon}>
+            <Icon path={PIN_ICON} color={colors.lime} size={19} strokeWidth={1.8} />
+          </View>
+          <View style={styles.requestsText}>
+            <Text style={styles.radarTitle}>Radar - Find Your People</Text>
+            <Text style={styles.radarSub}>See where your friends are right now</Text>
+          </View>
+          <Icon path={CHEVRON_ICON} color={colors.lime} size={18} strokeWidth={2} />
+        </Pressable>
 
         <View style={styles.searchField}>
           <SearchIcon size={19} color={colors.ink55} />
@@ -149,17 +166,7 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenA
             <Text style={styles.emptyBody}>Share your code or scan someone else's to start connecting.</Text>
           </View>
         )}
-      </ScrollView>
 
-      <View style={styles.pinned}>
-        <View style={styles.bottomIconRow}>
-          <Pressable onPress={onHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Home">
-            <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
-          </Pressable>
-          <Pressable onPress={goChats} style={styles.chatButton} accessibilityRole="button" accessibilityLabel="Chats">
-            <Icon path={CHAT_ICON} color={colors.lime} size={20} strokeWidth={1.9} />
-          </Pressable>
-        </View>
         <Pressable
           onPress={goAdd}
           style={({ pressed }) => [styles.ctaButton, pressed && styles.pressed]}
@@ -168,6 +175,12 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenA
         >
           <Icon path={QR_ICON} color={colors.ink} size={19} strokeWidth={1.8} />
           <Text style={styles.ctaLabel}>Add a friend</Text>
+        </Pressable>
+      </ScrollView>
+
+      <View style={styles.pinned}>
+        <Pressable onPress={onHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Home">
+          <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
         </Pressable>
       </View>
 
@@ -178,7 +191,9 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenA
           if (id === 'expenses') onOpenExpenses();
           if (id === 'split') onOpenSplit();
         }}
-        onAdd={onOpenAddItem}
+        onAdd={goChats}
+        fabIconPath={CHAT_ICON}
+        fabAccessibilityLabel="Chats"
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
       />
@@ -201,12 +216,7 @@ const styles = StyleSheet.create({
   pinned: {
     paddingHorizontal: 26,
     paddingTop: spacing.ms,
-  },
-  bottomIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.ms,
+    paddingBottom: spacing.ms,
   },
   ctaButton: {
     flexDirection: 'row',
@@ -255,14 +265,6 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 1,
   },
-  chatButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   pressed: {
     opacity: 0.85,
   },
@@ -280,6 +282,33 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans400,
     fontSize: 15,
     color: colors.textPrimary,
+  },
+  radarBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.ms,
+    backgroundColor: colors.ink,
+    borderRadius: 26,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+  },
+  radarIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radarTitle: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 14.5,
+    color: '#fff',
+  },
+  radarSub: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 12.5,
+    color: 'rgba(255,255,255,.6)',
   },
   requestsBanner: {
     flexDirection: 'row',

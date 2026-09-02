@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
@@ -32,11 +32,10 @@ interface AddFriendScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
-  onOpenAddItem: () => void;
 }
 
 /** Add a friend (6p-2): show your own code/QR, or enter theirs cell by cell. */
-export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAddItem }: AddFriendScreenProps) {
+export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFriendScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friendCode, goHome, goScan, lookupCode } = useFriends();
@@ -105,7 +104,8 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAdd
       end={{ x: 0.5, y: 1 }}
       style={styles.screen}
     >
-      <View style={[styles.topRow, { paddingTop: insets.top + spacing.sm }]}>
+      <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + spacing.sm }}>
+      <View style={styles.topRow}>
         <Pressable onPress={() => setShareOpen(true)} style={styles.sharePill} accessibilityRole="button" accessibilityLabel="Share your invite code">
           <Icon path={SHARE_ICON} color={colors.textPrimary} size={15} strokeWidth={2} />
           <Text style={styles.shareLabel}>Share</Text>
@@ -183,11 +183,9 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAdd
         />
         {error && <Text style={styles.error}>{error}</Text>}
       </View>
+      </ScrollView>
 
       <View style={styles.pinned}>
-        <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Icon path={BACK_ICON} color={colors.textPrimary} size={19} strokeWidth={2} />
-        </Pressable>
         <Pressable onPress={goScan} style={({ pressed }) => [styles.scanButton, pressed && styles.scanButtonPressed]}>
           <Icon path={SCAN_ICON} color={colors.ink} size={18} strokeWidth={1.9} />
           <Text style={styles.scanLabel}>Scan their code</Text>
@@ -201,7 +199,9 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenAdd
           if (id === 'expenses') onOpenExpenses();
           if (id === 'split') onOpenSplit();
         }}
-        onAdd={onOpenAddItem}
+        onAdd={goHome}
+        fabIconPath={BACK_ICON}
+        fabAccessibilityLabel="Back"
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
       />
@@ -237,25 +237,14 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
+  scrollFlex: {
+    flex: 1,
+  },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingHorizontal: 26,
-  },
-  iconButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    marginBottom: spacing.ms,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 14,
-    elevation: 2,
   },
   sharePill: {
     flexDirection: 'row',

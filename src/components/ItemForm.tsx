@@ -19,6 +19,7 @@ import type { DosageType } from '../types/space';
 const CLOCK_ICON = 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M12 7v5l3.5 2';
 const CAMERA_ICON = 'M4 8h3l1.5-2h7L17 8h3v12H4z M12 11.4a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8';
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
+const ROOM_ICON = 'M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z M12 11.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5';
 const DOSE_FREQUENCIES = [1, 2, 3, 4];
 
 interface MedicineFields {
@@ -44,6 +45,7 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
   const [room, setRoom] = useState('');
   const [expiry, setExpiry] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [roomOpen, setRoomOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -132,6 +134,7 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
     setRoom('');
     setExpiry('');
     setCalendarOpen(false);
+    setRoomOpen(false);
     resetPhotoFields();
     resetMedicineFields();
     setSavedFlash(true);
@@ -335,22 +338,39 @@ export function ItemForm({ rooms, onSubmit }: ItemFormProps) {
 
       <View style={styles.section}>
         <Text style={typography.formLabel}>Where is it?</Text>
-        <View style={{ gap: spacing.xs }}>
-          {rooms.map((label) => {
-            const on = room === label;
-            return (
-              <Pressable
-                key={label}
-                onPress={() => setRoom(label)}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: on }}
-                style={[styles.roomChip, { backgroundColor: on ? colors.ink : colors.pale }]}
-              >
-                <Text style={[typography.chipLabel, { color: on ? colors.lime : colors.textPrimary }]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <Pressable
+          onPress={() => setRoomOpen((o) => !o)}
+          accessibilityRole="button"
+          accessibilityLabel="Where is it"
+          style={styles.field}
+        >
+          <Icon path={ROOM_ICON} color={room ? colors.textPrimary : colors.textFaint} size={17} />
+          <Text style={[typography.chipLabel, { flex: 1, color: room ? colors.textPrimary : colors.textFaint }]}>
+            {room || 'Select a room'}
+          </Text>
+          <Text style={styles.caret}>{roomOpen ? '⌃' : '⌄'}</Text>
+        </Pressable>
+        {roomOpen && (
+          <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
+            {rooms.map((label) => {
+              const on = room === label;
+              return (
+                <Pressable
+                  key={label}
+                  onPress={() => {
+                    setRoom(label);
+                    setRoomOpen(false);
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: on }}
+                  style={[styles.roomChip, { backgroundColor: on ? colors.ink : colors.pale }]}
+                >
+                  <Text style={[typography.chipLabel, { color: on ? colors.lime : colors.textPrimary }]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       <Pressable

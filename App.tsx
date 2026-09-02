@@ -8,6 +8,8 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { SpaceProvider } from './src/context/SpaceContext';
 import { NotificationsProvider } from './src/context/NotificationsContext';
 import { FriendsProvider, useFriends } from './src/context/FriendsContext';
+import { CallProvider } from './src/context/CallContext';
+import { CallOverlay } from './src/components/calls/CallOverlay';
 import type { NotificationTarget } from './src/utils/notify';
 import { LaunchIntro } from './src/components/LaunchIntro';
 import { SignUpScreen } from './src/screens/SignUpScreen';
@@ -69,6 +71,8 @@ function AppNavigator() {
         viewId={screen.viewId}
         initialIndex={screen.initialIndex}
         onBack={() => setScreen({ name: 'home' })}
+        onOpenExpenses={() => setScreen({ name: 'expenses' })}
+        onOpenSplit={() => setScreen({ name: 'split' })}
       />
     );
   }
@@ -100,7 +104,7 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'home' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
-        onOpenAddItem={() => setScreen({ name: 'detail', viewId: 'add' })}
+        onOpenLiveLocations={() => setScreen({ name: 'liveLocations' })}
       />
     );
   }
@@ -112,6 +116,8 @@ function AppNavigator() {
           openChatWithUser(userId);
           setScreen({ name: 'friends' });
         }}
+        onOpenExpenses={() => setScreen({ name: 'expenses' })}
+        onOpenSplit={() => setScreen({ name: 'split' })}
       />
     );
   }
@@ -124,7 +130,6 @@ function AppNavigator() {
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
       onOpenSplit={() => setScreen({ name: 'split' })}
       onOpenFriends={() => setScreen({ name: 'friends' })}
-      onOpenLiveLocations={() => setScreen({ name: 'liveLocations' })}
       onOpenAccount={() => setScreen({ name: 'account', from: 'home' })}
       onOpenNotificationTarget={openNotificationTarget}
     />
@@ -146,7 +151,10 @@ function RootNavigator() {
     <SpaceProvider>
       <NotificationsProvider>
         <FriendsProvider>
-          <AppNavigator />
+          <CallProvider>
+            <AppNavigator />
+            <CallOverlay />
+          </CallProvider>
         </FriendsProvider>
       </NotificationsProvider>
     </SpaceProvider>

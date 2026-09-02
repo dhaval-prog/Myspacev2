@@ -55,14 +55,14 @@ function Fab({
   onPress,
   reduceMotion,
   activeId,
-  iconPath = PLUS_PATH,
-  accessibilityLabel = 'Add',
+  iconPath,
+  accessibilityLabel,
 }: {
   onPress?: () => void;
   reduceMotion?: boolean;
   activeId: string;
-  iconPath?: string;
-  accessibilityLabel?: string;
+  iconPath: string;
+  accessibilityLabel: string;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const animateTo = (v: number, dur: number) =>
@@ -88,12 +88,11 @@ interface BottomNavProps {
   activeId: string;
   onSelect: (id: string) => void;
   onAdd?: () => void;
+  /** Overrides the right-hand circle's icon/label — e.g. Chats, Back, or Add-a-friend on the Friends flow instead of the default "+". */
+  fabIconPath?: string;
+  fabAccessibilityLabel?: string;
   bottomInset: number;
   reduceMotion?: boolean;
-  /** Overrides the FAB's default "+" glyph — e.g. a chat or back icon on a screen where "+" doesn't apply. */
-  fabIcon?: string;
-  /** Overrides the FAB's default "Add" accessibility label to match a custom fabIcon. */
-  fabLabel?: string;
 }
 
 /**
@@ -101,7 +100,7 @@ interface BottomNavProps {
  * pill grouping Home/Expenses/Split on the left, and a separate circular
  * "+" action to its right — two distinct floating shapes, not one bar.
  */
-export function BottomNav({ activeId, onSelect, onAdd, bottomInset, reduceMotion, fabIcon, fabLabel }: BottomNavProps) {
+export function BottomNav({ activeId, onSelect, onAdd, fabIconPath, fabAccessibilityLabel, bottomInset, reduceMotion }: BottomNavProps) {
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(bottomInset, spacing.md) }]}>
       <View style={styles.row}>
@@ -117,7 +116,13 @@ export function BottomNav({ activeId, onSelect, onAdd, bottomInset, reduceMotion
             />
           ))}
         </View>
-        <Fab onPress={onAdd} reduceMotion={reduceMotion} activeId={activeId} iconPath={fabIcon} accessibilityLabel={fabLabel} />
+        <Fab
+          onPress={onAdd}
+          reduceMotion={reduceMotion}
+          activeId={activeId}
+          iconPath={fabIconPath ?? PLUS_PATH}
+          accessibilityLabel={fabAccessibilityLabel ?? 'Add'}
+        />
       </View>
     </View>
   );

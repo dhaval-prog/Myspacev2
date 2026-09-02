@@ -44,7 +44,6 @@ export function LocationPrivacyScreen({ onBack }: LocationPrivacyScreenProps) {
           <Icon path={BACK_ICON} color={colors.textPrimary} size={17} strokeWidth={2.4} />
         </Pressable>
         <Text style={styles.heroTitle}>Location & privacy</Text>
-        <View style={styles.backButton} />
       </View>
 
       <ScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.huge }]}>
@@ -86,7 +85,7 @@ const styles = StyleSheet.create({
   hero: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.ms,
     paddingHorizontal: spacing.xxl,
     paddingBottom: spacing.xl,
   },

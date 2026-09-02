@@ -593,7 +593,6 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
             <Icon path={BACK_ICON} color={colors.textPrimary} size={17} strokeWidth={2.4} />
           </Pressable>
           <Text style={styles.heroTitle}>Account settings</Text>
-          <View style={styles.backButton} />
         </View>
 
         <Pressable onPress={pickAvatar} accessibilityRole="button" accessibilityLabel="Change profile photo" style={styles.avatarWrap}>
@@ -985,7 +984,7 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.ms,
     marginBottom: spacing.md,
   },
   backButton: {

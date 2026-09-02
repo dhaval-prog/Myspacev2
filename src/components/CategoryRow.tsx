@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, typography, EASE, duration } from '../theme';
+import { Icon } from './Icon';
 
 interface CategoryRowProps {
   count: string;
@@ -10,6 +11,8 @@ interface CategoryRowProps {
   reduceMotion?: boolean;
   /** Gated until its prerequisite data exists (e.g. Add Items before any room). */
   locked?: boolean;
+  /** Overrides the badge's count text with an icon. */
+  icon?: string;
 }
 
 /**
@@ -17,7 +20,7 @@ interface CategoryRowProps {
  * Press feedback nudges the arrow right and lifts the badge slightly —
  * quiet, not bouncy. A locked row renders inert and doesn't animate.
  */
-export function CategoryRow({ count, label, active, onPress, reduceMotion, locked }: CategoryRowProps) {
+export function CategoryRow({ count, label, active, onPress, reduceMotion, locked, icon }: CategoryRowProps) {
   const arrowX = useRef(new Animated.Value(0)).current;
   const badgeScale = useRef(new Animated.Value(1)).current;
 
@@ -39,7 +42,7 @@ export function CategoryRow({ count, label, active, onPress, reduceMotion, locke
       accessibilityRole="button"
       accessibilityState={{ selected: active, disabled: locked }}
       accessibilityLabel={
-        locked ? `${label}, locked` : count === '+' ? `${label}, add new` : `${label}, ${count} items`
+        locked ? `${label}, locked` : icon ? label : count === '+' ? `${label}, add new` : `${label}, ${count} items`
       }
       style={({ pressed }) => [styles.row, pressed && !locked && styles.rowPressed]}
     >
@@ -52,14 +55,23 @@ export function CategoryRow({ count, label, active, onPress, reduceMotion, locke
           },
         ]}
       >
-        <Text
-          style={[
-            typography.monoBadge,
-            { color: locked ? colors.badgeLockedFg : active ? colors.lime : colors.badgeInactiveFg },
-          ]}
-        >
-          {count}
-        </Text>
+        {icon ? (
+          <Icon
+            path={icon}
+            color={locked ? colors.badgeLockedFg : active ? colors.lime : colors.badgeInactiveFg}
+            size={15}
+            strokeWidth={1.9}
+          />
+        ) : (
+          <Text
+            style={[
+              typography.monoBadge,
+              { color: locked ? colors.badgeLockedFg : active ? colors.lime : colors.badgeInactiveFg },
+            ]}
+          >
+            {count}
+          </Text>
+        )}
       </Animated.View>
 
       <Text

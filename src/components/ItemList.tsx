@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { Animated, Image, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, radius, spacing, typography, noOutline } from '../theme';
 import { useFocusBorder } from '../hooks/useFocusBorder';
 import { useAuth } from '../context/AuthContext';
@@ -7,16 +7,25 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { Icon } from './Icon';
 import { CategoryPicker } from './CategoryPicker';
 import { Calendar } from './Calendar';
+import { TimePicker } from './TimePicker';
 import { PhotoCaptureSheet } from './PhotoCaptureSheet';
+import { ConfirmDialog } from './ConfirmDialog';
 import { CATEGORY_ICON, EMPTY_CATEGORY_ICON } from '../data/itemCategories';
 import { formatDate } from '../utils/attention';
-import type { Item } from '../types/space';
+import { formatTime12 } from '../utils/time';
+import { ALERT_TYPES, ALERT_TYPE_LABEL, nextAlertDate } from '../utils/alerts';
+import type { AlertType, Item } from '../types/space';
+
+const CLOCK_PATH = 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M12 7v5l3.5 2';
 
 const EDIT_PATH = 'M4 20h4L20 8l-4-4L4 16zM14.5 5.5l4 4';
 const DELETE_PATH = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 const SEARCH_PATH = 'M11 4.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM16 16l4 4';
 const CLOSE_PATH = 'M6 6l12 12M18 6L6 18';
 const CAMERA_PATH = 'M4 8h3l1.5-2h7L17 8h3v12H4z M12 11.4a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8';
+
+/** How far a "View all" card slides left to swap its Edit action for Delete. */
+const SWIPE_REVEAL_WIDTH = 64;
 
 interface EditPatch {
   name?: string;
@@ -25,6 +34,8 @@ interface EditPatch {
   expiry?: string;
   /** Omitted = unchanged; '' = removed; a URL = replaced with a new photo. */
   photoUrl?: string;
+  alertType?: AlertType;
+  reminderTimes?: string[];
 }
 
 interface ItemListProps {
@@ -90,7 +101,7 @@ export function ItemList({ items, rooms, mode, onDelete, onEditSave }: ItemListP
           item={it}
           rooms={rooms}
           mode={mode}
-          isEditing={mode === 'edit' && editingIndex === index}
+          isEditing={(mode === 'edit' || mode === 'view') && editingIndex === index}
           onToggleEdit={() => setEditingIndex((cur) => (cur === index ? null : index))}
           onDelete={() => onDelete?.(index)}
           onSave={(patch) => {
@@ -126,9 +137,35 @@ function ItemCard({
   const sub = [item.category, item.room].filter(Boolean).join(' · ') || 'Unfiled';
   const hasExpiry = Boolean(item.expiry) && mode !== 'delete';
 
+  // "View all" cards: a left swipe anywhere on the card swaps the Edit
+  // action for Delete (and a right swipe swaps it back) — no separate
+  // Edit/Delete tabs needed, unlike the 'edit'/'delete' rail modes below.
+  const [swiped, setSwiped] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => mode === 'view' && Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderRelease: (_, g) => {
+        if (g.dx < -SWIPE_REVEAL_WIDTH / 2) setSwiped(true);
+        else if (g.dx > SWIPE_REVEAL_WIDTH / 2) setSwiped(false);
+      },
+    }),
+  ).current;
+
+  const confirmDelete = () => {
+    setConfirmOpen(false);
+    onDelete();
+  };
+
+  const cancelDelete = () => {
+    setConfirmOpen(false);
+    setSwiped(false);
+  };
+
   return (
     <View style={styles.card}>
-      <View style={styles.cardRow}>
+      <View style={styles.cardRow} {...(mode === 'view' ? panResponder.panHandlers : {})}>
         <View style={styles.cardIcon}>
           {item.photoUrl ? (
             <Image source={{ uri: item.photoUrl }} style={styles.cardPhoto} />
@@ -141,6 +178,26 @@ function ItemCard({
           <Text style={typography.itemSub}>{sub}</Text>
           {hasExpiry && <Text style={typography.itemExpiry}>{`exp ${formatDate(item.expiry)}`}</Text>}
         </View>
+        {mode === 'view' && !swiped && (
+          <Pressable
+            onPress={onToggleEdit}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit ${item.name}`}
+            style={[styles.action, { backgroundColor: isEditing ? colors.ink : colors.pressWash }]}
+          >
+            <Icon path={EDIT_PATH} color={isEditing ? colors.lime : colors.textPrimary} size={15} />
+          </Pressable>
+        )}
+        {mode === 'view' && swiped && (
+          <Pressable
+            onPress={() => setConfirmOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${item.name}`}
+            style={[styles.action, { backgroundColor: colors.danger }]}
+          >
+            <Icon path={DELETE_PATH} color="#fff" size={15} />
+          </Pressable>
+        )}
         {mode === 'edit' && (
           <Pressable
             onPress={onToggleEdit}
@@ -162,7 +219,205 @@ function ItemCard({
           </Pressable>
         )}
       </View>
-      {isEditing && <ItemEditForm item={item} rooms={rooms} onSave={onSave} onCancel={onCancel} />}
+      {isEditing &&
+        (item.category === 'Alert' ? (
+          <AlertEditForm item={item} onSave={onSave} onCancel={onCancel} />
+        ) : (
+          <ItemEditForm item={item} rooms={rooms} onSave={onSave} onCancel={onCancel} />
+        ))}
+      {mode === 'view' && (
+        <ConfirmDialog
+          visible={confirmOpen}
+          title={`Delete ${item.name}?`}
+          message="This removes it permanently — it can't be undone."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={confirmDelete}
+          onCancel={cancelDelete}
+        />
+      )}
+    </View>
+  );
+}
+
+/** Editing an "Alert" item: the same fields it was created with, not the generic item form. */
+function AlertEditForm({
+  item,
+  onSave,
+  onCancel,
+}: {
+  item: Item;
+  onSave: (patch: EditPatch) => void;
+  onCancel: () => void;
+}) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+
+  const [name, setName] = useState(item.name);
+  const [alertType, setAlertType] = useState<AlertType>(item.alertType ?? 'daily');
+  const [time, setTime] = useState<string | undefined>(item.reminderTimes?.[0]);
+  const [timeOpen, setTimeOpen] = useState(false);
+  const { borderColor: editNameBorder, onFocus: onEditNameFocus, onBlur: onEditNameBlur } = useFocusBorder(
+    'rgba(22,33,12,0)',
+    colors.ink,
+  );
+
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [photoUri, setPhotoUri] = useState<string | null>(item.photoUrl ?? null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(item.photoUrl ?? null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoChanged = photoUrl !== (item.photoUrl ?? null);
+
+  const handleCapture = async (uri: string) => {
+    setCameraOpen(false);
+    setPhotoUri(uri);
+    setPhotoError(null);
+
+    if (!userId || !isSupabaseConfigured) {
+      setPhotoUrl(uri);
+      return;
+    }
+
+    setPhotoUploading(true);
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const ext = (blob.type.split('/')[1] || 'jpg').split('+')[0];
+      const path = `${userId}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('item-photos').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('item-photos').getPublicUrl(path);
+      setPhotoUrl(pub.publicUrl);
+    } catch {
+      setPhotoError('Could not upload that photo. Try again.');
+      setPhotoUrl(item.photoUrl ?? null);
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const removePhoto = () => {
+    setPhotoUri(null);
+    setPhotoUrl(null);
+    setPhotoError(null);
+  };
+
+  return (
+    <View style={styles.editWrap}>
+      <View style={styles.divider} />
+
+      <View style={styles.editSection}>
+        <Text style={typography.formLabel}>Alert name</Text>
+        <Animated.View style={[styles.editInputWrap, { borderColor: editNameBorder }]}>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            onFocus={onEditNameFocus}
+            onBlur={onEditNameBlur}
+            style={[styles.editInput, noOutline]}
+          />
+        </Animated.View>
+      </View>
+
+      <View style={styles.editSection}>
+        <Text style={typography.formLabel}>Alert type</Text>
+        <View style={styles.alertTypeRow}>
+          {ALERT_TYPES.map((t) => {
+            const on = alertType === t;
+            return (
+              <Pressable
+                key={t}
+                onPress={() => setAlertType(t)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on }}
+                style={[styles.alertTypeChip, { backgroundColor: on ? colors.ink : colors.pale }]}
+              >
+                <Text style={[typography.chipLabel, { color: on ? colors.lime : colors.textPrimary }]}>{ALERT_TYPE_LABEL[t]}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.editSection}>
+        <Text style={typography.formLabel}>Photo</Text>
+        {photoUri ? (
+          <View style={styles.photoRow}>
+            <Image source={{ uri: photoUri }} style={styles.photoThumb} />
+            <Text style={[typography.chipLabel, { flex: 1, color: photoError ? '#D33243' : colors.textPrimary }]}>
+              {photoUploading ? 'Uploading…' : photoError ? photoError : 'Photo'}
+            </Text>
+            <Pressable
+              onPress={() => setCameraOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Update photo"
+              style={styles.photoIconButton}
+              hitSlop={8}
+            >
+              <Icon path={CAMERA_PATH} color={colors.textPrimary} size={15} />
+            </Pressable>
+            <Pressable
+              onPress={removePhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Remove photo"
+              style={styles.photoIconButton}
+              hitSlop={8}
+            >
+              <Icon path={CLOSE_PATH} color={colors.textPrimary} size={14} />
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable onPress={() => setCameraOpen(true)} accessibilityRole="button" accessibilityLabel="Add photo" style={styles.editField}>
+            <Icon path={CAMERA_PATH} color={colors.textFaint} size={16} />
+            <Text style={[typography.chipLabel, { flex: 1, color: colors.textFaint }]}>Take a photo</Text>
+          </Pressable>
+        )}
+      </View>
+
+      <View style={styles.editSection}>
+        <Text style={typography.formLabel}>Select time for alert</Text>
+        <Pressable onPress={() => setTimeOpen((o) => !o)} style={styles.editField}>
+          <Icon path={CLOCK_PATH} color={time ? colors.textPrimary : colors.textFaint} size={16} />
+          <Text style={[typography.chipLabel, { flex: 1, color: time ? colors.textPrimary : colors.textFaint }]}>
+            {time ? formatTime12(time) : 'Set a time'}
+          </Text>
+        </Pressable>
+        {timeOpen && (
+          <TimePicker
+            value={time}
+            onSelect={(hhmm) => {
+              setTime(hhmm);
+              setTimeOpen(false);
+            }}
+          />
+        )}
+      </View>
+
+      <View style={styles.editActions}>
+        <Pressable onPress={onCancel} style={[styles.editButton, { backgroundColor: colors.pressWash }]}>
+          <Text style={[typography.buttonLabel, { fontSize: 13, color: colors.textPrimary }]}>Cancel</Text>
+        </Pressable>
+        <Pressable
+          disabled={photoUploading}
+          onPress={() =>
+            onSave({
+              name: name.trim() || item.name,
+              alertType,
+              reminderTimes: [time ?? item.reminderTimes?.[0] ?? '09:00'],
+              ...(alertType !== item.alertType ? { expiry: nextAlertDate(alertType) } : {}),
+              ...(photoChanged ? { photoUrl: photoUrl ?? '' } : {}),
+            })
+          }
+          style={[styles.editButton, { backgroundColor: photoUploading ? colors.pressWash : colors.ink }]}
+        >
+          <Text style={[typography.buttonLabel, { fontSize: 13, color: photoUploading ? colors.textFaint : colors.lime }]}>
+            {photoUploading ? 'Uploading…' : 'Save'}
+          </Text>
+        </Pressable>
+      </View>
+
+      <PhotoCaptureSheet visible={cameraOpen} onClose={() => setCameraOpen(false)} onCapture={handleCapture} />
     </View>
   );
 }
@@ -490,6 +745,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     paddingVertical: spacing.xs + 1,
     paddingHorizontal: spacing.ms + 1,
+  },
+  alertTypeRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  alertTypeChip: {
+    flex: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing.ms,
+    alignItems: 'center',
   },
   editActions: {
     flexDirection: 'row',

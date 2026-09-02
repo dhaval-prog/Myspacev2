@@ -10,14 +10,18 @@ import { OverflowIcon } from '../../components/icons/OverflowIcon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { ActionButton } from '../../components/account/rows';
+import { MediaGalleryModal } from '../../components/chat/MediaGalleryModal';
 import { useFriends } from '../../context/FriendsContext';
 import { useAuth } from '../../context/AuthContext';
+import { useCall } from '../../context/CallContext';
 
 const CHECK_ICON = 'M5 12.5 10 17.5 19 7';
 const ATTACH_ICON = 'M12 5v14M5 12h14';
+const PHONE_ICON = 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2C9.5 21 3 14.5 3 6a2 2 0 0 1 2-2z';
 const SEND_ICON = 'M4 12 20 4l-7 16-2.5-6.5z';
 const PIN_ICON = 'M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11z M12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z';
 const IMAGE_ICON = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4L15 13l5 5';
+const GRID_ICON = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z';
 const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 const PERSON_X_ICON = 'M4 19c0-3.3 2.7-6 6-6s6 2.7 6 6M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM17 8l4 4M21 8l-4 4';
 const HEADER_AVATAR_COLOR = { bg: colors.lime, fg: colors.ink };
@@ -60,11 +64,13 @@ export function ChatThreadScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { focusedFriend, messages, sendMessage, sendPhoto, sendLocation, goChats, removeFriend, clearChat, isOnline, isTyping, notifyTyping } = useFriends();
+  const { startCall } = useCall();
   const [text, setText] = useState('');
   const [sendingAttachment, setSendingAttachment] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -89,6 +95,12 @@ export function ChatThreadScreen() {
   const theirTyping = isTyping(focusedFriend.connectionId);
 
   const showFriendsChip = isToday(focusedFriend.acceptedAt);
+
+  const mediaItems = messages
+    .filter((m) => m.kind === 'image' && m.attachmentUrl)
+    .map((m) => ({ id: m.id, url: m.attachmentUrl!, senderId: m.senderId }))
+    .reverse();
+  const mediaSenderNameFor = (senderId: string) => (senderId === user?.id ? 'You' : focusedFriend.name);
 
   const pickPhoto = async () => {
     setAttachOpen(false);
@@ -137,6 +149,16 @@ export function ChatThreadScreen() {
     removeFriend(focusedFriend.connectionId);
   };
 
+  const startVideoCall = () => {
+    startCall({
+      kind: 'dm',
+      title: focusedFriend.name,
+      memberIds: [focusedFriend.userId],
+      participantNames: { [focusedFriend.userId]: focusedFriend.name },
+      contextId: focusedFriend.connectionId,
+    });
+  };
+
   return (
     <LinearGradient
       colors={colors.friendsChatCanvas as [string, string, ...string[]]}
@@ -157,6 +179,9 @@ export function ChatThreadScreen() {
             </View>
           )}
         </View>
+        <Pressable onPress={startVideoCall} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Start video call">
+          <Icon path={PHONE_ICON} color="#FFFFFF" size={18} strokeWidth={1.8} />
+        </Pressable>
         <Pressable onPress={() => setOptionsOpen(true)} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="More options">
           <OverflowIcon size={19} color="#FFFFFF" />
         </Pressable>
@@ -174,6 +199,13 @@ export function ChatThreadScreen() {
         ) : (
         <View style={styles.bubbleStack}>
           {messages.map((m) => {
+            if (m.kind === 'system') {
+              return (
+                <View key={m.id} style={styles.systemChip}>
+                  <Text style={styles.systemChipText}>{m.text}</Text>
+                </View>
+              );
+            }
             const mine = m.senderId === user?.id;
             return (
               <View key={m.id} style={[styles.msgWrap, mine ? styles.msgWrapMine : styles.msgWrapTheirs]}>
@@ -264,7 +296,24 @@ export function ChatThreadScreen() {
         <Text style={styles.sheetTitle}>Share</Text>
         <SheetOption icon={IMAGE_ICON} label="Photo" onPress={pickPhoto} />
         <SheetOption icon={PIN_ICON} label="Current location" onPress={shareLocation} />
+        <SheetOption
+          icon={GRID_ICON}
+          label="Media"
+          onPress={() => {
+            setAttachOpen(false);
+            setMediaOpen(true);
+          }}
+        />
       </BottomSheet>
+
+      <MediaGalleryModal
+        visible={mediaOpen}
+        onClose={() => setMediaOpen(false)}
+        title="Media"
+        bannerCaption={focusedFriend.name}
+        items={mediaItems}
+        senderNameFor={mediaSenderNameFor}
+      />
 
       <BottomSheet visible={confirmClearOpen} onClose={() => setConfirmClearOpen(false)}>
         <Text style={styles.sheetTitle}>Delete chat</Text>
@@ -504,9 +553,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.ms,
   },
   pinnedIconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',

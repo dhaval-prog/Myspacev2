@@ -18,12 +18,14 @@ interface RailProps {
   onSelect: (index: number) => void;
   onToggleCollapse: () => void;
   reduceMotion?: boolean;
+  /** Icon only, no label underneath — e.g. Needs attention, where each tile is a distinct item rather than a named tool. */
+  showLabels?: boolean;
 }
 
 const CHEVRON_PATH = 'M6 9.5l6 6 6-6';
 
 /** The notched ice rail — one tile per tool, collapsible via the chevron. */
-export function Rail({ tiles, activeIndex, collapsed, onSelect, onToggleCollapse, reduceMotion }: RailProps) {
+export function Rail({ tiles, activeIndex, collapsed, onSelect, onToggleCollapse, reduceMotion, showLabels = true }: RailProps) {
   const slide = useRef(new Animated.Value(collapsed ? 1 : 0)).current;
 
   useEffect(() => {
@@ -78,9 +80,11 @@ export function Rail({ tiles, activeIndex, collapsed, onSelect, onToggleCollapse
                 ) : (
                   <Text style={[styles.monoGlyph, { color: active ? colors.lime : colors.textPrimary }]}>{tile.mono}</Text>
                 )}
-                <Text style={[typography.railLabel, { color: tile.locked ? colors.textDisabled : active ? colors.lime : colors.textPrimary }]}>
-                  {tile.label}
-                </Text>
+                {showLabels && (
+                  <Text style={[typography.railLabel, { color: tile.locked ? colors.textDisabled : active ? colors.lime : colors.textPrimary }]}>
+                    {tile.label}
+                  </Text>
+                )}
               </Pressable>
             </View>
           );

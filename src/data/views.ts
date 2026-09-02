@@ -1,7 +1,7 @@
 export type ViewId = 'add' | 'attention';
 
 export interface RailItemDef {
-  /** Stable key, also used as the rail index lookup ("view-all" | "add" | "edit" | "delete"). */
+  /** Stable key, also used as the rail index lookup ("view-all" | "add" | "alerts"). */
   id: string;
   mono: string;
   /** Label under the rail tile. */
@@ -51,20 +51,12 @@ export const VIEWS: Record<'add', ViewDef> = {
         gated: false,
       },
       {
-        id: 'delete',
-        mono: '⌫',
-        rail: 'Delete',
-        title: 'Remove an item',
-        desc: 'Delete a thing you have filed.',
-        gated: true,
-      },
-      {
-        id: 'edit',
-        mono: '⌨',
-        rail: 'Edit',
-        title: 'Edit an item',
-        desc: 'Change a name, its category or the place it lives.',
-        gated: true,
+        id: 'alerts',
+        mono: '🔔',
+        rail: 'Alerts',
+        title: 'Alerts',
+        desc: 'Set a reminder — it shows up here, and in Needs attention, when it is due.',
+        gated: false,
       },
     ],
   },

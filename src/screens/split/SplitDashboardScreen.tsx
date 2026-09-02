@@ -52,9 +52,6 @@ export function SplitDashboardScreen() {
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Icon path={BACK_ICON} color={colors.splitInk} size={19} strokeWidth={2} />
-        </Pressable>
         <View style={styles.headerText}>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {focusedGroup.name}
@@ -193,6 +190,11 @@ export function SplitDashboardScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+        <View style={styles.footerBackRow}>
+          <Pressable onPress={goHome} style={styles.backCircle} accessibilityRole="button" accessibilityLabel="Back">
+            <Icon path={BACK_ICON} color={colors.splitInk} size={19} strokeWidth={2} />
+          </Pressable>
+        </View>
         <View style={styles.footerRow}>
           <Pressable onPress={goAdd} style={styles.addButton}>
             <Text style={styles.addButtonLabel}>+ Add Expense</Text>
@@ -249,6 +251,19 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 15,
+    backgroundColor: colors.splitSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.splitInk,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 2,
+  },
+  backCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.splitSurface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -486,6 +501,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.splitBg,
     paddingHorizontal: spacing.xxxl,
     paddingTop: spacing.ms,
+  },
+  footerBackRow: {
+    marginBottom: spacing.ms,
   },
   footerRow: {
     flexDirection: 'row',
