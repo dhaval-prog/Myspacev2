@@ -1,12 +1,17 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import '../utils/registerWebRTC';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 
-/** Real (non-simulated) camera/mic + WebRTC only exist on the web build for now — there's no native module wired up for it. */
-export const callsSupported = Platform.OS === 'web' && typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+/**
+ * True once real WebRTC globals exist — the browser provides them natively
+ * on web; on native they come from react-native-webrtc via registerWebRTC
+ * (imported above), which only succeeds in a custom dev client/production
+ * build, not the vanilla Expo Go app.
+ */
+export const callsSupported = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
 export type CallKind = 'dm' | 'group';
 type CallStatus = 'incoming' | 'outgoing' | 'active';
