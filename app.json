@@ -11,7 +11,13 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["upi", "tez", "phonepe", "paytmmp", "bhim"]
+        "LSApplicationQueriesSchemes": [
+          "upi",
+          "tez",
+          "phonepe",
+          "paytmmp",
+          "bhim"
+        ]
       }
     },
     "android": {
@@ -32,7 +38,9 @@
         "intent": [
           {
             "action": "android.intent.action.VIEW",
-            "data": { "scheme": "upi" }
+            "data": {
+              "scheme": "upi"
+            }
           }
         ]
       }
@@ -45,7 +53,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "MySpace uses your camera to scan a card's join QR code."
+          "cameraPermission": "MySpace uses your camera to scan a card's join QR code and for video calls."
         }
       ],
       [
@@ -67,6 +75,13 @@
           "imageWidth": 150,
           "resizeMode": "contain",
           "backgroundColor": "#C3EA4F"
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "MySpace uses your camera to scan a card's join QR code and for video calls.",
+          "microphonePermission": "MySpace uses your microphone for video calls."
         }
       ]
     ]
