@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing } from '../../theme';
@@ -143,8 +144,9 @@ function MapPage({
 
   // Radar is pointless without your own position, so it asks up front —
   // approve and you're pinned on the map immediately; decline (or it's
-  // already denied at the OS level) and there's nothing useful to show, so
-  // the permissionDenied dialog below sends the user straight back home.
+  // already denied at the OS level) shows a dialog that helps fix it in
+  // place (open Settings / re-prompt the browser) rather than bouncing the
+  // user straight back home.
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
@@ -155,6 +157,7 @@ function MapPage({
           if (!cancelled) setPermissionDenied(true);
           return;
         }
+        if (!cancelled) setPermissionDenied(false);
         const pos = await Location.getCurrentPositionAsync({});
         if (cancelled) return;
         const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
@@ -176,8 +179,8 @@ function MapPage({
   }, [userId]);
 
   // Manual retry — the same fetch as above, without the mount-effect's
-  // cancellation dance, for the recenter FAB to call when there's no
-  // position yet instead of recentering on nothing.
+  // cancellation dance, for the recenter FAB (and the permission dialog) to
+  // call when there's no position yet instead of recentering on nothing.
   const retryMyPosition = async () => {
     setLocationError(null);
     try {
@@ -186,6 +189,7 @@ function MapPage({
         setPermissionDenied(true);
         return;
       }
+      setPermissionDenied(false);
       const pos = await Location.getCurrentPositionAsync({});
       const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
       setMyPosition(coords);
@@ -193,6 +197,33 @@ function MapPage({
       upsertLastSeen(coords.latitude, coords.longitude);
     } catch {
       setLocationError("Couldn't get your location — check your browser or device location settings, then try again.");
+    }
+  };
+
+  // On native, denying location once means the OS won't show its permission
+  // prompt again — the only way back in is the Settings app. "Open Settings"
+  // backgrounds this app; the moment it's foregrounded again, silently
+  // re-check permission so the dialog clears itself the instant the user
+  // flips the toggle, instead of leaving them stuck looking at a stale
+  // "denied" dialog after they've already fixed it.
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && permissionDenied) retryMyPosition();
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissionDenied]);
+
+  const handleEnableLocation = () => {
+    if (Platform.OS === 'web') {
+      // A browser that has already blocked this site won't re-show its own
+      // permission prompt no matter how many times we ask — the user has to
+      // flip it in the browser's site settings first. Retrying still
+      // matters: it's what actually clears the dialog the moment they do.
+      retryMyPosition();
+    } else {
+      Linking.openSettings();
     }
   };
 
@@ -473,10 +504,14 @@ function MapPage({
       <ConfirmDialog
         visible={permissionDenied}
         title="Location access needed"
-        message="Radar shows you and your friends on a map, so it needs your location to work. Enable it to use Radar."
-        confirmLabel="OK"
-        hideCancel
-        onConfirm={onBack}
+        message={
+          Platform.OS === 'web'
+            ? 'Radar shows you and your friends on a map, so it needs your location to work. Your browser has blocked it for this site — tap the location icon in your address bar, allow access, then try again.'
+            : 'Radar shows you and your friends on a map, so it needs your location to work. Turn on Location for MySpace in Settings, then come back here.'
+        }
+        confirmLabel={Platform.OS === 'web' ? 'Try again' : 'Open Settings'}
+        cancelLabel="Not now"
+        onConfirm={handleEnableLocation}
         onCancel={onBack}
       />
     </View>
