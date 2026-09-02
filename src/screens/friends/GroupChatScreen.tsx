@@ -6,10 +6,12 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { colors, fontFamily, noOutline, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
+import { OverflowIcon } from '../../components/icons/OverflowIcon';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
-import { ToggleRow } from '../../components/account/rows';
+import { ActionButton, ToggleRow } from '../../components/account/rows';
 import { useFriends } from '../../context/FriendsContext';
 import { useAuth } from '../../context/AuthContext';
+import { useCall } from '../../context/CallContext';
 import type { GroupPoll } from '../../types/groups';
 
 const ATTACH_ICON = 'M12 5v14M5 12h14';
@@ -19,18 +21,21 @@ const IMAGE_ICON = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4L15 13l5 5';
 const POLL_ICON = 'M5 20V10M12 20V4M19 20v-7';
 const CHECK_ICON = 'M5 12.5 10 17.5 19 7';
 const GROUP_ICON = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
+const PHONE_ICON = 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2C9.5 21 3 14.5 3 6a2 2 0 0 1 2-2z';
+const LEAVE_ICON = 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9';
+const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 
 function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
 }
 
-function SheetOption({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+function SheetOption({ icon, label, destructive, onPress }: { icon: string; label: string; destructive?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.sheetOption, pressed && styles.sheetOptionPressed]}>
-      <View style={styles.sheetOptionIcon}>
-        <Icon path={icon} color={colors.textPrimary} size={17} strokeWidth={1.9} />
+      <View style={[styles.sheetOptionIcon, destructive && styles.sheetOptionIconDestructive]}>
+        <Icon path={icon} color={destructive ? colors.danger : colors.textPrimary} size={17} strokeWidth={1.9} />
       </View>
-      <Text style={styles.sheetOptionLabel}>{label}</Text>
+      <Text style={[styles.sheetOptionLabel, destructive && styles.sheetOptionLabelDestructive]}>{label}</Text>
     </Pressable>
   );
 }
@@ -84,8 +89,22 @@ function PollCard({ poll, myUserId, onVote }: { poll: GroupPoll; myUserId: strin
 export function GroupChatScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { focusedGroup, groupMemberNamesFor, groupMessages, groupPolls, sendGroupMessage, sendGroupPhoto, sendGroupLocation, createGroupPoll, voteOnPoll, goChats } =
-    useFriends();
+  const {
+    focusedGroup,
+    groupMemberIdsFor,
+    groupMemberNamesFor,
+    groupMessages,
+    groupPolls,
+    sendGroupMessage,
+    sendGroupPhoto,
+    sendGroupLocation,
+    createGroupPoll,
+    voteOnPoll,
+    leaveGroup,
+    deleteGroup,
+    goChats,
+  } = useFriends();
+  const { startCall } = useCall();
   const [text, setText] = useState('');
   const [sendingAttachment, setSendingAttachment] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -97,6 +116,10 @@ export function GroupChatScreen() {
   const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
   const [pollSubmitting, setPollSubmitting] = useState(false);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [groupActionError, setGroupActionError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -106,6 +129,30 @@ export function GroupChatScreen() {
   if (!focusedGroup) return null;
 
   const memberNames = groupMemberNamesFor(focusedGroup.id);
+  const isOwner = focusedGroup.ownerId === user?.id;
+
+  const startVideoCall = () => {
+    const memberIds = groupMemberIdsFor(focusedGroup.id).filter((id) => id !== user?.id);
+    const participantNames: Record<string, string> = {};
+    memberIds.forEach((id, i) => {
+      participantNames[id] = memberNames[i] ?? 'Someone';
+    });
+    startCall({ kind: 'group', title: focusedGroup.name, memberIds, participantNames });
+  };
+
+  const doLeaveGroup = async () => {
+    setConfirmLeaveOpen(false);
+    setGroupActionError(null);
+    const { error } = await leaveGroup(focusedGroup.id);
+    if (error) setGroupActionError(error);
+  };
+
+  const doDeleteGroup = async () => {
+    setConfirmDeleteOpen(false);
+    setGroupActionError(null);
+    const { error } = await deleteGroup(focusedGroup.id);
+    if (error) setGroupActionError(error);
+  };
 
   const submit = () => {
     if (!text.trim()) return;
@@ -188,7 +235,15 @@ export function GroupChatScreen() {
               {memberNames.length > 0 ? `You, ${memberNames.join(', ')}` : 'Just you'}
             </Text>
           </View>
+          <Pressable onPress={startVideoCall} style={styles.headerIconButton} accessibilityRole="button" accessibilityLabel="Start video call">
+            <Icon path={PHONE_ICON} color="#FFFFFF" size={17} strokeWidth={1.8} />
+          </Pressable>
+          <Pressable onPress={() => setOptionsOpen(true)} style={styles.headerIconButton} accessibilityRole="button" accessibilityLabel="More options">
+            <OverflowIcon size={18} color="#FFFFFF" />
+          </Pressable>
         </View>
+
+        {groupActionError && <Text style={styles.attachError}>{groupActionError}</Text>}
 
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
           {groupMessages.length === 0 ? (
@@ -313,6 +368,56 @@ export function GroupChatScreen() {
             </Pressable>
           </View>
         </BottomSheet>
+
+        <BottomSheet visible={optionsOpen} onClose={() => setOptionsOpen(false)}>
+          <Text style={styles.sheetTitle}>{focusedGroup.name}</Text>
+          {isOwner ? (
+            <SheetOption
+              icon={TRASH_ICON}
+              label="Delete group"
+              destructive
+              onPress={() => {
+                setOptionsOpen(false);
+                setConfirmDeleteOpen(true);
+              }}
+            />
+          ) : (
+            <SheetOption
+              icon={LEAVE_ICON}
+              label="Leave group"
+              onPress={() => {
+                setOptionsOpen(false);
+                setConfirmLeaveOpen(true);
+              }}
+            />
+          )}
+        </BottomSheet>
+
+        <BottomSheet visible={confirmLeaveOpen} onClose={() => setConfirmLeaveOpen(false)}>
+          <Text style={styles.sheetTitle}>Leave group</Text>
+          <Text style={styles.sheetBody}>Leave {focusedGroup.name}? You'll stop seeing new messages unless someone adds you back.</Text>
+          <View style={styles.sheetActions}>
+            <View style={styles.sheetActionFlex}>
+              <ActionButton label="Cancel" variant="secondary" onPress={() => setConfirmLeaveOpen(false)} />
+            </View>
+            <View style={styles.sheetActionFlex}>
+              <ActionButton label="Leave" variant="destructive" onPress={doLeaveGroup} />
+            </View>
+          </View>
+        </BottomSheet>
+
+        <BottomSheet visible={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
+          <Text style={styles.sheetTitle}>Delete group</Text>
+          <Text style={styles.sheetBody}>Delete {focusedGroup.name} for everyone? This removes all messages and polls too — it can't be undone.</Text>
+          <View style={styles.sheetActions}>
+            <View style={styles.sheetActionFlex}>
+              <ActionButton label="Cancel" variant="secondary" onPress={() => setConfirmDeleteOpen(false)} />
+            </View>
+            <View style={styles.sheetActionFlex}>
+              <ActionButton label="Delete" variant="destructive" onPress={doDeleteGroup} />
+            </View>
+          </View>
+        </BottomSheet>
       </KeyboardAvoidingView>
     </LinearGradient>
   );
@@ -351,6 +456,14 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans600,
     fontSize: 16.5,
     color: '#fff',
+  },
+  headerIconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerMeta: {
     fontFamily: fontFamily.sans400,
@@ -541,6 +654,27 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans600,
     fontSize: 15,
     color: colors.textPrimary,
+  },
+  sheetOptionIconDestructive: {
+    backgroundColor: colors.splitDangerBg,
+  },
+  sheetOptionLabelDestructive: {
+    color: colors.danger,
+  },
+  sheetBody: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  sheetActionFlex: {
+    flex: 1,
   },
   pollForm: {
     gap: spacing.ms,

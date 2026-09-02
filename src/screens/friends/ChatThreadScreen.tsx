@@ -12,9 +12,11 @@ import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { ActionButton } from '../../components/account/rows';
 import { useFriends } from '../../context/FriendsContext';
 import { useAuth } from '../../context/AuthContext';
+import { useCall } from '../../context/CallContext';
 
 const CHECK_ICON = 'M5 12.5 10 17.5 19 7';
 const ATTACH_ICON = 'M12 5v14M5 12h14';
+const PHONE_ICON = 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2C9.5 21 3 14.5 3 6a2 2 0 0 1 2-2z';
 const SEND_ICON = 'M4 12 20 4l-7 16-2.5-6.5z';
 const PIN_ICON = 'M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11z M12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z';
 const IMAGE_ICON = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4L15 13l5 5';
@@ -60,6 +62,7 @@ export function ChatThreadScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { focusedFriend, messages, sendMessage, sendPhoto, sendLocation, goChats, removeFriend, clearChat, isOnline, isTyping, notifyTyping } = useFriends();
+  const { startCall } = useCall();
   const [text, setText] = useState('');
   const [sendingAttachment, setSendingAttachment] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -137,6 +140,10 @@ export function ChatThreadScreen() {
     removeFriend(focusedFriend.connectionId);
   };
 
+  const startVideoCall = () => {
+    startCall({ kind: 'dm', title: focusedFriend.name, memberIds: [focusedFriend.userId], participantNames: { [focusedFriend.userId]: focusedFriend.name } });
+  };
+
   return (
     <LinearGradient
       colors={colors.friendsChatCanvas as [string, string, ...string[]]}
@@ -157,6 +164,9 @@ export function ChatThreadScreen() {
             </View>
           )}
         </View>
+        <Pressable onPress={startVideoCall} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Start video call">
+          <Icon path={PHONE_ICON} color="#FFFFFF" size={18} strokeWidth={1.8} />
+        </Pressable>
         <Pressable onPress={() => setOptionsOpen(true)} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="More options">
           <OverflowIcon size={19} color="#FFFFFF" />
         </Pressable>

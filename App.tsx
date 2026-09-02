@@ -8,6 +8,8 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { SpaceProvider } from './src/context/SpaceContext';
 import { NotificationsProvider } from './src/context/NotificationsContext';
 import { FriendsProvider, useFriends } from './src/context/FriendsContext';
+import { CallProvider } from './src/context/CallContext';
+import { CallOverlay } from './src/components/calls/CallOverlay';
 import type { NotificationTarget } from './src/utils/notify';
 import { LaunchIntro } from './src/components/LaunchIntro';
 import { SignUpScreen } from './src/screens/SignUpScreen';
@@ -147,7 +149,10 @@ function RootNavigator() {
     <SpaceProvider>
       <NotificationsProvider>
         <FriendsProvider>
-          <AppNavigator />
+          <CallProvider>
+            <AppNavigator />
+            <CallOverlay />
+          </CallProvider>
         </FriendsProvider>
       </NotificationsProvider>
     </SpaceProvider>

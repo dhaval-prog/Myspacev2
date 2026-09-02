@@ -238,6 +238,10 @@ interface FriendsContextValue {
   createGroupPoll: (question: string, options: [string, string], allowMultiple: boolean) => Promise<{ error: string | null }>;
   /** Casts (or retracts) this account's vote for one option of a poll. */
   voteOnPoll: (pollId: string, optionId: string) => Promise<void>;
+  /** Removes just my own membership — anyone but the owner can leave. Returns to the Chats list. */
+  leaveGroup: (groupId: string) => Promise<{ error: string | null }>;
+  /** Owner-only: deletes the group and everything in it (messages, polls, memberships). Returns to the Chats list. */
+  deleteGroup: (groupId: string) => Promise<{ error: string | null }>;
 }
 
 const FriendsContext = createContext<FriendsContextValue | null>(null);
@@ -1118,6 +1122,40 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     if (!voteErr) setGroupPollVoteRows((prev) => [...prev, { poll_id: pollId, option_id: optionId, group_id: focusedGroupId, user_id: userId }]);
   };
 
+  /** Drops every locally-cached row for a group once it's gone (left or deleted), then heads back to Chats. */
+  const forgetGroupLocally = (groupId: string) => {
+    setGroupRows((prev) => prev.filter((g) => g.id !== groupId));
+    setGroupMemberRows((prev) => prev.filter((m) => m.group_id !== groupId));
+    setGroupMessageRows((prev) => prev.filter((m) => m.group_id !== groupId));
+    setGroupPollRows((prev) => prev.filter((p) => p.group_id !== groupId));
+    setGroupPollOptionRows((prev) => prev.filter((o) => o.group_id !== groupId));
+    setGroupPollVoteRows((prev) => prev.filter((v) => v.group_id !== groupId));
+    setGroupLastMessages((prev) => {
+      if (!(groupId in prev)) return prev;
+      const next = { ...prev };
+      delete next[groupId];
+      return next;
+    });
+    if (focusedGroupId === groupId) setFocusedGroupId(null);
+    goChats();
+  };
+
+  const leaveGroup = async (groupId: string): Promise<{ error: string | null }> => {
+    if (!userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    const { error } = await supabase.from('chat_group_members').delete().eq('group_id', groupId).eq('user_id', userId);
+    if (error) return { error: error.message };
+    forgetGroupLocally(groupId);
+    return { error: null };
+  };
+
+  const deleteGroup = async (groupId: string): Promise<{ error: string | null }> => {
+    if (!userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    const { error } = await supabase.from('chat_groups').delete().eq('id', groupId);
+    if (error) return { error: error.message };
+    forgetGroupLocally(groupId);
+    return { error: null };
+  };
+
   // Load + subscribe to messages, polls, options and votes for the focused group only.
   useEffect(() => {
     if (!focusedGroupId || !userId || !isSupabaseConfigured) {
@@ -1258,6 +1296,8 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     sendGroupLocation,
     createGroupPoll,
     voteOnPoll,
+    leaveGroup,
+    deleteGroup,
   };
 
   return <FriendsContext.Provider value={value}>{children}</FriendsContext.Provider>;
