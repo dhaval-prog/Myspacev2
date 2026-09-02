@@ -106,7 +106,7 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
 
           {viewId === 'add' && selectedTileId === 'add' && <ItemForm rooms={ROOM_OPTIONS} onSubmit={addItem} />}
           {viewId === 'add' && selectedTileId === 'view-all' && items.length > 0 && (
-            <ItemList items={items} rooms={ROOM_OPTIONS} mode="view" />
+            <ItemList items={items} rooms={ROOM_OPTIONS} mode="view" onDelete={removeItem} onEditSave={editItem} />
           )}
           {viewId === 'add' && selectedTileId === 'alerts' && <AlertForm onSubmit={addItem} />}
           {viewId === 'add' && selectedTileId === 'delete' && items.length > 0 && (
