@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { Animated, Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Modal, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { PanResponderGestureState } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, radius, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useMinimumVisible } from '../../hooks/useMinimumVisible';
 import { AccountBadge } from '../../components/AccountBadge';
 import { NotificationsBell } from '../../components/NotificationsBell';
 import { NotificationsSheet } from '../../components/NotificationsSheet';
@@ -12,6 +13,7 @@ import { Icon } from '../../components/Icon';
 import { initialsOf } from '../../components/split/MemberAvatar';
 import { JoinSplitSheet } from '../../components/split/JoinSplitSheet';
 import { BottomNav } from '../../components/BottomNav';
+import { CardFanThrobber, SkeletonBar, SkeletonCard } from '../../components/throbbers';
 import { useAuth } from '../../context/AuthContext';
 import { useSplit } from '../../context/SplitContext';
 import { SPLIT_CATEGORY_MAP } from '../../data/splitCategories';
@@ -32,13 +34,15 @@ export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount, onOpenN
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
-  const { groups, membersFor, expensesFor, balancesFor, goCreate, openGroup, deleteGroup } = useSplit();
+  const { loading, refreshing, refresh, groups, membersFor, expensesFor, balancesFor, goCreate, openGroup, deleteGroup } = useSplit();
+  const showLoader = useMinimumVisible(loading, 500);
   const [joinOpen, setJoinOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [friendsTab, setFriendsTab] = useState<'nearby' | 'recent'>('nearby');
   const [revealedGroupId, setRevealedGroupId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [listWidth, setListWidth] = useState(326);
   const revealedGroupIdRef = useRef<string | null>(null);
   const dragXMap = useRef(new Map<string, Animated.Value>()).current;
   const responderCache = useRef(new Map<string, ReturnType<typeof PanResponder.create>>()).current;
@@ -110,11 +114,37 @@ export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount, onOpenN
   const allPeople = Array.from(peopleIds).map((id) => groups.flatMap((g) => membersFor(g.id)).find((m) => m.userId === id)!);
   const people = allPeople.slice(0, 5);
 
+  if (showLoader) {
+    return (
+      <View style={styles.screen}>
+        <View style={[styles.topRow, { paddingHorizontal: spacing.xxxl, paddingTop: insets.top + spacing.md }]}>
+          <Image source={require('../../../assets/logos/logo-coral.png')} style={styles.logo} />
+          <View style={styles.headerActions}>
+            <NotificationsBell onPress={() => setNotificationsOpen(true)} bg={colors.splitSurface} tint={colors.splitInk} />
+            <AccountBadge onPress={onOpenAccount} />
+          </View>
+        </View>
+        <CardFanThrobber size={120} label="Squaring up" />
+        <BottomNav
+          activeId="split"
+          onSelect={(id) => {
+            if (id === 'home') onHome();
+            if (id === 'expenses') onOpenExpenses();
+          }}
+          onAdd={goCreate}
+          bottomInset={insets.bottom}
+          reduceMotion={reduceMotion}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.screen}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.lime} />}
       >
         <View style={styles.topRow}>
           <Image source={require('../../../assets/logos/logo-coral.png')} style={styles.logo} />
@@ -201,7 +231,16 @@ export function SplitHomeScreen({ onHome, onOpenExpenses, onOpenAccount, onOpenN
           </Pressable>
         </View>
 
-        {groups.length === 0 ? (
+        {refreshing ? (
+          <View style={styles.list} onLayout={(e) => setListWidth(e.nativeEvent.layout.width)}>
+            <SkeletonBar width={listWidth} />
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={[styles.skeletonCardWrap, { height: listWidth * (206 / 326) }]}>
+                <SkeletonCard width={listWidth} depth={0} />
+              </View>
+            ))}
+          </View>
+        ) : groups.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No splits yet</Text>
             <Text style={styles.emptyBody}>Create one to start sharing expenses with people.</Text>
@@ -575,6 +614,9 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: spacing.ms,
+  },
+  skeletonCardWrap: {
+    position: 'relative',
   },
   card: {
     borderRadius: 28,

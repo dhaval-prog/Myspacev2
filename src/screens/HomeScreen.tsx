@@ -3,6 +3,7 @@ import { ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useMinimumVisible } from '../hooks/useMinimumVisible';
 import { useAuth } from '../context/AuthContext';
 import { useSpace } from '../context/SpaceContext';
 import { useFriends } from '../context/FriendsContext';
@@ -17,6 +18,7 @@ import { Hero } from '../components/Hero';
 import { CategoryNavigation, type CategoryRowData } from '../components/CategoryNavigation';
 import { ContextCard } from '../components/ContextCard';
 import { BottomNav } from '../components/BottomNav';
+import { DotPairThrobber } from '../components/throbbers';
 
 const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
 
@@ -48,7 +50,8 @@ export function HomeScreen({
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const userId = user?.id ?? null;
-  const { items } = useSpace();
+  const { items, loading } = useSpace();
+  const showLoader = useMinimumVisible(loading, 300);
   const { receivedRequests, goRequests } = useFriends();
   const [activeViewId, setActiveViewId] = useState<ViewId>('add');
   const [previewViewId, setPreviewViewId] = useState<ViewId>('add');
@@ -141,6 +144,10 @@ export function HomeScreen({
     : previewViewId === 'add'
       ? VIEWS.add.items[1].title
       : (attentionEntries[0]?.item.name ?? 'All caught up');
+
+  if (showLoader) {
+    return <DotPairThrobber size={52} center />;
+  }
 
   return (
     <View style={styles.screen}>

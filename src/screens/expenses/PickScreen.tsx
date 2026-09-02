@@ -3,11 +3,13 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, radius, spacing } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useMinimumVisible } from '../../hooks/useMinimumVisible';
 import { CardStack } from '../../components/expenses/CardStack';
 import { BottomNav } from '../../components/BottomNav';
 import { AccountBadge } from '../../components/AccountBadge';
 import { NotificationsBell } from '../../components/NotificationsBell';
 import { NotificationsSheet } from '../../components/NotificationsSheet';
+import { CardFanThrobber } from '../../components/throbbers';
 import { useExpenses } from '../../context/ExpensesContext';
 import type { NotificationTarget } from '../../utils/notify';
 
@@ -22,7 +24,8 @@ interface PickScreenProps {
 export function PickScreen({ onHome, onOpenSplit, onOpenAccount, onOpenNotificationTarget }: PickScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { openNewCard, openJoin } = useExpenses();
+  const { loading, refreshing, refresh, openNewCard, openJoin } = useExpenses();
+  const showLoader = useMinimumVisible(loading, 500);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   return (
@@ -40,17 +43,23 @@ export function PickScreen({ onHome, onOpenSplit, onOpenAccount, onOpenNotificat
       </View>
 
       <View style={styles.stackArea}>
-        <Text style={styles.stackHint} pointerEvents="none">
-          Scroll through your cards · pull one up to open
-        </Text>
-        <CardStack reduceMotion={reduceMotion} />
-        <Pressable onPress={openNewCard} style={styles.addButton} accessibilityRole="button" accessibilityLabel="Add expense card">
-          <Text style={styles.addPlus}>+</Text>
-          <Text style={styles.addLabel}>ADD EXPENSE CARD</Text>
-        </Pressable>
-        <Pressable onPress={openJoin} style={styles.joinLink} accessibilityRole="button" accessibilityLabel="Join a budget card with an invite code">
-          <Text style={styles.joinLinkText}>Have an invite code?</Text>
-        </Pressable>
+        {showLoader ? (
+          <CardFanThrobber size={120} label="Opening your pocket" />
+        ) : (
+          <>
+            <Text style={styles.stackHint} pointerEvents="none">
+              Scroll through your cards · pull one up to open
+            </Text>
+            <CardStack reduceMotion={reduceMotion} refreshing={refreshing} onRefresh={refresh} />
+            <Pressable onPress={openNewCard} style={styles.addButton} accessibilityRole="button" accessibilityLabel="Add expense card">
+              <Text style={styles.addPlus}>+</Text>
+              <Text style={styles.addLabel}>ADD EXPENSE CARD</Text>
+            </Pressable>
+            <Pressable onPress={openJoin} style={styles.joinLink} accessibilityRole="button" accessibilityLabel="Join a budget card with an invite code">
+              <Text style={styles.joinLinkText}>Have an invite code?</Text>
+            </Pressable>
+          </>
+        )}
       </View>
 
       <BottomNav

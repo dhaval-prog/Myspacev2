@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   PanResponder,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,9 +10,10 @@ import {
   type GestureResponderEvent,
   type PanResponderGestureState,
 } from 'react-native';
-import { EASE, fontFamily } from '../../theme';
+import { colors, EASE, fontFamily } from '../../theme';
 import { useExpenses } from '../../context/ExpensesContext';
 import { formatMoney, parseAmount } from '../../utils/expensesFormat';
+import DeckSkeleton from '../throbbers/DeckSkeleton';
 
 const CARD_WIDTH = 326;
 const CARD_HEIGHT = 206;
@@ -27,6 +29,9 @@ const FLY_DURATION = 340;
 
 interface CardStackProps {
   reduceMotion?: boolean;
+  /** True while the deck is being refetched (pull-to-refresh) — swaps the fan for a skeleton stack, ScrollView stays mounted. */
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }
 
 /**
@@ -44,7 +49,7 @@ interface CardStackProps {
  * than an instant snap to its end position held static for the rest of
  * the 340ms.
  */
-export function CardStack({ reduceMotion }: CardStackProps) {
+export function CardStack({ reduceMotion, refreshing = false, onRefresh }: CardStackProps) {
   const { deck, flyCard, openCard, expensesFor } = useExpenses();
   const [pickP, setPickP] = useState(0);
   // Index of the card whose touch gesture is in progress, purely so its
@@ -185,7 +190,7 @@ export function CardStack({ reduceMotion }: CardStackProps) {
     return responder;
   };
 
-  if (deck.length === 0) {
+  if (deck.length === 0 && !refreshing) {
     return (
       <View style={styles.empty}>
         <Text style={styles.emptyTitle}>No budget cards yet</Text>
@@ -209,6 +214,7 @@ export function CardStack({ reduceMotion }: CardStackProps) {
         style={StyleSheet.absoluteFill}
         contentContainerStyle={{ paddingBottom: 84 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.lime} /> : undefined}
       >
         {deck.map((card) => (
           <View key={card.rid} style={{ height: SLOT_HEIGHT }} />
@@ -216,6 +222,11 @@ export function CardStack({ reduceMotion }: CardStackProps) {
         <View style={{ height: Math.max(0, areaHeight - SLOT_HEIGHT) }} />
       </ScrollView>
 
+      {refreshing ? (
+        <View style={styles.centerWrap} pointerEvents="none">
+          <DeckSkeleton width={CARD_WIDTH} count={2} />
+        </View>
+      ) : (
       <View style={styles.centerWrap} pointerEvents="box-none">
         <View style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}>
           {deck.map((card, i) => {
@@ -294,6 +305,7 @@ export function CardStack({ reduceMotion }: CardStackProps) {
           })}
         </View>
       </View>
+      )}
     </View>
   );
 }
