@@ -15,8 +15,6 @@ const BACK_ICON = 'M15 5l-7 7 7 7';
 const CHEVRON_ICON = 'M9 6l6 6-6 6';
 const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
 const PIN_ICON = 'M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z M12 11.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5';
-/** Matches the "Recenter map" FAB on the Live Locations screen, for a consistent glyph. */
-const RECENTER_ICON = 'M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 100 8 4 4 0 000-8z';
 
 interface FriendsHomeScreenProps {
   onHome: () => void;
@@ -194,7 +192,7 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenL
           if (id === 'split') onOpenSplit();
         }}
         onAdd={goChats}
-        fabIconPath={RECENTER_ICON}
+        fabIconPath={CHAT_ICON}
         fabAccessibilityLabel="Chats"
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
