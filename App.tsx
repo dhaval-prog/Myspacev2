@@ -104,6 +104,7 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'home' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
+        onOpenLiveLocations={() => setScreen({ name: 'liveLocations' })}
       />
     );
   }

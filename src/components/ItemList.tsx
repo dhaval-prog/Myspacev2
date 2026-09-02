@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { Animated, Image, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, radius, spacing, typography, noOutline } from '../theme';
 import { useFocusBorder } from '../hooks/useFocusBorder';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,7 @@ import { CategoryPicker } from './CategoryPicker';
 import { Calendar } from './Calendar';
 import { TimePicker } from './TimePicker';
 import { PhotoCaptureSheet } from './PhotoCaptureSheet';
+import { ConfirmDialog } from './ConfirmDialog';
 import { CATEGORY_ICON, EMPTY_CATEGORY_ICON } from '../data/itemCategories';
 import { formatDate } from '../utils/attention';
 import { formatTime12 } from '../utils/time';
@@ -22,6 +23,9 @@ const DELETE_PATH = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 
 const SEARCH_PATH = 'M11 4.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM16 16l4 4';
 const CLOSE_PATH = 'M6 6l12 12M18 6L6 18';
 const CAMERA_PATH = 'M4 8h3l1.5-2h7L17 8h3v12H4z M12 11.4a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8';
+
+/** How far a "View all" card slides left to swap its Edit action for Delete. */
+const SWIPE_REVEAL_WIDTH = 64;
 
 interface EditPatch {
   name?: string;
@@ -97,7 +101,7 @@ export function ItemList({ items, rooms, mode, onDelete, onEditSave }: ItemListP
           item={it}
           rooms={rooms}
           mode={mode}
-          isEditing={mode === 'edit' && editingIndex === index}
+          isEditing={(mode === 'edit' || mode === 'view') && editingIndex === index}
           onToggleEdit={() => setEditingIndex((cur) => (cur === index ? null : index))}
           onDelete={() => onDelete?.(index)}
           onSave={(patch) => {
@@ -133,9 +137,35 @@ function ItemCard({
   const sub = [item.category, item.room].filter(Boolean).join(' · ') || 'Unfiled';
   const hasExpiry = Boolean(item.expiry) && mode !== 'delete';
 
+  // "View all" cards: a left swipe anywhere on the card swaps the Edit
+  // action for Delete (and a right swipe swaps it back) — no separate
+  // Edit/Delete tabs needed, unlike the 'edit'/'delete' rail modes below.
+  const [swiped, setSwiped] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => mode === 'view' && Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderRelease: (_, g) => {
+        if (g.dx < -SWIPE_REVEAL_WIDTH / 2) setSwiped(true);
+        else if (g.dx > SWIPE_REVEAL_WIDTH / 2) setSwiped(false);
+      },
+    }),
+  ).current;
+
+  const confirmDelete = () => {
+    setConfirmOpen(false);
+    onDelete();
+  };
+
+  const cancelDelete = () => {
+    setConfirmOpen(false);
+    setSwiped(false);
+  };
+
   return (
     <View style={styles.card}>
-      <View style={styles.cardRow}>
+      <View style={styles.cardRow} {...(mode === 'view' ? panResponder.panHandlers : {})}>
         <View style={styles.cardIcon}>
           {item.photoUrl ? (
             <Image source={{ uri: item.photoUrl }} style={styles.cardPhoto} />
@@ -148,6 +178,26 @@ function ItemCard({
           <Text style={typography.itemSub}>{sub}</Text>
           {hasExpiry && <Text style={typography.itemExpiry}>{`exp ${formatDate(item.expiry)}`}</Text>}
         </View>
+        {mode === 'view' && !swiped && (
+          <Pressable
+            onPress={onToggleEdit}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit ${item.name}`}
+            style={[styles.action, { backgroundColor: isEditing ? colors.ink : colors.pressWash }]}
+          >
+            <Icon path={EDIT_PATH} color={isEditing ? colors.lime : colors.textPrimary} size={15} />
+          </Pressable>
+        )}
+        {mode === 'view' && swiped && (
+          <Pressable
+            onPress={() => setConfirmOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${item.name}`}
+            style={[styles.action, { backgroundColor: colors.danger }]}
+          >
+            <Icon path={DELETE_PATH} color="#fff" size={15} />
+          </Pressable>
+        )}
         {mode === 'edit' && (
           <Pressable
             onPress={onToggleEdit}
@@ -175,6 +225,17 @@ function ItemCard({
         ) : (
           <ItemEditForm item={item} rooms={rooms} onSave={onSave} onCancel={onCancel} />
         ))}
+      {mode === 'view' && (
+        <ConfirmDialog
+          visible={confirmOpen}
+          title={`Delete ${item.name}?`}
+          message="This removes it permanently — it can't be undone."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={confirmDelete}
+          onCancel={cancelDelete}
+        />
+      )}
     </View>
   );
 }
