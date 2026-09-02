@@ -85,6 +85,15 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
 
   return (
     <View style={styles.screen}>
+      {!collapsed && (isFormView || tiles.length > 0) && (
+        <Pressable
+          onPress={() => setCollapsed(true)}
+          style={styles.railBackdrop}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss tools"
+        />
+      )}
+
       <View style={[styles.body, { paddingTop: insets.top + spacing.md }]}>
         {(isFormView || tiles.length > 0) && (
           <Rail
@@ -95,15 +104,6 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
             onToggleCollapse={() => setCollapsed((c) => !c)}
             reduceMotion={reduceMotion}
             showLabels={isFormView}
-          />
-        )}
-
-        {!collapsed && (isFormView || tiles.length > 0) && (
-          <Pressable
-            onPress={() => setCollapsed(true)}
-            style={styles.railBackdrop}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss tools"
           />
         )}
 
@@ -138,22 +138,25 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
           styles.pinnedBack,
           { paddingBottom: viewId === 'add' ? spacing.ms : Math.max(insets.bottom, spacing.md) + spacing.ms },
         ]}
+        pointerEvents="box-none"
       >
         <Pressable onPress={onBack} style={styles.backCircle} accessibilityRole="button" accessibilityLabel="Back">
           <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
         </Pressable>
       </View>
       {viewId === 'add' && (
-        <BottomNav
-          activeId="home"
-          onSelect={(id) => {
-            if (id === 'home') onBack();
-            if (id === 'expenses') onOpenExpenses();
-            if (id === 'split') onOpenSplit();
-          }}
-          bottomInset={insets.bottom}
-          reduceMotion={reduceMotion}
-        />
+        <View style={styles.bottomNavWrap} pointerEvents="box-none">
+          <BottomNav
+            activeId="home"
+            onSelect={(id) => {
+              if (id === 'home') onBack();
+              if (id === 'expenses') onOpenExpenses();
+              if (id === 'split') onOpenSplit();
+            }}
+            bottomInset={insets.bottom}
+            reduceMotion={reduceMotion}
+          />
+        </View>
       )}
     </View>
   );
@@ -245,6 +248,10 @@ const styles = StyleSheet.create({
   pinnedBack: {
     paddingHorizontal: spacing.xxxl,
     paddingTop: spacing.ms,
+    zIndex: 6,
+  },
+  bottomNavWrap: {
+    zIndex: 6,
   },
   backCircle: {
     width: 52,
@@ -261,6 +268,7 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+    zIndex: 6,
   },
   railBackdrop: {
     position: 'absolute',
