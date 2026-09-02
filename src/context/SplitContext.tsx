@@ -138,6 +138,9 @@ function warn(action: string, error: { message: string } | null) {
 }
 
 interface SplitContextValue {
+  loading: boolean;
+  refreshing: boolean;
+  refresh: () => void;
   page: SplitPage;
   groups: SplitGroup[];
   focusedGroup: SplitGroup | undefined;
@@ -243,6 +246,8 @@ export function SplitProvider({ children, initialGroupId }: SplitProviderProps) 
   const [pendingPayment, setPendingPayment] = useState<{ recipientUserId: string; amount: number } | null>(null);
   const [focusedPaymentAttemptId, setFocusedPaymentAttemptId] = useState<string | null>(null);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -253,9 +258,11 @@ export function SplitProvider({ children, initialGroupId }: SplitProviderProps) 
       setSettlementRows([]);
       setMemberRows([]);
       setPaymentAttemptRows([]);
+      setLoading(false);
       return;
     }
 
+    setLoading(true);
     (async () => {
       const [groupsRes, expensesRes, membersRes, settlementsRes, paymentAttemptsRes] = await Promise.all([
         supabase.from('split_groups').select('*').order('created_at', { ascending: true }),
@@ -291,12 +298,51 @@ export function SplitProvider({ children, initialGroupId }: SplitProviderProps) 
       } else {
         setShareRows([]);
       }
+      setLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
   }, [userId]);
+
+  const refresh = async () => {
+    if (!userId || !isSupabaseConfigured) return;
+    setRefreshing(true);
+    const [groupsRes, expensesRes, membersRes, settlementsRes, paymentAttemptsRes] = await Promise.all([
+      supabase.from('split_groups').select('*').order('created_at', { ascending: true }),
+      supabase.from('split_expenses').select('*').order('created_at', { ascending: false }),
+      supabase.from('split_members').select('group_id,user_id'),
+      supabase.from('split_settlements').select('*').order('created_at', { ascending: false }),
+      supabase.from('payment_attempts').select('*').order('created_at', { ascending: false }),
+    ]);
+
+    warn('refresh groups', groupsRes.error);
+    warn('refresh expenses', expensesRes.error);
+    warn('refresh members', membersRes.error);
+    warn('refresh settlements', settlementsRes.error);
+    warn('refresh payment attempts', paymentAttemptsRes.error);
+
+    const groups = (groupsRes.data as GroupRow[] | null) ?? [];
+    setGroupRows(groups);
+    const expenses = (expensesRes.data as ExpenseRow[] | null) ?? [];
+    setExpenseRows(expenses);
+    setMemberRows((membersRes.data as { group_id: string; user_id: string }[] | null) ?? []);
+    setSettlementRows((settlementsRes.data as SettlementRow[] | null) ?? []);
+    setPaymentAttemptRows((paymentAttemptsRes.data as PaymentAttemptRow[] | null) ?? []);
+
+    if (expenses.length > 0) {
+      const sharesRes = await supabase
+        .from('split_expense_shares')
+        .select('*')
+        .in('expense_id', expenses.map((e) => e.id));
+      warn('refresh shares', sharesRes.error);
+      setShareRows((sharesRes.data as ShareRow[] | null) ?? []);
+    } else {
+      setShareRows([]);
+    }
+    setRefreshing(false);
+  };
 
   // Backfill display names for whoever shows up in a group — owner, member,
   // expense payer — fetched lazily as new people show up.
@@ -908,6 +954,9 @@ export function SplitProvider({ children, initialGroupId }: SplitProviderProps) 
   }, [userId]);
 
   const value: SplitContextValue = {
+    loading,
+    refreshing,
+    refresh,
     page,
     groups,
     focusedGroup,

@@ -123,6 +123,9 @@ function warn(action: string, error: { message: string } | null) {
 }
 
 interface ExpensesContextValue {
+  loading: boolean;
+  refreshing: boolean;
+  refresh: () => void;
   page: Page;
   deck: WalletCard[];
   sel: number;
@@ -217,6 +220,8 @@ export function ExpensesProvider({ children, initialCardId }: ExpensesProviderPr
   const [sel, setSel] = useState(0);
   const [dot, setDot] = useState(0);
   const [flyCard, setFlyCard] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [spendOpen, setSpendOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
@@ -239,9 +244,11 @@ export function ExpensesProvider({ children, initialCardId }: ExpensesProviderPr
       setExpenseRows([]);
       setTopupRows([]);
       setMemberRows([]);
+      setLoading(false);
       return;
     }
 
+    setLoading(true);
     (async () => {
       const [cardsRes, expensesRes, topupsRes, membersRes] = await Promise.all([
         supabase.from('budget_cards').select('*').order('created_at', { ascending: true }),
@@ -260,12 +267,35 @@ export function ExpensesProvider({ children, initialCardId }: ExpensesProviderPr
       setExpenseRows((expensesRes.data as ExpenseRow[] | null) ?? []);
       setTopupRows((topupsRes.data as TopupRow[] | null) ?? []);
       setMemberRows((membersRes.data as CardMemberRow[] | null) ?? []);
+      setLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
   }, [userId]);
+
+  const refresh = async () => {
+    if (!userId || !isSupabaseConfigured) return;
+    setRefreshing(true);
+    const [cardsRes, expensesRes, topupsRes, membersRes] = await Promise.all([
+      supabase.from('budget_cards').select('*').order('created_at', { ascending: true }),
+      supabase.from('card_expenses').select('*').order('created_at', { ascending: false }),
+      supabase.from('card_topups').select('*').order('created_at', { ascending: false }),
+      supabase.from('card_members').select('card_id, user_id'),
+    ]);
+
+    warn('refresh cards', cardsRes.error);
+    warn('refresh expenses', expensesRes.error);
+    warn('refresh topups', topupsRes.error);
+    warn('refresh members', membersRes.error);
+
+    setCardRows((cardsRes.data as CardRow[] | null) ?? []);
+    setExpenseRows((expensesRes.data as ExpenseRow[] | null) ?? []);
+    setTopupRows((topupsRes.data as TopupRow[] | null) ?? []);
+    setMemberRows((membersRes.data as CardMemberRow[] | null) ?? []);
+    setRefreshing(false);
+  };
 
   // Backfills display names for whoever logged an expense, topped up, owns,
   // or is a member of a card — fetched lazily as new people show up, never
@@ -727,6 +757,9 @@ export function ExpensesProvider({ children, initialCardId }: ExpensesProviderPr
   };
 
   const value: ExpensesContextValue = {
+    loading,
+    refreshing,
+    refresh,
     page,
     deck,
     sel,
