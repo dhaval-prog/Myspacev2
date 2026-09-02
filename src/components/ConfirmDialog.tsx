@@ -13,6 +13,9 @@ interface ConfirmDialogProps {
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** An optional third, full-width primary action rendered above the confirm/cancel row — for a dialog with one clearly preferred choice plus a couple of secondary ones. */
+  primaryLabel?: string;
+  onPrimary?: () => void;
 }
 
 /**
@@ -31,6 +34,8 @@ export function ConfirmDialog({
   destructive,
   onConfirm,
   onCancel,
+  primaryLabel,
+  onPrimary,
 }: ConfirmDialogProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -39,14 +44,27 @@ export function ConfirmDialog({
         <View style={styles.card}>
           <Text style={[typography.detailTitle, styles.title]}>{title}</Text>
           <Text style={[typography.body, styles.message]}>{message}</Text>
+          {primaryLabel && onPrimary && (
+            <Pressable onPress={onPrimary} style={[styles.button, styles.primaryButton, { backgroundColor: colors.ink }]}>
+              <Text style={[typography.buttonLabel, { fontSize: 14, color: colors.lime }]}>{primaryLabel}</Text>
+            </Pressable>
+          )}
           <View style={styles.actions}>
             {!hideCancel && (
               <Pressable onPress={onCancel} style={[styles.button, { backgroundColor: colors.pressWash }]}>
                 <Text style={[typography.buttonLabel, { fontSize: 14, color: colors.textPrimary }]}>{cancelLabel}</Text>
               </Pressable>
             )}
-            <Pressable onPress={onConfirm} style={[styles.button, { backgroundColor: destructive ? colors.danger : colors.ink }]}>
-              <Text style={[typography.buttonLabel, { fontSize: 14, color: destructive ? colors.white : colors.lime }]}>
+            <Pressable
+              onPress={onConfirm}
+              style={[styles.button, { backgroundColor: destructive ? colors.danger : primaryLabel ? colors.pressWash : colors.ink }]}
+            >
+              <Text
+                style={[
+                  typography.buttonLabel,
+                  { fontSize: 14, color: destructive ? colors.white : primaryLabel ? colors.textPrimary : colors.lime },
+                ]}
+              >
                 {confirmLabel}
               </Text>
             </Pressable>
@@ -81,12 +99,15 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   button: {
     flex: 1,
     paddingVertical: 13,
     borderRadius: radius.md - 8,
     alignItems: 'center',
+  },
+  primaryButton: {
+    marginTop: spacing.md,
   },
 });
