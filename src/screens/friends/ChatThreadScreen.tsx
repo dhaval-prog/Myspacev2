@@ -98,8 +98,9 @@ export function ChatThreadScreen() {
 
   const mediaItems = messages
     .filter((m) => m.kind === 'image' && m.attachmentUrl)
-    .map((m) => ({ id: m.id, url: m.attachmentUrl! }))
+    .map((m) => ({ id: m.id, url: m.attachmentUrl!, senderId: m.senderId }))
     .reverse();
+  const mediaSenderNameFor = (senderId: string) => (senderId === user?.id ? 'You' : focusedFriend.name);
 
   const pickPhoto = async () => {
     setAttachOpen(false);
@@ -305,7 +306,14 @@ export function ChatThreadScreen() {
         />
       </BottomSheet>
 
-      <MediaGalleryModal visible={mediaOpen} onClose={() => setMediaOpen(false)} title="Media" items={mediaItems} />
+      <MediaGalleryModal
+        visible={mediaOpen}
+        onClose={() => setMediaOpen(false)}
+        title="Media"
+        bannerCaption={focusedFriend.name}
+        items={mediaItems}
+        senderNameFor={mediaSenderNameFor}
+      />
 
       <BottomSheet visible={confirmClearOpen} onClose={() => setConfirmClearOpen(false)}>
         <Text style={styles.sheetTitle}>Delete chat</Text>
