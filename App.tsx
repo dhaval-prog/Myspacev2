@@ -128,7 +128,6 @@ function AppNavigator() {
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
       onOpenSplit={() => setScreen({ name: 'split' })}
       onOpenFriends={() => setScreen({ name: 'friends' })}
-      onOpenLiveLocations={() => setScreen({ name: 'liveLocations' })}
       onOpenAccount={() => setScreen({ name: 'account', from: 'home' })}
       onOpenNotificationTarget={openNotificationTarget}
     />

@@ -98,6 +98,15 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
           />
         )}
 
+        {!collapsed && (isFormView || tiles.length > 0) && (
+          <Pressable
+            onPress={() => setCollapsed(true)}
+            style={styles.railBackdrop}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss tools"
+          />
+        )}
+
         <ContentColumn collapsed={collapsed || tiles.length === 0} reduceMotion={reduceMotion}>
           <View key={`${viewId}-${selectedTileId}`} style={styles.titleBlock}>
             <Text style={typography.detailTitle}>{title}</Text>
@@ -109,12 +118,6 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
             <ItemList items={items} rooms={ROOM_OPTIONS} mode="view" onDelete={removeItem} onEditSave={editItem} />
           )}
           {viewId === 'add' && selectedTileId === 'alerts' && <AlertForm onSubmit={addItem} />}
-          {viewId === 'add' && selectedTileId === 'delete' && items.length > 0 && (
-            <ItemList items={items} rooms={ROOM_OPTIONS} mode="delete" onDelete={removeItem} />
-          )}
-          {viewId === 'add' && selectedTileId === 'edit' && items.length > 0 && (
-            <ItemList items={items} rooms={ROOM_OPTIONS} mode="edit" onEditSave={editItem} />
-          )}
 
           {viewId === 'attention' && attentionEntries[ri] && (
             <AttentionDetail
@@ -258,6 +261,14 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+  },
+  railBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
   },
   contentColumn: {
     flex: 1,
