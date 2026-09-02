@@ -51,7 +51,19 @@ const FAB_ICON_BY_TAB: Record<string, string> = {
   split: '#DE3769',
 };
 
-function Fab({ onPress, reduceMotion, activeId }: { onPress?: () => void; reduceMotion?: boolean; activeId: string }) {
+function Fab({
+  onPress,
+  reduceMotion,
+  activeId,
+  iconPath = PLUS_PATH,
+  accessibilityLabel = 'Add',
+}: {
+  onPress?: () => void;
+  reduceMotion?: boolean;
+  activeId: string;
+  iconPath?: string;
+  accessibilityLabel?: string;
+}) {
   const scale = useRef(new Animated.Value(1)).current;
   const animateTo = (v: number, dur: number) =>
     Animated.timing(scale, { toValue: v, duration: reduceMotion ? 0 : dur, easing: EASE, useNativeDriver: true }).start();
@@ -62,11 +74,11 @@ function Fab({ onPress, reduceMotion, activeId }: { onPress?: () => void; reduce
       onPressIn={() => animateTo(0.92, duration.micro)}
       onPressOut={() => animateTo(1, duration.state)}
       accessibilityRole="button"
-      accessibilityLabel="Add"
+      accessibilityLabel={accessibilityLabel}
       hitSlop={6}
     >
       <Animated.View style={[styles.fab, { transform: [{ scale }] }]}>
-        <Icon path={PLUS_PATH} color={FAB_ICON_BY_TAB[activeId] ?? FAB_ICON_DEFAULT} size={24} strokeWidth={2.2} />
+        <Icon path={iconPath} color={FAB_ICON_BY_TAB[activeId] ?? FAB_ICON_DEFAULT} size={24} strokeWidth={2.2} />
       </Animated.View>
     </Pressable>
   );
@@ -78,6 +90,10 @@ interface BottomNavProps {
   onAdd?: () => void;
   bottomInset: number;
   reduceMotion?: boolean;
+  /** Overrides the FAB's default "+" glyph — e.g. a chat or back icon on a screen where "+" doesn't apply. */
+  fabIcon?: string;
+  /** Overrides the FAB's default "Add" accessibility label to match a custom fabIcon. */
+  fabLabel?: string;
 }
 
 /**
@@ -85,7 +101,7 @@ interface BottomNavProps {
  * pill grouping Home/Expenses/Split on the left, and a separate circular
  * "+" action to its right — two distinct floating shapes, not one bar.
  */
-export function BottomNav({ activeId, onSelect, onAdd, bottomInset, reduceMotion }: BottomNavProps) {
+export function BottomNav({ activeId, onSelect, onAdd, bottomInset, reduceMotion, fabIcon, fabLabel }: BottomNavProps) {
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(bottomInset, spacing.md) }]}>
       <View style={styles.row}>
@@ -101,7 +117,7 @@ export function BottomNav({ activeId, onSelect, onAdd, bottomInset, reduceMotion
             />
           ))}
         </View>
-        <Fab onPress={onAdd} reduceMotion={reduceMotion} activeId={activeId} />
+        <Fab onPress={onAdd} reduceMotion={reduceMotion} activeId={activeId} iconPath={fabIcon} accessibilityLabel={fabLabel} />
       </View>
     </View>
   );
