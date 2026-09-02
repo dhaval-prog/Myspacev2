@@ -20,7 +20,7 @@ interface MessageRow {
   id: string;
   connection_id: string;
   sender_id: string;
-  kind: 'text' | 'image' | 'location';
+  kind: 'text' | 'image' | 'location' | 'system';
   text: string | null;
   attachment_url: string | null;
   created_at: string;
@@ -49,7 +49,7 @@ interface GroupMessageRow {
   id: string;
   group_id: string;
   sender_id: string;
-  kind: 'text' | 'image' | 'location' | 'poll';
+  kind: 'text' | 'image' | 'location' | 'poll' | 'system';
   text: string | null;
   attachment_url: string | null;
   poll_id: string | null;
@@ -63,6 +63,12 @@ interface GroupPollRow {
   question: string;
   allow_multiple: boolean;
   created_at: string;
+  purpose: 'general' | 'rename';
+  proposed_name: string | null;
+  old_name: string | null;
+  expires_at: string | null;
+  resolved: boolean;
+  resolution: 'renamed' | 'kept' | null;
 }
 
 interface GroupPollOptionRow {
@@ -82,6 +88,19 @@ interface GroupPollVoteRow {
 
 function warn(action: string, error: { message: string } | null) {
   if (error) console.warn(`[friends] failed to ${action}:`, error.message);
+}
+
+/**
+ * A file extension for a storage path — prefers the blob's real MIME type
+ * (expo-image-picker on web hands back a `blob:` URI with no extension at
+ * all, so naively taking "everything after the last dot" of that URI grabs
+ * the whole URI instead, once for the whole host:port having no dot in it).
+ */
+function extFromBlob(localUri: string, mimeType: string): string {
+  const mimeExt = mimeType.split('/')[1]?.split('+')[0];
+  if (mimeExt && /^[a-z0-9]{2,5}$/i.test(mimeExt)) return mimeExt.toLowerCase() === 'jpeg' ? 'jpg' : mimeExt.toLowerCase();
+  const match = localUri.split('?')[0].match(/\.([a-z0-9]{2,5})$/i);
+  return match ? match[1].toLowerCase() : 'jpg';
 }
 
 function toChatGroup(row: GroupRow): ChatGroup {
@@ -129,6 +148,12 @@ function buildPolls(polls: GroupPollRow[], options: GroupPollOptionRow[], votes:
       allowMultiple: p.allow_multiple,
       options: pollOptions,
       votesByUser,
+      purpose: p.purpose,
+      proposedName: p.proposed_name,
+      oldName: p.old_name,
+      expiresAt: p.expires_at,
+      resolved: p.resolved,
+      resolution: p.resolution,
     };
   }
   return result;
@@ -238,6 +263,8 @@ interface FriendsContextValue {
   createGroupPoll: (question: string, options: [string, string], allowMultiple: boolean) => Promise<{ error: string | null }>;
   /** Casts (or retracts) this account's vote for one option of a poll. */
   voteOnPoll: (pollId: string, optionId: string) => Promise<void>;
+  /** Starts a Yes/No poll asking the group to confirm a rename — see the poll's `purpose`/`resolved`/`resolution` for how it plays out. */
+  proposeGroupRename: (newName: string) => Promise<{ error: string | null }>;
   /** Removes just my own membership — anyone but the owner can leave. Returns to the Chats list. */
   leaveGroup: (groupId: string) => Promise<{ error: string | null }>;
   /** Owner-only: deletes the group and everything in it (messages, polls, memberships). Returns to the Chats list. */
@@ -747,7 +774,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await fetch(localUri);
       const blob = await response.blob();
-      const ext = (localUri.split('.').pop() || 'jpg').split('?')[0].toLowerCase();
+      const ext = extFromBlob(localUri, blob.type || 'image/jpeg');
       const path = `${userId}/${focusedConnectionId}-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('chat-media').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
       if (upErr) return { error: upErr.message };
@@ -1028,7 +1055,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await fetch(localUri);
       const blob = await response.blob();
-      const ext = (localUri.split('.').pop() || 'jpg').split('?')[0].toLowerCase();
+      const ext = extFromBlob(localUri, blob.type || 'image/jpeg');
       const path = `${userId}/group-${focusedGroupId}-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('chat-media').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
       if (upErr) return { error: upErr.message };
@@ -1096,7 +1123,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const voteOnPoll = async (pollId: string, optionId: string) => {
     if (!userId || !isSupabaseConfigured || !focusedGroupId) return;
     const poll = groupPolls[pollId];
-    if (!poll) return;
+    if (!poll || (poll.purpose === 'rename' && poll.resolved)) return;
     const myVotes = poll.votesByUser[userId] ?? [];
 
     if (poll.allowMultiple) {
@@ -1120,6 +1147,62 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     const { error: voteErr } = await supabase.from('group_poll_votes').insert({ poll_id: pollId, option_id: optionId, group_id: focusedGroupId, user_id: userId });
     warn('cast vote', voteErr);
     if (!voteErr) setGroupPollVoteRows((prev) => [...prev, { poll_id: pollId, option_id: optionId, group_id: focusedGroupId, user_id: userId }]);
+
+    // A rename poll can resolve the moment a majority is reached — check
+    // right away rather than waiting for the hourly timeout sweep.
+    if (!voteErr && poll.purpose === 'rename') {
+      const { error: checkErr } = await supabase.rpc('check_rename_poll', { p_poll_id: pollId });
+      warn('check rename poll', checkErr);
+    }
+  };
+
+  /** Any member can propose renaming the group — starts a Yes/No poll (reusing the regular poll machinery) that resolves as soon as a majority of current members votes either way, or automatically renames after an hour if nobody votes at all. */
+  const proposeGroupRename = async (newName: string): Promise<{ error: string | null }> => {
+    if (!focusedGroupId || !userId || !isSupabaseConfigured || !focusedGroup) return { error: 'Not signed in.' };
+    const trimmed = newName.trim();
+    if (!trimmed) return { error: 'Enter a name.' };
+    if (trimmed === focusedGroup.name) return { error: "That's already the group name." };
+    const pendingRename = Object.values(groupPolls).some((p) => p.groupId === focusedGroupId && p.purpose === 'rename' && !p.resolved);
+    if (pendingRename) return { error: "There's already a rename request being voted on." };
+
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const { data: poll, error: pollErr } = await supabase
+      .from('group_polls')
+      .insert({
+        group_id: focusedGroupId,
+        created_by: userId,
+        question: `Rename "${focusedGroup.name}" to "${trimmed}"?`,
+        allow_multiple: false,
+        purpose: 'rename',
+        proposed_name: trimmed,
+        old_name: focusedGroup.name,
+        expires_at: expiresAt,
+      })
+      .select('*')
+      .single();
+    if (pollErr || !poll) return { error: pollErr?.message ?? 'Could not start the rename poll.' };
+    const pollRow = poll as GroupPollRow;
+
+    const { data: optionRows, error: optionsErr } = await supabase
+      .from('group_poll_options')
+      .insert([
+        { poll_id: pollRow.id, group_id: focusedGroupId, label: 'Yes', position: 0 },
+        { poll_id: pollRow.id, group_id: focusedGroupId, label: 'No', position: 1 },
+      ])
+      .select('*');
+    if (optionsErr) return { error: optionsErr.message };
+
+    const { data: msgRow, error: msgErr } = await supabase
+      .from('group_messages')
+      .insert({ group_id: focusedGroupId, sender_id: userId, kind: 'poll', poll_id: pollRow.id })
+      .select('*')
+      .single();
+    if (msgErr) return { error: msgErr.message };
+
+    setGroupPollRows((prev) => [...prev, pollRow]);
+    setGroupPollOptionRows((prev) => [...prev, ...((optionRows as GroupPollOptionRow[] | null) ?? [])]);
+    if (msgRow) appendGroupMessage(msgRow as GroupMessageRow);
+    return { error: null };
   };
 
   /** Drops every locally-cached row for a group once it's gone (left or deleted), then heads back to Chats. */
@@ -1230,6 +1313,24 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
           setGroupPollVoteRows((prev) => prev.filter((v) => !(v.poll_id === row.poll_id && v.option_id === row.option_id && v.user_id === row.user_id)));
         },
       )
+      .on(
+        // A rename poll flipping to resolved (early majority, or the hourly sweep).
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'group_polls', filter: `group_id=eq.${focusedGroupId}` },
+        (payload) => {
+          const row = payload.new as GroupPollRow;
+          setGroupPollRows((prev) => prev.map((p) => (p.id === row.id ? row : p)));
+        },
+      )
+      .on(
+        // The rename itself — chat_groups.name changing under a resolved 'renamed' poll.
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'chat_groups', filter: `id=eq.${focusedGroupId}` },
+        (payload) => {
+          const row = payload.new as GroupRow;
+          setGroupRows((prev) => prev.map((g) => (g.id === row.id ? row : g)));
+        },
+      )
       .subscribe();
 
     return () => {
@@ -1296,6 +1397,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     sendGroupLocation,
     createGroupPoll,
     voteOnPoll,
+    proposeGroupRename,
     leaveGroup,
     deleteGroup,
   };
