@@ -10,6 +10,7 @@ import { NotificationsProvider } from './src/context/NotificationsContext';
 import { FriendsProvider, useFriends } from './src/context/FriendsContext';
 import { CallProvider } from './src/context/CallContext';
 import { GameProvider } from './src/context/GameContext';
+import { CardsGameProvider } from './src/context/CardsGameContext';
 import { CallOverlay } from './src/components/calls/CallOverlay';
 import type { NotificationTarget } from './src/utils/notify';
 import { LaunchIntro } from './src/components/LaunchIntro';
@@ -21,6 +22,8 @@ import { ExpensesScreen } from './src/screens/expenses/ExpensesScreen';
 import { SplitScreen } from './src/screens/split/SplitScreen';
 import { FriendsScreen } from './src/screens/friends/FriendsScreen';
 import { GamesScreen } from './src/screens/games/GamesScreen';
+import { GamesHomeScreen } from './src/screens/games/GamesHomeScreen';
+import { CardsGameScreen } from './src/screens/games/cards/CardsGameScreen';
 import { LiveLocationsScreen } from './src/screens/location/LiveLocationsScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
 import type { ViewId } from './src/data/views';
@@ -34,7 +37,9 @@ type Screen =
   | { name: 'expenses'; focusCardId?: string }
   | { name: 'split'; focusGroupId?: string }
   | { name: 'friends' }
+  | { name: 'gamesHub' }
   | { name: 'games' }
+  | { name: 'cards' }
   | { name: 'liveLocations' }
   | { name: 'account'; from: 'home' | 'expenses' | 'split' };
 
@@ -111,10 +116,30 @@ function AppNavigator() {
       />
     );
   }
+  if (screen.name === 'gamesHub') {
+    return (
+      <GamesHomeScreen
+        onHome={() => setScreen({ name: 'home' })}
+        onOpenExpenses={() => setScreen({ name: 'expenses' })}
+        onOpenSplit={() => setScreen({ name: 'split' })}
+        onOpenNpat={() => setScreen({ name: 'games' })}
+        onOpenCards={() => setScreen({ name: 'cards' })}
+      />
+    );
+  }
   if (screen.name === 'games') {
     return (
       <GamesScreen
-        onHome={() => setScreen({ name: 'home' })}
+        onHome={() => setScreen({ name: 'gamesHub' })}
+        onOpenExpenses={() => setScreen({ name: 'expenses' })}
+        onOpenSplit={() => setScreen({ name: 'split' })}
+      />
+    );
+  }
+  if (screen.name === 'cards') {
+    return (
+      <CardsGameScreen
+        onHome={() => setScreen({ name: 'gamesHub' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
       />
@@ -142,7 +167,7 @@ function AppNavigator() {
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
       onOpenSplit={() => setScreen({ name: 'split' })}
       onOpenFriends={() => setScreen({ name: 'friends' })}
-      onOpenGames={() => setScreen({ name: 'games' })}
+      onOpenGames={() => setScreen({ name: 'gamesHub' })}
       onOpenAccount={() => setScreen({ name: 'account', from: 'home' })}
       onOpenNotificationTarget={openNotificationTarget}
     />
@@ -166,8 +191,10 @@ function RootNavigator() {
         <FriendsProvider>
           <CallProvider>
             <GameProvider>
-              <AppNavigator />
-              <CallOverlay />
+              <CardsGameProvider>
+                <AppNavigator />
+                <CallOverlay />
+              </CardsGameProvider>
             </GameProvider>
           </CallProvider>
         </FriendsProvider>
