@@ -22,6 +22,32 @@ export function dayLabel(iso: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+interface SectionModalProps {
+  visible: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+/** Generic expand-to-full-view modal — used to open the full Leadership Circle / Points Breakdown from their compact previews. */
+export function SectionModal({ visible, title, onClose, children }: SectionModalProps) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
+          <Text style={styles.detailTitle}>{title}</Text>
+          <ScrollView style={styles.sectionScroll} showsVerticalScrollIndicator={false}>
+            {children}
+          </ScrollView>
+          <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button">
+            <Text style={styles.closeText}>Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 interface PlayerStatsModalProps {
   member: CircleMember | null;
   breakdown: GameBreakdownEntry[];
@@ -182,4 +208,5 @@ const styles = StyleSheet.create({
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
   detailLabel: { fontFamily: fontFamily.sans400, fontSize: 13.5, color: colors.textSecondary },
   detailValue: { fontFamily: fontFamily.sans700, fontSize: 13.5, color: colors.textPrimary },
+  sectionScroll: { maxHeight: 460 },
 });

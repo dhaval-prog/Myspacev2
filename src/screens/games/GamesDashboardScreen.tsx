@@ -9,9 +9,9 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useGameStats } from '../../context/GameStatsContext';
 import type { CircleMember, GameBreakdownEntry } from '../../types/gameStats';
 import { FriendCircle } from './components/FriendCircle';
-import { LeadershipCircle } from './components/LeadershipCircle';
-import { GameBreakdownChart } from './components/GameBreakdownChart';
-import { PlayerStatsModal, GameDetailModal, resultGlyph, dayLabel } from './components/GamesDashboardModals';
+import { LeadershipCircle, LeadershipCirclePreview } from './components/LeadershipCircle';
+import { GameBreakdownChart, GameBreakdownPreview } from './components/GameBreakdownChart';
+import { PlayerStatsModal, GameDetailModal, SectionModal, resultGlyph, dayLabel } from './components/GamesDashboardModals';
 import { gameTypeLabel } from '../../types/gameStats';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
@@ -37,10 +37,13 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
 
   const [selectedMember, setSelectedMember] = useState<CircleMember | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<GameBreakdownEntry | null>(null);
+  const [showLeadership, setShowLeadership] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const self = circle.find((c) => c.isSelf) ?? null;
   const friends = circle.filter((c) => !c.isSelf);
   const anyonePlayed = circle.some((c) => c.stats.gamesPlayed > 0);
+  const myTotal = self?.stats.totalPoints ?? 0;
 
   return (
     <LinearGradient
@@ -56,7 +59,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
           <Text style={styles.sub}>Your gaming circle</Text>
         </View>
 
-        {/* Your Circle */}
+        {/* Your Circle — one line */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Your Circle</Text>
           {!loading && friends.length === 0 ? (
@@ -72,46 +75,44 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
           ) : null}
         </View>
 
-        {/* Your Score */}
+        {/* Your Score / Leadership Circle / Points Breakdown — one line */}
         {self && friends.length > 0 && (
-          <View style={[styles.card, styles.scoreCard]}>
-            <Text style={styles.scoreLabel}>YOUR SCORE</Text>
-            <Text style={styles.scoreValue}>{self.stats.totalPoints}</Text>
-            <Text style={styles.scoreSub}>GAME POINTS</Text>
-            {myEntry && (
-              <View style={styles.rankPill}>
-                <Text style={styles.rankPillText}>#{myEntry.rank} IN YOUR CIRCLE</Text>
-              </View>
-            )}
-            {myRankDelta !== null && myRankDelta !== 0 && (
-              <Text style={[styles.rankDelta, myRankDelta < 0 && styles.rankDeltaDown]}>
-                {myRankDelta > 0 ? `▲ ${myRankDelta}` : `▼ ${Math.abs(myRankDelta)}`}
-                {myRankDelta > 0 ? ' Moved up' : ' Dropped'}
-              </Text>
-            )}
+          <View style={styles.tripleRow}>
+            <View style={styles.miniCard}>
+              <Text style={styles.miniCardTitle}>Your Score</Text>
+              <Text style={styles.scoreValue}>{myTotal}</Text>
+              <Text style={styles.scoreSub}>PTS</Text>
+              {myEntry && (
+                <View style={styles.rankPill}>
+                  <Text style={styles.rankPillText}>#{myEntry.rank}</Text>
+                </View>
+              )}
+              {myRankDelta !== null && myRankDelta !== 0 && (
+                <Text style={[styles.rankDelta, myRankDelta < 0 && styles.rankDeltaDown]} numberOfLines={1}>
+                  {myRankDelta > 0 ? `▲${myRankDelta}` : `▼${Math.abs(myRankDelta)}`}
+                </Text>
+              )}
+            </View>
+
+            <Pressable style={styles.miniCard} onPress={() => setShowLeadership(true)} accessibilityRole="button" accessibilityLabel="View Leadership Circle">
+              <Text style={styles.miniCardTitle}>Leadership Circle</Text>
+              {anyonePlayed ? (
+                <LeadershipCirclePreview leaderboard={leaderboard} />
+              ) : (
+                <Text style={styles.miniEmptyText}>Not started</Text>
+              )}
+            </Pressable>
+
+            <Pressable style={styles.miniCard} onPress={() => setShowBreakdown(true)} accessibilityRole="button" accessibilityLabel="View Points Breakdown">
+              <Text style={styles.miniCardTitle}>Points Breakdown</Text>
+              {breakdown.length > 0 ? (
+                <GameBreakdownPreview entries={breakdown} total={myTotal} />
+              ) : (
+                <Text style={styles.miniEmptyText}>No data yet</Text>
+              )}
+            </Pressable>
           </View>
         )}
-
-        {/* Leadership Circle */}
-        {friends.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Leadership Circle</Text>
-            {!anyonePlayed ? (
-              <View style={styles.emptyPanel}>
-                <Text style={styles.emptyTitle}>Let's get playing</Text>
-                <Text style={styles.emptyBody}>Your friends are here. Start your first game and build your Game Points.</Text>
-              </View>
-            ) : (
-              <LeadershipCircle leaderboard={leaderboard} onSelectMember={setSelectedMember} />
-            )}
-          </View>
-        )}
-
-        {/* Game Breakdown */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Game Breakdown</Text>
-          <GameBreakdownChart entries={breakdown} total={self?.stats.totalPoints ?? 0} onSelectEntry={setSelectedEntry} />
-        </View>
 
         {/* Recent Activity */}
         {recentActivity.length > 0 && (
@@ -173,6 +174,34 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
         onClose={() => setSelectedMember(null)}
       />
       <GameDetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
+
+      <SectionModal visible={showLeadership} title="Leadership Circle" onClose={() => setShowLeadership(false)}>
+        {!anyonePlayed ? (
+          <View style={styles.emptyPanel}>
+            <Text style={styles.emptyTitle}>Let's get playing</Text>
+            <Text style={styles.emptyBody}>Your friends are here. Start your first game and build your Game Points.</Text>
+          </View>
+        ) : (
+          <LeadershipCircle
+            leaderboard={leaderboard}
+            onSelectMember={(m) => {
+              setShowLeadership(false);
+              setSelectedMember(m);
+            }}
+          />
+        )}
+      </SectionModal>
+
+      <SectionModal visible={showBreakdown} title="Points Breakdown" onClose={() => setShowBreakdown(false)}>
+        <GameBreakdownChart
+          entries={breakdown}
+          total={myTotal}
+          onSelectEntry={(e) => {
+            setShowBreakdown(false);
+            setSelectedEntry(e);
+          }}
+        />
+      </SectionModal>
     </LinearGradient>
   );
 }
@@ -202,13 +231,29 @@ const styles = StyleSheet.create({
   emptyBody: { fontFamily: fontFamily.sans400, fontSize: 13, color: colors.textMuted, textAlign: 'center' },
   primaryBtn: { marginTop: 4, paddingVertical: 10, paddingHorizontal: 22, borderRadius: radius.pill, backgroundColor: colors.lime },
   primaryBtnLabel: { fontFamily: fontFamily.sans700, fontSize: 13.5, color: colors.ink },
-  scoreCard: { alignItems: 'center' },
-  scoreLabel: { fontFamily: fontFamily.sans700, fontSize: 12, color: colors.textMuted, letterSpacing: 1 },
-  scoreValue: { fontFamily: fontFamily.sans800, fontSize: 44, color: colors.textPrimary, lineHeight: 48 },
-  scoreSub: { fontFamily: fontFamily.sans600, fontSize: 11.5, color: colors.textMuted, letterSpacing: 1 },
-  rankPill: { marginTop: 8, paddingVertical: 6, paddingHorizontal: 16, borderRadius: radius.pill, backgroundColor: colors.lime },
-  rankPillText: { fontFamily: fontFamily.sans700, fontSize: 12.5, color: colors.ink },
-  rankDelta: { marginTop: 6, fontFamily: fontFamily.sans600, fontSize: 12.5, color: '#1F9254' },
+  tripleRow: { flexDirection: 'row', gap: 10 },
+  miniCard: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    backgroundColor: colors.surface86,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    gap: 6,
+    shadowColor: colors.ink,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  miniCardTitle: { fontFamily: fontFamily.sans700, fontSize: 11, color: colors.textMuted, textAlign: 'center' },
+  miniEmptyText: { fontFamily: fontFamily.sans400, fontSize: 11.5, color: colors.textFaint, textAlign: 'center', paddingVertical: 12 },
+  scoreValue: { fontFamily: fontFamily.sans800, fontSize: 30, color: colors.textPrimary, lineHeight: 32 },
+  scoreSub: { fontFamily: fontFamily.sans600, fontSize: 10, color: colors.textMuted, letterSpacing: 1 },
+  rankPill: { marginTop: 2, paddingVertical: 3, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.lime },
+  rankPillText: { fontFamily: fontFamily.sans700, fontSize: 11, color: colors.ink },
+  rankDelta: { fontFamily: fontFamily.sans600, fontSize: 11, color: '#1F9254' },
   rankDeltaDown: { color: colors.danger },
   activityList: { gap: 2 },
   activityRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
