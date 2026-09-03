@@ -10,7 +10,7 @@ interface CardsGameScreenProps {
   onOpenSplit: () => void;
 }
 
-/** My Space Cards entry point — routes on server state, same philosophy as the NPAT game router. */
+/** Space Cards entry point — routes on server state, same philosophy as the NPAT game router. */
 export function CardsGameScreen({ onHome, onOpenExpenses, onOpenSplit }: CardsGameScreenProps) {
   const { game, result } = useCardsGame();
 
