@@ -113,7 +113,7 @@ interface CardsGameContextValue {
 const CardsGameContext = createContext<CardsGameContextValue | null>(null);
 
 /**
- * My Space Cards — a shed-your-hand card game. Every mutation is a
+ * Space Cards — a shed-your-hand card game. Every mutation is a
  * SECURITY DEFINER RPC; this context only mirrors `cards_games` /
  * `cards_players` / this account's own `cards_hands` row via Realtime.
  * The deck and other players' hands are never fetched — RLS makes that

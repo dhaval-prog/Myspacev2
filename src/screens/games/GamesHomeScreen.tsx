@@ -34,7 +34,7 @@ export function GamesHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenNpa
 
   const games: GameCardData[] = [
     { id: 'npat', title: 'Name, Place, Animal, Thing', blurb: 'Race the clock, beat the letter.', emoji: '🎯', bg: colors.ink, onPress: onOpenNpat },
-    { id: 'cards', title: 'My Space Cards', blurb: 'Shed your hand before anyone else.', emoji: '🃏', bg: '#2C1B4D', onPress: onOpenCards },
+    { id: 'cards', title: 'Space Cards', blurb: 'Shed your hand before anyone else.', emoji: '🃏', bg: '#2C1B4D', onPress: onOpenCards },
   ];
 
   return (

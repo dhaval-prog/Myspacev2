@@ -87,7 +87,7 @@ function CardsHub({
     >
       <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerRow}>
-          <Text style={styles.titleOnDark}>My Space Cards</Text>
+          <Text style={styles.titleOnDark}>Space Cards</Text>
           <Text style={styles.subOnDark}>Shed your hand before anyone else — 2 to 4 players.</Text>
         </View>
 
