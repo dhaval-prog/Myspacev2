@@ -21,6 +21,7 @@ import { BottomNav } from '../components/BottomNav';
 import { DotPairThrobber } from '../components/throbbers';
 
 const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
+const DICE_ICON = 'M4 4h16v16H4z M8 8h.01 M16 8h.01 M8 16h.01 M16 16h.01 M12 12h.01';
 
 interface HomeScreenProps {
   onOpenNotificationTarget?: (target: NotificationTarget) => void;
@@ -28,6 +29,7 @@ interface HomeScreenProps {
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
   onOpenFriends: () => void;
+  onOpenGames: () => void;
   onOpenAccount: () => void;
 }
 
@@ -44,6 +46,7 @@ export function HomeScreen({
   onOpenExpenses,
   onOpenSplit,
   onOpenFriends,
+  onOpenGames,
   onOpenAccount,
 }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
@@ -92,6 +95,7 @@ export function HomeScreen({
       count: receivedRequests.length ? String(receivedRequests.length) : '',
       icon: receivedRequests.length ? undefined : CHAT_ICON,
     });
+    list.push({ id: 'games', label: 'Games', count: '', icon: DICE_ICON });
     return list;
   }, [items.length, showAttention, attentionEntries.length, receivedRequests.length]);
 
@@ -102,9 +106,9 @@ export function HomeScreen({
   // appears to change on its own. A real tap always navigates away
   // immediately. Off entirely when the OS asks for reduced motion.
   useEffect(() => {
-    // "Orbit" (friends & chat) opens a whole separate section, not a
-    // detail rail — it never joins the ambient preview rotation.
-    const ids = rows.map((r) => r.id).filter((id) => id !== 'friends');
+    // "Orbit" (friends & chat) and "Games" each open a whole separate
+    // section, not a detail rail — neither joins the ambient preview rotation.
+    const ids = rows.map((r) => r.id).filter((id) => id !== 'friends' && id !== 'games');
     if (reduceMotion || ids.length <= 1) return;
     const timer = setInterval(() => {
       setPreviewViewId((current) => {
@@ -177,6 +181,10 @@ export function HomeScreen({
             onSelect={(id) => {
               if (id === 'friends') {
                 onOpenFriends();
+                return;
+              }
+              if (id === 'games') {
+                onOpenGames();
                 return;
               }
               setActiveViewId(id as ViewId);
