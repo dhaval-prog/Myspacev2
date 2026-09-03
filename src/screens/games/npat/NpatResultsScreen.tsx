@@ -96,7 +96,7 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
                   <Text style={styles.answerCategory}>{a.category}</Text>
                   <Text style={styles.answerValue}>{a.answer || '—'}</Text>
                   <View style={[styles.badge, { backgroundColor: s.bg }]}>
-                    <Text style={[styles.badgeLabel, { color: s.fg }]}>{a.validationStatus === 'valid' && a.isDuplicate ? '+5' : a.validationStatus === 'valid' ? '+10' : '+0'}</Text>
+                    <Text style={[styles.badgeLabel, { color: s.fg }]}>+{a.points}</Text>
                   </View>
                 </View>
                 {isOpen && <Text style={styles.answerReason}>{reasonFor(a.validationStatus, a.isDuplicate, a.category, round.letter)}</Text>}
