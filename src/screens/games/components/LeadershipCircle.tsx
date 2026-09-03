@@ -74,6 +74,44 @@ export function LeadershipCircle({ leaderboard, onSelectMember }: LeadershipCirc
   );
 }
 
+interface LeadershipCirclePreviewProps {
+  leaderboard: LeaderboardEntry[];
+}
+
+/** Compact preview for the three-up summary row — top ranks + the user's own row if it isn't already shown. Wrap in a Pressable to make it tappable. */
+export function LeadershipCirclePreview({ leaderboard }: LeadershipCirclePreviewProps) {
+  const top = leaderboard.slice(0, 3);
+  const me = leaderboard.find((e) => e.isSelf);
+  const showMeSeparately = !!me && !top.some((e) => e.isSelf);
+
+  return (
+    <View style={previewStyles.wrap}>
+      {top.map((e) => (
+        <View key={e.userId} style={[previewStyles.row, e.isSelf && styles.restRowSelf]}>
+          <Text style={previewStyles.rank}>{MEDALS[e.rank] ?? `#${e.rank}`}</Text>
+          <Text style={previewStyles.name} numberOfLines={1}>{e.isSelf ? 'You' : e.name}</Text>
+          <Text style={previewStyles.points}>{e.stats.totalPoints}</Text>
+        </View>
+      ))}
+      {showMeSeparately && me && (
+        <View style={[previewStyles.row, styles.restRowSelf]}>
+          <Text style={previewStyles.rank}>#{me.rank}</Text>
+          <Text style={previewStyles.name} numberOfLines={1}>You</Text>
+          <Text style={previewStyles.points}>{me.stats.totalPoints}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const previewStyles = StyleSheet.create({
+  wrap: { gap: 4 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 6 },
+  rank: { fontSize: 12, width: 20 },
+  name: { flex: 1, fontFamily: fontFamily.sans600, fontSize: 11.5, color: colors.textPrimary },
+  points: { fontFamily: fontFamily.sans700, fontSize: 11.5, color: colors.textPrimary },
+});
+
 const styles = StyleSheet.create({
   wrap: { gap: spacing.md },
   podiumRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing.lg },

@@ -11,26 +11,37 @@ const STROKE = 22;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
+interface Arc {
+  entry: GameBreakdownEntry;
+  color: string;
+  dash: number;
+  offset: number;
+}
+
+function buildArcs(entries: GameBreakdownEntry[], circumference: number): { arcs: Arc[]; positiveTotal: number } {
+  const positiveTotal = entries.filter((e) => e.net > 0).reduce((sum, e) => sum + e.net, 0);
+  let offset = 0;
+  const arcs = entries
+    .filter((e) => e.net > 0)
+    .map((entry, i) => {
+      const fraction = positiveTotal > 0 ? entry.net / positiveTotal : 0;
+      const dash = fraction * circumference;
+      const arc = { entry, color: PALETTE[i % PALETTE.length], dash, offset };
+      offset += dash;
+      return arc;
+    });
+  return { arcs, positiveTotal };
+}
+
 interface GameBreakdownChartProps {
   entries: GameBreakdownEntry[];
   total: number;
   onSelectEntry: (entry: GameBreakdownEntry) => void;
 }
 
-/** "Game Breakdown" — a donut of the positive contributions, with a signed legend beneath it (net values can be negative). */
+/** "Points Breakdown" — a donut of the positive contributions, with a signed legend beneath it (net values can be negative). */
 export function GameBreakdownChart({ entries, total, onSelectEntry }: GameBreakdownChartProps) {
-  const positiveTotal = useMemo(() => entries.filter((e) => e.net > 0).reduce((sum, e) => sum + e.net, 0), [entries]);
-
-  let offset = 0;
-  const arcs = entries
-    .filter((e) => e.net > 0)
-    .map((entry, i) => {
-      const fraction = positiveTotal > 0 ? entry.net / positiveTotal : 0;
-      const dash = fraction * CIRCUMFERENCE;
-      const arc = { entry, color: PALETTE[i % PALETTE.length], dash, offset };
-      offset += dash;
-      return arc;
-    });
+  const { arcs } = useMemo(() => buildArcs(entries, CIRCUMFERENCE), [entries]);
 
   if (entries.length === 0) {
     return (
@@ -46,25 +57,21 @@ export function GameBreakdownChart({ entries, total, onSelectEntry }: GameBreakd
       <View style={styles.donutWrap}>
         <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
           <Circle cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} stroke={colors.ink07} strokeWidth={STROKE} fill="none" />
-          {arcs.length === 0 ? null : (
-            <>
-              {arcs.map((arc) => (
-                <Circle
-                  key={arc.entry.gameType}
-                  cx={SIZE / 2}
-                  cy={SIZE / 2}
-                  r={RADIUS}
-                  stroke={arc.color}
-                  strokeWidth={STROKE}
-                  fill="none"
-                  strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-                  strokeDashoffset={-arc.offset}
-                  strokeLinecap="butt"
-                  transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
-                />
-              ))}
-            </>
-          )}
+          {arcs.map((arc) => (
+            <Circle
+              key={arc.entry.gameType}
+              cx={SIZE / 2}
+              cy={SIZE / 2}
+              r={RADIUS}
+              stroke={arc.color}
+              strokeWidth={STROKE}
+              fill="none"
+              strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
+              strokeDashoffset={-arc.offset}
+              strokeLinecap="butt"
+              transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
+            />
+          ))}
         </Svg>
         <View style={styles.donutCenter} pointerEvents="none">
           <Text style={[styles.centerValue, total < 0 && styles.negative]}>{total >= 0 ? total : `−${Math.abs(total)}`}</Text>
@@ -90,6 +97,55 @@ export function GameBreakdownChart({ entries, total, onSelectEntry }: GameBreakd
     </View>
   );
 }
+
+const PREVIEW_SIZE = 68;
+const PREVIEW_STROKE = 10;
+const PREVIEW_RADIUS = (PREVIEW_SIZE - PREVIEW_STROKE) / 2;
+const PREVIEW_CIRCUMFERENCE = 2 * Math.PI * PREVIEW_RADIUS;
+
+interface GameBreakdownPreviewProps {
+  entries: GameBreakdownEntry[];
+  total: number;
+}
+
+/** Compact donut (no legend) for the three-up summary row. Wrap in a Pressable to make it tappable. */
+export function GameBreakdownPreview({ entries, total }: GameBreakdownPreviewProps) {
+  const { arcs } = useMemo(() => buildArcs(entries, PREVIEW_CIRCUMFERENCE), [entries]);
+
+  return (
+    <View style={previewStyles.wrap}>
+      <Svg width={PREVIEW_SIZE} height={PREVIEW_SIZE} viewBox={`0 0 ${PREVIEW_SIZE} ${PREVIEW_SIZE}`}>
+        <Circle cx={PREVIEW_SIZE / 2} cy={PREVIEW_SIZE / 2} r={PREVIEW_RADIUS} stroke={colors.ink07} strokeWidth={PREVIEW_STROKE} fill="none" />
+        {arcs.map((arc) => (
+          <Circle
+            key={arc.entry.gameType}
+            cx={PREVIEW_SIZE / 2}
+            cy={PREVIEW_SIZE / 2}
+            r={PREVIEW_RADIUS}
+            stroke={arc.color}
+            strokeWidth={PREVIEW_STROKE}
+            fill="none"
+            strokeDasharray={`${PREVIEW_CIRCUMFERENCE} ${PREVIEW_CIRCUMFERENCE}`}
+            strokeDashoffset={-arc.offset}
+            strokeLinecap="butt"
+            transform={`rotate(-90 ${PREVIEW_SIZE / 2} ${PREVIEW_SIZE / 2})`}
+          />
+        ))}
+      </Svg>
+      <View style={previewStyles.center} pointerEvents="none">
+        <Text style={[previewStyles.centerValue, total < 0 && styles.negative]} numberOfLines={1} adjustsFontSizeToFit>
+          {total >= 0 ? total : `−${Math.abs(total)}`}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const previewStyles = StyleSheet.create({
+  wrap: { width: PREVIEW_SIZE, height: PREVIEW_SIZE, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  center: { position: 'absolute' },
+  centerValue: { fontFamily: fontFamily.sans800, fontSize: 18, color: colors.textPrimary },
+});
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: spacing.lg },
