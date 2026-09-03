@@ -1,11 +1,37 @@
-import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Dimensions, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, radius, spacing } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
 import { useCardsGame } from '../../../context/CardsGameContext';
 import type { CardSuit, PlayingCard } from '../../../types/cards';
 import { CardFace, SUIT_COLORS, SUIT_LABELS } from './CardFace';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+/** A face-down card — used for the draw pile and the fly-to-hand animation. Never shows a suit/rank, since the deck is never readable by any client. */
+function CardBack({ size = 'lg', style }: { size?: 'sm' | 'lg'; style?: unknown }) {
+  const dims = size === 'lg' ? backStyles.lg : backStyles.sm;
+  return (
+    <View style={[backStyles.card, dims, style as object]}>
+      <View style={backStyles.emblemRing}>
+        <View style={backStyles.emblemDot} />
+      </View>
+    </View>
+  );
+}
+
+/** The draw pile — a stack of face-down cards, top-right. Tapping it draws, same as the Draw button. */
+function DrawPile({ onPress, disabled, topOffset }: { onPress: () => void; disabled: boolean; topOffset: number }) {
+  return (
+    <Pressable onPress={onPress} disabled={disabled} style={[styles.drawPileWrap, { top: topOffset }, disabled && styles.drawPileDisabled]} accessibilityRole="button" accessibilityLabel="Draw a card">
+      <CardBack size="lg" style={[styles.drawPileLayer, { transform: [{ rotate: '-6deg' }, { translateX: -5 }, { translateY: 3 }] }]} />
+      <CardBack size="lg" style={[styles.drawPileLayer, { transform: [{ rotate: '4deg' }, { translateX: 4 }, { translateY: 1 }] }]} />
+      <CardBack size="lg" />
+      <Text style={styles.drawPileLabel}>DRAW</Text>
+    </Pressable>
+  );
+}
 
 function useCountdown(deadline: string | null): number | null {
   const [remaining, setRemaining] = useState<number | null>(deadline ? Math.max(0, Math.ceil((new Date(deadline).getTime() - Date.now()) / 1000)) : null);
@@ -36,6 +62,8 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const remaining = useCountdown(game?.turnDeadline ?? null);
+  const [flying, setFlying] = useState(false);
+  const flyProgress = useRef(new Animated.Value(0)).current;
 
   if (!game) return null;
 
@@ -70,6 +98,10 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   };
 
   const handleDraw = async () => {
+    if (!isMyTurn || busy || game.drewThisTurn) return;
+    setFlying(true);
+    flyProgress.setValue(0);
+    Animated.timing(flyProgress, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(() => setFlying(false));
     setBusy(true);
     setError(null);
     const { error: err } = await drawCard();
@@ -87,6 +119,18 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
 
   const urgency = remaining !== null && remaining <= 5 ? 'danger' : remaining !== null && remaining <= 10 ? 'warn' : 'normal';
 
+  // Approximate flight path from the draw pile (top-right) to the hand (bottom-left) —
+  // decorative only, so fixed offsets are fine rather than measuring exact layouts.
+  const flyBaseTop = insets.top + 66;
+  const flyBaseLeft = SCREEN_WIDTH - 16 - 72;
+  const flyDeltaX = 40 - flyBaseLeft;
+  const flyDeltaY = SCREEN_HEIGHT - insets.bottom - 170 - flyBaseTop;
+  const flyTranslateX = flyProgress.interpolate({ inputRange: [0, 1], outputRange: [0, flyDeltaX] });
+  const flyTranslateY = flyProgress.interpolate({ inputRange: [0, 1], outputRange: [0, flyDeltaY] });
+  const flyScale = flyProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.72] });
+  const flyRotate = flyProgress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '18deg'] });
+  const flyOpacity = flyProgress.interpolate({ inputRange: [0, 0.12, 0.85, 1], outputRange: [0, 1, 1, 0] });
+
   return (
     <View style={styles.screen}>
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
@@ -100,6 +144,8 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
           <View style={{ width: 50 }} />
         )}
       </View>
+
+      <DrawPile onPress={handleDraw} disabled={!isMyTurn || busy || game.drewThisTurn} topOffset={insets.top + 66} />
 
       <ScrollView contentContainerStyle={styles.opponentsRow} horizontal showsHorizontalScrollIndicator={false}>
         {opponents.map((p) => (
@@ -120,11 +166,20 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       </ScrollView>
 
       <View style={styles.center}>
-        {game.topCardSuit || game.topCardRank ? (
-          <CardFace card={{ suit: game.topCardSuit, rank: game.topCardRank ?? '0' }} size="lg" />
-        ) : (
-          <View style={styles.cardPlaceholder} />
-        )}
+        <View style={styles.discardStack}>
+          {(game.topCardSuit || game.topCardRank) && (
+            <>
+              <View style={[styles.discardGhost, { backgroundColor: '#3A2C5C', transform: [{ rotate: '-9deg' }, { translateX: -12 }, { translateY: 6 }] }]} />
+              <View style={[styles.discardGhost, { backgroundColor: '#2E2249', transform: [{ rotate: '7deg' }, { translateX: 10 }, { translateY: 4 }] }]} />
+              <View style={[styles.discardGhost, { backgroundColor: '#40316A', transform: [{ rotate: '-3deg' }, { translateX: 6 }, { translateY: -3 }] }]} />
+            </>
+          )}
+          {game.topCardSuit || game.topCardRank ? (
+            <CardFace card={{ suit: game.topCardSuit, rank: game.topCardRank ?? '0' }} size="lg" />
+          ) : (
+            <View style={styles.cardPlaceholder} />
+          )}
+        </View>
         {game.activeSuit && (
           <View style={[styles.activeSuitChip, { backgroundColor: SUIT_COLORS[game.activeSuit] }]}>
             <Text style={styles.activeSuitLabel}>{SUIT_LABELS[game.activeSuit]}</Text>
@@ -174,6 +229,18 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
           </View>
         </View>
       )}
+
+      {flying && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.flyingCardWrap,
+            { top: flyBaseTop, left: flyBaseLeft, opacity: flyOpacity, transform: [{ translateX: flyTranslateX }, { translateY: flyTranslateY }, { scale: flyScale }, { rotate: flyRotate }] },
+          ]}
+        >
+          <CardBack size="sm" />
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -198,6 +265,8 @@ const styles = StyleSheet.create({
   catchLabel: { fontFamily: fontFamily.sans700, fontSize: 10, color: '#fff' },
   announcedLabel: { fontFamily: fontFamily.sans700, fontSize: 9.5, color: colors.lime, marginTop: 2 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  discardStack: { width: 100, height: 116, alignItems: 'center', justifyContent: 'center' },
+  discardGhost: { position: 'absolute', width: 72, height: 100, borderRadius: radius.md, borderWidth: 2, borderColor: 'rgba(255,255,255,.12)' },
   cardPlaceholder: { width: 68, height: 96 },
   activeSuitChip: { borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 16 },
   activeSuitLabel: { fontFamily: fontFamily.sans700, fontSize: 12.5, color: '#fff', letterSpacing: 0.5, textTransform: 'uppercase' },
@@ -218,4 +287,37 @@ const styles = StyleSheet.create({
   suitSwatchLabel: { fontFamily: fontFamily.sans700, fontSize: 12.5, color: '#fff' },
   suitSheetCancel: { alignItems: 'center', paddingVertical: 8 },
   suitSheetCancelLabel: { fontFamily: fontFamily.sans500, fontSize: 13, color: 'rgba(255,255,255,.5)' },
+  drawPileWrap: { position: 'absolute', right: 16, width: 90, height: 116, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  drawPileDisabled: { opacity: 0.45 },
+  drawPileLayer: { position: 'absolute' },
+  drawPileLabel: { position: 'absolute', bottom: -2, fontFamily: fontFamily.sans700, fontSize: 10, letterSpacing: 1, color: 'rgba(255,255,255,.55)' },
+  flyingCardWrap: { position: 'absolute', zIndex: 20 },
+});
+
+const backStyles = StyleSheet.create({
+  card: {
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,.2)',
+    backgroundColor: '#2A2050',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  lg: { width: 72, height: 100 },
+  sm: { width: 46, height: 64 },
+  emblemRing: {
+    width: '52%',
+    aspectRatio: 1,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emblemDot: { width: '38%', aspectRatio: 1, borderRadius: 999, backgroundColor: colors.lime },
 });
