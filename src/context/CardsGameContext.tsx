@@ -156,8 +156,24 @@ export function CardsGameProvider({ children }: { children: React.ReactNode }) {
       })
       .subscribe();
 
+    // Realtime push is the fast path, but a dropped/delayed event (a flaky
+    // connection, a channel that reconnects mid-game) must never leave a
+    // player stuck mid-turn — a cheap poll on the single game row is the
+    // backstop that guarantees this state can't get permanently stale.
+    const poll = setInterval(() => {
+      supabase
+        .from('cards_games')
+        .select('*')
+        .eq('id', gameId)
+        .single()
+        .then(({ data }) => {
+          if (!cancelled && data) setGame(toGame(data as CardsGameRow));
+        });
+    }, 3000);
+
     return () => {
       cancelled = true;
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [gameId]);
@@ -186,11 +202,41 @@ export function CardsGameProvider({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cards_players', filter: `game_id=eq.${gameId}` }, (p) => upsert(p.new as CardsPlayerRow))
       .subscribe();
 
+    // Same backstop as the game-row poll — a host stuck in the waiting room
+    // not seeing a joined player is exactly as broken as a stuck turn, and
+    // "waiting" has no turn-change signal of its own to hang a resync off.
+    const poll = setInterval(() => {
+      supabase
+        .from('cards_players')
+        .select('*')
+        .eq('game_id', gameId)
+        .then(({ data }) => {
+          if (!cancelled && data) setPlayers((data as CardsPlayerRow[]).map(toPlayer));
+        });
+    }, 3000);
+
     return () => {
       cancelled = true;
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [gameId]);
+
+  // Same backstop as the game-row poll above, one level down: every turn
+  // transition is a reliable signal that players/hands just changed, so
+  // re-pull them fresh whenever it fires — independent of whether their
+  // own realtime events actually arrived.
+  useEffect(() => {
+    if (!gameId || !game || !isSupabaseConfigured) return;
+    supabase
+      .from('cards_players')
+      .select('*')
+      .eq('game_id', gameId)
+      .then(({ data }) => {
+        if (data) setPlayers(((data as CardsPlayerRow[] | null) ?? []).map(toPlayer));
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, game?.currentSeat, game?.drewThisTurn]);
 
   // Own hand only — RLS already restricts this table to the owning user's
   // row, so a plain "all rows for this game" query never returns anyone else's.
@@ -222,6 +268,22 @@ export function CardsGameProvider({ children }: { children: React.ReactNode }) {
       supabase.removeChannel(channel);
     };
   }, [gameId]);
+
+  // Same backstop, for the hand specifically — a forced draw (Surge+2,
+  // Prism Surge+4) changes this account's own hand from another player's
+  // action, so it must never depend on a single realtime event landing.
+  useEffect(() => {
+    if (!gameId || !game || !isSupabaseConfigured) return;
+    supabase
+      .from('cards_hands')
+      .select('*')
+      .eq('game_id', gameId)
+      .then(({ data }) => {
+        const row = (data as CardsHandRow[] | null)?.[0];
+        if (row) setMyHand(row.hand);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, game?.currentSeat, game?.drewThisTurn, game?.topCardRank]);
 
   useEffect(() => {
     if (!gameId || !isSupabaseConfigured) {
