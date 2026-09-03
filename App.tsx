@@ -11,6 +11,7 @@ import { FriendsProvider, useFriends } from './src/context/FriendsContext';
 import { CallProvider } from './src/context/CallContext';
 import { GameProvider } from './src/context/GameContext';
 import { CardsGameProvider } from './src/context/CardsGameContext';
+import { GameStatsProvider } from './src/context/GameStatsContext';
 import { CallOverlay } from './src/components/calls/CallOverlay';
 import type { NotificationTarget } from './src/utils/notify';
 import { LaunchIntro } from './src/components/LaunchIntro';
@@ -22,7 +23,7 @@ import { ExpensesScreen } from './src/screens/expenses/ExpensesScreen';
 import { SplitScreen } from './src/screens/split/SplitScreen';
 import { FriendsScreen } from './src/screens/friends/FriendsScreen';
 import { GamesScreen } from './src/screens/games/GamesScreen';
-import { GamesHomeScreen } from './src/screens/games/GamesHomeScreen';
+import { GamesDashboardScreen } from './src/screens/games/GamesDashboardScreen';
 import { CardsGameScreen } from './src/screens/games/cards/CardsGameScreen';
 import { LiveLocationsScreen } from './src/screens/location/LiveLocationsScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
@@ -118,10 +119,11 @@ function AppNavigator() {
   }
   if (screen.name === 'gamesHub') {
     return (
-      <GamesHomeScreen
+      <GamesDashboardScreen
         onHome={() => setScreen({ name: 'home' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
+        onOpenFriends={() => setScreen({ name: 'friends' })}
         onOpenNpat={() => setScreen({ name: 'games' })}
         onOpenCards={() => setScreen({ name: 'cards' })}
       />
@@ -192,8 +194,10 @@ function RootNavigator() {
           <CallProvider>
             <GameProvider>
               <CardsGameProvider>
-                <AppNavigator />
-                <CallOverlay />
+                <GameStatsProvider>
+                  <AppNavigator />
+                  <CallOverlay />
+                </GameStatsProvider>
               </CardsGameProvider>
             </GameProvider>
           </CallProvider>
