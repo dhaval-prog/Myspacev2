@@ -46,8 +46,8 @@ export function LobbyHeader({ title, subtitle, cards, onBack, reduceMotion }: Lo
           <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
         </Pressable>
       ) : null}
-      {title ? <Text style={[styles.title, onBack && styles.titleWithBack]}>{title}</Text> : null}
-      {subtitle ? <Text style={[styles.subtitle, onBack && styles.titleWithBack]}>{subtitle}</Text> : null}
+      {title ? <Text style={styles.title}>{title}</Text> : null}
+      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       <View style={[styles.fan, !title && styles.fanNoTitle]}>
         {cards.map(({ card, rotateDeg, x }, i) => (
           <Animated.View
@@ -87,9 +87,6 @@ const styles = StyleSheet.create({
     lineHeight: 30.8,
     letterSpacing: -1,
     color: '#FFFFFF',
-  },
-  titleWithBack: {
-    paddingLeft: 58,
   },
   subtitle: {
     alignSelf: 'flex-start',
