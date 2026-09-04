@@ -8,10 +8,12 @@ interface CardsGameScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
+  /** Which tab the create/join hub opens on — set by the Games hub's Create/Join row buttons. */
+  initialTab?: 'create' | 'join';
 }
 
 /** Space Cards entry point — routes on server state, same philosophy as the NPAT game router. */
-export function CardsGameScreen({ onHome, onOpenExpenses, onOpenSplit }: CardsGameScreenProps) {
+export function CardsGameScreen({ onHome, onOpenExpenses, onOpenSplit, initialTab }: CardsGameScreenProps) {
   const { game, result } = useCardsGame();
 
   if (game?.status === 'game_end' || result) {
@@ -20,5 +22,5 @@ export function CardsGameScreen({ onHome, onOpenExpenses, onOpenSplit }: CardsGa
   if (game?.status === 'playing') {
     return <CardsBoardScreen onHome={onHome} />;
   }
-  return <CardsLobbyScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} />;
+  return <CardsLobbyScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} initialTab={initialTab} />;
 }

@@ -11,11 +11,17 @@ interface TimerRingProps {
   urgent: boolean;
   reduceMotion?: boolean;
   children?: React.ReactNode;
+  /** Overrides the default Space Cards geometry — e.g. NPAT's smaller round-timer ring. */
+  size?: number;
+  thickness?: number;
+  /** Overrides the lime/urgent auto pick — e.g. NPAT's amber mid-tier before the red danger tier. */
+  color?: string;
 }
 
 /** The conic countdown ring around the discard pile — react-native-svg stands in for CSS conic-gradient, which RN has no equivalent for. */
-export function TimerRing({ secondsLeft, limit, urgent, reduceMotion, children }: TimerRingProps) {
-  const { size, thickness } = scGeometry.timerRing;
+export function TimerRing({ secondsLeft, limit, urgent, reduceMotion, children, size: sizeOverride, thickness: thicknessOverride, color }: TimerRingProps) {
+  const size = sizeOverride ?? scGeometry.timerRing.size;
+  const thickness = thicknessOverride ?? scGeometry.timerRing.thickness;
   const radius = (size - thickness) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = useRef(new Animated.Value(limit > 0 ? secondsLeft / limit : 1)).current;
@@ -56,7 +62,7 @@ export function TimerRing({ secondsLeft, limit, urgent, reduceMotion, children }
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={urgent ? scColor.urgent : scColor.lime}
+          stroke={color ?? (urgent ? scColor.urgent : scColor.lime)}
           strokeWidth={thickness}
           fill="none"
           strokeDasharray={`${circumference} ${circumference}`}
