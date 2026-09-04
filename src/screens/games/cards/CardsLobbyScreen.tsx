@@ -104,14 +104,20 @@ function CardsHub({
 
   return (
     <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
-      <ScrollView style={styles.scrollFlex} contentContainerStyle={{ paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
+      <View style={{ paddingTop: insets.top + 14 }}>
         <LobbyHeader
           title={!isJoin ? 'UNO Space Cards' : undefined}
           subtitle={!isJoin ? 'Shed your hand before anyone else.' : undefined}
           cards={fan}
           reduceMotion={reduceMotion}
         />
+      </View>
 
+      {/* The header stays pinned at the top; this scroll area fills the space
+          between it and the bottom nav and centers the sheet within that space
+          (rather than leaving leftover room pool below it), while still
+          scrolling if the sheet's content ever grows taller than that space. */}
+      <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <LinearGradient colors={[scColor.sheet2, scColor.sheet3]} style={styles.sheet}>
           <View style={styles.handle} />
 
@@ -247,7 +253,7 @@ function CardsReadyRoom({
 
   return (
     <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
-      <ScrollView style={styles.scrollFlex} contentContainerStyle={{ paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
+      <View style={{ paddingTop: insets.top + 14 }}>
         <LobbyHeader
           cards={JOIN_FAN}
           onBack={() => {
@@ -256,7 +262,9 @@ function CardsReadyRoom({
           }}
           reduceMotion={reduceMotion}
         />
+      </View>
 
+      <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <LinearGradient colors={[scColor.sheet2, scColor.sheet3]} style={styles.sheet}>
           <View style={styles.handle} />
 
@@ -319,6 +327,7 @@ function CardsReadyRoom({
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   scrollFlex: { flex: 1 },
+  sheetScroll: { flexGrow: 1, justifyContent: 'center' },
   sheet: {
     marginTop: 18,
     borderTopLeftRadius: 32,

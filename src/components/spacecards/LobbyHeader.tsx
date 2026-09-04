@@ -55,7 +55,10 @@ export function LobbyHeader({ title, subtitle, cards, onBack, reduceMotion }: Lo
         {cards.map(({ card, rotateDeg, x }, i) => (
           <Animated.View
             key={`${card.suit}-${card.rank}-${i}`}
-            style={[styles.fanCard, { marginLeft: x - 40, zIndex: i, transform: [{ rotate: `${rotateDeg}deg` }, { translateY: lift }, { scale: FAN_CARD_SCALE }] }]}
+            // The x spread scales along with the cards themselves — scaling only the
+            // card and not the gaps between them made each card cover much more of
+            // its neighbour than the fan was designed for (down to a sliver).
+            style={[styles.fanCard, { marginLeft: (x - 40) * FAN_CARD_SCALE, zIndex: i, transform: [{ rotate: `${rotateDeg}deg` }, { translateY: lift }, { scale: FAN_CARD_SCALE }] }]}
           >
             <CardFace card={card} size="pile" />
           </Animated.View>
@@ -102,8 +105,10 @@ const styles = StyleSheet.create({
   fan: {
     flexDirection: 'row',
     marginTop: 26,
-    marginBottom: 8,
-    height: 116,
+    marginBottom: 20,
+    // Tall enough to actually contain the scaled-up cards — otherwise they
+    // overflow the box and crowd right up against the sheet below.
+    height: 116 * FAN_CARD_SCALE,
     alignItems: 'center',
     justifyContent: 'center',
   },
