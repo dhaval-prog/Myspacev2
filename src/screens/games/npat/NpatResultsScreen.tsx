@@ -38,6 +38,7 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
   const { user } = useAuth();
   const { game, round, players, answers, myPlayerId, startRound, leaveGame } = useGame();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,6 +57,7 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
   };
 
   const answersByPlayer = (playerId: string) => answers.filter((a) => a.playerId === playerId);
+  const otherPlayers = active.filter((p) => p.id !== myPlayerId);
 
   return (
     <LinearGradient
@@ -104,6 +106,40 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
             );
           })}
         </View>
+
+        {otherPlayers.length > 0 && (
+          <>
+            <Text style={styles.eyebrow}>EVERYONE'S ANSWERS</Text>
+            <View style={styles.list}>
+              {otherPlayers.map((p) => {
+                const theirAnswers = answersByPlayer(p.id);
+                const roundPoints = theirAnswers.reduce((sum, a) => sum + a.points, 0);
+                const isOpen = expandedPlayer === p.id;
+                return (
+                  <View key={p.id} style={styles.playerCard}>
+                    <Pressable onPress={() => setExpandedPlayer(isOpen ? null : p.id)} style={styles.playerCardHead}>
+                      <Text style={styles.playerCardName}>{p.name}</Text>
+                      <Text style={styles.playerCardPoints}>+{roundPoints} this round</Text>
+                    </Pressable>
+                    {isOpen &&
+                      theirAnswers.map((a) => {
+                        const s = STATUS_STYLE[a.validationStatus];
+                        return (
+                          <View key={a.id} style={styles.answerHead}>
+                            <Text style={styles.answerCategory}>{a.category}</Text>
+                            <Text style={styles.answerValue}>{a.answer || '—'}</Text>
+                            <View style={[styles.badge, { backgroundColor: s.bg }]}>
+                              <Text style={[styles.badgeLabel, { color: s.fg }]}>+{a.points}</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         {error && <Text style={styles.error}>{error}</Text>}
 
@@ -175,6 +211,10 @@ const styles = StyleSheet.create({
   rankName: { flex: 1, fontFamily: fontFamily.sans600, fontSize: 14.5, color: colors.textPrimary },
   rankScore: { fontFamily: fontFamily.mono500, fontSize: 15, color: colors.textPrimary },
   answerRow: { backgroundColor: 'rgba(255,255,255,.7)', borderRadius: 18, padding: 14, gap: 6 },
+  playerCard: { backgroundColor: 'rgba(255,255,255,.7)', borderRadius: 18, padding: 14, gap: 10 },
+  playerCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  playerCardName: { fontFamily: fontFamily.sans600, fontSize: 14.5, color: colors.textPrimary },
+  playerCardPoints: { fontFamily: fontFamily.mono500, fontSize: 12, color: colors.textFaint },
   answerHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   answerCategory: { fontFamily: fontFamily.mono500, fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: colors.textFaint, width: 60 },
   answerValue: { flex: 1, fontFamily: fontFamily.sans600, fontSize: 15, color: colors.textPrimary },

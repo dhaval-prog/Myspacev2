@@ -21,6 +21,8 @@ export interface GamePlayer {
   ready: boolean;
   totalScore: number;
   active: boolean;
+  /** The round this player has fully submitted every category for, or null. */
+  submittedRoundId: string | null;
 }
 
 export interface GameRound {

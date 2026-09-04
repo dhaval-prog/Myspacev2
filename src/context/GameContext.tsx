@@ -22,6 +22,7 @@ interface GamePlayerRow {
   ready: boolean;
   total_score: number;
   left_at: string | null;
+  submitted_round_id: string | null;
 }
 
 interface GameRoundRow {
@@ -67,6 +68,7 @@ function toPlayer(row: GamePlayerRow): GamePlayer {
     ready: row.ready,
     totalScore: row.total_score,
     active: row.left_at === null,
+    submittedRoundId: row.submitted_round_id,
   };
 }
 
@@ -168,8 +170,24 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       })
       .subscribe();
 
+    // Realtime push is the fast path, but a dropped/delayed event must never
+    // leave a player stuck on a stale screen (e.g. the host clicks Start round
+    // but never sees the round begin) — a cheap poll is the backstop that
+    // guarantees this can't get permanently stale.
+    const poll = setInterval(() => {
+      supabase
+        .from('game_rooms')
+        .select('*')
+        .eq('id', gameId)
+        .single()
+        .then(({ data }) => {
+          if (!cancelled && data) setGame(toRoom(data as GameRoomRow));
+        });
+    }, 3000);
+
     return () => {
       cancelled = true;
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [gameId]);
@@ -203,8 +221,19 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe();
 
+    const poll = setInterval(() => {
+      supabase
+        .from('game_players')
+        .select('*')
+        .eq('game_id', gameId)
+        .then(({ data }) => {
+          if (!cancelled && data) setPlayers((data as GamePlayerRow[]).map(toPlayer));
+        });
+    }, 3000);
+
     return () => {
       cancelled = true;
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [gameId]);
@@ -241,8 +270,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe();
 
+    const poll = setInterval(() => {
+      supabase
+        .from('game_rounds')
+        .select('*')
+        .eq('game_id', gameId)
+        .order('round_number', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (!cancelled && data) setRound((prev) => (!prev || data.round_number >= prev.roundNumber ? toRound(data as GameRoundRow) : prev));
+        });
+    }, 3000);
+
     return () => {
       cancelled = true;
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [gameId]);
@@ -278,8 +321,19 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe();
 
+    const poll = setInterval(() => {
+      supabase
+        .from('game_answers')
+        .select('*')
+        .eq('round_id', round.id)
+        .then(({ data }) => {
+          if (!cancelled && data) setAnswerRows(data as GameAnswerRow[]);
+        });
+    }, 3000);
+
     return () => {
       cancelled = true;
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [round?.id]);
