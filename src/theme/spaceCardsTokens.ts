@@ -74,16 +74,19 @@ export const SC_COLOUR_LABEL: Record<ScColourName, string> = {
 };
 
 export const scGeometry = {
-  handCard: { w: 58, h: 84, radius: 11, ovalW: 42, ovalH: 62 },
+  // Bumped ~14% from the original handoff size (58x84) — at the original size, once
+  // dimmed cards were fanned and overlapping, players couldn't reliably read which
+  // card was which to make a pick.
+  handCard: { w: 66, h: 96, radius: 13, ovalW: 48, ovalH: 71 },
   pileCard: { w: 80, h: 112, radius: 13, ovalW: 58, ovalH: 82 },
   deckBack: { w: 56, h: 78, radius: 11 },
   timerRing: { size: 196, thickness: 8, hole: 180 },
   wheelTile: 106,
-  handRowWidth: 268,
-  maxHandPitch: 60,
+  handRowWidth: 305,
+  maxHandPitch: 68,
 } as const;
 
-/** `min(60, (268 - 58) / (n - 1))` — cards overlap as the hand grows; flights land on this pitch. */
+/** `min(68, (305 - 66) / (n - 1))` — cards overlap as the hand grows; flights land on this pitch. */
 export function handPitch(n: number): number {
   if (n <= 1) return scGeometry.maxHandPitch;
   return Math.min(scGeometry.maxHandPitch, (scGeometry.handRowWidth - scGeometry.handCard.w) / (n - 1));

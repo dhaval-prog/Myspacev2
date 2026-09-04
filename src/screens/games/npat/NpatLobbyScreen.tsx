@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../../components/Icon';
@@ -8,8 +8,10 @@ import { PrimaryCta } from '../../../components/spacecards/PrimaryCta';
 import { NpatHeader } from '../../../components/npat/NpatHeader';
 import { RoomCodeCells } from '../../../components/npat/RoomCodeCells';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { useFocusBorder } from '../../../hooks/useFocusBorder';
 import { useAuth } from '../../../context/AuthContext';
 import { useGame } from '../../../context/GameContext';
+import { noOutline } from '../../../theme/webStyles';
 import { npColor, npFont, ROUND_OPTIONS, TIMER_OPTIONS } from '../../../theme/npatTokens';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
@@ -105,6 +107,7 @@ function NpatHub({
   const [timerSeconds, setTimerSeconds] = useState(30);
   const [roomCode, setRoomCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const { borderColor: nameBorderColor, onFocus: onNameFocus, onBlur: onNameBlur } = useFocusBorder('rgba(22,33,12,0)', npColor.lime);
   const isJoin = tab === 'join';
 
   const handleCreate = async () => {
@@ -140,9 +143,17 @@ function NpatHub({
 
           <View style={styles.field}>
             <Text style={styles.label}>YOUR NAME</Text>
-            <View style={styles.input}>
-              <TextInput value={name} onChangeText={setName} placeholder="Player" placeholderTextColor="rgba(22,33,12,.35)" style={styles.inputText} />
-            </View>
+            <Animated.View style={[styles.input, { borderColor: nameBorderColor }]}>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                onFocus={onNameFocus}
+                onBlur={onNameBlur}
+                placeholder="Player"
+                placeholderTextColor="rgba(22,33,12,.35)"
+                style={[styles.inputText, noOutline]}
+              />
+            </Animated.View>
           </View>
 
           {!isJoin ? (
@@ -361,7 +372,7 @@ const styles = StyleSheet.create({
   tabLabelActive: { fontFamily: npFont.sans700, color: '#FFFFFF' },
   field: { gap: 9 },
   label: { fontFamily: npFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.12, color: npColor.fieldLabel, textTransform: 'uppercase' },
-  input: { backgroundColor: npColor.fieldBg, borderRadius: 16, paddingVertical: 15, paddingHorizontal: 17 },
+  input: { backgroundColor: npColor.fieldBg, borderRadius: 16, borderWidth: 1.5, paddingVertical: 15, paddingHorizontal: 17 },
   inputText: { fontFamily: npFont.sans700, fontSize: 16, color: npColor.ink },
   pillRow: { flexDirection: 'row', gap: 8 },
   optionPill: { flex: 1, paddingVertical: 13, borderRadius: 14, alignItems: 'center', backgroundColor: npColor.fieldBg },

@@ -240,7 +240,12 @@ function DraggableCard({
     onDragActiveChange(phase !== 'idle');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
-  const disabled = !enabled || !isPlayable;
+  // Only fade a card out when it genuinely can't be played on MY turn — dimming the
+  // whole hand just because it isn't my turn yet made every card look washed out and
+  // hard to read (the turn banner + disabled action buttons already say whose turn
+  // it is, so the hand itself stays fully legible at all times).
+  const lit = enabled && isPlayable;
+  const dimmed = enabled && !isPlayable;
   // Drag offsets are listed first so they land in true screen pixels regardless of
   // the fan's resting tilt — otherwise a card fanned at, say, 20deg would drag along
   // that diagonal instead of following the finger.
@@ -250,8 +255,8 @@ function DraggableCard({
   ];
   return (
     <Animated.View {...panHandlers} accessibilityLabel={`Hand card: ${card.suit ?? 'wild'} ${card.rank}`} style={style}>
-      {!disabled ? <View style={styles.handCardGlow} pointerEvents="none" /> : null}
-      <CardFace card={card} size="hand" disabled={disabled} />
+      {lit ? <View style={styles.handCardGlow} pointerEvents="none" /> : null}
+      <CardFace card={card} size="hand" disabled={dimmed} />
     </Animated.View>
   );
 }

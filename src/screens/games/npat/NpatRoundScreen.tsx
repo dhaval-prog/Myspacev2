@@ -6,7 +6,9 @@ import { Icon } from '../../../components/Icon';
 import { FriendAvatar } from '../../../components/friends/FriendAvatar';
 import { TimerRing } from '../../../components/spacecards/TimerRing';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { useFocusBorder } from '../../../hooks/useFocusBorder';
 import { useGame } from '../../../context/GameContext';
+import { noOutline } from '../../../theme/webStyles';
 import { npColor, npFont, npRoundColor } from '../../../theme/npatTokens';
 import type { GamePlayer } from '../../../types/games';
 
@@ -33,6 +35,7 @@ function useCountdown(endTime: string | undefined): number {
 function AnswerRow({ label, value, onChangeText, locked, reduceMotion, delay }: { label: string; value: string; onChangeText: (t: string) => void; locked: boolean; reduceMotion?: boolean; delay: number }) {
   const entrance = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   const markScale = useRef(new Animated.Value(locked ? 1 : 0)).current;
+  const { borderColor: focusBorderColor, onFocus, onBlur } = useFocusBorder('rgba(255,255,255,0)', npColor.lime);
 
   useEffect(() => {
     if (reduceMotion) return;
@@ -47,18 +50,20 @@ function AnswerRow({ label, value, onChangeText, locked, reduceMotion, delay }: 
   const translateY = entrance.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
 
   return (
-    <Animated.View style={[styles.row, locked && styles.rowLocked, { opacity, transform: [{ translateY }] }]}>
+    <Animated.View style={[styles.row, locked && styles.rowLocked, { opacity, transform: [{ translateY }], borderColor: focusBorderColor }]}>
       <Text style={styles.rowLabel} numberOfLines={1}>
         {label.toUpperCase()}
       </Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
+        onFocus={onFocus}
+        onBlur={onBlur}
         placeholder="Type your answer"
         placeholderTextColor={npRoundColor.onDark38}
         autoCapitalize="words"
         autoCorrect={false}
-        style={styles.rowInput}
+        style={[styles.rowInput, noOutline]}
       />
       <View style={styles.markSlot}>
         {locked ? (
@@ -353,7 +358,7 @@ const styles = StyleSheet.create({
   letter: { fontFamily: npFont.sans800, fontSize: 52, color: npColor.ink, letterSpacing: -2 },
   timer: { marginTop: 11, fontFamily: npFont.sans700, fontSize: 25, letterSpacing: -0.6, color: '#FFFFFF' },
   form: { gap: 12, marginTop: 18 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: npRoundColor.rowBg, borderRadius: 999, paddingVertical: 13, paddingHorizontal: 16 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: npRoundColor.rowBg, borderRadius: 999, borderWidth: 1.5, paddingVertical: 13, paddingHorizontal: 16 },
   rowLocked: { backgroundColor: npRoundColor.rowBgLocked },
   rowLabel: { width: 52, fontFamily: npFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.1, color: npRoundColor.promptLabel },
   rowInput: { flex: 1, fontFamily: npFont.sans700, fontSize: 14.5, color: '#FFFFFF', padding: 0 },
