@@ -1,33 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fontFamily, radius, spacing } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
 import { useCardsGame } from '../../../context/CardsGameContext';
 import type { CardSuit, PlayingCard } from '../../../types/cards';
 import { CardFace, SUIT_COLORS, SUIT_LABELS } from './CardFace';
 import { useCardDrag, type DropZone } from './useCardDrag';
+import { Icon } from '../../../components/Icon';
+import { CardBack } from '../../../components/spacecards/CardBack';
+import { OpponentStack } from '../../../components/spacecards/OpponentStack';
+import { ColourWheel } from '../../../components/spacecards/ColourWheel';
+import { TimerRing } from '../../../components/spacecards/TimerRing';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { scColor, scFont, scGeometry } from '../../../theme/spaceCardsTokens';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-/**
- * A face-down card — the draw pile, opponent stacks, and every in-flight
- * card while its identity isn't public yet. Never shows a suit/rank, since
- * the deck is never readable by any client — this is the only face a
- * hidden card can ever wear. Carries this game's own branding, not UNO's.
- */
-function CardBack({ size = 'lg', style }: { size?: 'sm' | 'lg'; style?: unknown }) {
-  const dims = size === 'lg' ? backStyles.lg : backStyles.sm;
-  const isLg = size === 'lg';
-  return (
-    <View style={[backStyles.card, dims, style as object]}>
-      <View style={backStyles.ring}>
-        <Text style={[backStyles.brand, !isLg && backStyles.brandSm]}>MY SPACE</Text>
-        <Text style={[backStyles.title, !isLg && backStyles.titleSm]}>SPACE{'\n'}CARDS</Text>
-      </View>
-    </View>
-  );
-}
+const CLOCK_ICON = 'M12 4a8 8 0 100 16 8 8 0 000-16z M12 9v4l2.5 2';
+const OVERFLOW_DOTS = [5, 12, 19];
 
 /** Flips a card from its back to its revealed face over `duration`ms, then calls onDone. */
 function FlipRevealCard({ card, duration = 300, onDone }: { card: PlayingCard; duration?: number; onDone?: () => void }) {
@@ -42,17 +32,17 @@ function FlipRevealCard({ card, duration = 300, onDone }: { card: PlayingCard; d
   return (
     <View style={styles.flipWrap}>
       <Animated.View style={[styles.flipFace, { opacity: backOpacity, transform: [{ perspective: 800 }, { rotateY }] }]}>
-        <CardBack size="lg" />
+        <CardBack />
       </Animated.View>
       <Animated.View style={[styles.flipFace, { opacity: frontOpacity }]}>
-        <CardFace card={card} size="lg" />
+        <CardFace card={card} size="hand" />
       </Animated.View>
     </View>
   );
 }
 
 /** A card flying between two fixed points — used for opponents' draws/plays, which the player only ever watches. */
-function FlyingCard({ from, to, revealCard, size = 'lg' }: { from: { x: number; y: number }; to: { x: number; y: number }; revealCard?: PlayingCard; size?: 'sm' | 'lg' }) {
+function FlyingCard({ from, to, revealCard }: { from: { x: number; y: number }; to: { x: number; y: number }; revealCard?: PlayingCard }) {
   const progress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(progress, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
@@ -65,7 +55,7 @@ function FlyingCard({ from, to, revealCard, size = 'lg' }: { from: { x: number; 
   if (!revealCard) {
     return (
       <Animated.View pointerEvents="none" style={[styles.flyingAbs, style]}>
-        <CardBack size={size} />
+        <CardBack />
       </Animated.View>
     );
   }
@@ -74,10 +64,10 @@ function FlyingCard({ from, to, revealCard, size = 'lg' }: { from: { x: number; 
   return (
     <Animated.View pointerEvents="none" style={[styles.flyingAbs, style]}>
       <Animated.View style={[styles.flipFace, { opacity: backOpacity }]}>
-        <CardBack size={size} />
+        <CardBack />
       </Animated.View>
       <Animated.View style={[styles.flipFace, { opacity: frontOpacity }]}>
-        <CardFace card={revealCard} size={size} />
+        <CardFace card={revealCard} size="hand" />
       </Animated.View>
     </Animated.View>
   );
@@ -88,9 +78,9 @@ function DrawPile({ onPress, disabled, topOffset, bounce }: { onPress: () => voi
   return (
     <Animated.View style={[styles.drawPileWrap, { top: topOffset, transform: [{ scale: bounce }] }]}>
       <Pressable onPress={onPress} disabled={disabled} style={[styles.drawPileTouch, disabled && styles.drawPileDisabled]} accessibilityRole="button" accessibilityLabel="Draw a card">
-        <CardBack size="lg" style={[styles.drawPileLayer, { transform: [{ rotate: '-6deg' }, { translateX: -5 }, { translateY: 3 }] }]} />
-        <CardBack size="lg" style={[styles.drawPileLayer, { transform: [{ rotate: '4deg' }, { translateX: 4 }, { translateY: 1 }] }]} />
-        <CardBack size="lg" />
+        <CardBack style={[styles.drawPileLayer, { transform: [{ rotate: '-6deg' }, { translateX: -5 }, { translateY: 3 }] }]} />
+        <CardBack style={[styles.drawPileLayer, { transform: [{ rotate: '4deg' }, { translateX: 4 }, { translateY: 1 }] }]} />
+        <CardBack />
         <Text style={styles.drawPileLabel}>DRAW</Text>
       </Pressable>
     </Animated.View>
@@ -118,20 +108,8 @@ function DraggableCard({
   const { panHandlers, animatedStyle } = useCardDrag({ enabled, isPlayable, getDropZone, onPlay, onTap, onHoverChange });
   return (
     <Animated.View {...panHandlers} accessibilityLabel={`Hand card: ${card.suit ?? 'wild'} ${card.rank}`} style={animatedStyle}>
-      <CardFace card={card} size="lg" disabled={!enabled || !isPlayable} />
+      <CardFace card={card} size="hand" disabled={!enabled || !isPlayable} />
     </Animated.View>
-  );
-}
-
-/** A stack of face-down cards sized by how many the opponent actually holds — never a fixed count. */
-function OpponentStack({ count }: { count: number }) {
-  const layers = Math.max(1, Math.min(count, 5));
-  return (
-    <View style={styles.opponentStack}>
-      {Array.from({ length: layers }).map((_, i) => (
-        <CardBack key={i} size="sm" style={[styles.opponentStackLayer, { transform: [{ translateX: i * 3 }, { translateY: -i * 2 }] }]} />
-      ))}
-    </View>
   );
 }
 
@@ -150,7 +128,6 @@ function useCountdown(deadline: string | null): number | null {
   return remaining;
 }
 
-const SUITS: CardSuit[] = ['ember', 'tide', 'moss', 'solar'];
 const OPPONENT_ANCHOR = { x: 70, y: 0 }; // approximate opponents-row position; y filled in with insets at render time
 
 interface CardsBoardScreenProps {
@@ -159,6 +136,7 @@ interface CardsBoardScreenProps {
 
 export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const { game, players, myHand, myPlayerId, drawCard, playCard, passTurn, announceLastCard, catchLastCard, leaveGame } = useCardsGame();
   const [pendingWild, setPendingWild] = useState<PlayingCard | null>(null);
@@ -286,7 +264,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
     if (err) setError(err);
   };
 
-  const urgency = remaining !== null && remaining <= 5 ? 'danger' : remaining !== null && remaining <= 10 ? 'warn' : 'normal';
+  const urgent = remaining !== null && remaining <= 5;
 
   // Approximate flight path from the draw pile (top-right) to the hand (bottom-left) —
   // decorative only, so fixed offsets are fine rather than measuring exact layouts.
@@ -305,16 +283,23 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   const discardPoint = discardZoneRef.current ? { x: discardZoneRef.current.x, y: discardZoneRef.current.y } : { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT / 2 };
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable onPress={leaveGame ? () => { leaveGame(); onHome(); } : onHome} style={styles.leaveChip}>
+    <LinearGradient colors={[scColor.tableLift, scColor.tableMid, scColor.tableDeep]} locations={[0, 0.5, 1]} style={styles.screen}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
+        <Pressable onPress={leaveGame ? () => { leaveGame(); onHome(); } : onHome} style={styles.leaveChip} accessibilityRole="button" accessibilityLabel="Leave the table">
           <Text style={styles.leaveChipLabel}>Leave</Text>
         </Pressable>
-        <Text style={styles.roomCode}>{game.roomCode}</Text>
-        {remaining !== null ? (
-          <Text style={[styles.timer, urgency === 'warn' && styles.timerWarn, urgency === 'danger' && styles.timerDanger]}>{remaining}s</Text>
+        <Text style={styles.roomCode}>{game.roomCode.split('').join(' ')}</Text>
+        {game.timerSeconds ? (
+          <View style={styles.timerChip}>
+            <Icon path={CLOCK_ICON} color={scColor.lime} size={12} strokeWidth={2.2} />
+            <Text style={styles.timerChipLabel}>{game.timerSeconds}S</Text>
+          </View>
         ) : (
-          <View style={{ width: 50 }} />
+          <View style={styles.overflowBtn}>
+            {OVERFLOW_DOTS.map((y) => (
+              <View key={y} style={[styles.overflowDot, { top: y - 1.8 }]} />
+            ))}
+          </View>
         )}
       </View>
 
@@ -323,12 +308,19 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       <ScrollView contentContainerStyle={styles.opponentsRow} horizontal showsHorizontalScrollIndicator={false}>
         {opponents.map((p) => (
           <View key={p.id} style={[styles.opponent, p.id === currentPlayer?.id && styles.opponentActive]}>
-            <OpponentStack count={p.cardsRemaining} />
+            <OpponentStack />
             <Text style={styles.opponentName} numberOfLines={1}>{p.name}</Text>
             <Text style={styles.opponentCount}>{p.cardsRemaining} card{p.cardsRemaining === 1 ? '' : 's'}</Text>
+            {game.timerSeconds ? (
+              <View style={[styles.opponentTimerPill, p.id === currentPlayer?.id && remaining !== null && styles.opponentTimerPillLive]}>
+                <Text style={[styles.opponentTimerText, p.id === currentPlayer?.id && remaining !== null && styles.opponentTimerTextLive]}>
+                  {p.id === currentPlayer?.id && remaining !== null ? `${remaining}S` : 'WAITING'}
+                </Text>
+              </View>
+            ) : null}
             {p.cardsRemaining === 1 && !p.lastCardAnnounced && (
-              <Pressable onPress={() => catchLastCard(p.id)} style={styles.catchButton}>
-                <Text style={styles.catchLabel}>🔥 Catch!</Text>
+              <Pressable onPress={() => catchLastCard(p.id)} style={styles.catchButton} accessibilityRole="button" accessibilityLabel={`Catch ${p.name} on last card`}>
+                <Text style={styles.catchLabel}>Catch!</Text>
               </Pressable>
             )}
             {p.cardsRemaining === 1 && p.lastCardAnnounced && <Text style={styles.announcedLabel}>LAST CARD!</Text>}
@@ -337,31 +329,58 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       </ScrollView>
 
       <View style={styles.center}>
-        <View ref={discardViewRef} onLayout={measureDiscardZone} style={styles.discardStack} accessibilityLabel="Discard pile">
-          <Animated.View style={[styles.discardGlow, dropGlow && styles.discardGlowActive]} />
-          {(game.topCardSuit || game.topCardRank) && (
-            <>
-              <View style={[styles.discardGhost, { backgroundColor: '#3A2C5C', transform: [{ rotate: '-9deg' }, { translateX: -12 }, { translateY: 6 }] }]} />
-              <View style={[styles.discardGhost, { backgroundColor: '#2E2249', transform: [{ rotate: '7deg' }, { translateX: 10 }, { translateY: 4 }] }]} />
-              <View style={[styles.discardGhost, { backgroundColor: '#40316A', transform: [{ rotate: '-3deg' }, { translateX: 6 }, { translateY: -3 }] }]} />
-            </>
-          )}
-          {game.topCardSuit || game.topCardRank ? (
-            <Animated.View style={{ transform: [{ scale: discardBounce }] }}>
-              <CardFace card={{ suit: game.topCardSuit, rank: game.topCardRank ?? '0' }} size="lg" />
-            </Animated.View>
-          ) : (
-            <View style={styles.cardPlaceholder} />
-          )}
-        </View>
-        {game.activeSuit && (
-          <View style={[styles.activeSuitChip, { backgroundColor: SUIT_COLORS[game.activeSuit] }]}>
-            <Text style={styles.activeSuitLabel}>{SUIT_LABELS[game.activeSuit]}</Text>
+        <View style={styles.discardOuter}>
+          {game.timerSeconds && remaining !== null ? (
+            <View style={styles.timerRingAbs} pointerEvents="none">
+              <TimerRing secondsLeft={remaining} limit={game.timerSeconds} urgent={urgent} reduceMotion={reduceMotion} />
+            </View>
+          ) : null}
+          <View ref={discardViewRef} onLayout={measureDiscardZone} style={styles.discardStack} accessibilityLabel="Discard pile">
+            {dropGlow ? <View style={styles.dropGlowRing} pointerEvents="none" /> : null}
+            {game.activeSuit ? (
+              <View style={styles.haloWrap} pointerEvents="none">
+                {[0.42, 0.26, 0.13, 0.05].map((o, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.haloRing,
+                      { backgroundColor: SUIT_COLORS[game.activeSuit as CardSuit], opacity: o, width: 186 - i * 30, height: 186 - i * 30, borderRadius: (186 - i * 30) / 2 },
+                    ]}
+                  />
+                ))}
+              </View>
+            ) : null}
+            {(game.topCardSuit || game.topCardRank) && (
+              <>
+                <View style={[styles.discardGhost, { transform: [{ rotate: '-9deg' }, { translateX: -12 }, { translateY: 6 }] }]} />
+                <View style={[styles.discardGhost, { transform: [{ rotate: '7deg' }, { translateX: 10 }, { translateY: 4 }] }]} />
+                <View style={[styles.discardGhost, { transform: [{ rotate: '-3deg' }, { translateX: 6 }, { translateY: -3 }] }]} />
+              </>
+            )}
+            {game.topCardSuit || game.topCardRank ? (
+              <Animated.View style={{ transform: [{ scale: discardBounce }] }}>
+                <CardFace card={{ suit: game.topCardSuit, rank: game.topCardRank ?? '0' }} size="pile" />
+              </Animated.View>
+            ) : (
+              <View style={styles.cardPlaceholder} />
+            )}
           </View>
-        )}
+        </View>
+        <View style={styles.chipsRow}>
+          {game.activeSuit && (
+            <View style={[styles.activeSuitChip, { backgroundColor: SUIT_COLORS[game.activeSuit] }]}>
+              <Text style={styles.activeSuitLabel}>{SUIT_LABELS[game.activeSuit].toUpperCase()}</Text>
+            </View>
+          )}
+          {game.timerSeconds && remaining !== null ? (
+            <View style={styles.secondsChip}>
+              <Text style={[styles.secondsChipLabel, urgent && styles.secondsChipLabelUrgent]}>{remaining}s</Text>
+            </View>
+          ) : null}
+        </View>
       </View>
 
-      <Text style={styles.turnBanner}>{isMyTurn ? 'Your turn' : `${currentPlayer?.name ?? 'Someone'}'s turn`}</Text>
+      <Text style={[styles.turnBanner, urgent && isMyTurn && styles.turnBannerUrgent]}>{isMyTurn ? (urgent ? 'Play now' : 'Your turn') : `${currentPlayer?.name ?? 'Someone'} is playing…`}</Text>
       {error && <Text style={styles.error}>{error}</Text>}
 
       <ScrollView
@@ -391,9 +410,9 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
         )}
       </ScrollView>
 
-      <View style={[styles.actions, { paddingBottom: insets.bottom + spacing.md }]}>
+      <View style={[styles.actions, { paddingBottom: insets.bottom + 12 }]}>
         <Pressable onPress={handleDraw} disabled={!isMyTurn || busy || game.drewThisTurn} style={[styles.actionButton, (!isMyTurn || game.drewThisTurn) && styles.actionButtonDisabled]}>
-          <Text style={styles.actionLabel}>Draw</Text>
+          <Text style={styles.actionLabel}>Draw a card</Text>
         </Pressable>
         {isMyTurn && game.drewThisTurn && (
           <Pressable onPress={handlePass} disabled={busy} style={styles.actionButton}>
@@ -402,28 +421,12 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
         )}
         {me && me.cardsRemaining === 1 && !me.lastCardAnnounced && (
           <Pressable onPress={announceLastCard} style={[styles.actionButton, styles.lastCardButton]}>
-            <Text style={styles.lastCardLabel}>🔥 LAST CARD!</Text>
+            <Text style={styles.lastCardLabel}>LAST CARD!</Text>
           </Pressable>
         )}
       </View>
 
-      {pendingWild && (
-        <View style={styles.suitSheetBackdrop}>
-          <View style={styles.suitSheet}>
-            <Text style={styles.suitSheetTitle}>Choose a color</Text>
-            <View style={styles.suitSheetRow}>
-              {SUITS.map((s) => (
-                <Pressable key={s} onPress={() => handleChooseSuit(s)} style={[styles.suitSwatch, { backgroundColor: SUIT_COLORS[s] }]}>
-                  <Text style={styles.suitSwatchLabel}>{SUIT_LABELS[s]}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable onPress={() => setPendingWild(null)} style={styles.suitSheetCancel}>
-              <Text style={styles.suitSheetCancelLabel}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
+      <ColourWheel visible={!!pendingWild} onLockColour={handleChooseSuit} onCancel={() => setPendingWild(null)} reduceMotion={reduceMotion} />
 
       {flying && (
         <Animated.View
@@ -433,106 +436,71 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
             { top: flyBaseTop, left: flyBaseLeft, opacity: flyOpacity, transform: [{ translateX: flyTranslateX }, { translateY: flyTranslateY }, { scale: flyScale }, { rotate: flyRotate }] },
           ]}
         >
-          <CardBack size="sm" />
+          <CardBack />
         </Animated.View>
       )}
 
       {opponentFlights.map((f) => (
-        <FlyingCard
-          key={f.id}
-          size="sm"
-          from={f.kind === 'draw' ? drawPilePoint : opponentPoint}
-          to={f.kind === 'draw' ? opponentPoint : discardPoint}
-          revealCard={f.kind === 'play' ? f.card : undefined}
-        />
+        <FlyingCard key={f.id} from={f.kind === 'draw' ? drawPilePoint : opponentPoint} to={f.kind === 'draw' ? opponentPoint : discardPoint} revealCard={f.kind === 'play' ? f.card : undefined} />
       ))}
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#1A1230' },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: spacing.sm },
-  leaveChip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,.1)' },
-  leaveChipLabel: { fontFamily: fontFamily.sans600, fontSize: 12.5, color: 'rgba(255,255,255,.7)' },
-  roomCode: { fontFamily: fontFamily.mono500, fontSize: 13, letterSpacing: 2, color: 'rgba(255,255,255,.5)' },
-  timer: { fontFamily: fontFamily.mono500, fontSize: 18, color: '#fff', width: 50, textAlign: 'right' },
-  timerWarn: { color: '#F5B93F' },
-  timerDanger: { color: '#FF5B5B' },
-  opponentsRow: { paddingHorizontal: 16, gap: 10, paddingBottom: spacing.sm },
-  opponent: { alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,.06)', borderRadius: 18, padding: 10, minWidth: 78 },
-  opponentActive: { backgroundColor: 'rgba(195,234,79,.16)' },
-  opponentStack: { width: 46, height: 64, marginBottom: 2 },
-  opponentStackLayer: { position: 'absolute' },
-  opponentName: { fontFamily: fontFamily.sans600, fontSize: 12, color: '#fff', maxWidth: 70 },
-  opponentCount: { fontFamily: fontFamily.mono500, fontSize: 10.5, color: 'rgba(255,255,255,.55)' },
-  catchButton: { marginTop: 2, paddingVertical: 4, paddingHorizontal: 8, borderRadius: radius.pill, backgroundColor: '#FF5B5B' },
-  catchLabel: { fontFamily: fontFamily.sans700, fontSize: 10, color: '#fff' },
-  announcedLabel: { fontFamily: fontFamily.sans700, fontSize: 9.5, color: colors.lime, marginTop: 2 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  discardStack: { width: 100, height: 116, alignItems: 'center', justifyContent: 'center' },
-  discardGlow: { position: 'absolute', width: 96, height: 112, borderRadius: radius.lg, backgroundColor: colors.lime, opacity: 0 },
-  discardGlowActive: { opacity: 0.28 },
-  discardGhost: { position: 'absolute', width: 72, height: 100, borderRadius: radius.md, borderWidth: 2, borderColor: 'rgba(255,255,255,.12)' },
-  cardPlaceholder: { width: 68, height: 96 },
-  activeSuitChip: { borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 16 },
-  activeSuitLabel: { fontFamily: fontFamily.sans700, fontSize: 12.5, color: '#fff', letterSpacing: 0.5, textTransform: 'uppercase' },
-  turnBanner: { fontFamily: fontFamily.sans600, fontSize: 15, color: '#fff', textAlign: 'center', marginBottom: 4 },
-  error: { fontFamily: fontFamily.sans500, fontSize: 12, color: '#FF8A6B', textAlign: 'center', marginBottom: 4 },
-  hand: { paddingHorizontal: 16, gap: 10, alignItems: 'flex-end', minHeight: 106 },
-  actions: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: spacing.sm },
-  actionButton: { flex: 1, borderRadius: radius.pill, backgroundColor: colors.lime, paddingVertical: 15, alignItems: 'center' },
-  actionButtonDisabled: { opacity: 0.35 },
-  actionLabel: { fontFamily: fontFamily.sans600, fontSize: 14.5, color: colors.ink },
-  lastCardButton: { backgroundColor: '#FF5B5B' },
-  lastCardLabel: { fontFamily: fontFamily.sans700, fontSize: 13.5, color: '#fff' },
-  suitSheetBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,.55)', alignItems: 'center', justifyContent: 'center' },
-  suitSheet: { backgroundColor: '#241A3D', borderRadius: 24, padding: 22, width: '84%', gap: 16 },
-  suitSheetTitle: { fontFamily: fontFamily.sans600, fontSize: 16, color: '#fff', textAlign: 'center' },
-  suitSheetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
-  suitSwatch: { width: 78, height: 60, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  suitSwatchLabel: { fontFamily: fontFamily.sans700, fontSize: 12.5, color: '#fff' },
-  suitSheetCancel: { alignItems: 'center', paddingVertical: 8 },
-  suitSheetCancelLabel: { fontFamily: fontFamily.sans500, fontSize: 13, color: 'rgba(255,255,255,.5)' },
-  drawPileWrap: { position: 'absolute', right: 16, width: 90, height: 116, zIndex: 10 },
+  screen: { flex: 1 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingBottom: 10 },
+  leaveChip: { paddingVertical: 9, paddingHorizontal: 15, borderRadius: 999, backgroundColor: 'rgba(255,255,255,.1)' },
+  leaveChipLabel: { fontFamily: scFont.sans600, fontSize: 13, color: 'rgba(255,255,255,.82)' },
+  roomCode: { fontFamily: scFont.mono500, fontSize: 12, letterSpacing: 12 * 0.34, color: 'rgba(255,255,255,.44)' },
+  overflowBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  overflowDot: { position: 'absolute', width: 3.6, height: 3.6, borderRadius: 1.8, backgroundColor: 'rgba(255,255,255,.7)' },
+  timerChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(195,234,79,.14)', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 11 },
+  timerChipLabel: { fontFamily: scFont.sans600, fontSize: 9, letterSpacing: 0.9, color: scColor.lime },
+  opponentsRow: { paddingHorizontal: 16, gap: 10, paddingBottom: 8 },
+  opponent: { alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,.07)', borderRadius: 18, padding: 10, minWidth: 84 },
+  opponentActive: { backgroundColor: 'rgba(195,234,79,.14)' },
+  opponentName: { fontFamily: scFont.sans700, fontSize: 12.5, color: '#fff', maxWidth: 76, marginTop: 2 },
+  opponentCount: { fontFamily: scFont.mono500, fontSize: 10, color: 'rgba(255,255,255,.5)' },
+  opponentTimerPill: { marginTop: 6, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 9, backgroundColor: 'rgba(255,255,255,.1)' },
+  opponentTimerPillLive: { backgroundColor: 'rgba(255,255,255,.1)' },
+  opponentTimerText: { fontFamily: scFont.mono500, fontSize: 9, color: 'rgba(255,255,255,.5)' },
+  opponentTimerTextLive: { fontFamily: scFont.sans700, color: scColor.lime },
+  catchButton: { marginTop: 4, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999, backgroundColor: scColor.urgent },
+  catchLabel: { fontFamily: scFont.sans700, fontSize: 10, color: '#fff' },
+  announcedLabel: { fontFamily: scFont.sans700, fontSize: 9.5, color: scColor.lime, marginTop: 4 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 30 },
+  discardOuter: { width: 196, height: 196, alignItems: 'center', justifyContent: 'center' },
+  timerRingAbs: { position: 'absolute', left: 0, top: 0 },
+  discardStack: { width: 150, height: 150, alignItems: 'center', justifyContent: 'center' },
+  haloWrap: { position: 'absolute', width: 186, height: 186, alignItems: 'center', justifyContent: 'center' },
+  haloRing: { position: 'absolute' },
+  dropGlowRing: { position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: scColor.lime, opacity: 0.3 },
+  discardGhost: { position: 'absolute', width: 80, height: 112, borderRadius: 13, backgroundColor: '#FFFFFF', opacity: 0.22 },
+  cardPlaceholder: { width: 80, height: 112 },
+  chipsRow: { flexDirection: 'row', gap: 8 },
+  activeSuitChip: { borderRadius: 999, paddingVertical: 7, paddingHorizontal: 15 },
+  activeSuitLabel: { fontFamily: scFont.mono500, fontSize: 10.5, letterSpacing: 1.68, color: '#FFFFFF' },
+  secondsChip: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: 13, backgroundColor: 'rgba(255,255,255,.1)' },
+  secondsChipLabel: { fontFamily: scFont.mono500, fontSize: 11, letterSpacing: 1.32, color: 'rgba(255,255,255,.72)' },
+  secondsChipLabelUrgent: { color: scColor.urgent },
+  turnBanner: { fontFamily: scFont.sans800, fontSize: 16, color: '#fff', textAlign: 'center', marginBottom: 4 },
+  turnBannerUrgent: { color: scColor.urgent },
+  error: { fontFamily: scFont.sans500, fontSize: 12, color: scColor.urgent, textAlign: 'center', marginBottom: 4 },
+  hand: { paddingHorizontal: 16, gap: 10, alignItems: 'flex-end', minHeight: scGeometry.handCard.h + 20 },
+  actions: { flexDirection: 'row', gap: 10, paddingHorizontal: 18, paddingTop: 10 },
+  actionButton: { flex: 1, borderRadius: 999, backgroundColor: scColor.lime, paddingVertical: 17, alignItems: 'center', shadowColor: scColor.lime, shadowOpacity: 0.4, shadowOffset: { width: 0, height: 12 }, shadowRadius: 26 },
+  actionButtonDisabled: { opacity: 0.4, shadowOpacity: 0 },
+  actionLabel: { fontFamily: scFont.sans700, fontSize: 15, color: scColor.ink },
+  lastCardButton: { backgroundColor: scColor.urgent, shadowColor: scColor.urgent },
+  lastCardLabel: { fontFamily: scFont.sans700, fontSize: 13.5, color: '#fff' },
+  drawPileWrap: { position: 'absolute', right: 16, width: 90, height: 116, zIndex: 10, alignItems: 'center', justifyContent: 'center' },
   drawPileTouch: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   drawPileDisabled: { opacity: 0.45 },
   drawPileLayer: { position: 'absolute' },
-  drawPileLabel: { position: 'absolute', bottom: -2, fontFamily: fontFamily.sans700, fontSize: 10, letterSpacing: 1, color: 'rgba(255,255,255,.55)' },
+  drawPileLabel: { position: 'absolute', bottom: -16, fontFamily: scFont.sans600, fontSize: 9, letterSpacing: 1.4, color: 'rgba(255,255,255,.42)' },
   flyingCardWrap: { position: 'absolute', zIndex: 20 },
   flyingAbs: { position: 'absolute', zIndex: 25 },
-  flipWrap: { width: 72, height: 100 },
-  flipFace: { position: 'absolute', width: 72, height: 100, backfaceVisibility: 'hidden' },
-});
-
-const backStyles = StyleSheet.create({
-  card: {
-    borderRadius: radius.md,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,.2)',
-    backgroundColor: '#2A2050',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  lg: { width: 72, height: 100 },
-  sm: { width: 46, height: 64 },
-  ring: {
-    width: '80%',
-    aspectRatio: 0.82,
-    borderRadius: 999,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,.28)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  brand: { fontFamily: fontFamily.sans700, fontSize: 7.5, letterSpacing: 1, color: colors.lime },
-  brandSm: { fontSize: 5.5, letterSpacing: 0.6 },
-  title: { fontFamily: fontFamily.sans800, fontSize: 10.5, lineHeight: 11.5, textAlign: 'center', color: '#fff' },
-  titleSm: { fontSize: 7, lineHeight: 8 },
+  flipWrap: { width: 56, height: 78 },
+  flipFace: { position: 'absolute', width: 56, height: 78, backfaceVisibility: 'hidden' },
 });

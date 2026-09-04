@@ -1,13 +1,14 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { fontFamily, radius } from '../../../theme';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { scColor, scFont } from '../../../theme/spaceCardsTokens';
+import { WildSwatch } from '../../../components/spacecards/WildSwatch';
 import type { CardRank, CardSuit, PlayingCard } from '../../../types/cards';
 
 export const SUIT_COLORS: Record<CardSuit, string> = {
-  ember: '#E8543A',
-  tide: '#2C8FC9',
-  moss: '#3F8F4F',
-  solar: '#E8A93D',
+  ember: '#E8533B',
+  tide: '#2F93D8',
+  moss: '#2F9E4F',
+  solar: '#E9B02F',
 };
 
 export const SUIT_LABELS: Record<CardSuit, string> = {
@@ -17,72 +18,102 @@ export const SUIT_LABELS: Record<CardSuit, string> = {
   solar: 'Solar',
 };
 
-const SPECIAL_LABELS: Record<string, string> = {
-  block: 'BLOCK',
-  flip: 'FLIP',
-  surge2: '+2',
-  prism: 'PRISM',
-  prism4: '+4',
-};
+/** Face + corner text for the three coloured action ranks — the handoff spec only covers plain numbers and the wild +4, so these keep readable short labels rather than an invented icon set. */
+const SPECIAL_FACE: Record<string, string> = { block: 'BLOCK', flip: 'FLIP', surge2: '+2' };
+const SPECIAL_INDEX: Record<string, string> = { block: 'BLK', flip: 'FLP', surge2: '+2' };
+const WILD_FACE: Record<string, string> = { prism: 'PRISM', prism4: '+4' };
+const WILD_INDEX: Record<string, string> = { prism: 'PR', prism4: '+4' };
 
-const SPECIAL_INDEX: Record<string, string> = {
-  block: 'BLK',
-  flip: 'FLP',
-  surge2: '+2',
-  prism: 'PR',
-  prism4: '+4',
-};
-
-function faceLabel(rank: CardRank): string {
-  return SPECIAL_LABELS[rank] ?? rank;
+function faceText(rank: CardRank, isWild: boolean): string {
+  if (isWild) return WILD_FACE[rank] ?? rank;
+  return SPECIAL_FACE[rank] ?? rank;
 }
-
-function indexLabel(rank: CardRank): string {
+function indexText(rank: CardRank, isWild: boolean): string {
+  if (isWild) return WILD_INDEX[rank] ?? rank;
   return SPECIAL_INDEX[rank] ?? rank;
 }
 
+type CardSize = 'hand' | 'pile' | 'sm';
+
+const SIZES: Record<CardSize, { w: number; h: number; radius: number; ovalW: number; ovalH: number; face: number; corner: number }> = {
+  hand: { w: 58, h: 84, radius: 11, ovalW: 42, ovalH: 62, face: 23, corner: 9.5 },
+  pile: { w: 80, h: 112, radius: 13, ovalW: 58, ovalH: 82, face: 30, corner: 11 },
+  sm: { w: 46, h: 64, radius: 9, ovalW: 33, ovalH: 49, face: 18, corner: 7.5 },
+};
+/** The wild card's own face size runs smaller than a number's, per the handoff (§3/§5): 15 hand / 20 pile, scaled down again for `sm`. */
+const WILD_FACE_SIZE: Record<CardSize, number> = { hand: 15, pile: 20, sm: 12 };
+/** A multi-letter special-rank label (BLOCK/FLIP) needs a smaller face size than a single digit to stay on one line. */
+const SPECIAL_FACE_SIZE: Record<CardSize, number> = { hand: 13, pile: 17, sm: 10 };
+
 interface CardFaceProps {
   card: PlayingCard;
-  size?: 'sm' | 'lg';
+  size?: CardSize;
   disabled?: boolean;
   onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
 }
 
 /**
- * One playing card — an original face (colored body, white center plate,
- * mirrored corner indices) built to feel like a real printed card, not a
- * copy of any specific commercial deck's trade dress.
+ * One playing card — exact visual per the Space Cards design handoff: a
+ * white card, a colour oval rotated -22deg holding the face value, and a
+ * matching mirrored corner index top-left. Wild ranks (prism/prism4) get
+ * the four-colour quadrant swatch instead of a solid oval.
  */
-export function CardFace({ card, size = 'lg', disabled, onPress }: CardFaceProps) {
+export function CardFace({ card, size = 'hand', disabled, onPress, style }: CardFaceProps) {
+  const s = SIZES[size];
   const isWild = card.suit === null;
-  const bg = isWild ? '#1E1633' : SUIT_COLORS[card.suit as CardSuit];
-  const isLg = size === 'lg';
-  const dims = isLg ? styles.lg : styles.sm;
-  const index = indexLabel(card.rank);
+  const solidColour = isWild ? undefined : SUIT_COLORS[card.suit as CardSuit];
+  const isSpecial = card.rank === 'block' || card.rank === 'flip' || card.rank === 'surge2';
+  const face = faceText(card.rank, isWild);
+  const index = indexText(card.rank, isWild);
+  const faceSize = isWild ? WILD_FACE_SIZE[size] : isSpecial ? SPECIAL_FACE_SIZE[size] : s.face;
+  const cornerColour = isWild ? scColor.ink : solidColour;
 
   const content = (
-    <View style={[styles.card, dims, { backgroundColor: bg }, disabled && styles.disabled]}>
-      <Text style={[styles.index, isLg ? styles.indexLg : styles.indexSm]}>{index}</Text>
-      <View style={[styles.plate, isLg ? styles.plateLg : styles.plateSm]}>
-        {isWild ? (
-          <View style={styles.wheel}>
-            {(['ember', 'tide', 'moss', 'solar'] as CardSuit[]).map((s) => (
-              <View key={s} style={[styles.wedge, { backgroundColor: SUIT_COLORS[s] }]} />
-            ))}
-          </View>
-        ) : (
-          <Text style={[styles.centerText, isLg ? styles.centerTextLg : styles.centerTextSm, { color: bg }]} numberOfLines={1} adjustsFontSizeToFit>
-            {index}
-          </Text>
-        )}
+    <View style={[styles.card, { width: s.w, height: s.h, borderRadius: s.radius }, disabled && styles.disabled, style]}>
+      <View
+        style={{
+          position: 'absolute',
+          left: (s.w - s.ovalW) / 2,
+          top: (s.h - s.ovalH) / 2,
+          width: s.ovalW,
+          height: s.ovalH,
+          borderRadius: s.ovalW / 2,
+          overflow: 'hidden',
+          transform: [{ rotate: '-22deg' }],
+        }}
+      >
+        {isWild ? <WildSwatch style={StyleSheet.absoluteFill} /> : <View style={[StyleSheet.absoluteFill, { backgroundColor: solidColour }]} />}
       </View>
-      <Text style={[styles.index, styles.indexBottom, isLg ? styles.indexLg : styles.indexSm]}>{index}</Text>
+      <Text
+        style={{
+          position: 'absolute',
+          left: 2,
+          right: 2,
+          top: '50%',
+          marginTop: -faceSize * 0.56,
+          textAlign: 'center',
+          fontFamily: scFont.sans800,
+          fontSize: faceSize,
+          lineHeight: faceSize,
+          color: '#FFFFFF',
+          textShadowColor: 'rgba(0,0,0,.26)',
+          textShadowOffset: { width: 0, height: 2 },
+          textShadowRadius: 0,
+        }}
+        numberOfLines={1}
+      >
+        {face}
+      </Text>
+      <Text style={{ position: 'absolute', left: size === 'pile' ? 7 : 5, top: size === 'pile' ? 6 : 4, fontFamily: scFont.sans800, fontSize: s.corner, lineHeight: s.corner, color: cornerColour }}>
+        {index}
+      </Text>
     </View>
   );
 
   if (!onPress) return content;
   return (
-    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${faceLabel(card.rank)} card`}>
+    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${SUIT_LABELS[card.suit as CardSuit] ?? 'Wild'} ${face} card`}>
       {content}
     </Pressable>
   );
@@ -90,42 +121,14 @@ export function CardFace({ card, size = 'lg', disabled, onPress }: CardFaceProps
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: radius.md,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,.55)',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOpacity: 0.22,
-    shadowOffset: { width: 0, height: 5 },
-    shadowRadius: 9,
-    elevation: 3,
-  },
-  lg: { width: 72, height: 100, paddingVertical: 6 },
-  sm: { width: 46, height: 64, paddingVertical: 4 },
-  disabled: { opacity: 0.35 },
-  index: { fontFamily: fontFamily.sans700, color: '#fff', alignSelf: 'flex-start', marginLeft: 6 },
-  indexBottom: { alignSelf: 'flex-end', marginRight: 6, transform: [{ rotate: '180deg' }] },
-  indexLg: { fontSize: 12.5 },
-  indexSm: { fontSize: 9 },
-  plate: {
-    backgroundColor: '#FBF8F2',
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  plateLg: { width: 52, height: 52 },
-  plateSm: { width: 32, height: 32 },
-  centerText: { fontFamily: fontFamily.sans800 },
-  centerTextLg: { fontSize: 21 },
-  centerTextSm: { fontSize: 12 },
-  wheel: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    shadowColor: '#000',
+    shadowOpacity: 0.44,
+    shadowOffset: { width: 0, height: 9 },
+    shadowRadius: 20,
   },
-  wedge: { width: '50%', height: '50%' },
+  disabled: {
+    opacity: 0.58,
+  },
 });
