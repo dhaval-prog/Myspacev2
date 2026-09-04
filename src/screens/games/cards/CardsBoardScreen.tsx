@@ -42,11 +42,11 @@ function FlipRevealCard({ card, duration = 300, onDone }: { card: PlayingCard; d
   );
 }
 
-/** A card flying between two fixed points — used for opponents' draws/plays, which the player only ever watches. */
-function FlyingCard({ from, to, revealCard }: { from: { x: number; y: number }; to: { x: number; y: number }; revealCard?: PlayingCard }) {
+/** A card flying between two fixed points — used for opponents' draws/plays, which the player only ever watches. Calls onDone once it lands, so the caller can stop rendering it instead of leaving a permanent frozen card sitting at `to`. */
+function FlyingCard({ from, to, revealCard, onDone }: { from: { x: number; y: number }; to: { x: number; y: number }; revealCard?: PlayingCard; onDone?: () => void }) {
   const progress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.timing(progress, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(() => onDone?.());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [from.x, to.x] });
@@ -365,7 +365,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
 
       <DrawPile onPress={handleDraw} disabled={!isMyTurn || busy || game.drewThisTurn} topOffset={insets.top + 66} bounce={drawPileBounce} />
 
-      <ScrollView contentContainerStyle={styles.opponentsRow} horizontal showsHorizontalScrollIndicator={false}>
+      <ScrollView style={styles.opponentsScroll} contentContainerStyle={styles.opponentsRow} horizontal showsHorizontalScrollIndicator={false}>
         {opponents.map((p) => (
           <View key={p.id} style={[styles.opponent, p.id === currentPlayer?.id && styles.opponentActive]}>
             <OpponentStack />
@@ -517,7 +517,13 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       )}
 
       {opponentFlights.map((f) => (
-        <FlyingCard key={f.id} from={f.kind === 'draw' ? drawPilePoint : opponentPoint} to={f.kind === 'draw' ? opponentPoint : discardPoint} revealCard={f.kind === 'play' ? f.card : undefined} />
+        <FlyingCard
+          key={f.id}
+          from={f.kind === 'draw' ? drawPilePoint : opponentPoint}
+          to={f.kind === 'draw' ? opponentPoint : discardPoint}
+          revealCard={f.kind === 'play' ? f.card : undefined}
+          onDone={() => setOpponentFlights((prev) => prev.filter((flight) => flight.id !== f.id))}
+        />
       ))}
     </LinearGradient>
   );
@@ -533,7 +539,13 @@ const styles = StyleSheet.create({
   overflowDot: { position: 'absolute', width: 3.6, height: 3.6, borderRadius: 1.8, backgroundColor: 'rgba(255,255,255,.7)' },
   timerChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(195,234,79,.14)', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 11 },
   timerChipLabel: { fontFamily: scFont.sans600, fontSize: 9, letterSpacing: 0.9, color: scColor.lime },
-  opponentsRow: { paddingHorizontal: 16, gap: 10, paddingBottom: 8 },
+  // Without an explicit style, RN Web's ScrollView defaults to flex-growing to fill
+  // whatever space is left in its column parent — here that meant it competed with
+  // the board's own flex:1 center area, inflating every opponent tile to fill that
+  // stretched height (and squeezing the discard/turn-banner block below it in turn).
+  // flexGrow/flexShrink: 0 pins it to its content's natural height instead.
+  opponentsScroll: { flexGrow: 0, flexShrink: 0 },
+  opponentsRow: { paddingHorizontal: 16, gap: 10, paddingBottom: 8, alignItems: 'flex-start' },
   opponent: { alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,.07)', borderRadius: 18, padding: 10, minWidth: 84 },
   opponentActive: { backgroundColor: 'rgba(195,234,79,.14)' },
   opponentName: { fontFamily: scFont.sans700, fontSize: 12.5, color: '#fff', maxWidth: 76, marginTop: 2 },
