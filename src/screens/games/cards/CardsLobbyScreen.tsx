@@ -184,18 +184,18 @@ function CardsHub({
             </>
           )}
         </LinearGradient>
-      </ScrollView>
 
-      <BottomNav
-        activeId="home"
-        onSelect={(id) => {
-          if (id === 'home') onHome();
-          if (id === 'expenses') onOpenExpenses();
-          if (id === 'split') onOpenSplit();
-        }}
-        bottomInset={insets.bottom}
-        reduceMotion={reduceMotion}
-      />
+        <BottomNav
+          activeId="home"
+          onSelect={(id) => {
+            if (id === 'home') onHome();
+            if (id === 'expenses') onOpenExpenses();
+            if (id === 'split') onOpenSplit();
+          }}
+          bottomInset={insets.bottom}
+          reduceMotion={reduceMotion}
+        />
+      </ScrollView>
     </LinearGradient>
   );
 }
@@ -286,18 +286,18 @@ function CardsReadyRoom({
             <Text style={styles.leaveLabel}>Leave game</Text>
           </Pressable>
         </LinearGradient>
-      </ScrollView>
 
-      <BottomNav
-        activeId="home"
-        onSelect={(id) => {
-          if (id === 'home') onHome();
-          if (id === 'expenses') onOpenExpenses();
-          if (id === 'split') onOpenSplit();
-        }}
-        bottomInset={insets.bottom}
-        reduceMotion={reduceMotion}
-      />
+        <BottomNav
+          activeId="home"
+          onSelect={(id) => {
+            if (id === 'home') onHome();
+            if (id === 'expenses') onOpenExpenses();
+            if (id === 'split') onOpenSplit();
+          }}
+          bottomInset={insets.bottom}
+          reduceMotion={reduceMotion}
+        />
+      </ScrollView>
     </LinearGradient>
   );
 }
