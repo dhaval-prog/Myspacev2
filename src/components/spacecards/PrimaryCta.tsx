@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { scColor, scFont, scMotion } from '../../theme/spaceCardsTokens';
 
 interface PrimaryCtaProps {
@@ -7,10 +7,12 @@ interface PrimaryCtaProps {
   onPress: () => void;
   disabled?: boolean;
   reduceMotion?: boolean;
+  /** Optional leading glyph — e.g. NPAT's Create button die icon. Omit for a text-only CTA. */
+  icon?: React.ReactNode;
 }
 
 /** The lime primary action — breathing glow per §10 (cta-glow, 3.4s loop). Shared by every screen that shows it. */
-export function PrimaryCta({ label, onPress, disabled, reduceMotion }: PrimaryCtaProps) {
+export function PrimaryCta({ label, onPress, disabled, reduceMotion, icon }: PrimaryCtaProps) {
   const glow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -34,7 +36,14 @@ export function PrimaryCta({ label, onPress, disabled, reduceMotion }: PrimaryCt
   return (
     <Animated.View style={[styles.wrap, { shadowRadius, shadowOpacity: disabled ? 0 : shadowOpacity }]}>
       <Pressable disabled={disabled} onPress={onPress} style={[styles.cta, disabled && styles.ctaDisabled]} accessibilityRole="button" accessibilityLabel={label}>
-        <Text style={styles.label}>{label}</Text>
+        {icon ? (
+          <View style={styles.row}>
+            {icon}
+            <Text style={styles.label}>{label}</Text>
+          </View>
+        ) : (
+          <Text style={styles.label}>{label}</Text>
+        )}
       </Pressable>
     </Animated.View>
   );
@@ -51,6 +60,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     backgroundColor: scColor.lime,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   ctaDisabled: {
     backgroundColor: 'rgba(195,234,79,.35)',
