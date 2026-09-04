@@ -214,6 +214,11 @@ const styles = StyleSheet.create({
     width: 46,
     height: 68,
     borderRadius: 23,
+    // Clips WildSwatch's sharp-cornered 2x2 grid to this oval — without it the
+    // rotated square corners poke out past the curve, matching the bug where
+    // this looked like a lopsided tilted square instead of the same clipped
+    // colour oval every other card face (CardFace.tsx) already uses.
+    overflow: 'hidden',
     backgroundColor: scColor.ember,
     transform: [{ rotate: '-22deg' }],
   },
