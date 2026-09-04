@@ -46,6 +46,39 @@ export const npColor = {
   glowShadow: '#C3EA4F',
 } as const;
 
+export const npRoundColor = {
+  bgTop: '#1A2A0E',
+  bgMid: '#16240B',
+  bgBottom: '#121E09',
+
+  warn: '#F0A03C',
+  danger: '#F0603C',
+
+  ringTrack: 'rgba(255,255,255,.09)',
+  ghostLetter: 'rgba(195,234,79,.06)',
+
+  liveBadgeBg: 'rgba(195,234,79,.14)',
+  closingBadgeBg: 'rgba(240,96,60,.16)',
+
+  chipBg: 'rgba(255,255,255,.06)',
+  promptLabel: '#8CA075',
+
+  rowBg: 'rgba(255,255,255,.07)',
+  rowBgLocked: 'rgba(195,234,79,.16)',
+  rowRingLocked: 'rgba(195,234,79,.55)',
+  markRing: 'rgba(255,255,255,.22)',
+
+  submitInactiveBg: 'rgba(255,255,255,.09)',
+  submitInactiveText: 'rgba(255,255,255,.4)',
+
+  onDark75: 'rgba(255,255,255,.75)',
+  onDark65: 'rgba(255,255,255,.65)',
+  onDark45: 'rgba(255,255,255,.45)',
+  onDark42: 'rgba(255,255,255,.42)',
+  onDark40: 'rgba(255,255,255,.4)',
+  onDark38: 'rgba(255,255,255,.38)',
+} as const;
+
 export const ROUND_OPTIONS = [3, 5, 10] as const;
 export const TIMER_OPTIONS = [15, 20, 30, 45] as const;
 
