@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, noOutline, radius, spacing } from '../../../theme';
@@ -40,12 +40,6 @@ export function NpatRoundScreen() {
   const locked = round?.status !== 'playing' || hasSubmittedAll;
   const urgency = remaining <= DANGER_AT ? 'danger' : remaining <= WARN_AT ? 'warn' : 'normal';
 
-  const submittedCount = useMemo(() => {
-    // Best-effort progress indicator — only my own submission is visible
-    // pre-results (by design), so this just reflects whether I've locked in.
-    return hasSubmittedAll ? 1 : 0;
-  }, [hasSubmittedAll]);
-
   const handleSubmit = async () => {
     setSubmitting(true);
     setError(null);
@@ -55,9 +49,42 @@ export function NpatRoundScreen() {
     if (err) setError(err);
   };
 
+  // Refs kept current every render so the deadline timer below always reads
+  // the latest typed values/categories/submitAnswers without needing them in
+  // its dependency array (submitAnswers is a new closure every GameProvider
+  // render, so depending on it directly would keep re-arming the timeout).
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
+  const submitAnswersRef = useRef(submitAnswers);
+  submitAnswersRef.current = submitAnswers;
+  const hasSubmittedAllRef = useRef(hasSubmittedAll);
+  hasSubmittedAllRef.current = hasSubmittedAll;
+  const autoSubmittedForRound = useRef<string | null>(null);
+
+  // Whatever's typed gets sent the instant the clock runs out, even if the
+  // player never pressed Submit — otherwise every category silently scores
+  // 0 the moment the round locks. Fires slightly before the server's own
+  // end_time (which submit_round_answers strictly enforces) so the request
+  // has time to land before the deadline it's racing against.
+  useEffect(() => {
+    if (!round || round.status !== 'playing') return;
+    const msLeft = new Date(round.endTime).getTime() - Date.now() - 400;
+    const timer = setTimeout(() => {
+      if (autoSubmittedForRound.current === round.id || hasSubmittedAllRef.current) return;
+      autoSubmittedForRound.current = round.id;
+      const answers = categoriesRef.current.map((c) => ({ category: c, answer: valuesRef.current[c] ?? '' }));
+      submitAnswersRef.current(answers);
+    }, Math.max(0, msLeft));
+    return () => clearTimeout(timer);
+  }, [round?.id, round?.status, round?.endTime]);
+
   if (!round || !game) return null;
 
   const activeCount = players.filter((p) => p.active).length;
+  const submittedCount = players.filter((p) => p.active && p.submittedRoundId === round.id).length;
+  const stillWaitingOn = Math.max(0, activeCount - submittedCount);
 
   return (
     <View style={[styles.screen, urgency === 'danger' && styles.screenDanger]}>
@@ -97,11 +124,16 @@ export function NpatRoundScreen() {
           </View>
         ) : (
           <View style={styles.waitingCard}>
-            <Text style={styles.waitingTitle}>{submittedCount > 0 ? "You're locked in" : 'Round locked'}</Text>
+            <Text style={styles.waitingTitle}>{hasSubmittedAll ? "You're locked in" : 'Round locked'}</Text>
             <Text style={styles.waitingBody}>
               {categories.map((c) => `${c}: ${values[c] || '—'}`).join('  ·  ')}
             </Text>
-            <Text style={styles.waitingSub}>Waiting for the other {Math.max(0, activeCount - 1)} player{activeCount - 1 === 1 ? '' : 's'} · results reveal once everyone's in.</Text>
+            <Text style={styles.waitingSub}>
+              {stillWaitingOn > 0
+                ? `Waiting for ${stillWaitingOn} more player${stillWaitingOn === 1 ? '' : 's'} to submit`
+                : 'Everyone has submitted'}{' '}
+              · results reveal once everyone's in.
+            </Text>
           </View>
         )}
 
