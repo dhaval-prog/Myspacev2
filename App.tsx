@@ -39,8 +39,8 @@ type Screen =
   | { name: 'split'; focusGroupId?: string }
   | { name: 'friends' }
   | { name: 'gamesHub' }
-  | { name: 'games' }
-  | { name: 'cards' }
+  | { name: 'games'; initialTab?: 'create' | 'join' }
+  | { name: 'cards'; initialTab?: 'create' | 'join' }
   | { name: 'liveLocations' }
   | { name: 'account'; from: 'home' | 'expenses' | 'split' };
 
@@ -124,8 +124,8 @@ function AppNavigator() {
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
         onOpenFriends={() => setScreen({ name: 'friends' })}
-        onOpenNpat={() => setScreen({ name: 'games' })}
-        onOpenCards={() => setScreen({ name: 'cards' })}
+        onOpenNpat={(initialTab) => setScreen({ name: 'games', initialTab })}
+        onOpenCards={(initialTab) => setScreen({ name: 'cards', initialTab })}
       />
     );
   }
@@ -135,6 +135,7 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'gamesHub' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
+        initialTab={screen.initialTab}
       />
     );
   }
@@ -144,6 +145,7 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'gamesHub' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
+        initialTab={screen.initialTab}
       />
     );
   }

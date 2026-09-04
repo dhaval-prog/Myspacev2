@@ -22,9 +22,10 @@ export const fontsToLoad = {
   Figtree_800ExtraBold,
   DMMono_400Regular,
   DMMono_500Medium,
-  // Space Cards and NPAT only — every other screen uses Figtree; Plus Jakarta
-  // Sans is those two games' own design-mandated face, kept out of the shared
-  // fontFamily tokens in typography.ts so it can't leak into the rest of the app.
+  // Space Cards, NPAT, and the Games hub only — every other screen uses
+  // Figtree; Plus Jakarta Sans is the Games feature's own design-mandated
+  // face, kept out of the shared fontFamily tokens in typography.ts so it
+  // can't leak into the rest of the app.
   PlusJakartaSans_400Regular,
   PlusJakartaSans_500Medium,
   PlusJakartaSans_600SemiBold,
