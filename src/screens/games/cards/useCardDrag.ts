@@ -38,6 +38,27 @@ export function useCardDrag({ enabled, isPlayable, getDropZone, onPlay, onTap, o
   const rotate = useRef(new Animated.Value(0)).current;
   const hoveringRef = useRef(false);
 
+  // The PanResponder below is built exactly once (useRef's initializer only ever
+  // runs on the first render), so any value its callbacks close over directly would
+  // stay frozen at whatever it was when this card instance first mounted — including
+  // `enabled`/`isPlayable`, which flip every time the turn changes. A card dealt on
+  // someone else's turn would stay draggable forever, and one dealt as playable would
+  // keep reporting "valid" after it stopped being legal, throwing at the server as a
+  // rejected "not your turn" / illegal-card play. Route every value the responder
+  // reads through a ref that's kept current on every render instead.
+  const enabledRef = useRef(enabled);
+  const isPlayableRef = useRef(isPlayable);
+  const getDropZoneRef = useRef(getDropZone);
+  const onPlayRef = useRef(onPlay);
+  const onTapRef = useRef(onTap);
+  const onHoverChangeRef = useRef(onHoverChange);
+  enabledRef.current = enabled;
+  isPlayableRef.current = isPlayable;
+  getDropZoneRef.current = getDropZone;
+  onPlayRef.current = onPlay;
+  onTapRef.current = onTap;
+  onHoverChangeRef.current = onHoverChange;
+
   const setPhaseBoth = (p: CardPhase) => {
     phaseRef.current = p;
     setPhase(p);
@@ -68,10 +89,10 @@ export function useCardDrag({ enabled, isPlayable, getDropZone, onPlay, onTap, o
 
   const panResponderRef = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => enabled,
-      onStartShouldSetPanResponderCapture: () => enabled,
-      onMoveShouldSetPanResponder: (_evt, g) => enabled && (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2),
-      onMoveShouldSetPanResponderCapture: (_evt, g) => enabled && (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2),
+      onStartShouldSetPanResponder: () => enabledRef.current,
+      onStartShouldSetPanResponderCapture: () => enabledRef.current,
+      onMoveShouldSetPanResponder: (_evt, g) => enabledRef.current && (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2),
+      onMoveShouldSetPanResponderCapture: (_evt, g) => enabledRef.current && (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2),
       // The hand sits inside a horizontal ScrollView, which otherwise renegotiates and
       // steals the responder mid-drag the instant a gesture has any horizontal component
       // (a well-known PanResponder-inside-ScrollView gotcha) — refuse to give it up once granted.
@@ -93,25 +114,25 @@ export function useCardDrag({ enabled, isPlayable, getDropZone, onPlay, onTap, o
         pan.setValue({ x: gesture.dx, y: gesture.dy - LIFT_Y });
         rotate.setValue(Math.max(-MAX_ROTATE_DEG, Math.min(MAX_ROTATE_DEG, gesture.dx / 8)));
 
-        const zone = getDropZone();
+        const zone = getDropZoneRef.current();
         const hovering = !!zone && Math.hypot(gesture.moveX - zone.x, gesture.moveY - zone.y) <= zone.radius;
         if (hovering !== hoveringRef.current) {
           hoveringRef.current = hovering;
-          onHoverChange?.(hovering && isPlayable);
+          onHoverChangeRef.current?.(hovering && isPlayableRef.current);
         }
-        const next: CardPhase = hovering ? (isPlayable ? 'valid' : 'invalid') : 'dragging';
+        const next: CardPhase = hovering ? (isPlayableRef.current ? 'valid' : 'invalid') : 'dragging';
         if (next !== phaseRef.current) setPhaseBoth(next);
       },
       onPanResponderRelease: async (_evt, gesture) => {
         const endedPhase = phaseRef.current;
         if (hoveringRef.current) {
           hoveringRef.current = false;
-          onHoverChange?.(false);
+          onHoverChangeRef.current?.(false);
         }
 
         if (endedPhase === 'pressed') {
           resetVisual(true);
-          onTap?.();
+          onTapRef.current?.();
           return;
         }
         if (endedPhase === 'invalid') {
@@ -131,13 +152,13 @@ export function useCardDrag({ enabled, isPlayable, getDropZone, onPlay, onTap, o
         // until the server confirms and the real hand shrinks — no separate
         // optimistic-hide bookkeeping needed, since a failed play just springs back.
         setPhaseBoth('throwing');
-        const zone = getDropZone();
+        const zone = getDropZoneRef.current();
         const targetX = zone ? gesture.dx + (zone.x - gesture.moveX) : gesture.dx;
         const targetY = zone ? gesture.dy - LIFT_Y + (zone.y - gesture.moveY) : gesture.dy - LIFT_Y;
         const speed = Math.hypot(gesture.vx, gesture.vy);
         const duration = Math.max(140, 300 - speed * 60);
 
-        const playPromise = onPlay();
+        const playPromise = onPlayRef.current();
         Animated.parallel([
           Animated.timing(pan, { toValue: { x: targetX, y: targetY }, duration, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
           Animated.timing(scale, { toValue: 0.92, duration, useNativeDriver: true }),
@@ -152,7 +173,7 @@ export function useCardDrag({ enabled, isPlayable, getDropZone, onPlay, onTap, o
       onPanResponderTerminate: () => {
         if (hoveringRef.current) {
           hoveringRef.current = false;
-          onHoverChange?.(false);
+          onHoverChangeRef.current?.(false);
         }
         resetVisual(true);
       },
