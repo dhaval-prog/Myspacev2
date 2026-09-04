@@ -1,8 +1,11 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { scFont } from '../../theme/spaceCardsTokens';
 import { CardFace } from '../../screens/games/cards/CardFace';
+import { Icon } from '../Icon';
 import type { PlayingCard } from '../../types/cards';
+
+const BACK_ICON = 'M15 5l-7 7 7 7';
 
 interface FanCard {
   card: PlayingCard;
@@ -14,22 +17,45 @@ interface LobbyHeaderProps {
   title?: string;
   subtitle?: string;
   cards: FanCard[];
+  onBack?: () => void;
+  reduceMotion?: boolean;
 }
 
-/** The dealt-fan hero at the top of Create/Join — same card-fan visual, different deals per screen (§6/§7). 2A carries the screen title; 2B's fan sits alone. */
-export function LobbyHeader({ title, subtitle, cards }: LobbyHeaderProps) {
+/** The dealt-fan hero at the top of Create/Join — same card-fan visual, different deals per screen (§6/§7). 2A carries the screen title; 2B's fan sits alone. The fan gently bobs, like the cards are floating; `onBack` puts navigation in the same row as the title instead of pinned separately below the sheet. */
+export function LobbyHeader({ title, subtitle, cards, onBack, reduceMotion }: LobbyHeaderProps) {
+  const bob = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bob, { toValue: 1, duration: 1700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 0, duration: 1700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion, bob]);
+
+  const lift = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });
+
   return (
     <View style={styles.wrap}>
-      {title ? <Text style={styles.title}>{title}</Text> : null}
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      {onBack ? (
+        <Pressable onPress={onBack} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back to Games">
+          <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
+        </Pressable>
+      ) : null}
+      {title ? <Text style={[styles.title, onBack && styles.titleWithBack]}>{title}</Text> : null}
+      {subtitle ? <Text style={[styles.subtitle, onBack && styles.titleWithBack]}>{subtitle}</Text> : null}
       <View style={[styles.fan, !title && styles.fanNoTitle]}>
         {cards.map(({ card, rotateDeg, x }, i) => (
-          <CardFace
+          <Animated.View
             key={`${card.suit}-${card.rank}-${i}`}
-            card={card}
-            size="pile"
-            style={[styles.fanCard, { marginLeft: x - 40, zIndex: i, transform: [{ rotate: `${rotateDeg}deg` }] }]}
-          />
+            style={[styles.fanCard, { marginLeft: x - 40, zIndex: i, transform: [{ rotate: `${rotateDeg}deg` }, { translateY: lift }] }]}
+          >
+            <CardFace card={card} size="pile" />
+          </Animated.View>
         ))}
       </View>
     </View>
@@ -42,6 +68,18 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     alignItems: 'center',
   },
+  backButton: {
+    position: 'absolute',
+    top: 8,
+    left: 22,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
   title: {
     alignSelf: 'flex-start',
     fontFamily: scFont.sans800,
@@ -49,6 +87,9 @@ const styles = StyleSheet.create({
     lineHeight: 30.8,
     letterSpacing: -1,
     color: '#FFFFFF',
+  },
+  titleWithBack: {
+    paddingLeft: 58,
   },
   subtitle: {
     alignSelf: 'flex-start',
@@ -67,7 +108,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fanNoTitle: {
-    marginTop: 40,
+    marginTop: 46,
   },
   fanCard: {
     position: 'absolute',
