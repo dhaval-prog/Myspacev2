@@ -38,7 +38,6 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
   const { user } = useAuth();
   const { game, round, players, answers, myPlayerId, startRound, leaveGame } = useGame();
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +56,10 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
   };
 
   const answersByPlayer = (playerId: string) => answers.filter((a) => a.playerId === playerId);
-  const otherPlayers = active.filter((p) => p.id !== myPlayerId);
+  // "You" first for a quick self-check, then everyone else in leaderboard order —
+  // every player's answers are shown directly, not tucked behind a tap-to-reveal,
+  // so both the host and every other player can see the full round at a glance.
+  const answerOrder = [...active.filter((p) => p.id === myPlayerId), ...active.filter((p) => p.id !== myPlayerId)];
 
   return (
     <LinearGradient
@@ -87,59 +89,40 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
           ))}
         </View>
 
-        <Text style={styles.eyebrow}>YOUR ANSWERS</Text>
+        <Text style={styles.eyebrow}>ALL ANSWERS</Text>
         <View style={styles.list}>
-          {answersByPlayer(myPlayerId ?? '').map((a) => {
-            const s = STATUS_STYLE[a.validationStatus];
-            const isOpen = expanded === a.id;
+          {answerOrder.map((p) => {
+            const theirAnswers = answersByPlayer(p.id);
+            const roundPoints = theirAnswers.reduce((sum, a) => sum + a.points, 0);
             return (
-              <Pressable key={a.id} onPress={() => setExpanded(isOpen ? null : a.id)} style={styles.answerRow}>
-                <View style={styles.answerHead}>
-                  <Text style={styles.answerCategory}>{a.category}</Text>
-                  <Text style={styles.answerValue}>{a.answer || '—'}</Text>
-                  <View style={[styles.badge, { backgroundColor: s.bg }]}>
-                    <Text style={[styles.badgeLabel, { color: s.fg }]}>+{a.points}</Text>
-                  </View>
+              <View key={p.id} style={styles.playerCard}>
+                <View style={styles.playerCardHead}>
+                  <Text style={styles.playerCardName}>
+                    {p.name}
+                    {p.id === myPlayerId ? ' (you)' : ''}
+                  </Text>
+                  <Text style={styles.playerCardPoints}>+{roundPoints} this round</Text>
                 </View>
-                {isOpen && <Text style={styles.answerReason}>{reasonFor(a.validationStatus, a.isDuplicate, a.category, round.letter)}</Text>}
-              </Pressable>
+                {theirAnswers.map((a) => {
+                  const s = STATUS_STYLE[a.validationStatus];
+                  const isOpen = expanded === a.id;
+                  return (
+                    <Pressable key={a.id} onPress={() => setExpanded(isOpen ? null : a.id)}>
+                      <View style={styles.answerHead}>
+                        <Text style={styles.answerCategory}>{a.category}</Text>
+                        <Text style={styles.answerValue}>{a.answer || '—'}</Text>
+                        <View style={[styles.badge, { backgroundColor: s.bg }]}>
+                          <Text style={[styles.badgeLabel, { color: s.fg }]}>+{a.points}</Text>
+                        </View>
+                      </View>
+                      {isOpen && <Text style={styles.answerReason}>{reasonFor(a.validationStatus, a.isDuplicate, a.category, round.letter)}</Text>}
+                    </Pressable>
+                  );
+                })}
+              </View>
             );
           })}
         </View>
-
-        {otherPlayers.length > 0 && (
-          <>
-            <Text style={styles.eyebrow}>EVERYONE'S ANSWERS</Text>
-            <View style={styles.list}>
-              {otherPlayers.map((p) => {
-                const theirAnswers = answersByPlayer(p.id);
-                const roundPoints = theirAnswers.reduce((sum, a) => sum + a.points, 0);
-                const isOpen = expandedPlayer === p.id;
-                return (
-                  <View key={p.id} style={styles.playerCard}>
-                    <Pressable onPress={() => setExpandedPlayer(isOpen ? null : p.id)} style={styles.playerCardHead}>
-                      <Text style={styles.playerCardName}>{p.name}</Text>
-                      <Text style={styles.playerCardPoints}>+{roundPoints} this round</Text>
-                    </Pressable>
-                    {isOpen &&
-                      theirAnswers.map((a) => {
-                        const s = STATUS_STYLE[a.validationStatus];
-                        return (
-                          <View key={a.id} style={styles.answerHead}>
-                            <Text style={styles.answerCategory}>{a.category}</Text>
-                            <Text style={styles.answerValue}>{a.answer || '—'}</Text>
-                            <View style={[styles.badge, { backgroundColor: s.bg }]}>
-                              <Text style={[styles.badgeLabel, { color: s.fg }]}>+{a.points}</Text>
-                            </View>
-                          </View>
-                        );
-                      })}
-                  </View>
-                );
-              })}
-            </View>
-          </>
-        )}
 
         {error && <Text style={styles.error}>{error}</Text>}
 
@@ -210,7 +193,6 @@ const styles = StyleSheet.create({
   rankNumber: { fontFamily: fontFamily.mono500, fontSize: 13, color: colors.ink50, width: 18 },
   rankName: { flex: 1, fontFamily: fontFamily.sans600, fontSize: 14.5, color: colors.textPrimary },
   rankScore: { fontFamily: fontFamily.mono500, fontSize: 15, color: colors.textPrimary },
-  answerRow: { backgroundColor: 'rgba(255,255,255,.7)', borderRadius: 18, padding: 14, gap: 6 },
   playerCard: { backgroundColor: 'rgba(255,255,255,.7)', borderRadius: 18, padding: 14, gap: 10 },
   playerCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   playerCardName: { fontFamily: fontFamily.sans600, fontSize: 14.5, color: colors.textPrimary },
