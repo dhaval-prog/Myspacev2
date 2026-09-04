@@ -246,6 +246,11 @@ function DraggableCard({
   // a card as playable, so "not playable" is the absence of a highlight, not a
   // washed-out card.
   const lit = enabled && isPlayable;
+  // Picked up out of the stack (long-pressed or dragged past the threshold) — deepen
+  // its shadow so it visibly pops above its neighbours, on top of the scale/lift the
+  // drag hook itself animates. Excludes the brief 'pressed' phase, which hasn't
+  // committed to being a hold-and-drag yet (still might just be a tap).
+  const lifted = phase !== 'idle' && phase !== 'pressed';
   // Drag offsets are listed first so they land in true screen pixels regardless of
   // the fan's resting tilt — otherwise a card fanned at, say, 20deg would drag along
   // that diagonal instead of following the finger.
@@ -256,7 +261,7 @@ function DraggableCard({
   return (
     <Animated.View {...panHandlers} accessibilityLabel={`Hand card: ${card.suit ?? 'wild'} ${card.rank}`} style={style}>
       {lit ? <View style={styles.handCardGlow} pointerEvents="none" /> : null}
-      <CardFace card={card} size="hand" />
+      <CardFace card={card} size="hand" style={lifted ? styles.handCardLifted : undefined} />
     </Animated.View>
   );
 }
@@ -740,6 +745,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowOffset: { width: 0, height: 0 },
     shadowRadius: 10,
+  },
+  handCardLifted: {
+    shadowColor: '#000',
+    shadowOpacity: 0.55,
+    shadowOffset: { width: 0, height: 18 },
+    shadowRadius: 26,
   },
   actions: { flexDirection: 'row', gap: 10, paddingHorizontal: 18, paddingTop: 10 },
   singleAction: { flex: 1 },
