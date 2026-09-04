@@ -1,21 +1,24 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fontFamily, noOutline, radius, spacing } from '../../../theme';
 import { Icon } from '../../../components/Icon';
 import { BottomNav } from '../../../components/BottomNav';
+import { LobbyHeader } from '../../../components/spacecards/LobbyHeader';
+import { OpponentStack } from '../../../components/spacecards/OpponentStack';
+import { PrimaryCta } from '../../../components/spacecards/PrimaryCta';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useAuth } from '../../../context/AuthContext';
 import { useCardsGame } from '../../../context/CardsGameContext';
-import { CardFace } from './CardFace';
+import { scColor, scFont } from '../../../theme/spaceCardsTokens';
+import type { PlayingCard } from '../../../types/cards';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const LEAVE_ICON = 'M9 5l-7 7 7 7 M2 12h13 M17 5v14';
 
 const PLAYER_OPTIONS = [2, 3, 4];
 const TIMER_OPTIONS: { label: string; value: number | null }[] = [
-  { label: 'No timer', value: null },
+  { label: 'Off', value: null },
   { label: '15s', value: 15 },
   { label: '30s', value: 30 },
   { label: '60s', value: 60 },
@@ -25,38 +28,20 @@ function defaultName(user: { user_metadata?: { full_name?: string } } | null): s
   return user?.user_metadata?.full_name?.split(' ')[0]?.trim() || 'Player';
 }
 
-/** A small fan of cards that gently bobs up and down, like they're floating. Purely decorative — never animates the reduced-motion way. */
-function CardsHero({ reduceMotion }: { reduceMotion?: boolean }) {
-  const bob = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bob, { toValue: 1, duration: 1700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(bob, { toValue: 0, duration: 1700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [reduceMotion, bob]);
-
-  const lift = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -9] });
-
-  return (
-    <View style={styles.heroWrap} pointerEvents="none">
-      <Animated.View style={[styles.heroLayer, { transform: [{ rotate: '-11deg' }, { translateX: -26 }, { translateY: lift }] }]}>
-        <CardFace card={{ suit: 'tide', rank: '5' }} size="sm" />
-      </Animated.View>
-      <Animated.View style={[styles.heroLayer, { transform: [{ rotate: '9deg' }, { translateX: 24 }, { translateY: lift }] }]}>
-        <CardFace card={{ suit: 'solar', rank: '2' }} size="sm" />
-      </Animated.View>
-      <Animated.View style={[styles.heroLayer, { transform: [{ translateY: lift }] }]}>
-        <CardFace card={{ suit: 'ember', rank: '7' }} size="lg" />
-      </Animated.View>
-    </View>
-  );
+function fanCard(suit: PlayingCard['suit'], rank: PlayingCard['rank']): PlayingCard {
+  return { suit, rank };
 }
+const CREATE_FAN = [
+  { card: fanCard('tide', '5'), rotateDeg: -17, x: -58 },
+  { card: fanCard('solar', '2'), rotateDeg: -7, x: -27 },
+  { card: fanCard('moss', '6'), rotateDeg: 12, x: 30 },
+  { card: fanCard('ember', '7'), rotateDeg: 2, x: 0 },
+];
+const JOIN_FAN = [
+  { card: fanCard('tide', '4'), rotateDeg: -14, x: -46 },
+  { card: fanCard('solar', '8'), rotateDeg: -3, x: -14 },
+  { card: fanCard('ember', '6'), rotateDeg: 9, x: 20 },
+];
 
 interface CardsLobbyScreenProps {
   onHome: () => void;
@@ -64,6 +49,7 @@ interface CardsLobbyScreenProps {
   onOpenSplit: () => void;
 }
 
+/** Space Cards — Create/Join lobby (2A/2B) and the waiting room, restyled to the design handoff, wired to the real backend (CardsGameContext). */
 export function CardsLobbyScreen({ onHome, onOpenExpenses, onOpenSplit }: CardsLobbyScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
@@ -111,85 +97,98 @@ function CardsHub({
     if (err) setError(err);
   };
 
+  const isJoin = tab === 'join';
+  const fan = isJoin ? JOIN_FAN : CREATE_FAN;
+  const codeCells = [0, 1, 2, 3].map((i) => roomCode[i] ?? '');
+  const focusIndex = Math.min(roomCode.length, 3);
+
   return (
-    <LinearGradient
-      colors={['#2C1B4D', '#4A2E6E', '#7A4FA0'] as [string, string, ...string[]]}
-      locations={[0, 0.5, 1]}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.screen}
-    >
-      <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
-        <View style={styles.headerRow}>
-          <Pressable onPress={onHome} style={styles.iconButtonDark} accessibilityRole="button" accessibilityLabel="Back to Games">
-            <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
-          </Pressable>
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.titleOnDark}>Space Cards</Text>
-            <Text style={styles.subOnDark}>Shed your hand before anyone else — 2 to 4 players.</Text>
+    <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
+        <LobbyHeader title={!isJoin ? 'UNO Space Cards' : undefined} subtitle={!isJoin ? 'Shed your hand before anyone else.' : undefined} cards={fan} />
+
+        <LinearGradient colors={[scColor.sheet2, scColor.sheet3]} style={styles.sheet}>
+          <View style={styles.handle} />
+
+          <View style={styles.tabs}>
+            <Pressable onPress={() => setTab('create')} style={[styles.tab, !isJoin && styles.tabActive]} accessibilityRole="button" accessibilityLabel="Create a game">
+              <Text style={[styles.tabLabel, !isJoin && styles.tabLabelActive]}>Create a game</Text>
+            </Pressable>
+            <Pressable onPress={() => setTab('join')} style={[styles.tab, isJoin && styles.tabActive]} accessibilityRole="button" accessibilityLabel="Join a game">
+              <Text style={[styles.tabLabel, isJoin && styles.tabLabelActive]}>Join a game</Text>
+            </Pressable>
           </View>
-        </View>
 
-        <CardsHero reduceMotion={reduceMotion} />
+          <View style={styles.field}>
+            <Text style={styles.label}>YOUR NAME</Text>
+            <View style={styles.input}>
+              <TextInput value={name} onChangeText={setName} placeholder="Your name" placeholderTextColor="rgba(255,255,255,.4)" style={styles.inputText} />
+            </View>
+          </View>
 
-        <View style={styles.tabRow}>
-          <Pressable onPress={() => setTab('create')} style={[styles.tabButton, tab === 'create' && styles.tabButtonActive]}>
-            <Text style={[styles.tabLabel, tab === 'create' && styles.tabLabelActive]}>Create a game</Text>
-          </Pressable>
-          <Pressable onPress={() => setTab('join')} style={[styles.tabButton, tab === 'join' && styles.tabButtonActive]}>
-            <Text style={[styles.tabLabel, tab === 'join' && styles.tabLabelActive]}>Join a game</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.fieldLabel}>Your name</Text>
-          <TextInput value={name} onChangeText={setName} placeholder="Player" placeholderTextColor={colors.placeholder} style={[styles.input, noOutline]} />
-
-          {tab === 'create' ? (
+          {!isJoin ? (
             <>
-              <Text style={styles.fieldLabel}>Players</Text>
-              <View style={styles.pillRow}>
-                {PLAYER_OPTIONS.map((n) => (
-                  <Pressable key={n} onPress={() => setMaxPlayers(n)} style={[styles.optionPill, maxPlayers === n && styles.optionPillActive]}>
-                    <Text style={[styles.optionLabel, maxPlayers === n && styles.optionLabelActive]}>{n}</Text>
-                  </Pressable>
-                ))}
+              <View style={styles.field}>
+                <Text style={styles.label}>PLAYERS</Text>
+                <View style={styles.optionRow}>
+                  {PLAYER_OPTIONS.map((n) => (
+                    <Pressable key={n} onPress={() => setMaxPlayers(n)} style={[styles.optionTile, maxPlayers === n && styles.optionTileActive]} accessibilityRole="button" accessibilityLabel={`${n} players`}>
+                      <Text style={[styles.optionLabel, maxPlayers === n && styles.optionLabelActive]}>{n}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
-              <Text style={styles.fieldLabel}>Turn timer</Text>
-              <View style={styles.pillRow}>
-                {TIMER_OPTIONS.map((t) => (
-                  <Pressable key={t.label} onPress={() => setTimerSeconds(t.value)} style={[styles.optionPill, timerSeconds === t.value && styles.optionPillActive]}>
-                    <Text style={[styles.optionLabel, timerSeconds === t.value && styles.optionLabelActive]}>{t.label}</Text>
-                  </Pressable>
-                ))}
+
+              <View style={styles.field}>
+                <Text style={styles.label}>TURN TIMER</Text>
+                <View style={styles.optionRow}>
+                  {TIMER_OPTIONS.map((t) => (
+                    <Pressable key={t.label} onPress={() => setTimerSeconds(t.value)} style={[styles.optionTile, timerSeconds === t.value && styles.optionTileActive]} accessibilityRole="button" accessibilityLabel={t.value === null ? 'Timer off' : `${t.value} second timer`}>
+                      <Text style={[styles.optionLabel, timerSeconds === t.value && styles.optionLabelActive]}>{t.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
+
               {error && <Text style={styles.error}>{error}</Text>}
-              <Pressable onPress={handleCreate} disabled={loading} style={({ pressed }) => [styles.ctaButton, pressed && styles.pressed]}>
-                <Text style={styles.ctaLabel}>{loading ? 'Creating…' : 'Create room'}</Text>
-              </Pressable>
+              <PrimaryCta label={loading ? 'Creating…' : 'Create room'} onPress={handleCreate} disabled={loading} reduceMotion={reduceMotion} />
             </>
           ) : (
             <>
-              <Text style={styles.fieldLabel}>Room code</Text>
-              <TextInput
-                value={roomCode}
-                onChangeText={(t) => setRoomCode(t.toUpperCase().slice(0, 4))}
-                placeholder="AB7K"
-                placeholderTextColor={colors.placeholder}
-                autoCapitalize="characters"
-                style={[styles.input, styles.inputMono, noOutline]}
-              />
+              <View style={styles.field}>
+                <Text style={styles.label}>ROOM CODE</Text>
+                <View style={styles.codeRow}>
+                  {codeCells.map((ch, i) => (
+                    <View key={i} style={[styles.codeCell, i === focusIndex && !ch && styles.codeCellFocused]}>
+                      <Text style={styles.codeCellText}>{ch}</Text>
+                      {i === focusIndex && !ch ? <View style={styles.caret} /> : null}
+                    </View>
+                  ))}
+                </View>
+                <TextInput
+                  value={roomCode}
+                  onChangeText={(t) => setRoomCode(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))}
+                  autoCapitalize="characters"
+                  maxLength={4}
+                  style={styles.hiddenInput}
+                  autoFocus
+                />
+              </View>
               {error && <Text style={styles.error}>{error}</Text>}
-              <Pressable onPress={handleJoin} disabled={loading} style={({ pressed }) => [styles.ctaButton, pressed && styles.pressed]}>
-                <Text style={styles.ctaLabel}>{loading ? 'Joining…' : 'Join room'}</Text>
-              </Pressable>
+              <PrimaryCta label={loading ? 'Joining…' : 'Join game'} onPress={handleJoin} disabled={loading} reduceMotion={reduceMotion} />
             </>
           )}
-        </View>
+        </LinearGradient>
       </ScrollView>
 
+      <View style={styles.pinned}>
+        <Pressable onPress={onHome} style={styles.iconButtonDark} accessibilityRole="button" accessibilityLabel="Back to Games">
+          <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
+        </Pressable>
+      </View>
+
       <BottomNav
-        activeId="games"
+        activeId="home"
         onSelect={(id) => {
           if (id === 'home') onHome();
           if (id === 'expenses') onOpenExpenses();
@@ -234,78 +233,71 @@ function CardsReadyRoom({
   };
 
   return (
-    <LinearGradient
-      colors={['#2C1B4D', '#4A2E6E', '#7A4FA0'] as [string, string, ...string[]]}
-      locations={[0, 0.5, 1]}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.screen}
-    >
-      <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
-        <View style={styles.headerRow}>
-          <Pressable
-            onPress={() => {
-              leaveGame();
-              onHome();
-            }}
-            style={styles.iconButtonDark}
-            accessibilityRole="button"
-            accessibilityLabel="Back to Games"
-          >
-            <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
-          </Pressable>
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.titleOnDark}>Waiting room</Text>
-            <Text style={styles.subOnDark}>{active.length}/{game.maxPlayers} players · share the code below</Text>
+    <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
+        <LobbyHeader cards={JOIN_FAN} />
+
+        <LinearGradient colors={[scColor.sheet2, scColor.sheet3]} style={styles.sheet}>
+          <View style={styles.handle} />
+
+          <View style={styles.field}>
+            <Text style={styles.label}>ROOM CODE</Text>
+            <Text style={styles.roomCodeValue}>{game.roomCode}</Text>
+            <Text style={styles.roomCodeSub}>{game.timerSeconds ? `${game.timerSeconds}s per turn` : 'No turn timer'} · {active.length}/{game.maxPlayers} seated</Text>
           </View>
-        </View>
 
-        <View style={styles.codeCard}>
-          <Text style={styles.codeLabel}>ROOM CODE</Text>
-          <Text style={styles.codeValue}>{game.roomCode}</Text>
-          <Text style={styles.codeSub}>{game.timerSeconds ? `${game.timerSeconds}s per turn` : 'No turn timer'}</Text>
-        </View>
-
-        <Text style={styles.eyebrow}>PLAYERS</Text>
-        <View style={styles.list}>
-          {active.map((p) => (
-            <View key={p.id} style={styles.row}>
-              <View style={styles.seatBadge}>
-                <Text style={styles.seatBadgeLabel}>{p.seat + 1}</Text>
+          <View style={styles.waitList}>
+            {active.map((p) => (
+              <View key={p.id} style={styles.waitRow}>
+                <View style={[styles.statusDot, p.userId === game.hostId ? styles.statusDotHost : styles.statusDotReady]} />
+                <OpponentStack style={styles.waitAvatar} />
+                <Text style={styles.waitName}>
+                  {p.name}
+                  {p.userId === game.hostId ? ' · Host' : ''}
+                  {p.id === myPlayerId ? ' (you)' : ''}
+                </Text>
               </View>
-              <Text style={styles.rowName}>
-                {p.name}
-                {p.userId === game.hostId ? ' · Host' : ''}
-                {p.id === myPlayerId ? ' (you)' : ''}
-              </Text>
-            </View>
-          ))}
-          {Array.from({ length: Math.max(0, game.maxPlayers - active.length) }).map((_, i) => (
-            <View key={`empty-${i}`} style={[styles.row, styles.rowEmpty]}>
-              <View style={[styles.seatBadge, styles.seatBadgeEmpty]} />
-              <Text style={styles.rowNameEmpty}>Waiting for a player…</Text>
-            </View>
-          ))}
-        </View>
+            ))}
+            {Array.from({ length: Math.max(0, game.maxPlayers - active.length) }).map((_, i) => (
+              <View key={`empty-${i}`} style={[styles.waitRow, styles.waitRowEmpty]}>
+                <View style={styles.statusDot} />
+                <View style={[styles.waitAvatar, styles.waitAvatarEmpty]} />
+                <Text style={styles.waitNameEmpty}>Waiting for a player…</Text>
+              </View>
+            ))}
+          </View>
 
-        {error && <Text style={styles.error}>{error}</Text>}
+          {error && <Text style={styles.error}>{error}</Text>}
 
-        {isHost ? (
-          <Pressable onPress={handleStart} disabled={starting || !canStart} style={({ pressed }) => [styles.ctaButton, (!canStart || starting) && styles.ctaButtonDisabled, pressed && styles.pressed]}>
-            <Text style={styles.ctaLabel}>{starting ? 'Starting…' : canStart ? 'Start game' : `Need ${game.minPlayers} players`}</Text>
+          {isHost ? (
+            <PrimaryCta label={starting ? 'Starting…' : canStart ? 'Start game' : `Need ${game.minPlayers} players`} onPress={handleStart} disabled={starting || !canStart} reduceMotion={reduceMotion} />
+          ) : (
+            <Text style={styles.waitHint}>Waiting for the host to start the round…</Text>
+          )}
+
+          <Pressable onPress={leaveGame} style={styles.leaveRow} accessibilityRole="button" accessibilityLabel="Leave game">
+            <Icon path={LEAVE_ICON} color="rgba(255,255,255,.5)" size={16} strokeWidth={1.8} />
+            <Text style={styles.leaveLabel}>Leave game</Text>
           </Pressable>
-        ) : (
-          <Text style={styles.waitingText}>Waiting for the host to start the game…</Text>
-        )}
-
-        <Pressable onPress={leaveGame} style={styles.leaveRow}>
-          <Icon path={LEAVE_ICON} color="rgba(255,255,255,.5)" size={16} strokeWidth={1.8} />
-          <Text style={styles.leaveLabel}>Leave game</Text>
-        </Pressable>
+        </LinearGradient>
       </ScrollView>
 
+      <View style={styles.pinned}>
+        <Pressable
+          onPress={() => {
+            leaveGame();
+            onHome();
+          }}
+          style={styles.iconButtonDark}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Games"
+        >
+          <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
+        </Pressable>
+      </View>
+
       <BottomNav
-        activeId="games"
+        activeId="home"
         onSelect={(id) => {
           if (id === 'home') onHome();
           if (id === 'expenses') onOpenExpenses();
@@ -320,81 +312,55 @@ function CardsReadyRoom({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  scrollFlex: { flex: 1 },
-  scroll: { paddingHorizontal: 26, paddingBottom: spacing.lg, gap: 14 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  headerTextBlock: { flex: 1, gap: 2 },
-  heroWrap: { height: 112, alignItems: 'center', justifyContent: 'center' },
-  heroLayer: { position: 'absolute' },
-  titleOnDark: { fontFamily: fontFamily.sans700, fontSize: 28, lineHeight: 30, letterSpacing: -0.8, color: '#fff' },
-  subOnDark: { fontFamily: fontFamily.sans400, fontSize: 13.5, color: 'rgba(255,255,255,.65)' },
-  tabRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,.12)', borderRadius: radius.pill, padding: 4, gap: 4 },
-  tabButton: { flex: 1, paddingVertical: 12, borderRadius: radius.pill, alignItems: 'center' },
-  tabButtonActive: { backgroundColor: '#fff' },
-  tabLabel: { fontFamily: fontFamily.sans600, fontSize: 13.5, color: 'rgba(255,255,255,.7)' },
-  tabLabelActive: { color: colors.ink },
-  card: { backgroundColor: 'rgba(255,255,255,.1)', borderRadius: 26, padding: 20, gap: 10 },
-  fieldLabel: {
-    fontFamily: fontFamily.mono500,
-    fontSize: 10.5,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: 'rgba(255,255,255,.5)',
-    marginTop: 6,
+  sheet: {
+    marginTop: 18,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,.20)',
+    borderBottomWidth: 0,
+    paddingHorizontal: 22,
+    paddingTop: 14,
+    paddingBottom: 28,
+    gap: 18,
   },
-  input: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 16,
-    color: '#fff',
-    backgroundColor: 'rgba(255,255,255,.12)',
-    borderRadius: radius.pill,
-    paddingVertical: 13,
-    paddingHorizontal: 18,
-  },
-  inputMono: { fontFamily: fontFamily.mono500, letterSpacing: 6, textAlign: 'center', fontSize: 22 },
-  pillRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  optionPill: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,.1)' },
-  optionPillActive: { backgroundColor: colors.lime },
-  optionLabel: { fontFamily: fontFamily.sans600, fontSize: 13.5, color: 'rgba(255,255,255,.7)' },
-  optionLabelActive: { color: colors.ink },
-  ctaButton: {
-    borderRadius: radius.pill,
-    backgroundColor: colors.lime,
-    paddingVertical: 17,
-    alignItems: 'center',
-    marginTop: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.24,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 24,
-    elevation: 4,
-  },
-  ctaButtonDisabled: { opacity: 0.5 },
-  ctaLabel: { fontFamily: fontFamily.sans600, fontSize: 16, color: colors.ink },
-  pressed: { opacity: 0.85 },
-  error: { fontFamily: fontFamily.sans500, fontSize: 12.5, color: '#FF8A6B' },
-  eyebrow: { fontFamily: fontFamily.sans600, fontSize: 11.5, letterSpacing: 1.495, textTransform: 'uppercase', color: 'rgba(255,255,255,.5)' },
-  list: { gap: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(255,255,255,.1)', borderRadius: 18, paddingVertical: 12, paddingHorizontal: 16 },
-  rowEmpty: { backgroundColor: 'rgba(255,255,255,.05)' },
-  rowName: { flex: 1, fontFamily: fontFamily.sans600, fontSize: 14.5, color: '#fff' },
-  rowNameEmpty: { flex: 1, fontFamily: fontFamily.sans400, fontSize: 13.5, color: 'rgba(255,255,255,.4)' },
-  seatBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' },
-  seatBadgeEmpty: { backgroundColor: 'rgba(255,255,255,.1)' },
-  seatBadgeLabel: { fontFamily: fontFamily.mono500, fontSize: 12, color: colors.ink },
-  codeCard: { backgroundColor: 'rgba(0,0,0,.25)', borderRadius: 26, paddingVertical: 20, paddingHorizontal: 22, alignItems: 'center', gap: 4 },
-  codeLabel: { fontFamily: fontFamily.mono500, fontSize: 10.5, letterSpacing: 1.4, color: 'rgba(255,255,255,.5)' },
-  codeValue: { fontFamily: fontFamily.mono500, fontSize: 40, letterSpacing: 8, color: colors.lime },
-  codeSub: { fontFamily: fontFamily.sans400, fontSize: 12, color: 'rgba(255,255,255,.6)', marginTop: 4 },
-  waitingText: { fontFamily: fontFamily.sans400, fontSize: 13, color: 'rgba(255,255,255,.6)', textAlign: 'center' },
-  leaveRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 },
-  leaveLabel: { fontFamily: fontFamily.sans500, fontSize: 12.5, color: 'rgba(255,255,255,.5)' },
-  iconButtonDark: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  handle: { alignSelf: 'center', width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,.28)', marginBottom: 4 },
+  pinned: { paddingHorizontal: 26, paddingTop: 10, paddingBottom: 10 },
+  iconButtonDark: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,.12)', alignItems: 'center', justifyContent: 'center' },
+  tabs: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,.08)', borderRadius: 999, padding: 4 },
+  tab: { flex: 1, paddingVertical: 11, borderRadius: 999, alignItems: 'center' },
+  tabActive: { backgroundColor: scColor.ink },
+  tabLabel: { fontFamily: scFont.sans500, fontSize: 13.5, color: 'rgba(255,255,255,.62)' },
+  tabLabelActive: { fontFamily: scFont.sans700, color: scColor.lime },
+  field: { gap: 9 },
+  label: { fontFamily: scFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.12, color: 'rgba(255,255,255,.52)' },
+  input: { backgroundColor: 'rgba(255,255,255,.14)', borderRadius: 16, paddingVertical: 15, paddingHorizontal: 17 },
+  inputText: { fontFamily: scFont.sans700, fontSize: 16, color: '#FFFFFF' },
+  optionRow: { flexDirection: 'row', gap: 8 },
+  optionTile: { flex: 1, paddingVertical: 13, borderRadius: 14, alignItems: 'center', backgroundColor: 'rgba(255,255,255,.14)' },
+  optionTileActive: { backgroundColor: scColor.lime },
+  optionLabel: { fontFamily: scFont.sans600, fontSize: 14, color: 'rgba(255,255,255,.82)' },
+  optionLabelActive: { fontFamily: scFont.sans700, color: scColor.ink },
+  error: { fontFamily: scFont.sans500, fontSize: 12.5, color: scColor.urgent },
+  codeRow: { flexDirection: 'row', gap: 10 },
+  codeCell: { flex: 1, aspectRatio: 1, borderRadius: 16, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  codeCellFocused: { backgroundColor: 'rgba(255,255,255,.16)', borderWidth: 2, borderColor: scColor.lime },
+  codeCellText: { fontFamily: scFont.sans700, fontSize: 24, color: scColor.ink },
+  caret: { width: 2, height: 22, backgroundColor: 'rgba(255,255,255,.6)' },
+  hiddenInput: { position: 'absolute', opacity: 0, height: 0, width: 0 },
+  roomCodeValue: { fontFamily: scFont.mono500, fontSize: 32, letterSpacing: 32 * 0.2, color: scColor.lime },
+  roomCodeSub: { fontFamily: scFont.sans400, fontSize: 12, color: 'rgba(255,255,255,.55)', marginTop: 2 },
+  waitList: { gap: 8 },
+  waitRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,.08)', borderRadius: 16, padding: 10 },
+  waitRowEmpty: { backgroundColor: 'rgba(255,255,255,.04)' },
+  statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,.2)' },
+  statusDotReady: { backgroundColor: '#4FA83A' },
+  statusDotHost: { backgroundColor: scColor.lime },
+  waitAvatar: {},
+  waitAvatarEmpty: { width: 40, height: 52, borderRadius: 8, backgroundColor: 'rgba(255,255,255,.05)' },
+  waitName: { flex: 1, fontFamily: scFont.sans700, fontSize: 13.5, color: '#FFFFFF' },
+  waitNameEmpty: { flex: 1, fontFamily: scFont.sans400, fontSize: 13, color: 'rgba(255,255,255,.4)' },
+  waitHint: { fontFamily: scFont.sans400, fontSize: 12, color: 'rgba(255,255,255,.5)', textAlign: 'center' },
+  leaveRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 6 },
+  leaveLabel: { fontFamily: scFont.sans500, fontSize: 12.5, color: 'rgba(255,255,255,.5)' },
 });
