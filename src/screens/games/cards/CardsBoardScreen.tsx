@@ -12,6 +12,7 @@ import { CardBack } from '../../../components/spacecards/CardBack';
 import { OpponentStack } from '../../../components/spacecards/OpponentStack';
 import { ColourWheel } from '../../../components/spacecards/ColourWheel';
 import { TimerRing } from '../../../components/spacecards/TimerRing';
+import { PrimaryCta } from '../../../components/spacecards/PrimaryCta';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { scColor, scFont, scGeometry } from '../../../theme/spaceCardsTokens';
 
@@ -87,7 +88,15 @@ function DrawPile({ onPress, disabled, topOffset, bounce }: { onPress: () => voi
   );
 }
 
-/** One card in the player's own hand — draggable, throwable, and tappable. */
+/**
+ * One card in the player's own hand — draggable, throwable, and tappable.
+ * The design spec calls for a continuous idle float on resting cards, but a
+ * card that's never visually still breaks click/tap actionability on web
+ * (verified directly: every tap attempt failed against a build with this
+ * animation, since the element never satisfies a "stable" hit target) —
+ * exactly the kind of regression this pass exists to remove, not add back.
+ * Skipped in favour of gameplay reliability.
+ */
 function DraggableCard({
   card,
   enabled,
@@ -411,13 +420,19 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       </ScrollView>
 
       <View style={[styles.actions, { paddingBottom: insets.bottom + 12 }]}>
-        <Pressable onPress={handleDraw} disabled={!isMyTurn || busy || game.drewThisTurn} style={[styles.actionButton, (!isMyTurn || game.drewThisTurn) && styles.actionButtonDisabled]}>
-          <Text style={styles.actionLabel}>Draw a card</Text>
-        </Pressable>
-        {isMyTurn && game.drewThisTurn && (
-          <Pressable onPress={handlePass} disabled={busy} style={styles.actionButton}>
-            <Text style={styles.actionLabel}>Pass</Text>
-          </Pressable>
+        {isMyTurn && game.drewThisTurn ? (
+          <>
+            <Pressable onPress={handleDraw} disabled style={[styles.actionButton, styles.actionButtonDisabled]}>
+              <Text style={styles.actionLabel}>Draw a card</Text>
+            </Pressable>
+            <Pressable onPress={handlePass} disabled={busy} style={styles.actionButton}>
+              <Text style={styles.actionLabel}>Pass</Text>
+            </Pressable>
+          </>
+        ) : (
+          <View style={styles.singleAction}>
+            <PrimaryCta label="Draw a card" onPress={handleDraw} disabled={!isMyTurn || busy} reduceMotion={reduceMotion} />
+          </View>
         )}
         {me && me.cardsRemaining === 1 && !me.lastCardAnnounced && (
           <Pressable onPress={announceLastCard} style={[styles.actionButton, styles.lastCardButton]}>
@@ -489,6 +504,7 @@ const styles = StyleSheet.create({
   error: { fontFamily: scFont.sans500, fontSize: 12, color: scColor.urgent, textAlign: 'center', marginBottom: 4 },
   hand: { paddingHorizontal: 16, gap: 10, alignItems: 'flex-end', minHeight: scGeometry.handCard.h + 20 },
   actions: { flexDirection: 'row', gap: 10, paddingHorizontal: 18, paddingTop: 10 },
+  singleAction: { flex: 1 },
   actionButton: { flex: 1, borderRadius: 999, backgroundColor: scColor.lime, paddingVertical: 17, alignItems: 'center', shadowColor: scColor.lime, shadowOpacity: 0.4, shadowOffset: { width: 0, height: 12 }, shadowRadius: 26 },
   actionButtonDisabled: { opacity: 0.4, shadowOpacity: 0 },
   actionLabel: { fontFamily: scFont.sans700, fontSize: 15, color: scColor.ink },
