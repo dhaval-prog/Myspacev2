@@ -38,6 +38,22 @@ export function ColourWheel({ visible, onLockColour, onCancel, reduceMotion }: C
   const scrim = useRef(new Animated.Value(0)).current;
   const tileAnims = useRef(SC_COLOURS.map(() => new Animated.Value(0))).current;
   const hubAnim = useRef(new Animated.Value(0)).current;
+  const confirmGlow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!selected || reduceMotion) {
+      confirmGlow.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(confirmGlow, { toValue: 1, duration: 1600, useNativeDriver: false }),
+        Animated.timing(confirmGlow, { toValue: 0, duration: 1600, useNativeDriver: false }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [selected, reduceMotion, confirmGlow]);
 
   useEffect(() => {
     if (!visible) {
@@ -72,7 +88,7 @@ export function ColourWheel({ visible, onLockColour, onCancel, reduceMotion }: C
         <View style={styles.column}>
           <Text style={styles.label}>YOU PLAYED A WILD +4</Text>
 
-          <View style={{ width: scGeometry.wheelTile * 2 + 24, height: scGeometry.wheelTile * 2 + 24 }}>
+          <View style={{ width: scGeometry.wheelTile * 2 + 24, height: scGeometry.wheelTile * 2 + 24, marginTop: 18 }}>
             {SC_COLOURS.map((colour, i) => {
               const pos = TILE_POSITION[colour];
               const isSelected = selected === colour;
@@ -136,18 +152,30 @@ export function ColourWheel({ visible, onLockColour, onCancel, reduceMotion }: C
             </Animated.View>
           </View>
 
-          <Pressable
-            disabled={!selected}
-            onPress={() => selected && onLockColour(selected)}
-            style={[styles.confirm, selected && styles.confirmActive]}
-            accessibilityRole="button"
-            accessibilityLabel={selected ? `Lock in ${SC_COLOUR_LABEL[selected]}` : 'Pick a colour'}
+          <Animated.View
+            style={[
+              { marginTop: 24 },
+              selected && {
+                shadowColor: scColor.lime,
+                shadowOffset: { width: 0, height: 14 },
+                shadowRadius: confirmGlow.interpolate({ inputRange: [0, 1], outputRange: [30, 38] }),
+                shadowOpacity: confirmGlow.interpolate({ inputRange: [0, 1], outputRange: [0.42, 0.66] }),
+              },
+            ]}
           >
-            <Text style={[styles.confirmLabel, selected && styles.confirmLabelActive]}>
-              {selected ? `Lock in ${SC_COLOUR_LABEL[selected]}` : 'Pick a colour'}
-            </Text>
-          </Pressable>
-          <Pressable onPress={onCancel} accessibilityRole="button" accessibilityLabel="Cancel">
+            <Pressable
+              disabled={!selected}
+              onPress={() => selected && onLockColour(selected)}
+              style={[styles.confirm, selected && styles.confirmActive]}
+              accessibilityRole="button"
+              accessibilityLabel={selected ? `Lock in ${SC_COLOUR_LABEL[selected]}` : 'Pick a colour'}
+            >
+              <Text style={[styles.confirmLabel, selected && styles.confirmLabelActive]}>
+                {selected ? `Lock in ${SC_COLOUR_LABEL[selected]}` : 'Pick a colour'}
+              </Text>
+            </Pressable>
+          </Animated.View>
+          <Pressable onPress={onCancel} accessibilityRole="button" accessibilityLabel="Cancel" style={styles.cancelWrap}>
             <Text style={styles.cancel}>Cancel</Text>
           </Pressable>
         </View>
@@ -159,13 +187,12 @@ export function ColourWheel({ visible, onLockColour, onCancel, reduceMotion }: C
 const styles = StyleSheet.create({
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(12,5,24,.86)',
+    backgroundColor: 'rgba(12,5,24,.78)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   column: {
     alignItems: 'center',
-    gap: 22,
   },
   label: {
     fontFamily: scFont.mono500,
@@ -184,6 +211,9 @@ const styles = StyleSheet.create({
   tileSelected: {
     borderWidth: 3,
     borderColor: 'rgba(255,255,255,.9)',
+    shadowOffset: { width: 0, height: 16 },
+    shadowRadius: 34,
+    shadowOpacity: 0.55,
   },
   tileLabel: {
     fontFamily: scFont.sans800,
@@ -231,7 +261,7 @@ const styles = StyleSheet.create({
     color: scColor.ink,
   },
   confirm: {
-    width: 260,
+    width: 236,
     paddingVertical: 17,
     borderRadius: 999,
     alignItems: 'center',
@@ -239,10 +269,6 @@ const styles = StyleSheet.create({
   },
   confirmActive: {
     backgroundColor: scColor.lime,
-    shadowColor: scColor.lime,
-    shadowOpacity: 0.4,
-    shadowOffset: { width: 0, height: 12 },
-    shadowRadius: 26,
   },
   confirmLabel: {
     fontFamily: scFont.sans700,
@@ -252,9 +278,12 @@ const styles = StyleSheet.create({
   confirmLabelActive: {
     color: scColor.ink,
   },
+  cancelWrap: {
+    marginTop: 14,
+  },
   cancel: {
-    fontFamily: scFont.sans600,
-    fontSize: 14,
-    color: 'rgba(255,255,255,.55)',
+    fontFamily: scFont.sans500,
+    fontSize: 13,
+    color: 'rgba(255,255,255,.45)',
   },
 });
