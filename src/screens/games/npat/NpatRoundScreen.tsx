@@ -361,7 +361,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: npRoundColor.rowBg, borderRadius: 999, borderWidth: 1.5, paddingVertical: 13, paddingHorizontal: 16 },
   rowLocked: { backgroundColor: npRoundColor.rowBgLocked },
   rowLabel: { width: 52, fontFamily: npFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.1, color: npRoundColor.promptLabel },
-  rowInput: { flex: 1, fontFamily: npFont.sans700, fontSize: 14.5, color: '#FFFFFF', padding: 0 },
+  // iOS Safari auto-zooms the whole page on focus for any text input under
+  // 16px and won't zoom back out on blur — 16 is the smallest size that avoids it.
+  rowInput: { flex: 1, fontFamily: npFont.sans700, fontSize: 16, color: '#FFFFFF', padding: 0 },
   markSlot: { width: 22, height: 22 },
   markOn: { width: 22, height: 22, borderRadius: 11, backgroundColor: npColor.lime, alignItems: 'center', justifyContent: 'center' },
   markOff: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.6, borderColor: npRoundColor.markRing },

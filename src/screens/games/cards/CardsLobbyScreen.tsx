@@ -381,7 +381,9 @@ const styles = StyleSheet.create({
   codeCellFocused: { backgroundColor: 'rgba(255,255,255,.16)', borderWidth: 2, borderColor: scColor.lime },
   codeCellText: { fontFamily: scFont.sans700, fontSize: 24, color: scColor.ink },
   caret: { width: 2, height: 22, backgroundColor: 'rgba(255,255,255,.6)' },
-  hiddenInput: { position: 'absolute', opacity: 0, height: 0, width: 0 },
+  // fontSize matters even though this input is invisible — iOS Safari zooms the
+  // whole page on focus for any text input under 16px, regardless of its own size.
+  hiddenInput: { position: 'absolute', opacity: 0, height: 0, width: 0, fontSize: 16 },
   roomCodeValue: { fontFamily: scFont.mono500, fontSize: 32, letterSpacing: 32 * 0.2, color: scColor.lime },
   roomCodeSub: { fontFamily: scFont.sans400, fontSize: 12, color: 'rgba(255,255,255,.55)', marginTop: 2 },
   waitList: { gap: 8 },
