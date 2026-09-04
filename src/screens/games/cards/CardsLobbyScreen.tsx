@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../../components/Icon';
@@ -8,8 +8,10 @@ import { LobbyHeader } from '../../../components/spacecards/LobbyHeader';
 import { OpponentStack } from '../../../components/spacecards/OpponentStack';
 import { PrimaryCta } from '../../../components/spacecards/PrimaryCta';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { useFocusBorder } from '../../../hooks/useFocusBorder';
 import { useAuth } from '../../../context/AuthContext';
 import { useCardsGame } from '../../../context/CardsGameContext';
+import { noOutline } from '../../../theme/webStyles';
 import { scColor, scFont } from '../../../theme/spaceCardsTokens';
 import type { PlayingCard } from '../../../types/cards';
 
@@ -17,10 +19,10 @@ const LEAVE_ICON = 'M9 5l-7 7 7 7 M2 12h13 M17 5v14';
 const BACK_ICON = 'M15 5l-7 7 7 7';
 
 const PLAYER_OPTIONS = [2, 3, 4];
-const TIMER_OPTIONS: { label: string; value: number | null }[] = [
-  { label: 'Off', value: null },
+const TIMER_OPTIONS: { label: string; value: number }[] = [
   { label: '15s', value: 15 },
   { label: '30s', value: 30 },
+  { label: '45s', value: 45 },
   { label: '60s', value: 60 },
 ];
 
@@ -87,9 +89,10 @@ function CardsHub({
   const [tab, setTab] = useState<'create' | 'join'>(initialTab ?? 'create');
   const [name, setName] = useState(fallbackName);
   const [maxPlayers, setMaxPlayers] = useState(4);
-  const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
+  const [timerSeconds, setTimerSeconds] = useState(15);
   const [roomCode, setRoomCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const { borderColor: nameBorderColor, onFocus: onNameFocus, onBlur: onNameBlur } = useFocusBorder('rgba(255,255,255,0)', scColor.lime);
 
   const handleCreate = async () => {
     setError(null);
@@ -138,9 +141,17 @@ function CardsHub({
 
           <View style={styles.field}>
             <Text style={styles.label}>YOUR NAME</Text>
-            <View style={styles.input}>
-              <TextInput value={name} onChangeText={setName} placeholder="Your name" placeholderTextColor="rgba(255,255,255,.4)" style={styles.inputText} />
-            </View>
+            <Animated.View style={[styles.input, { borderColor: nameBorderColor }]}>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                onFocus={onNameFocus}
+                onBlur={onNameBlur}
+                placeholder="Your name"
+                placeholderTextColor="rgba(255,255,255,.4)"
+                style={[styles.inputText, noOutline]}
+              />
+            </Animated.View>
           </View>
 
           {!isJoin ? (
@@ -160,7 +171,7 @@ function CardsHub({
                 <Text style={styles.label}>TURN TIMER</Text>
                 <View style={styles.optionRow}>
                   {TIMER_OPTIONS.map((t) => (
-                    <Pressable key={t.label} onPress={() => setTimerSeconds(t.value)} style={[styles.optionTile, timerSeconds === t.value && styles.optionTileActive]} accessibilityRole="button" accessibilityLabel={t.value === null ? 'Timer off' : `${t.value} second timer`}>
+                    <Pressable key={t.label} onPress={() => setTimerSeconds(t.value)} style={[styles.optionTile, timerSeconds === t.value && styles.optionTileActive]} accessibilityRole="button" accessibilityLabel={`${t.value} second timer`}>
                       <Text style={[styles.optionLabel, timerSeconds === t.value && styles.optionLabelActive]}>{t.label}</Text>
                     </Pressable>
                   ))}
@@ -354,7 +365,7 @@ const styles = StyleSheet.create({
   tabLabelActive: { fontFamily: scFont.sans700, color: scColor.lime },
   field: { gap: 9 },
   label: { fontFamily: scFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.12, color: 'rgba(255,255,255,.52)' },
-  input: { backgroundColor: 'rgba(255,255,255,.14)', borderRadius: 16, paddingVertical: 15, paddingHorizontal: 17 },
+  input: { backgroundColor: 'rgba(255,255,255,.14)', borderRadius: 16, borderWidth: 1.5, paddingVertical: 15, paddingHorizontal: 17 },
   inputText: { fontFamily: scFont.sans700, fontSize: 16, color: '#FFFFFF' },
   optionRow: { flexDirection: 'row', gap: 8 },
   optionTile: { flex: 1, paddingVertical: 13, borderRadius: 14, alignItems: 'center', backgroundColor: 'rgba(255,255,255,.14)' },
