@@ -122,6 +122,22 @@ function DraggableCard({
   );
 }
 
+/** Wraps a hand card with the initial-deal entrance: opacity 0 + translateY(-30) + scale(.84) → resting, staggered 55ms per card. A no-op wrapper (no animation) for any card that wasn't part of the initial deal. */
+function DealtCard({ index, animate, children }: { index: number; animate: boolean; children: React.ReactNode }) {
+  const progress = useRef(new Animated.Value(animate ? 0 : 1)).current;
+  useEffect(() => {
+    if (!animate) return;
+    const delay = setTimeout(() => {
+      Animated.timing(progress, { toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    }, index * 55);
+    return () => clearTimeout(delay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [-30, 0] });
+  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.84, 1] });
+  return <Animated.View style={{ opacity: progress, transform: [{ translateY }, { scale }] }}>{children}</Animated.View>;
+}
+
 function useCountdown(deadline: string | null): number | null {
   const [remaining, setRemaining] = useState<number | null>(deadline ? Math.max(0, Math.ceil((new Date(deadline).getTime() - Date.now()) / 1000)) : null);
   useEffect(() => {
@@ -147,7 +163,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
-  const { game, players, myHand, myPlayerId, drawCard, playCard, passTurn, announceLastCard, catchLastCard, leaveGame } = useCardsGame();
+  const { game, players, myHand, myPlayerId, discardPile, drawCard, playCard, passTurn, announceLastCard, catchLastCard, leaveGame } = useCardsGame();
   const [pendingWild, setPendingWild] = useState<PlayingCard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -165,6 +181,37 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   const prevTopCard = useRef<string>('');
   const [opponentFlights, setOpponentFlights] = useState<{ id: string; kind: 'draw' | 'play'; card?: PlayingCard }[]>([]);
   const isFirstRender = useRef(true);
+
+  // Captures the exact keys of whatever hand this account first ever sees for this
+  // game — the initial deal — so only those cards, and only once, get the deal-in
+  // entrance animation. Later renders reuse the same key format for cards that
+  // shift index after a play, so a fixed set of keys (not "index < N") is what
+  // keeps a later re-key from replaying the entrance.
+  const initialDealKeys = useRef<Set<string> | null>(null);
+  if (initialDealKeys.current === null && myHand.length > 0) {
+    initialDealKeys.current = new Set(myHand.map((c, i) => `${c.suit}-${c.rank}-${i}`));
+  }
+
+  // Tracks whether this account's own turn just ended because its deadline actually
+  // expired (server auto-drew and passed for them) rather than a normal play/pass,
+  // so the "X is playing…" banner can explain the auto-draw for a few seconds instead
+  // of leaving it silent.
+  const wasMyTurnRef = useRef(false);
+  const lastDeadlineRef = useRef<string | null>(null);
+  const [timedOutBanner, setTimedOutBanner] = useState(false);
+  useEffect(() => {
+    const meNow = players.find((p) => p.id === myPlayerId);
+    const isMyTurnNow = !!game && meNow?.seat === game.currentSeat;
+    const deadlineJustPassed = wasMyTurnRef.current && !isMyTurnNow && !!lastDeadlineRef.current && new Date(lastDeadlineRef.current).getTime() <= Date.now();
+    wasMyTurnRef.current = isMyTurnNow;
+    lastDeadlineRef.current = game?.turnDeadline ?? null;
+    if (deadlineJustPassed) {
+      setTimedOutBanner(true);
+      const timer = setTimeout(() => setTimedOutBanner(false), 4000);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.currentSeat, game?.turnDeadline, myPlayerId, players]);
 
   // A newly-drawn card enters the hand with a flip reveal instead of just appearing.
   useEffect(() => {
@@ -212,6 +259,10 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   const currentPlayer = players.find((p) => p.seat === game.currentSeat);
 
   const isPlayable = (card: PlayingCard) => card.rank === 'prism' || card.rank === 'prism4' || card.suit === game.activeSuit || card.rank === game.topCardRank;
+
+  // The top card itself is rendered as a real CardFace below — this is just the up-to-7
+  // previously played cards peeking out from underneath it, per the spec's exact stacking formula.
+  const pileGhosts = discardPile.slice(0, -1).slice(-7);
 
   const measureDiscardZone = () => {
     // react-native-web forwards a View's ref to its underlying DOM node, which has no
@@ -359,13 +410,18 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
                 ))}
               </View>
             ) : null}
-            {(game.topCardSuit || game.topCardRank) && (
-              <>
-                <View style={[styles.discardGhost, { transform: [{ rotate: '-9deg' }, { translateX: -12 }, { translateY: 6 }] }]} />
-                <View style={[styles.discardGhost, { transform: [{ rotate: '7deg' }, { translateX: 10 }, { translateY: 4 }] }]} />
-                <View style={[styles.discardGhost, { transform: [{ rotate: '-3deg' }, { translateX: 6 }, { translateY: -3 }] }]} />
-              </>
-            )}
+            {pileGhosts.map((c, i) => {
+              const rotateDeg = ((i * 47) % 34) - 17;
+              const offsetX = ((i * 29) % 16) - 8;
+              const offsetY = ((i * 19) % 12) - 6;
+              const opacity = pileGhosts.length > 1 ? 0.4 + (i / (pileGhosts.length - 1)) * 0.6 : 1;
+              return (
+                <View
+                  key={`${c.suit}-${c.rank}-${i}`}
+                  style={[styles.discardGhost, { opacity, transform: [{ rotate: `${rotateDeg}deg` }, { translateX: offsetX }, { translateY: offsetY }] }]}
+                />
+              );
+            })}
             {game.topCardSuit || game.topCardRank ? (
               <Animated.View style={{ transform: [{ scale: discardBounce }] }}>
                 <CardFace card={{ suit: game.topCardSuit, rank: game.topCardRank ?? '0' }} size="pile" />
@@ -389,7 +445,9 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
         </View>
       </View>
 
-      <Text style={[styles.turnBanner, urgent && isMyTurn && styles.turnBannerUrgent]}>{isMyTurn ? (urgent ? 'Play now' : 'Your turn') : `${currentPlayer?.name ?? 'Someone'} is playing…`}</Text>
+      <Text style={[styles.turnBanner, urgent && isMyTurn && styles.turnBannerUrgent]}>
+        {timedOutBanner ? 'You timed out — a card was drawn for you' : isMyTurn ? (urgent ? 'Play now' : 'Your turn') : `${currentPlayer?.name ?? 'Someone'} is playing…`}
+      </Text>
       {error && <Text style={styles.error}>{error}</Text>}
 
       <ScrollView
@@ -401,22 +459,25 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
         // Scroll only clips horizontally; the vertical axis stays visible for the drag.
         style={{ overflowX: 'auto', overflowY: 'visible' } as object}
       >
-        {myHand.map((card, i) =>
-          i === revealingIndex ? (
-            <FlipRevealCard key={`${card.suit}-${card.rank}-${i}`} card={card} onDone={() => setRevealingIndex(null)} />
-          ) : (
-            <DraggableCard
-              key={`${card.suit}-${card.rank}-${i}`}
-              card={card}
-              enabled={isMyTurn && !busy}
-              isPlayable={isPlayable(card)}
-              getDropZone={() => discardZoneRef.current}
-              onPlay={() => handleCardPress(card)}
-              onTap={() => handleCardPress(card)}
-              onHoverChange={setDropGlow}
-            />
-          ),
-        )}
+        {myHand.map((card, i) => {
+          const key = `${card.suit}-${card.rank}-${i}`;
+          if (i === revealingIndex) {
+            return <FlipRevealCard key={key} card={card} onDone={() => setRevealingIndex(null)} />;
+          }
+          return (
+            <DealtCard key={key} index={i} animate={!!initialDealKeys.current?.has(key)}>
+              <DraggableCard
+                card={card}
+                enabled={isMyTurn && !busy}
+                isPlayable={isPlayable(card)}
+                getDropZone={() => discardZoneRef.current}
+                onPlay={() => handleCardPress(card)}
+                onTap={() => handleCardPress(card)}
+                onHoverChange={setDropGlow}
+              />
+            </DealtCard>
+          );
+        })}
       </ScrollView>
 
       <View style={[styles.actions, { paddingBottom: insets.bottom + 12 }]}>

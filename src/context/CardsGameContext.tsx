@@ -96,6 +96,7 @@ interface CardsGameContextValue {
   myHand: PlayingCard[];
   result: CardsResult | null;
   myPlayerId: string | null;
+  discardPile: PlayingCard[];
   loading: boolean;
   error: string | null;
 
@@ -116,8 +117,12 @@ const CardsGameContext = createContext<CardsGameContextValue | null>(null);
  * Space Cards — a shed-your-hand card game. Every mutation is a
  * SECURITY DEFINER RPC; this context only mirrors `cards_games` /
  * `cards_players` / this account's own `cards_hands` row via Realtime.
- * The deck and other players' hands are never fetched — RLS makes that
- * structurally impossible, not just hidden client-side.
+ * Other players' hands and the face-down draw pile are never fetched —
+ * RLS makes that structurally impossible, not just hidden client-side.
+ * The discard pile is the one deck-state field that's meant to be public
+ * (it's just the play history), so it's read through a narrow RPC
+ * (`get_discard_pile`) rather than a direct table select — `cards_deck_state`
+ * itself carries no RLS policy at all, so a raw select would 403.
  */
 export function CardsGameProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -127,6 +132,7 @@ export function CardsGameProvider({ children }: { children: React.ReactNode }) {
   const [game, setGame] = useState<CardsGame | null>(null);
   const [players, setPlayers] = useState<CardsPlayer[]>([]);
   const [myHand, setMyHand] = useState<PlayingCard[]>([]);
+  const [discardPile, setDiscardPile] = useState<PlayingCard[]>([]);
   const [result, setResult] = useState<CardsResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -285,6 +291,44 @@ export function CardsGameProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, game?.currentSeat, game?.drewThisTurn, game?.topCardRank]);
 
+  // The discard pile has no RLS policy of its own — read through the
+  // get_discard_pile RPC instead of a table select. There's nothing to
+  // subscribe to via Realtime here (postgres_changes enforces the same RLS,
+  // so it would never deliver events for a policy-less table anyway), so
+  // this relies entirely on the poll backstop plus a refetch whenever the
+  // top card changes, same shape as the hand's turn-keyed refetch above.
+  useEffect(() => {
+    if (!gameId || !isSupabaseConfigured) {
+      setDiscardPile([]);
+      return;
+    }
+    let cancelled = false;
+    const fetchPile = () => {
+      supabase
+        .rpc('get_discard_pile', { p_game_id: gameId })
+        .then(({ data, error: err }) => {
+          warn('load discard pile', err);
+          if (!cancelled && data) setDiscardPile(data as PlayingCard[]);
+        });
+    };
+    fetchPile();
+    const poll = setInterval(fetchPile, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+    };
+  }, [gameId]);
+
+  useEffect(() => {
+    if (!gameId || !game || !isSupabaseConfigured) return;
+    supabase
+      .rpc('get_discard_pile', { p_game_id: gameId })
+      .then(({ data }) => {
+        if (data) setDiscardPile(data as PlayingCard[]);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, game?.topCardSuit, game?.topCardRank]);
+
   useEffect(() => {
     if (!gameId || !isSupabaseConfigured) {
       setResult(null);
@@ -426,6 +470,7 @@ export function CardsGameProvider({ children }: { children: React.ReactNode }) {
     setGame(null);
     setPlayers([]);
     setMyHand([]);
+    setDiscardPile([]);
     setResult(null);
     setError(null);
   };
@@ -438,6 +483,7 @@ export function CardsGameProvider({ children }: { children: React.ReactNode }) {
     myHand,
     result,
     myPlayerId,
+    discardPile,
     loading,
     error,
     createGame,
