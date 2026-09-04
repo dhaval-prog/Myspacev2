@@ -6,6 +6,9 @@ import { Icon } from '../Icon';
 import type { PlayingCard } from '../../types/cards';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
+// Scales up just this fan's cards — CardFace's 'pile' size is shared with the
+// board's discard pile, so bumping SIZES.pile itself would enlarge that too.
+const FAN_CARD_SCALE = 1.2;
 
 interface FanCard {
   card: PlayingCard;
@@ -52,7 +55,7 @@ export function LobbyHeader({ title, subtitle, cards, onBack, reduceMotion }: Lo
         {cards.map(({ card, rotateDeg, x }, i) => (
           <Animated.View
             key={`${card.suit}-${card.rank}-${i}`}
-            style={[styles.fanCard, { marginLeft: x - 40, zIndex: i, transform: [{ rotate: `${rotateDeg}deg` }, { translateY: lift }] }]}
+            style={[styles.fanCard, { marginLeft: x - 40, zIndex: i, transform: [{ rotate: `${rotateDeg}deg` }, { translateY: lift }, { scale: FAN_CARD_SCALE }] }]}
           >
             <CardFace card={card} size="pile" />
           </Animated.View>
