@@ -65,5 +65,7 @@ const styles = StyleSheet.create({
   cellFocused: { backgroundColor: 'rgba(22,33,12,.07)', borderWidth: 1.6, borderColor: npColor.lime },
   cellText: { fontFamily: npFont.mono500, fontSize: 21, color: npColor.lime },
   caret: { width: 2, height: 21, backgroundColor: npColor.ink },
-  hiddenInput: { position: 'absolute', opacity: 0, height: 0, width: 0 },
+  // fontSize matters even though this input is invisible — iOS Safari zooms the
+  // whole page on focus for any text input under 16px, regardless of its own size.
+  hiddenInput: { position: 'absolute', opacity: 0, height: 0, width: 0, fontSize: 16 },
 });
