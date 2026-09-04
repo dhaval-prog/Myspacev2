@@ -103,7 +103,7 @@ function CardsHub({
 
   return (
     <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
         <LobbyHeader
           title={!isJoin ? 'UNO Space Cards' : undefined}
           subtitle={!isJoin ? 'Shed your hand before anyone else.' : undefined}
@@ -233,7 +233,7 @@ function CardsReadyRoom({
 
   return (
     <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
         <LobbyHeader
           cards={JOIN_FAN}
           onBack={() => {
