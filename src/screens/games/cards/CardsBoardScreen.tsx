@@ -74,14 +74,67 @@ function FlyingCard({ from, to, revealCard, onDone }: { from: { x: number; y: nu
   );
 }
 
-/** The draw pile — a stack of face-down cards, top-right. Tapping it draws, same as the Draw button. */
-function DrawPile({ onPress, disabled, topOffset, bounce }: { onPress: () => void; disabled: boolean; topOffset: number; bounce: Animated.Value }) {
+/** Continuous idle bob on the deck's card-back plate — §the deck "breathes" even at rest. Wrapping only the visual (not the Pressable hit box) avoids the tap-reliability regression a moving hit target causes on web. */
+function FloatingCardBack({ reduceMotion }: { reduceMotion?: boolean }) {
+  const float = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, { toValue: 1, duration: 3200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(float, { toValue: 0, duration: 3200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion, float]);
+  const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
+  return (
+    <Animated.View style={{ transform: [{ translateY }] }}>
+      <CardBack />
+    </Animated.View>
+  );
+}
+
+const HALO_RING_OPACITIES = [0.42, 0.26, 0.13, 0.05];
+
+/** The discard pile's ambient glow — a continuous breathing pulse (opacity/scale) behind the halo rings, tinted to the active suit. */
+function Halo({ color, reduceMotion }: { color: string; reduceMotion?: boolean }) {
+  const breathe = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathe, { toValue: 1, duration: 1700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(breathe, { toValue: 0, duration: 1700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion, breathe]);
+  const scale = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 1.13] });
+  const opacityMultiplier = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 0.72 / 0.34] });
+  return (
+    <Animated.View style={[styles.haloWrap, { transform: [{ scale }] }]} pointerEvents="none">
+      {HALO_RING_OPACITIES.map((o, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            styles.haloRing,
+            { backgroundColor: color, opacity: Animated.multiply(o, opacityMultiplier), width: 186 - i * 30, height: 186 - i * 30, borderRadius: (186 - i * 30) / 2 },
+          ]}
+        />
+      ))}
+    </Animated.View>
+  );
+}
+
+/** The draw pile — the deck's wordmark plate, top-right. Tapping it draws, same as the Draw button. */
+function DrawPile({ onPress, disabled, topOffset, bounce, reduceMotion }: { onPress: () => void; disabled: boolean; topOffset: number; bounce: Animated.Value; reduceMotion?: boolean }) {
   return (
     <Animated.View style={[styles.drawPileWrap, { top: topOffset, transform: [{ scale: bounce }] }]}>
       <Pressable onPress={onPress} disabled={disabled} style={[styles.drawPileTouch, disabled && styles.drawPileDisabled]} accessibilityRole="button" accessibilityLabel="Draw a card">
-        <CardBack style={[styles.drawPileLayer, { transform: [{ rotate: '-6deg' }, { translateX: -5 }, { translateY: 3 }] }]} />
-        <CardBack style={[styles.drawPileLayer, { transform: [{ rotate: '4deg' }, { translateX: 4 }, { translateY: 1 }] }]} />
-        <CardBack />
+        <FloatingCardBack reduceMotion={reduceMotion} />
         <Text style={styles.drawPileLabel}>DRAW</Text>
       </Pressable>
     </Animated.View>
@@ -348,7 +401,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
         <Pressable onPress={leaveGame ? () => { leaveGame(); onHome(); } : onHome} style={styles.leaveChip} accessibilityRole="button" accessibilityLabel="Leave the table">
           <Text style={styles.leaveChipLabel}>Leave</Text>
         </Pressable>
-        <Text style={styles.roomCode}>{game.roomCode.split('').join(' ')}</Text>
+        <Text style={styles.roomCode}>{game.roomCode}</Text>
         {game.timerSeconds ? (
           <View style={styles.timerChip}>
             <Icon path={CLOCK_ICON} color={scColor.lime} size={12} strokeWidth={2.2} />
@@ -363,7 +416,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
         )}
       </View>
 
-      <DrawPile onPress={handleDraw} disabled={!isMyTurn || busy || game.drewThisTurn} topOffset={insets.top + 66} bounce={drawPileBounce} />
+      <DrawPile onPress={handleDraw} disabled={!isMyTurn || busy || game.drewThisTurn} topOffset={insets.top + 66} bounce={drawPileBounce} reduceMotion={reduceMotion} />
 
       <ScrollView style={styles.opponentsScroll} contentContainerStyle={styles.opponentsRow} horizontal showsHorizontalScrollIndicator={false}>
         {opponents.map((p) => (
@@ -397,19 +450,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
           ) : null}
           <View ref={discardViewRef} onLayout={measureDiscardZone} style={styles.discardStack} accessibilityLabel="Discard pile">
             {dropGlow ? <View style={styles.dropGlowRing} pointerEvents="none" /> : null}
-            {game.activeSuit ? (
-              <View style={styles.haloWrap} pointerEvents="none">
-                {[0.42, 0.26, 0.13, 0.05].map((o, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.haloRing,
-                      { backgroundColor: SUIT_COLORS[game.activeSuit as CardSuit], opacity: o, width: 186 - i * 30, height: 186 - i * 30, borderRadius: (186 - i * 30) / 2 },
-                    ]}
-                  />
-                ))}
-              </View>
-            ) : null}
+            {game.activeSuit ? <Halo color={SUIT_COLORS[game.activeSuit as CardSuit]} reduceMotion={reduceMotion} /> : null}
             {pileGhosts.map((c, i) => {
               const rotateDeg = ((i * 47) % 34) - 17;
               const offsetX = ((i * 29) % 16) - 8;
@@ -448,6 +489,9 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       <Text style={[styles.turnBanner, urgent && isMyTurn && styles.turnBannerUrgent]}>
         {timedOutBanner ? 'You timed out — a card was drawn for you' : isMyTurn ? (urgent ? 'Play now' : 'Your turn') : `${currentPlayer?.name ?? 'Someone'} is playing…`}
       </Text>
+      {!game.timerSeconds && !timedOutBanner && (
+        <Text style={styles.turnHint}>{isMyTurn ? (myHand.length ? 'Tap a lit card, or draw' : 'Hand empty — you win') : 'Hold on…'}</Text>
+      )}
       {error && <Text style={styles.error}>{error}</Text>}
 
       <ScrollView
@@ -574,6 +618,7 @@ const styles = StyleSheet.create({
   secondsChipLabelUrgent: { color: scColor.urgent },
   turnBanner: { fontFamily: scFont.sans800, fontSize: 16, color: '#fff', textAlign: 'center', marginBottom: 4 },
   turnBannerUrgent: { color: scColor.urgent },
+  turnHint: { fontFamily: scFont.sans400, fontSize: 11.5, color: 'rgba(255,255,255,.45)', textAlign: 'center', marginTop: 3, marginBottom: 4 },
   error: { fontFamily: scFont.sans500, fontSize: 12, color: scColor.urgent, textAlign: 'center', marginBottom: 4 },
   hand: { paddingHorizontal: 16, gap: 10, alignItems: 'flex-end', minHeight: scGeometry.handCard.h + 20 },
   actions: { flexDirection: 'row', gap: 10, paddingHorizontal: 18, paddingTop: 10 },
@@ -583,11 +628,10 @@ const styles = StyleSheet.create({
   actionLabel: { fontFamily: scFont.sans700, fontSize: 15, color: scColor.ink },
   lastCardButton: { backgroundColor: scColor.urgent, shadowColor: scColor.urgent },
   lastCardLabel: { fontFamily: scFont.sans700, fontSize: 13.5, color: '#fff' },
-  drawPileWrap: { position: 'absolute', right: 16, width: 90, height: 116, zIndex: 10, alignItems: 'center', justifyContent: 'center' },
-  drawPileTouch: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  drawPileWrap: { position: 'absolute', right: 16, zIndex: 10, alignItems: 'center' },
+  drawPileTouch: { alignItems: 'center', gap: 7 },
   drawPileDisabled: { opacity: 0.45 },
-  drawPileLayer: { position: 'absolute' },
-  drawPileLabel: { position: 'absolute', bottom: -16, fontFamily: scFont.sans600, fontSize: 9, letterSpacing: 1.4, color: 'rgba(255,255,255,.42)' },
+  drawPileLabel: { fontFamily: scFont.mono500, fontSize: 9, letterSpacing: 9 * 0.16, color: 'rgba(255,255,255,.42)' },
   flyingCardWrap: { position: 'absolute', zIndex: 20 },
   flyingAbs: { position: 'absolute', zIndex: 25 },
   flipWrap: { width: 56, height: 78 },
