@@ -14,6 +14,7 @@ import { scColor, scFont } from '../../../theme/spaceCardsTokens';
 import type { PlayingCard } from '../../../types/cards';
 
 const LEAVE_ICON = 'M9 5l-7 7 7 7 M2 12h13 M17 5v14';
+const BACK_ICON = 'M15 5l-7 7 7 7';
 
 const PLAYER_OPTIONS = [2, 3, 4];
 const TIMER_OPTIONS: { label: string; value: number | null }[] = [
@@ -108,7 +109,6 @@ function CardsHub({
           title={!isJoin ? 'UNO Space Cards' : undefined}
           subtitle={!isJoin ? 'Shed your hand before anyone else.' : undefined}
           cards={fan}
-          onBack={onHome}
           reduceMotion={reduceMotion}
         />
 
@@ -156,7 +156,14 @@ function CardsHub({
               </View>
 
               {error && <Text style={styles.error}>{error}</Text>}
-              <PrimaryCta label={loading ? 'Creating…' : 'Create room'} onPress={handleCreate} disabled={loading} reduceMotion={reduceMotion} />
+              <View style={styles.actionsRow}>
+                <Pressable onPress={onHome} style={styles.backChip} accessibilityRole="button" accessibilityLabel="Back to Games">
+                  <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
+                </Pressable>
+                <View style={styles.ctaFlex}>
+                  <PrimaryCta label={loading ? 'Creating…' : 'Create room'} onPress={handleCreate} disabled={loading} reduceMotion={reduceMotion} />
+                </View>
+              </View>
             </>
           ) : (
             <>
@@ -180,7 +187,14 @@ function CardsHub({
                 />
               </View>
               {error && <Text style={styles.error}>{error}</Text>}
-              <PrimaryCta label={loading ? 'Joining…' : 'Join game'} onPress={handleJoin} disabled={loading} reduceMotion={reduceMotion} />
+              <View style={styles.actionsRow}>
+                <Pressable onPress={onHome} style={styles.backChip} accessibilityRole="button" accessibilityLabel="Back to Games">
+                  <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
+                </Pressable>
+                <View style={styles.ctaFlex}>
+                  <PrimaryCta label={loading ? 'Joining…' : 'Join game'} onPress={handleJoin} disabled={loading} reduceMotion={reduceMotion} />
+                </View>
+              </View>
             </>
           )}
         </LinearGradient>
@@ -332,6 +346,9 @@ const styles = StyleSheet.create({
   optionLabel: { fontFamily: scFont.sans600, fontSize: 14, color: 'rgba(255,255,255,.82)' },
   optionLabelActive: { fontFamily: scFont.sans700, color: scColor.ink },
   error: { fontFamily: scFont.sans500, fontSize: 12.5, color: scColor.urgent },
+  actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  backChip: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,.12)', alignItems: 'center', justifyContent: 'center' },
+  ctaFlex: { flex: 1 },
   codeRow: { flexDirection: 'row', gap: 10 },
   codeCell: { flex: 1, aspectRatio: 1, borderRadius: 16, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   codeCellFocused: { backgroundColor: 'rgba(255,255,255,.16)', borderWidth: 2, borderColor: scColor.lime },
