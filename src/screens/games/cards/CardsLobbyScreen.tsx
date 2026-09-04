@@ -47,10 +47,12 @@ interface CardsLobbyScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
+  /** Which tab the create/join hub opens on — e.g. the Games hub's "Join with code" row button jumps straight to Join. */
+  initialTab?: 'create' | 'join';
 }
 
 /** Space Cards — Create/Join lobby (2A/2B) and the waiting room, restyled to the design handoff, wired to the real backend (CardsGameContext). */
-export function CardsLobbyScreen({ onHome, onOpenExpenses, onOpenSplit }: CardsLobbyScreenProps) {
+export function CardsLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initialTab }: CardsLobbyScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
@@ -59,7 +61,9 @@ export function CardsLobbyScreen({ onHome, onOpenExpenses, onOpenSplit }: CardsL
   if (game) {
     return <CardsReadyRoom onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} insets={insets} reduceMotion={reduceMotion} />;
   }
-  return <CardsHub onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} defaultName={defaultName(user)} insets={insets} reduceMotion={reduceMotion} />;
+  return (
+    <CardsHub onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} defaultName={defaultName(user)} insets={insets} reduceMotion={reduceMotion} initialTab={initialTab} />
+  );
 }
 
 function CardsHub({
@@ -69,6 +73,7 @@ function CardsHub({
   defaultName: fallbackName,
   insets,
   reduceMotion,
+  initialTab,
 }: {
   onHome: () => void;
   onOpenExpenses: () => void;
@@ -76,9 +81,10 @@ function CardsHub({
   defaultName: string;
   insets: { top: number; bottom: number };
   reduceMotion?: boolean;
+  initialTab?: 'create' | 'join';
 }) {
   const { loading, createGame, joinGame } = useCardsGame();
-  const [tab, setTab] = useState<'create' | 'join'>('create');
+  const [tab, setTab] = useState<'create' | 'join'>(initialTab ?? 'create');
   const [name, setName] = useState(fallbackName);
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [timerSeconds, setTimerSeconds] = useState<number | null>(null);

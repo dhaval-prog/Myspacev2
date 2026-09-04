@@ -31,10 +31,12 @@ interface NpatLobbyScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
+  /** Which tab the create/join hub opens on — e.g. the Games hub's "Join with code" row button jumps straight to Join. */
+  initialTab?: 'create' | 'join';
 }
 
 /** Create-or-join hub when there's no game yet; ready-up room once one exists — restyled to the "MySpace Games · 1A · 1B" handoff. */
-export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatLobbyScreenProps) {
+export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initialTab }: NpatLobbyScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
@@ -69,6 +71,7 @@ export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatLob
       defaultName={defaultName(user)}
       insets={insets}
       reduceMotion={reduceMotion}
+      initialTab={initialTab}
     />
   );
 }
@@ -83,6 +86,7 @@ function NpatHub({
   defaultName: fallbackName,
   insets,
   reduceMotion,
+  initialTab,
 }: {
   onHome: () => void;
   onOpenExpenses: () => void;
@@ -93,8 +97,9 @@ function NpatHub({
   defaultName: string;
   insets: { top: number; bottom: number };
   reduceMotion?: boolean;
+  initialTab?: 'create' | 'join';
 }) {
-  const [tab, setTab] = useState<'create' | 'join'>('create');
+  const [tab, setTab] = useState<'create' | 'join'>(initialTab ?? 'create');
   const [name, setName] = useState(fallbackName);
   const [rounds, setRounds] = useState(5);
   const [timerSeconds, setTimerSeconds] = useState(30);
