@@ -14,7 +14,7 @@ import { ColourWheel } from '../../../components/spacecards/ColourWheel';
 import { TimerRing } from '../../../components/spacecards/TimerRing';
 import { PrimaryCta } from '../../../components/spacecards/PrimaryCta';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
-import { scColor, scFont, scGeometry } from '../../../theme/spaceCardsTokens';
+import { fanPose, scColor, scFont, scGeometry } from '../../../theme/spaceCardsTokens';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CLOCK_ICON = 'M12 5a8 8 0 100 16 8 8 0 000-16z M12 9v4l2.5 2';
@@ -218,23 +218,40 @@ function DraggableCard({
   card,
   enabled,
   isPlayable,
+  basePose,
   getDropZone,
   onPlay,
   onTap,
   onHoverChange,
+  onDragActiveChange,
 }: {
   card: PlayingCard;
   enabled: boolean;
   isPlayable: boolean;
+  basePose: { rotateDeg: number; translateY: number };
   getDropZone: () => DropZone | null;
   onPlay: () => Promise<{ error: string | null } | void>;
   onTap: () => void;
   onHoverChange: (hovering: boolean) => void;
+  onDragActiveChange: (active: boolean) => void;
 }) {
-  const { panHandlers, animatedStyle } = useCardDrag({ enabled, isPlayable, getDropZone, onPlay, onTap, onHoverChange });
+  const { panHandlers, phase, animatedStyle } = useCardDrag({ enabled, isPlayable, getDropZone, onPlay, onTap, onHoverChange });
+  useEffect(() => {
+    onDragActiveChange(phase !== 'idle');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+  const disabled = !enabled || !isPlayable;
+  // Drag offsets are listed first so they land in true screen pixels regardless of
+  // the fan's resting tilt — otherwise a card fanned at, say, 20deg would drag along
+  // that diagonal instead of following the finger.
+  const style = [
+    animatedStyle,
+    { transform: [...animatedStyle.transform, { translateY: basePose.translateY }, { rotate: `${basePose.rotateDeg}deg` }] },
+  ];
   return (
-    <Animated.View {...panHandlers} accessibilityLabel={`Hand card: ${card.suit ?? 'wild'} ${card.rank}`} style={animatedStyle}>
-      <CardFace card={card} size="hand" disabled={!enabled || !isPlayable} />
+    <Animated.View {...panHandlers} accessibilityLabel={`Hand card: ${card.suit ?? 'wild'} ${card.rank}`} style={style}>
+      {!disabled ? <View style={styles.handCardGlow} pointerEvents="none" /> : null}
+      <CardFace card={card} size="hand" disabled={disabled} />
     </Animated.View>
   );
 }
@@ -298,6 +315,9 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   const prevTopCard = useRef<string>('');
   const [opponentFlights, setOpponentFlights] = useState<{ id: string; kind: 'draw' | 'play'; card?: PlayingCard }[]>([]);
   const isFirstRender = useRef(true);
+  // Which hand card (by index) is currently mid-drag, so its slot can jump above its
+  // fanned neighbours instead of staying pinned to its resting stack order.
+  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
 
   // Captures the exact keys of whatever hand this account first ever sees for this
   // game — the initial deal — so only those cards, and only once, get the deal-in
@@ -567,35 +587,37 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       )}
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.hand}
-        // On web, a ScrollView's own overflow clipping (needed for horizontal scroll) also
-        // clips — and kills hit-testing for — a card being dragged vertically out of the row.
-        // Scroll only clips horizontally; the vertical axis stays visible for the drag.
-        style={{ overflowX: 'auto', overflowY: 'visible' } as object}
-      >
+      <View style={styles.hand} pointerEvents="box-none">
         {myHand.map((card, i) => {
           const key = `${card.suit}-${card.rank}-${i}`;
+          const pose = fanPose(i, myHand.length);
+          const slotStyle = [styles.handCardSlot, { marginLeft: pose.x - scGeometry.handCard.w / 2, zIndex: activeDragIndex === i ? 100 : i }];
           if (i === revealingIndex) {
-            return <FlipRevealCard key={key} card={card} onDone={() => setRevealingIndex(null)} />;
+            return (
+              <View key={key} style={slotStyle}>
+                <FlipRevealCard card={card} onDone={() => setRevealingIndex(null)} />
+              </View>
+            );
           }
           return (
-            <DealtCard key={key} index={i} animate={!!initialDealKeys.current?.has(key)}>
-              <DraggableCard
-                card={card}
-                enabled={isMyTurn && !busy}
-                isPlayable={isPlayable(card)}
-                getDropZone={() => discardZoneRef.current}
-                onPlay={() => handleCardPress(card)}
-                onTap={() => handleCardPress(card)}
-                onHoverChange={setDropGlow}
-              />
-            </DealtCard>
+            <View key={key} style={slotStyle}>
+              <DealtCard index={i} animate={!!initialDealKeys.current?.has(key)}>
+                <DraggableCard
+                  card={card}
+                  enabled={isMyTurn && !busy}
+                  isPlayable={isPlayable(card)}
+                  basePose={pose}
+                  getDropZone={() => discardZoneRef.current}
+                  onPlay={() => handleCardPress(card)}
+                  onTap={() => handleCardPress(card)}
+                  onHoverChange={setDropGlow}
+                  onDragActiveChange={(active) => setActiveDragIndex((prev) => (active ? i : prev === i ? null : prev))}
+                />
+              </DealtCard>
+            </View>
           );
         })}
-      </ScrollView>
+      </View>
 
       <View style={[styles.actions, { paddingBottom: insets.bottom + 12 }]}>
         {isMyTurn && game.drewThisTurn ? (
@@ -696,7 +718,24 @@ const styles = StyleSheet.create({
   turnBannerUrgent: { color: scColor.urgent },
   turnHint: { fontFamily: scFont.sans400, fontSize: 11.5, color: 'rgba(255,255,255,.45)', textAlign: 'center', marginTop: 3, marginBottom: 4 },
   error: { fontFamily: scFont.sans500, fontSize: 12, color: scColor.urgent, textAlign: 'center', marginBottom: 4 },
-  hand: { paddingHorizontal: 16, gap: 10, alignItems: 'flex-end', minHeight: scGeometry.handCard.h + 20 },
+  // Cards are laid out via fanPose's absolute x/rotate/translateY rather than flex flow,
+  // so each slot below anchors at container-center + its own pose offset.
+  hand: { position: 'relative', width: '100%', minHeight: scGeometry.handCard.h + 40, justifyContent: 'flex-end', paddingBottom: 6 },
+  handCardSlot: { position: 'absolute', left: '50%', bottom: 6 },
+  handCardGlow: {
+    position: 'absolute',
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: scColor.lime,
+    shadowColor: scColor.lime,
+    shadowOpacity: 1,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 10,
+  },
   actions: { flexDirection: 'row', gap: 10, paddingHorizontal: 18, paddingTop: 10 },
   singleAction: { flex: 1 },
   actionButton: { flex: 1, borderRadius: 999, backgroundColor: scColor.lime, paddingVertical: 17, alignItems: 'center', shadowColor: scColor.lime, shadowOpacity: 0.4, shadowOffset: { width: 0, height: 12 }, shadowRadius: 26 },
