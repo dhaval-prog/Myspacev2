@@ -17,7 +17,7 @@ import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { scColor, scFont, scGeometry } from '../../../theme/spaceCardsTokens';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CLOCK_ICON = 'M12 4a8 8 0 100 16 8 8 0 000-16z M12 9v4l2.5 2';
+const CLOCK_ICON = 'M12 5a8 8 0 100 16 8 8 0 000-16z M12 9v4l2.5 2';
 const OVERFLOW_DOTS = [5, 12, 19];
 
 /** Flips a card from its back to its revealed face over `duration`ms, then calls onDone. */
@@ -127,6 +127,70 @@ function Halo({ color, reduceMotion }: { color: string; reduceMotion?: boolean }
       ))}
     </Animated.View>
   );
+}
+
+/** The small live/waiting pill under an opponent's name — a breathing lime dot while their turn is actually counting down, a static muted dot otherwise. */
+function OpponentTimerPill({ live, label, reduceMotion }: { live: boolean; label: string; reduceMotion?: boolean }) {
+  const breathe = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!live || reduceMotion) {
+      breathe.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathe, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(breathe, { toValue: 0, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [live, reduceMotion, breathe]);
+  const scale = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] });
+  const opacity = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 0.5] });
+  return (
+    <View style={[styles.opponentTimerPill, live && styles.opponentTimerPillLive]}>
+      <Animated.View style={[styles.opponentTimerDot, live && styles.opponentTimerDotLive, live && { transform: [{ scale }], opacity }]} />
+      <Text style={styles.opponentTimerText}>{label}</Text>
+    </View>
+  );
+}
+
+/** The seconds-remaining pill beside the active-suit chip — blinks urgently in the last 5 seconds of my own turn. */
+function SecondsChip({ label, urgent, reduceMotion }: { label: string; urgent: boolean; reduceMotion?: boolean }) {
+  const blink = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!urgent || reduceMotion) {
+      blink.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(blink, { toValue: 0.15, duration: 500, useNativeDriver: true }),
+        Animated.timing(blink, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [urgent, reduceMotion, blink]);
+  return (
+    <Animated.View style={[styles.secondsChip, urgent && styles.secondsChipUrgent, { opacity: blink }]}>
+      <Text style={[styles.secondsChipLabel, urgent && styles.secondsChipLabelUrgent]}>{label}</Text>
+    </Animated.View>
+  );
+}
+
+/**
+ * A soft red vignette around the whole table when my own turn is about to
+ * time out — RN has no inset box-shadow, so a thick semi-transparent border
+ * stands in for it.
+ */
+function EdgeGlow({ urgent, reduceMotion }: { urgent: boolean; reduceMotion?: boolean }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(opacity, { toValue: urgent ? 1 : 0, duration: reduceMotion ? 0 : 400, useNativeDriver: true }).start();
+  }, [urgent, reduceMotion, opacity]);
+  return <Animated.View pointerEvents="none" style={[styles.edgeGlow, { opacity }]} />;
 }
 
 /** The draw pile — the deck's wordmark plate, top-right. Tapping it draws, same as the Draw button. */
@@ -377,7 +441,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
     if (err) setError(err);
   };
 
-  const urgent = remaining !== null && remaining <= 5;
+  const urgent = remaining !== null && isMyTurn && remaining <= 5;
 
   // Approximate flight path from the draw pile (top-right) to the hand (bottom-left) —
   // decorative only, so fixed offsets are fine rather than measuring exact layouts.
@@ -397,6 +461,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
 
   return (
     <LinearGradient colors={[scColor.tableLift, scColor.tableMid, scColor.tableDeep]} locations={[0, 0.5, 1]} style={styles.screen}>
+      {game.timerSeconds ? <EdgeGlow urgent={urgent} reduceMotion={reduceMotion} /> : null}
       <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
         <Pressable onPress={leaveGame ? () => { leaveGame(); onHome(); } : onHome} style={styles.leaveChip} accessibilityRole="button" accessibilityLabel="Leave the table">
           <Text style={styles.leaveChipLabel}>Leave</Text>
@@ -425,11 +490,11 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
             <Text style={styles.opponentName} numberOfLines={1}>{p.name}</Text>
             <Text style={styles.opponentCount}>{p.cardsRemaining} card{p.cardsRemaining === 1 ? '' : 's'}</Text>
             {game.timerSeconds ? (
-              <View style={[styles.opponentTimerPill, p.id === currentPlayer?.id && remaining !== null && styles.opponentTimerPillLive]}>
-                <Text style={[styles.opponentTimerText, p.id === currentPlayer?.id && remaining !== null && styles.opponentTimerTextLive]}>
-                  {p.id === currentPlayer?.id && remaining !== null ? `${remaining}S` : 'WAITING'}
-                </Text>
-              </View>
+              <OpponentTimerPill
+                live={p.id === currentPlayer?.id && remaining !== null}
+                label={p.id === currentPlayer?.id && remaining !== null ? `${remaining}S` : 'WAITING'}
+                reduceMotion={reduceMotion}
+              />
             ) : null}
             {p.cardsRemaining === 1 && !p.lastCardAnnounced && (
               <Pressable onPress={() => catchLastCard(p.id)} style={styles.catchButton} accessibilityRole="button" accessibilityLabel={`Catch ${p.name} on last card`}>
@@ -478,19 +543,27 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
               <Text style={styles.activeSuitLabel}>{SUIT_LABELS[game.activeSuit].toUpperCase()}</Text>
             </View>
           )}
-          {game.timerSeconds && remaining !== null ? (
-            <View style={styles.secondsChip}>
-              <Text style={[styles.secondsChipLabel, urgent && styles.secondsChipLabelUrgent]}>{remaining}s</Text>
-            </View>
-          ) : null}
+          {game.timerSeconds && remaining !== null ? <SecondsChip label={`${remaining}s`} urgent={urgent} reduceMotion={reduceMotion} /> : null}
         </View>
       </View>
 
-      <Text style={[styles.turnBanner, urgent && isMyTurn && styles.turnBannerUrgent]}>
+      <Text style={[styles.turnBanner, urgent && styles.turnBannerUrgent]}>
         {timedOutBanner ? 'You timed out — a card was drawn for you' : isMyTurn ? (urgent ? 'Play now' : 'Your turn') : `${currentPlayer?.name ?? 'Someone'} is playing…`}
       </Text>
-      {!game.timerSeconds && !timedOutBanner && (
-        <Text style={styles.turnHint}>{isMyTurn ? (myHand.length ? 'Tap a lit card, or draw' : 'Hand empty — you win') : 'Hold on…'}</Text>
+      {!timedOutBanner && (
+        <Text style={styles.turnHint}>
+          {game.timerSeconds
+            ? isMyTurn
+              ? urgent
+                ? `Auto-draws and passes in ${remaining}s`
+                : `Turn timer on · ${game.timerSeconds}s per player`
+              : "Their clock is running"
+            : isMyTurn
+              ? myHand.length
+                ? 'Tap a lit card, or draw'
+                : 'Hand empty — you win'
+              : 'Hold on…'}
+        </Text>
       )}
       {error && <Text style={styles.error}>{error}</Text>}
 
@@ -575,6 +648,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  edgeGlow: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 6, borderWidth: 28, borderColor: 'rgba(240,96,60,.4)' },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingBottom: 10 },
   leaveChip: { paddingVertical: 9, paddingHorizontal: 15, borderRadius: 999, backgroundColor: 'rgba(255,255,255,.1)' },
   leaveChipLabel: { fontFamily: scFont.sans600, fontSize: 13, color: 'rgba(255,255,255,.82)' },
@@ -582,7 +656,7 @@ const styles = StyleSheet.create({
   overflowBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   overflowDot: { position: 'absolute', width: 3.6, height: 3.6, borderRadius: 1.8, backgroundColor: 'rgba(255,255,255,.7)' },
   timerChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(195,234,79,.14)', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 11 },
-  timerChipLabel: { fontFamily: scFont.sans600, fontSize: 9, letterSpacing: 0.9, color: scColor.lime },
+  timerChipLabel: { fontFamily: scFont.mono500, fontSize: 9, letterSpacing: 0.9, color: scColor.lime },
   // Without an explicit style, RN Web's ScrollView defaults to flex-growing to fill
   // whatever space is left in its column parent — here that meant it competed with
   // the board's own flex:1 center area, inflating every opponent tile to fill that
@@ -594,10 +668,11 @@ const styles = StyleSheet.create({
   opponentActive: { backgroundColor: 'rgba(195,234,79,.14)' },
   opponentName: { fontFamily: scFont.sans700, fontSize: 12.5, color: '#fff', maxWidth: 76, marginTop: 2 },
   opponentCount: { fontFamily: scFont.mono500, fontSize: 10, color: 'rgba(255,255,255,.5)' },
-  opponentTimerPill: { marginTop: 6, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 9, backgroundColor: 'rgba(255,255,255,.1)' },
-  opponentTimerPillLive: { backgroundColor: 'rgba(255,255,255,.1)' },
-  opponentTimerText: { fontFamily: scFont.mono500, fontSize: 9, color: 'rgba(255,255,255,.5)' },
-  opponentTimerTextLive: { fontFamily: scFont.sans700, color: scColor.lime },
+  opponentTimerPill: { marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 9, backgroundColor: 'rgba(255,255,255,.08)' },
+  opponentTimerPillLive: { backgroundColor: 'rgba(195,234,79,.18)' },
+  opponentTimerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,.3)' },
+  opponentTimerDotLive: { backgroundColor: scColor.lime },
+  opponentTimerText: { fontFamily: scFont.mono500, fontSize: 9, letterSpacing: 9 * 0.14, color: 'rgba(255,255,255,.66)' },
   catchButton: { marginTop: 4, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999, backgroundColor: scColor.urgent },
   catchLabel: { fontFamily: scFont.sans700, fontSize: 10, color: '#fff' },
   announcedLabel: { fontFamily: scFont.sans700, fontSize: 9.5, color: scColor.lime, marginTop: 4 },
@@ -614,6 +689,7 @@ const styles = StyleSheet.create({
   activeSuitChip: { borderRadius: 999, paddingVertical: 7, paddingHorizontal: 15 },
   activeSuitLabel: { fontFamily: scFont.mono500, fontSize: 10.5, letterSpacing: 1.68, color: '#FFFFFF' },
   secondsChip: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: 13, backgroundColor: 'rgba(255,255,255,.1)' },
+  secondsChipUrgent: { backgroundColor: 'rgba(240,96,60,.2)' },
   secondsChipLabel: { fontFamily: scFont.mono500, fontSize: 11, letterSpacing: 1.32, color: 'rgba(255,255,255,.72)' },
   secondsChipLabelUrgent: { color: scColor.urgent },
   turnBanner: { fontFamily: scFont.sans800, fontSize: 16, color: '#fff', textAlign: 'center', marginBottom: 4 },
