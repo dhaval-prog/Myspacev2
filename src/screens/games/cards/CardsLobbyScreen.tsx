@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -93,6 +93,7 @@ function CardsHub({
   const [roomCode, setRoomCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const { borderColor: nameBorderColor, onFocus: onNameFocus, onBlur: onNameBlur } = useFocusBorder('rgba(255,255,255,0)', scColor.lime);
+  const roomCodeInputRef = useRef<TextInput>(null);
 
   const handleCreate = async () => {
     setError(null);
@@ -192,21 +193,26 @@ function CardsHub({
             <>
               <View style={styles.field}>
                 <Text style={styles.label}>ROOM CODE</Text>
-                <View style={styles.codeRow}>
+                <Pressable
+                  style={styles.codeRow}
+                  onPress={() => roomCodeInputRef.current?.focus()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Enter room code"
+                >
                   {codeCells.map((ch, i) => (
                     <View key={i} style={[styles.codeCell, i === focusIndex && !ch && styles.codeCellFocused]}>
                       <Text style={styles.codeCellText}>{ch}</Text>
                       {i === focusIndex && !ch ? <View style={styles.caret} /> : null}
                     </View>
                   ))}
-                </View>
+                </Pressable>
                 <TextInput
+                  ref={roomCodeInputRef}
                   value={roomCode}
                   onChangeText={(t) => setRoomCode(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))}
                   autoCapitalize="characters"
                   maxLength={4}
                   style={styles.hiddenInput}
-                  autoFocus
                 />
               </View>
               {error && <Text style={styles.error}>{error}</Text>}

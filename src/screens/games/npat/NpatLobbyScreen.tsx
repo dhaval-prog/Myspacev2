@@ -194,7 +194,7 @@ function NpatHub({
             <>
               <View style={styles.field}>
                 <Text style={styles.label}>ROOM CODE</Text>
-                <RoomCodeCells value={roomCode} onChangeText={setRoomCode} autoFocus />
+                <RoomCodeCells value={roomCode} onChangeText={setRoomCode} />
               </View>
               {error && <Text style={styles.error}>{error}</Text>}
               <Text style={styles.hint}>Ask your host for the 6-digit room code.</Text>

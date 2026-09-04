@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { npColor, npFont } from '../../theme/npatTokens';
 
 const CELL_COUNT = 6;
@@ -23,34 +23,44 @@ interface RoomCodeCellsProps {
   value: string;
   /** Editable when provided — renders the hidden numeric input and focus/caret state. Omit for a read-only display (the waiting room's real code). */
   onChangeText?: (t: string) => void;
-  autoFocus?: boolean;
 }
 
-/** The six room-code digit cells from the handoff — editable while joining, or a static real-code display once inside the room. */
-export function RoomCodeCells({ value, onChangeText, autoFocus }: RoomCodeCellsProps) {
+/** The six room-code digit cells from the handoff — editable while joining, or a static real-code display once inside the room. Tapping the cells (rather than auto-focusing on mount) brings up the keyboard, so the join screen doesn't open straight into a keyboard that hides everything below it. */
+export function RoomCodeCells({ value, onChangeText }: RoomCodeCellsProps) {
   const editable = !!onChangeText;
   const focusIndex = Math.min(value.length, CELL_COUNT - 1);
   const cells = Array.from({ length: CELL_COUNT }, (_, i) => value[i] ?? '');
+  const inputRef = useRef<TextInput>(null);
+
+  const cellRow = (
+    <View style={styles.row}>
+      {cells.map((ch, i) => {
+        const focused = editable && i === focusIndex && !ch;
+        return (
+          <View key={i} style={[styles.cell, focused && styles.cellFocused]}>
+            {ch ? <Text style={styles.cellText}>{ch}</Text> : focused ? <Caret /> : null}
+          </View>
+        );
+      })}
+    </View>
+  );
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.row}>
-        {cells.map((ch, i) => {
-          const focused = editable && i === focusIndex && !ch;
-          return (
-            <View key={i} style={[styles.cell, focused && styles.cellFocused]}>
-              {ch ? <Text style={styles.cellText}>{ch}</Text> : focused ? <Caret /> : null}
-            </View>
-          );
-        })}
-      </View>
+      {editable ? (
+        <Pressable onPress={() => inputRef.current?.focus()} accessibilityRole="button" accessibilityLabel="Enter room code">
+          {cellRow}
+        </Pressable>
+      ) : (
+        cellRow
+      )}
       {editable && (
         <TextInput
+          ref={inputRef}
           value={value}
           onChangeText={(t) => onChangeText?.(t.replace(/[^0-9]/g, '').slice(0, CELL_COUNT))}
           keyboardType="number-pad"
           maxLength={CELL_COUNT}
-          autoFocus={autoFocus}
           style={styles.hiddenInput}
         />
       )}
