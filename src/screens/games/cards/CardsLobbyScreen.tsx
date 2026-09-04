@@ -13,7 +13,6 @@ import { useCardsGame } from '../../../context/CardsGameContext';
 import { scColor, scFont } from '../../../theme/spaceCardsTokens';
 import type { PlayingCard } from '../../../types/cards';
 
-const BACK_ICON = 'M15 5l-7 7 7 7';
 const LEAVE_ICON = 'M9 5l-7 7 7 7 M2 12h13 M17 5v14';
 
 const PLAYER_OPTIONS = [2, 3, 4];
@@ -105,7 +104,13 @@ function CardsHub({
   return (
     <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
-        <LobbyHeader title={!isJoin ? 'UNO Space Cards' : undefined} subtitle={!isJoin ? 'Shed your hand before anyone else.' : undefined} cards={fan} />
+        <LobbyHeader
+          title={!isJoin ? 'UNO Space Cards' : undefined}
+          subtitle={!isJoin ? 'Shed your hand before anyone else.' : undefined}
+          cards={fan}
+          onBack={onHome}
+          reduceMotion={reduceMotion}
+        />
 
         <LinearGradient colors={[scColor.sheet2, scColor.sheet3]} style={styles.sheet}>
           <View style={styles.handle} />
@@ -181,12 +186,6 @@ function CardsHub({
         </LinearGradient>
       </ScrollView>
 
-      <View style={styles.pinned}>
-        <Pressable onPress={onHome} style={styles.iconButtonDark} accessibilityRole="button" accessibilityLabel="Back to Games">
-          <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
-        </Pressable>
-      </View>
-
       <BottomNav
         activeId="home"
         onSelect={(id) => {
@@ -235,7 +234,14 @@ function CardsReadyRoom({
   return (
     <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
-        <LobbyHeader cards={JOIN_FAN} />
+        <LobbyHeader
+          cards={JOIN_FAN}
+          onBack={() => {
+            leaveGame();
+            onHome();
+          }}
+          reduceMotion={reduceMotion}
+        />
 
         <LinearGradient colors={[scColor.sheet2, scColor.sheet3]} style={styles.sheet}>
           <View style={styles.handle} />
@@ -282,20 +288,6 @@ function CardsReadyRoom({
         </LinearGradient>
       </ScrollView>
 
-      <View style={styles.pinned}>
-        <Pressable
-          onPress={() => {
-            leaveGame();
-            onHome();
-          }}
-          style={styles.iconButtonDark}
-          accessibilityRole="button"
-          accessibilityLabel="Back to Games"
-        >
-          <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
-        </Pressable>
-      </View>
-
       <BottomNav
         activeId="home"
         onSelect={(id) => {
@@ -325,8 +317,6 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   handle: { alignSelf: 'center', width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,.28)', marginBottom: 4 },
-  pinned: { paddingHorizontal: 26, paddingTop: 10, paddingBottom: 10 },
-  iconButtonDark: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,.12)', alignItems: 'center', justifyContent: 'center' },
   tabs: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,.08)', borderRadius: 999, padding: 4 },
   tab: { flex: 1, paddingVertical: 11, borderRadius: 999, alignItems: 'center' },
   tabActive: { backgroundColor: scColor.ink },
