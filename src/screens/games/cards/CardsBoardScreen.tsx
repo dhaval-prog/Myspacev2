@@ -240,12 +240,12 @@ function DraggableCard({
     onDragActiveChange(phase !== 'idle');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
-  // Only fade a card out when it genuinely can't be played on MY turn — dimming the
-  // whole hand just because it isn't my turn yet made every card look washed out and
-  // hard to read (the turn banner + disabled action buttons already say whose turn
-  // it is, so the hand itself stays fully legible at all times).
+  // Hand cards never fade out — an opacity-dimmed card still reads as "there, but
+  // faint," which players found confusing next to the lit ones. Every card stays
+  // fully opaque with its normal drop shadow; only a lime glow on top of that marks
+  // a card as playable, so "not playable" is the absence of a highlight, not a
+  // washed-out card.
   const lit = enabled && isPlayable;
-  const dimmed = enabled && !isPlayable;
   // Drag offsets are listed first so they land in true screen pixels regardless of
   // the fan's resting tilt — otherwise a card fanned at, say, 20deg would drag along
   // that diagonal instead of following the finger.
@@ -256,7 +256,7 @@ function DraggableCard({
   return (
     <Animated.View {...panHandlers} accessibilityLabel={`Hand card: ${card.suit ?? 'wild'} ${card.rank}`} style={style}>
       {lit ? <View style={styles.handCardGlow} pointerEvents="none" /> : null}
-      <CardFace card={card} size="hand" disabled={dimmed} />
+      <CardFace card={card} size="hand" />
     </Animated.View>
   );
 }
