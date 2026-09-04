@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, noOutline, radius, spacing } from '../../../theme';
@@ -8,6 +8,7 @@ import { BottomNav } from '../../../components/BottomNav';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useAuth } from '../../../context/AuthContext';
 import { useCardsGame } from '../../../context/CardsGameContext';
+import { CardFace } from './CardFace';
 
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const LEAVE_ICON = 'M9 5l-7 7 7 7 M2 12h13 M17 5v14';
@@ -22,6 +23,39 @@ const TIMER_OPTIONS: { label: string; value: number | null }[] = [
 
 function defaultName(user: { user_metadata?: { full_name?: string } } | null): string {
   return user?.user_metadata?.full_name?.split(' ')[0]?.trim() || 'Player';
+}
+
+/** A small fan of cards that gently bobs up and down, like they're floating. Purely decorative — never animates the reduced-motion way. */
+function CardsHero({ reduceMotion }: { reduceMotion?: boolean }) {
+  const bob = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bob, { toValue: 1, duration: 1700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 0, duration: 1700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion, bob]);
+
+  const lift = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -9] });
+
+  return (
+    <View style={styles.heroWrap} pointerEvents="none">
+      <Animated.View style={[styles.heroLayer, { transform: [{ rotate: '-11deg' }, { translateX: -26 }, { translateY: lift }] }]}>
+        <CardFace card={{ suit: 'tide', rank: '5' }} size="sm" />
+      </Animated.View>
+      <Animated.View style={[styles.heroLayer, { transform: [{ rotate: '9deg' }, { translateX: 24 }, { translateY: lift }] }]}>
+        <CardFace card={{ suit: 'solar', rank: '2' }} size="sm" />
+      </Animated.View>
+      <Animated.View style={[styles.heroLayer, { transform: [{ translateY: lift }] }]}>
+        <CardFace card={{ suit: 'ember', rank: '7' }} size="lg" />
+      </Animated.View>
+    </View>
+  );
 }
 
 interface CardsLobbyScreenProps {
@@ -87,9 +121,16 @@ function CardsHub({
     >
       <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerRow}>
-          <Text style={styles.titleOnDark}>Space Cards</Text>
-          <Text style={styles.subOnDark}>Shed your hand before anyone else — 2 to 4 players.</Text>
+          <Pressable onPress={onHome} style={styles.iconButtonDark} accessibilityRole="button" accessibilityLabel="Back to Games">
+            <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
+          </Pressable>
+          <View style={styles.headerTextBlock}>
+            <Text style={styles.titleOnDark}>Space Cards</Text>
+            <Text style={styles.subOnDark}>Shed your hand before anyone else — 2 to 4 players.</Text>
+          </View>
         </View>
+
+        <CardsHero reduceMotion={reduceMotion} />
 
         <View style={styles.tabRow}>
           <Pressable onPress={() => setTab('create')} style={[styles.tabButton, tab === 'create' && styles.tabButtonActive]}>
@@ -147,12 +188,6 @@ function CardsHub({
         </View>
       </ScrollView>
 
-      <View style={styles.pinned}>
-        <Pressable onPress={onHome} style={styles.iconButtonDark} accessibilityRole="button" accessibilityLabel="Back to Games">
-          <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
-        </Pressable>
-      </View>
-
       <BottomNav
         activeId="games"
         onSelect={(id) => {
@@ -208,8 +243,21 @@ function CardsReadyRoom({
     >
       <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerRow}>
-          <Text style={styles.titleOnDark}>Waiting room</Text>
-          <Text style={styles.subOnDark}>{active.length}/{game.maxPlayers} players · share the code below</Text>
+          <Pressable
+            onPress={() => {
+              leaveGame();
+              onHome();
+            }}
+            style={styles.iconButtonDark}
+            accessibilityRole="button"
+            accessibilityLabel="Back to Games"
+          >
+            <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
+          </Pressable>
+          <View style={styles.headerTextBlock}>
+            <Text style={styles.titleOnDark}>Waiting room</Text>
+            <Text style={styles.subOnDark}>{active.length}/{game.maxPlayers} players · share the code below</Text>
+          </View>
         </View>
 
         <View style={styles.codeCard}>
@@ -256,20 +304,6 @@ function CardsReadyRoom({
         </Pressable>
       </ScrollView>
 
-      <View style={styles.pinned}>
-        <Pressable
-          onPress={() => {
-            leaveGame();
-            onHome();
-          }}
-          style={styles.iconButtonDark}
-          accessibilityRole="button"
-          accessibilityLabel="Back to Games"
-        >
-          <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
-        </Pressable>
-      </View>
-
       <BottomNav
         activeId="games"
         onSelect={(id) => {
@@ -288,8 +322,10 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   scrollFlex: { flex: 1 },
   scroll: { paddingHorizontal: 26, paddingBottom: spacing.lg, gap: 14 },
-  pinned: { paddingHorizontal: 26, paddingTop: spacing.ms, paddingBottom: spacing.ms },
-  headerRow: { gap: 2 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  headerTextBlock: { flex: 1, gap: 2 },
+  heroWrap: { height: 112, alignItems: 'center', justifyContent: 'center' },
+  heroLayer: { position: 'absolute' },
   titleOnDark: { fontFamily: fontFamily.sans700, fontSize: 28, lineHeight: 30, letterSpacing: -0.8, color: '#fff' },
   subOnDark: { fontFamily: fontFamily.sans400, fontSize: 13.5, color: 'rgba(255,255,255,.65)' },
   tabRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,.12)', borderRadius: radius.pill, padding: 4, gap: 4 },
