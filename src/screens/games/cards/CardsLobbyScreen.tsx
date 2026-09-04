@@ -104,7 +104,7 @@ function CardsHub({
 
   return (
     <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView style={styles.scrollFlex} contentContainerStyle={{ paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
         <LobbyHeader
           title={!isJoin ? 'UNO Space Cards' : undefined}
           subtitle={!isJoin ? 'Shed your hand before anyone else.' : undefined}
@@ -198,18 +198,18 @@ function CardsHub({
             </>
           )}
         </LinearGradient>
-
-        <BottomNav
-          activeId="home"
-          onSelect={(id) => {
-            if (id === 'home') onHome();
-            if (id === 'expenses') onOpenExpenses();
-            if (id === 'split') onOpenSplit();
-          }}
-          bottomInset={insets.bottom}
-          reduceMotion={reduceMotion}
-        />
       </ScrollView>
+
+      <BottomNav
+        activeId="home"
+        onSelect={(id) => {
+          if (id === 'home') onHome();
+          if (id === 'expenses') onOpenExpenses();
+          if (id === 'split') onOpenSplit();
+        }}
+        bottomInset={insets.bottom}
+        reduceMotion={reduceMotion}
+      />
     </LinearGradient>
   );
 }
@@ -247,7 +247,7 @@ function CardsReadyRoom({
 
   return (
     <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView style={styles.scrollFlex} contentContainerStyle={{ paddingTop: insets.top + 14 }} showsVerticalScrollIndicator={false} bounces={false}>
         <LobbyHeader
           cards={JOIN_FAN}
           onBack={() => {
@@ -300,24 +300,25 @@ function CardsReadyRoom({
             <Text style={styles.leaveLabel}>Leave game</Text>
           </Pressable>
         </LinearGradient>
-
-        <BottomNav
-          activeId="home"
-          onSelect={(id) => {
-            if (id === 'home') onHome();
-            if (id === 'expenses') onOpenExpenses();
-            if (id === 'split') onOpenSplit();
-          }}
-          bottomInset={insets.bottom}
-          reduceMotion={reduceMotion}
-        />
       </ScrollView>
+
+      <BottomNav
+        activeId="home"
+        onSelect={(id) => {
+          if (id === 'home') onHome();
+          if (id === 'expenses') onOpenExpenses();
+          if (id === 'split') onOpenSplit();
+        }}
+        bottomInset={insets.bottom}
+        reduceMotion={reduceMotion}
+      />
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  scrollFlex: { flex: 1 },
   sheet: {
     marginTop: 18,
     borderTopLeftRadius: 32,
