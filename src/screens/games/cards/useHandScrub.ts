@@ -12,6 +12,8 @@ interface UseHandScrubOptions {
   onTapCard: (index: number) => void;
   /** Fires whenever the card currently "under the finger" while browsing changes, so its slot can be raised above its neighbours. */
   onActiveIndexChange?: (index: number | null) => void;
+  /** A hard, fast upward flick released while card `index` was the one being browsed — the caller's throw-to-center behaviour. */
+  onFlickCard?: (index: number) => void;
 }
 
 // Below this much combined finger travel, a touch is still a candidate for a plain
@@ -19,14 +21,22 @@ interface UseHandScrubOptions {
 // whatever card the finger happens to be over.
 const TAP_MOVE_THRESHOLD = 6;
 export const HAND_SCRUB_BROWSE_SCALE = 1.18;
+// A hard, fast upward swipe counts as "thrown at the pile" even short of an exact
+// distance — matches a real flick, which is felt more by speed than by precise aim.
+const FLICK_MIN_DISTANCE = 60;
+const FLICK_MIN_VELOCITY = 0.5;
 
 /**
  * A single gesture recogniser for the whole hand row: sliding a finger left/right
  * across the stack zooms whichever card is nearest the finger, without ever moving a
- * card out of its resting slot. Cards are never draggable — the only way to play one
- * is a plain tap (no meaningful movement before release).
+ * card out of its resting slot. Cards are never draggable to an arbitrary point —
+ * the only two ways to play one are a plain tap (no meaningful movement before
+ * release) and a hard upward flick on the card currently being browsed, which the
+ * caller animates as a throw to the center (see CardsBoardScreen's flight overlay).
+ * Any other release (a slow drag, a horizontal-only release) just lets the browsed
+ * card spring back into the stack.
  */
-export function useHandScrub({ enabled, count, getSlotX, onTapCard, onActiveIndexChange }: UseHandScrubOptions) {
+export function useHandScrub({ enabled, count, getSlotX, onTapCard, onActiveIndexChange, onFlickCard }: UseHandScrubOptions) {
   const scalesRef = useRef<Animated.Value[]>([]);
   while (scalesRef.current.length < count) scalesRef.current.push(new Animated.Value(1));
   scalesRef.current.length = count;
@@ -40,11 +50,13 @@ export function useHandScrub({ enabled, count, getSlotX, onTapCard, onActiveInde
   const getSlotXRef = useRef(getSlotX);
   const onTapCardRef = useRef(onTapCard);
   const onActiveIndexChangeRef = useRef(onActiveIndexChange);
+  const onFlickCardRef = useRef(onFlickCard);
   enabledRef.current = enabled;
   countRef.current = count;
   getSlotXRef.current = getSlotX;
   onTapCardRef.current = onTapCard;
   onActiveIndexChangeRef.current = onActiveIndexChange;
+  onFlickCardRef.current = onFlickCard;
 
   const activeIndexRef = useRef<number | null>(null);
   const grantIndexRef = useRef<number | null>(null);
@@ -102,11 +114,18 @@ export function useHandScrub({ enabled, count, getSlotX, onTapCard, onActiveInde
         }
         setActive(nearestIndex(evt.nativeEvent.locationX));
       },
-      onPanResponderRelease: () => {
+      onPanResponderRelease: (_evt, gesture) => {
         if (!movedRef.current) {
           const idx = grantIndexRef.current;
           resetAll();
           if (idx !== null) onTapCardRef.current(idx);
+          return;
+        }
+        const flungUp = gesture.dy < -FLICK_MIN_DISTANCE && gesture.vy < -FLICK_MIN_VELOCITY;
+        if (flungUp) {
+          const idx = activeIndexRef.current ?? grantIndexRef.current;
+          resetAll();
+          if (idx !== null) onFlickCardRef.current?.(idx);
           return;
         }
         resetAll();
