@@ -6,7 +6,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useCardsGame } from '../../../context/CardsGameContext';
 import type { CardSuit, PlayingCard } from '../../../types/cards';
 import { CardFace, SUIT_COLORS, SUIT_LABELS } from './CardFace';
-import { useCardDrag, type DropZone } from './useCardDrag';
+import { HAND_SCRUB_BROWSE_SCALE, useHandScrub } from './useHandScrub';
 import { Icon } from '../../../components/Icon';
 import { CardBack } from '../../../components/spacecards/CardBack';
 import { OpponentStack } from '../../../components/spacecards/OpponentStack';
@@ -96,39 +96,6 @@ function FloatingCardBack({ reduceMotion }: { reduceMotion?: boolean }) {
   );
 }
 
-const HALO_RING_OPACITIES = [0.42, 0.26, 0.13, 0.05];
-
-/** The discard pile's ambient glow — a continuous breathing pulse (opacity/scale) behind the halo rings, tinted to the active suit. */
-function Halo({ color, reduceMotion }: { color: string; reduceMotion?: boolean }) {
-  const breathe = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (reduceMotion) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(breathe, { toValue: 1, duration: 1700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(breathe, { toValue: 0, duration: 1700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [reduceMotion, breathe]);
-  const scale = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 1.13] });
-  const opacityMultiplier = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 0.72 / 0.34] });
-  return (
-    <Animated.View style={[styles.haloWrap, { transform: [{ scale }] }]} pointerEvents="none">
-      {HALO_RING_OPACITIES.map((o, i) => (
-        <Animated.View
-          key={i}
-          style={[
-            styles.haloRing,
-            { backgroundColor: color, opacity: Animated.multiply(o, opacityMultiplier), width: 220 - i * 36, height: 220 - i * 36, borderRadius: (220 - i * 36) / 2 },
-          ]}
-        />
-      ))}
-    </Animated.View>
-  );
-}
-
 /** The small live/waiting pill under an opponent's name — a breathing lime dot while their turn is actually counting down, a static muted dot otherwise. */
 function OpponentTimerPill({ live, label, reduceMotion }: { live: boolean; label: string; reduceMotion?: boolean }) {
   const breathe = useRef(new Animated.Value(0)).current;
@@ -206,7 +173,12 @@ function DrawPile({ onPress, disabled, topOffset, bounce, reduceMotion }: { onPr
 }
 
 /**
- * One card in the player's own hand — draggable, throwable, and tappable.
+ * One card in the player's own hand — anchored in its fanned slot at all times.
+ * It has no gesture of its own: the whole hand row shares a single browse gesture
+ * (see useHandScrub) that zooms whichever card the finger is nearest, and a tap
+ * (handled by that same gesture) plays a card. This component only renders the
+ * result — the playable-card glow, and a deeper shadow while it's the card being
+ * browsed.
  * The design spec calls for a continuous idle float on resting cards, but a
  * card that's never visually still breaks click/tap actionability on web
  * (verified directly: every tap attempt failed against a build with this
@@ -214,54 +186,35 @@ function DrawPile({ onPress, disabled, topOffset, bounce, reduceMotion }: { onPr
  * exactly the kind of regression this pass exists to remove, not add back.
  * Skipped in favour of gameplay reliability.
  */
-function DraggableCard({
+function HandCard({
   card,
   enabled,
   isPlayable,
+  isActive,
+  scaleValue,
   basePose,
-  getDropZone,
-  onPlay,
-  onTap,
-  onHoverChange,
-  onDragActiveChange,
 }: {
   card: PlayingCard;
   enabled: boolean;
   isPlayable: boolean;
+  isActive: boolean;
+  scaleValue: Animated.Value;
   basePose: { rotateDeg: number; translateY: number };
-  getDropZone: () => DropZone | null;
-  onPlay: () => Promise<{ error: string | null } | void>;
-  onTap: () => void;
-  onHoverChange: (hovering: boolean) => void;
-  onDragActiveChange: (active: boolean) => void;
 }) {
-  const { panHandlers, phase, animatedStyle } = useCardDrag({ enabled, isPlayable, getDropZone, onPlay, onTap, onHoverChange });
-  useEffect(() => {
-    onDragActiveChange(phase !== 'idle');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
   // Hand cards never fade out — an opacity-dimmed card still reads as "there, but
   // faint," which players found confusing next to the lit ones. Every card stays
   // fully opaque with its normal drop shadow; only a lime glow on top of that marks
   // a card as playable, so "not playable" is the absence of a highlight, not a
   // washed-out card.
   const lit = enabled && isPlayable;
-  // Picked up out of the stack (long-pressed or dragged past the threshold) — deepen
-  // its shadow so it visibly pops above its neighbours, on top of the scale/lift the
-  // drag hook itself animates. Excludes the brief 'pressed' phase, which hasn't
-  // committed to being a hold-and-drag yet (still might just be a tap).
-  const lifted = phase !== 'idle' && phase !== 'pressed';
-  // Drag offsets are listed first so they land in true screen pixels regardless of
-  // the fan's resting tilt — otherwise a card fanned at, say, 20deg would drag along
-  // that diagonal instead of following the finger.
-  const style = [
-    animatedStyle,
-    { transform: [...animatedStyle.transform, { translateY: basePose.translateY }, { rotate: `${basePose.rotateDeg}deg` }] },
-  ];
+  const browseLift = scaleValue.interpolate({ inputRange: [1, HAND_SCRUB_BROWSE_SCALE], outputRange: [0, -16] });
+  const style = {
+    transform: [{ scale: scaleValue }, { translateY: browseLift }, { translateY: basePose.translateY }, { rotate: `${basePose.rotateDeg}deg` }],
+  };
   return (
-    <Animated.View {...panHandlers} accessibilityLabel={`Hand card: ${card.suit ?? 'wild'} ${card.rank}`} style={style}>
+    <Animated.View accessibilityLabel={`Hand card: ${card.suit ?? 'wild'} ${card.rank}`} style={style}>
       {lit ? <View style={styles.handCardGlow} pointerEvents="none" /> : null}
-      <CardFace card={card} size="hand" style={lifted ? styles.handCardLifted : undefined} />
+      <CardFace card={card} size="hand" style={isActive ? styles.handCardLifted : undefined} />
     </Animated.View>
   );
 }
@@ -316,18 +269,20 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   const flyProgress = useRef(new Animated.Value(0)).current;
   const drawPileBounce = useRef(new Animated.Value(1)).current;
   const discardBounce = useRef(new Animated.Value(1)).current;
-  const [dropGlow, setDropGlow] = useState(false);
   const [revealingIndex, setRevealingIndex] = useState<number | null>(null);
   const prevHandLength = useRef(myHand.length);
-  const discardZoneRef = useRef<DropZone | null>(null);
+  const discardZoneRef = useRef<{ x: number; y: number } | null>(null);
   const discardViewRef = useRef<View>(null);
   const prevOpponents = useRef<Map<string, number>>(new Map());
   const prevTopCard = useRef<string>('');
   const [opponentFlights, setOpponentFlights] = useState<{ id: string; kind: 'draw' | 'play'; card?: PlayingCard }[]>([]);
   const isFirstRender = useRef(true);
-  // Which hand card (by index) is currently mid-drag, so its slot can jump above its
-  // fanned neighbours instead of staying pinned to its resting stack order.
-  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
+  // Which hand card (by index) is currently being browsed (finger nearest it), so its
+  // slot can jump above its neighbours instead of staying pinned to its resting order.
+  const [activeBrowseIndex, setActiveBrowseIndex] = useState<number | null>(null);
+  // The hand row's own measured width — lets the browse gesture map a touch's local x
+  // to the same coordinate space fanPose already places each card's center in.
+  const handWidthRef = useRef(SCREEN_WIDTH);
 
   // Captures the exact keys of whatever hand this account first ever sees for this
   // game — the initial deal — so only those cards, and only once, get the deal-in
@@ -417,13 +372,24 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
     const node = discardViewRef.current as unknown as { measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void; getBoundingClientRect?: () => DOMRect };
     if (node?.getBoundingClientRect) {
       const rect = node.getBoundingClientRect();
-      discardZoneRef.current = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, radius: Math.max(rect.width, rect.height) * 0.85 };
+      discardZoneRef.current = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
       return;
     }
     node?.measureInWindow?.((x, y, width, height) => {
-      discardZoneRef.current = { x: x + width / 2, y: y + height / 2, radius: Math.max(width, height) * 0.85 };
+      discardZoneRef.current = { x: x + width / 2, y: y + height / 2 };
     });
   };
+
+  const handScrub = useHandScrub({
+    enabled: isMyTurn && !busy,
+    count: myHand.length,
+    getSlotX: (i) => handWidthRef.current / 2 + fanPose(i, myHand.length).x,
+    onTapCard: (i) => {
+      const card = myHand[i];
+      if (card) handleCardPress(card);
+    },
+    onActiveIndexChange: setActiveBrowseIndex,
+  });
 
   const handleCardPress = async (card: PlayingCard) => {
     if (!isMyTurn || busy) return { error: null };
@@ -544,8 +510,6 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
             </View>
           ) : null}
           <View ref={discardViewRef} onLayout={measureDiscardZone} style={styles.discardStack} accessibilityLabel="Discard pile">
-            {dropGlow ? <View style={styles.dropGlowRing} pointerEvents="none" /> : null}
-            {game.activeSuit ? <Halo color={SUIT_COLORS[game.activeSuit as CardSuit]} reduceMotion={reduceMotion} /> : null}
             {pileGhosts.map((c, i) => {
               const rotateDeg = ((i * 47) % 34) - 17;
               const offsetX = ((i * 29) % 16) - 8;
@@ -597,36 +561,36 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       )}
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <View style={styles.hand} pointerEvents="box-none">
+      <View style={styles.hand} onLayout={(e) => { handWidthRef.current = e.nativeEvent.layout.width; }}>
         {myHand.map((card, i) => {
           const key = `${card.suit}-${card.rank}-${i}`;
           const pose = fanPose(i, myHand.length);
-          const slotStyle = [styles.handCardSlot, { marginLeft: pose.x - scGeometry.handCard.w / 2, zIndex: activeDragIndex === i ? 100 : i }];
+          const slotStyle = [styles.handCardSlot, { marginLeft: pose.x - scGeometry.handCard.w / 2, zIndex: activeBrowseIndex === i ? 100 : i }];
           if (i === revealingIndex) {
             return (
-              <View key={key} style={slotStyle}>
+              <View key={key} style={slotStyle} pointerEvents="none">
                 <FlipRevealCard card={card} onDone={() => setRevealingIndex(null)} />
               </View>
             );
           }
           return (
-            <View key={key} style={slotStyle}>
+            <View key={key} style={slotStyle} pointerEvents="none">
               <DealtCard index={i} animate={!!initialDealKeys.current?.has(key)}>
-                <DraggableCard
+                <HandCard
                   card={card}
                   enabled={isMyTurn && !busy}
                   isPlayable={isPlayable(card)}
+                  isActive={activeBrowseIndex === i}
+                  scaleValue={handScrub.scales[i]}
                   basePose={pose}
-                  getDropZone={() => discardZoneRef.current}
-                  onPlay={() => handleCardPress(card)}
-                  onTap={() => handleCardPress(card)}
-                  onHoverChange={setDropGlow}
-                  onDragActiveChange={(active) => setActiveDragIndex((prev) => (active ? i : prev === i ? null : prev))}
                 />
               </DealtCard>
             </View>
           );
         })}
+        {/* A single gesture surface for the whole row — sliding across it browses/zooms
+            cards in place (see useHandScrub); the cards above are purely visual. */}
+        <View style={StyleSheet.absoluteFill} {...handScrub.panHandlers} />
       </View>
 
       <View style={[styles.actions, { paddingBottom: insets.bottom + 12 }]}>
@@ -717,9 +681,6 @@ const styles = StyleSheet.create({
   discardOuter: { width: 232, height: 232, alignItems: 'center', justifyContent: 'center' },
   timerRingAbs: { position: 'absolute', left: 0, top: 0 },
   discardStack: { width: 178, height: 178, alignItems: 'center', justifyContent: 'center' },
-  haloWrap: { position: 'absolute', width: 220, height: 220, alignItems: 'center', justifyContent: 'center' },
-  haloRing: { position: 'absolute' },
-  dropGlowRing: { position: 'absolute', width: 178, height: 178, borderRadius: 89, backgroundColor: scColor.lime, opacity: 0.3 },
   discardGhost: { position: 'absolute', width: 92, height: 129, borderRadius: 15, backgroundColor: '#FFFFFF', opacity: 0.22 },
   cardPlaceholder: { width: 92, height: 129 },
   chipsRow: { flexDirection: 'row', gap: 8 },
