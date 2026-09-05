@@ -19,6 +19,12 @@ import { fanPose, scColor, scFont, scGeometry } from '../../../theme/spaceCardsT
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CLOCK_ICON = 'M12 5a8 8 0 100 16 8 8 0 000-16z M12 9v4l2.5 2';
 const OVERFLOW_DOTS = [5, 12, 19];
+// Web only: a long-press/drag on the hand (holding still for the flick threshold, or
+// dragging past it) otherwise starts a native text selection that can spill onto the
+// banner text above the hand, fighting the in-progress gesture. RN's ViewStyle type
+// doesn't model this CSS-only key, so — like CardStack.tsx's own `noSelect` — it's
+// applied as a loosely-typed style rather than added to the typed StyleSheet.
+const noSelect: Record<string, unknown> = { userSelect: 'none' };
 
 /** Flips a card from its back to its revealed face over `duration`ms, then calls onDone. */
 function FlipRevealCard({ card, duration = 300, onDone }: { card: PlayingCard; duration?: number; onDone?: () => void }) {
@@ -537,7 +543,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   const discardPoint = discardZoneRef.current ? { x: discardZoneRef.current.x, y: discardZoneRef.current.y } : { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT / 2 };
 
   return (
-    <LinearGradient colors={[scColor.tableLift, scColor.tableMid, scColor.tableDeep]} locations={[0, 0.5, 1]} style={styles.screen}>
+    <LinearGradient colors={[scColor.tableLift, scColor.tableMid, scColor.tableDeep]} locations={[0, 0.5, 1]} style={[styles.screen, noSelect]}>
       {game.timerSeconds ? <EdgeGlow urgent={urgent} reduceMotion={reduceMotion} /> : null}
       <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
         <Pressable onPress={leaveGame ? () => { leaveGame(); onHome(); } : onHome} style={styles.leaveChip} accessibilityRole="button" accessibilityLabel="Leave the table">
