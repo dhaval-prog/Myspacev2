@@ -2,79 +2,41 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { colors } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
-import { ConfirmDialog } from '../ConfirmDialog';
-import { AppleIcon, FacebookIcon, GoogleIcon } from './icons';
-
-const PROVIDERS = [
-  { id: 'facebook', label: 'Continue with Facebook', bg: colors.white, render: () => <FacebookIcon /> },
-  { id: 'google', label: 'Continue with Google', bg: colors.white, render: () => <GoogleIcon /> },
-  { id: 'apple', label: 'Continue with Apple', bg: colors.ink, render: () => <AppleIcon /> },
-] as const;
-
-// Facebook and Apple sign-in are still mid-setup (pending Facebook App Review
-// and an Apple Developer account) — tapping them explains that instead of
-// attempting a real OAuth redirect.
-const COMING_SOON: Partial<Record<(typeof PROVIDERS)[number]['id'], string>> = {
-  facebook: 'Facebook',
-  apple: 'Apple',
-};
+import { GoogleIcon } from './icons';
 
 interface SocialAuthRowProps {
   /** Surfaces a failed OAuth redirect (e.g. the provider isn't enabled on the Supabase project yet) — the caller renders it the same way as its own form errors. */
   onError: (message: string) => void;
 }
 
-/** Facebook / Google / Apple sign-in — redirects to the provider via Supabase OAuth. */
+/** Google sign-in — redirects via Supabase OAuth. Facebook and Apple were removed while their own developer-account setup is still pending. */
 export function SocialAuthRow({ onError }: SocialAuthRowProps) {
   const { signInWithOAuth } = useAuth();
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [comingSoon, setComingSoon] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
-  const handlePress = async (id: (typeof PROVIDERS)[number]['id']) => {
-    if (pendingId) return;
-    const providerName = COMING_SOON[id];
-    if (providerName) {
-      setComingSoon(providerName);
-      return;
-    }
-    setPendingId(id);
-    const { error } = await signInWithOAuth(id);
+  const handlePress = async () => {
+    if (pending) return;
+    setPending(true);
+    const { error } = await signInWithOAuth('google');
     // On success the browser is already navigating away; only a failure to
     // even start that redirect (e.g. provider not enabled) resolves here.
     if (error) {
       onError(error);
-      setPendingId(null);
+      setPending(false);
     }
   };
 
   return (
     <View style={styles.row}>
-      {PROVIDERS.map((p) => (
-        <Pressable
-          key={p.id}
-          onPress={() => handlePress(p.id)}
-          disabled={pendingId !== null}
-          accessibilityRole="button"
-          accessibilityLabel={p.label}
-          style={({ pressed }) => [
-            styles.button,
-            { backgroundColor: p.bg },
-            pressed && styles.buttonPressed,
-            pendingId !== null && pendingId !== p.id && styles.buttonDisabled,
-          ]}
-        >
-          {p.render()}
-        </Pressable>
-      ))}
-      <ConfirmDialog
-        visible={comingSoon !== null}
-        title="Coming soon"
-        message={`Sign in with ${comingSoon} will be enabled once the app is live on the App Store.`}
-        confirmLabel="Got it"
-        hideCancel
-        onConfirm={() => setComingSoon(null)}
-        onCancel={() => setComingSoon(null)}
-      />
+      <Pressable
+        onPress={handlePress}
+        disabled={pending}
+        accessibilityRole="button"
+        accessibilityLabel="Continue with Google"
+        style={({ pressed }) => [styles.button, pressed && styles.buttonPressed, pending && styles.buttonDisabled]}
+      >
+        <GoogleIcon />
+      </Pressable>
     </View>
   );
 }
@@ -89,6 +51,7 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 29,
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.ink,

@@ -44,11 +44,10 @@ export function SignUpScreen({ onSwitchToLogin }: SignUpScreenProps) {
   };
 
   return (
-    <AuthLayout onBack={onSwitchToLogin}>
-      <View style={styles.spacer52} />
+    <AuthLayout>
       <Text style={typography.authTitle}>Create Account</Text>
       <Text style={[typography.authSubline, styles.subline]}>
-        Sign up with your email to save your rooms, organise your things, and find anything anytime.
+        Sign up with your email to save your own space and add people you like.
       </Text>
 
       <View style={styles.fields}>
@@ -144,7 +143,6 @@ export function SignUpScreen({ onSwitchToLogin }: SignUpScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  spacer52: { height: 52 },
   subline: { marginTop: spacing.ms },
   fields: { gap: spacing.md, marginTop: spacing.organic },
   ctaSpacer: { marginTop: spacing.huge },

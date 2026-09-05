@@ -78,9 +78,10 @@ export const scGeometry = {
   // dimmed cards were fanned and overlapping, players couldn't reliably read which
   // card was which to make a pick.
   handCard: { w: 66, h: 96, radius: 13, ovalW: 48, ovalH: 71 },
-  pileCard: { w: 80, h: 112, radius: 13, ovalW: 58, ovalH: 82 },
+  // Enlarged ~15% (80x112 -> 92x129) — the discard pile at the center of the board.
+  pileCard: { w: 92, h: 129, radius: 15, ovalW: 67, ovalH: 94 },
   deckBack: { w: 56, h: 78, radius: 11 },
-  timerRing: { size: 196, thickness: 8, hole: 180 },
+  timerRing: { size: 232, thickness: 9, hole: 214 },
   wheelTile: 106,
   handRowWidth: 305,
   maxHandPitch: 68,
