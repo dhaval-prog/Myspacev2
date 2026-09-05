@@ -35,17 +35,18 @@ function indexText(rank: CardRank, isWild: boolean): string {
 
 type CardSize = 'hand' | 'pile' | 'sm';
 
-// `hand` must stay numerically identical to scGeometry.handCard (spaceCardsTokens.ts)
-// — the board positions hand cards from that geometry, this renders them at it.
+// `hand`/`pile` must stay numerically identical to scGeometry.handCard/pileCard
+// (spaceCardsTokens.ts) — the board positions those cards from that geometry, this
+// renders them at it.
 const SIZES: Record<CardSize, { w: number; h: number; radius: number; ovalW: number; ovalH: number; face: number; corner: number }> = {
   hand: { w: 66, h: 96, radius: 13, ovalW: 48, ovalH: 71, face: 26, corner: 11 },
-  pile: { w: 80, h: 112, radius: 13, ovalW: 58, ovalH: 82, face: 30, corner: 11 },
+  pile: { w: 92, h: 129, radius: 15, ovalW: 67, ovalH: 94, face: 34, corner: 13 },
   sm: { w: 46, h: 64, radius: 9, ovalW: 33, ovalH: 49, face: 18, corner: 7.5 },
 };
 /** The wild card's own face size runs smaller than a number's, per the handoff (§3/§5): 15 hand / 20 pile, scaled down again for `sm`. */
-const WILD_FACE_SIZE: Record<CardSize, number> = { hand: 17, pile: 20, sm: 12 };
+const WILD_FACE_SIZE: Record<CardSize, number> = { hand: 17, pile: 23, sm: 12 };
 /** A multi-letter special-rank label (BLOCK/FLIP) needs a smaller face size than a single digit to stay on one line. */
-const SPECIAL_FACE_SIZE: Record<CardSize, number> = { hand: 15, pile: 17, sm: 10 };
+const SPECIAL_FACE_SIZE: Record<CardSize, number> = { hand: 15, pile: 20, sm: 10 };
 
 interface CardFaceProps {
   card: PlayingCard;

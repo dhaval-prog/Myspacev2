@@ -121,7 +121,7 @@ function Halo({ color, reduceMotion }: { color: string; reduceMotion?: boolean }
           key={i}
           style={[
             styles.haloRing,
-            { backgroundColor: color, opacity: Animated.multiply(o, opacityMultiplier), width: 186 - i * 30, height: 186 - i * 30, borderRadius: (186 - i * 30) / 2 },
+            { backgroundColor: color, opacity: Animated.multiply(o, opacityMultiplier), width: 220 - i * 36, height: 220 - i * 36, borderRadius: (220 - i * 36) / 2 },
           ]}
         />
       ))}
@@ -696,27 +696,32 @@ const styles = StyleSheet.create({
   // flexGrow/flexShrink: 0 pins it to its content's natural height instead.
   opponentsScroll: { flexGrow: 0, flexShrink: 0 },
   opponentsRow: { paddingHorizontal: 16, gap: 10, paddingBottom: 8, alignItems: 'flex-start' },
-  opponent: { alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,.07)', borderRadius: 18, padding: 10, minWidth: 84 },
+  // Shrunk from the original handoff size — this tile competed for attention with the
+  // discard pile below it, and there wasn't room to also enlarge the pile without the
+  // two crowding or overlapping on shorter screens.
+  opponent: { alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,.07)', borderRadius: 15, padding: 7, minWidth: 70 },
   opponentActive: { backgroundColor: 'rgba(195,234,79,.14)' },
-  opponentName: { fontFamily: scFont.sans700, fontSize: 12.5, color: '#fff', maxWidth: 76, marginTop: 2 },
-  opponentCount: { fontFamily: scFont.mono500, fontSize: 10, color: 'rgba(255,255,255,.5)' },
-  opponentTimerPill: { marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 9, backgroundColor: 'rgba(255,255,255,.08)' },
+  opponentName: { fontFamily: scFont.sans700, fontSize: 11, color: '#fff', maxWidth: 62, marginTop: 1 },
+  opponentCount: { fontFamily: scFont.mono500, fontSize: 9, color: 'rgba(255,255,255,.5)' },
+  opponentTimerPill: { marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7, backgroundColor: 'rgba(255,255,255,.08)' },
   opponentTimerPillLive: { backgroundColor: 'rgba(195,234,79,.18)' },
-  opponentTimerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,.3)' },
+  opponentTimerDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,.3)' },
   opponentTimerDotLive: { backgroundColor: scColor.lime },
-  opponentTimerText: { fontFamily: scFont.mono500, fontSize: 9, letterSpacing: 9 * 0.14, color: 'rgba(255,255,255,.66)' },
-  catchButton: { marginTop: 4, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999, backgroundColor: scColor.urgent },
-  catchLabel: { fontFamily: scFont.sans700, fontSize: 10, color: '#fff' },
-  announcedLabel: { fontFamily: scFont.sans700, fontSize: 9.5, color: scColor.lime, marginTop: 4 },
+  opponentTimerText: { fontFamily: scFont.mono500, fontSize: 8, letterSpacing: 8 * 0.14, color: 'rgba(255,255,255,.66)' },
+  catchButton: { marginTop: 3, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 999, backgroundColor: scColor.urgent },
+  catchLabel: { fontFamily: scFont.sans700, fontSize: 9, color: '#fff' },
+  announcedLabel: { fontFamily: scFont.sans700, fontSize: 8.5, color: scColor.lime, marginTop: 3 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 30 },
-  discardOuter: { width: 196, height: 196, alignItems: 'center', justifyContent: 'center' },
+  // Enlarged along with scGeometry.pileCard/timerRing — the discard pile is the board's
+  // focal point and read as too small next to the (now-shrunk) opponent tile above it.
+  discardOuter: { width: 232, height: 232, alignItems: 'center', justifyContent: 'center' },
   timerRingAbs: { position: 'absolute', left: 0, top: 0 },
-  discardStack: { width: 150, height: 150, alignItems: 'center', justifyContent: 'center' },
-  haloWrap: { position: 'absolute', width: 186, height: 186, alignItems: 'center', justifyContent: 'center' },
+  discardStack: { width: 178, height: 178, alignItems: 'center', justifyContent: 'center' },
+  haloWrap: { position: 'absolute', width: 220, height: 220, alignItems: 'center', justifyContent: 'center' },
   haloRing: { position: 'absolute' },
-  dropGlowRing: { position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: scColor.lime, opacity: 0.3 },
-  discardGhost: { position: 'absolute', width: 80, height: 112, borderRadius: 13, backgroundColor: '#FFFFFF', opacity: 0.22 },
-  cardPlaceholder: { width: 80, height: 112 },
+  dropGlowRing: { position: 'absolute', width: 178, height: 178, borderRadius: 89, backgroundColor: scColor.lime, opacity: 0.3 },
+  discardGhost: { position: 'absolute', width: 92, height: 129, borderRadius: 15, backgroundColor: '#FFFFFF', opacity: 0.22 },
+  cardPlaceholder: { width: 92, height: 129 },
   chipsRow: { flexDirection: 'row', gap: 8 },
   activeSuitChip: { borderRadius: 999, paddingVertical: 7, paddingHorizontal: 15 },
   activeSuitLabel: { fontFamily: scFont.mono500, fontSize: 10.5, letterSpacing: 1.68, color: '#FFFFFF' },

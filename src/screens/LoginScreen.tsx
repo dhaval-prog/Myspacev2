@@ -52,12 +52,9 @@ export function LoginScreen({ onSwitchToSignUp }: LoginScreenProps) {
   };
 
   return (
-    <AuthLayout onBack={onSwitchToSignUp}>
-      <View style={styles.spacer62} />
+    <AuthLayout>
       <Text style={typography.authTitle}>Welcome Back</Text>
-      <Text style={[typography.authSubline, styles.subline]}>
-        Sign in with your email to reach your rooms, your things, and everything you saved.
-      </Text>
+      <Text style={[typography.authSubline, styles.subline]}>Your people are waiting. Hurry up!</Text>
 
       <View style={styles.fields}>
         <AuthField
@@ -153,7 +150,6 @@ export function LoginScreen({ onSwitchToSignUp }: LoginScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  spacer62: { height: 62 },
   subline: { marginTop: spacing.ms },
   fields: { gap: spacing.md, marginTop: 40 },
   forgotButton: { alignSelf: 'flex-end', marginTop: spacing.md },
