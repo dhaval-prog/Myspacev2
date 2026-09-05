@@ -74,6 +74,40 @@ function FlyingCard({ from, to, revealCard, onDone }: { from: { x: number; y: nu
   );
 }
 
+/**
+ * The player's own card, thrown at the pile by an upward flick — picked up out of the
+ * stack (starts at the browse zoom, already mid-flight) and thrown into the center,
+ * straightening out of its resting tilt as it goes, landing with a small squash before
+ * settling. Unlike FlyingCard this never shows a card back: the player already knows
+ * what they're holding, so there's nothing to reveal.
+ */
+function PlayFlight({ card, from, to, startRotateDeg, onDone }: { card: PlayingCard; from: { x: number; y: number }; to: { x: number; y: number }; startRotateDeg: number; onDone: () => void }) {
+  const progress = useRef(new Animated.Value(0)).current;
+  const land = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(progress, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(() => {
+      Animated.sequence([
+        Animated.timing(land, { toValue: 1, duration: 90, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.spring(land, { toValue: 0, useNativeDriver: true, friction: 5, tension: 200 }),
+      ]).start(() => onDone());
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [from.x, to.x] });
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [from.y, to.y] });
+  const flightScale = progress.interpolate({ inputRange: [0, 1], outputRange: [HAND_SCRUB_BROWSE_SCALE, 1] });
+  const landScale = land.interpolate({ inputRange: [0, 1], outputRange: [1, 0.88] });
+  const rotate = progress.interpolate({ inputRange: [0, 1], outputRange: [`${startRotateDeg}deg`, '0deg'] });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.flyingAbs, { transform: [{ translateX }, { translateY }, { scale: Animated.multiply(flightScale, landScale) }, { rotate }] }]}
+    >
+      <CardFace card={card} size="hand" />
+    </Animated.View>
+  );
+}
+
 /** Continuous idle bob on the deck's card-back plate — §the deck "breathes" even at rest. Wrapping only the visual (not the Pressable hit box) avoids the tap-reliability regression a moving hit target causes on web. */
 function FloatingCardBack({ reduceMotion }: { reduceMotion?: boolean }) {
   const float = useRef(new Animated.Value(0)).current;
@@ -283,6 +317,14 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   // The hand row's own measured width — lets the browse gesture map a touch's local x
   // to the same coordinate space fanPose already places each card's center in.
   const handWidthRef = useRef(SCREEN_WIDTH);
+  // The hand row's full measured window rect — lets a flicked card's throw animation
+  // start from its actual on-screen position without needing a live per-card measurement.
+  const handRectRef = useRef({ x: 0, y: 0, width: SCREEN_WIDTH, height: 0 });
+  const handViewRef = useRef<View>(null);
+  // The card currently flying from the hand to the discard pile after an upward flick,
+  // and which fan slot to hide meanwhile so it doesn't also show there at the same time.
+  const [flyingCard, setFlyingCard] = useState<{ card: PlayingCard; from: { x: number; y: number }; rotateDeg: number } | null>(null);
+  const [hiddenHandIndex, setHiddenHandIndex] = useState<number | null>(null);
 
   // Captures the exact keys of whatever hand this account first ever sees for this
   // game — the initial deal — so only those cards, and only once, get the deal-in
@@ -316,9 +358,14 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
   }, [game?.currentSeat, game?.turnDeadline, myPlayerId, players]);
 
   // A newly-drawn card enters the hand with a flip reveal instead of just appearing.
+  // A shrink means a play actually went through server-side — any fan slot still being
+  // hidden for a just-thrown card's flight can stop being hidden now, since the real
+  // data no longer has that card in it at all.
   useEffect(() => {
     if (myHand.length > prevHandLength.current) {
       setRevealingIndex(myHand.length - 1);
+    } else if (myHand.length < prevHandLength.current) {
+      setHiddenHandIndex(null);
     }
     prevHandLength.current = myHand.length;
   }, [myHand.length]);
@@ -380,6 +427,39 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
     });
   };
 
+  const measureHand = () => {
+    const node = handViewRef.current as unknown as { measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void; getBoundingClientRect?: () => DOMRect };
+    if (node?.getBoundingClientRect) {
+      const rect = node.getBoundingClientRect();
+      handRectRef.current = { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+      handWidthRef.current = rect.width;
+      return;
+    }
+    node?.measureInWindow?.((x, y, width, height) => {
+      handRectRef.current = { x, y, width, height };
+      handWidthRef.current = width;
+    });
+  };
+
+  // A hard upward flick on a legal card throws it at the pile: the real fan slot hides
+  // (so it doesn't also sit there) while a detached flight animates from its approximate
+  // resting position — computed from the hand's own measured rect rather than a live
+  // per-card measurement, matching this screen's existing tolerance for decorative,
+  // approximate flight paths (see the draw-pile and opponent-flight animations below) —
+  // to the discard pile, landing with a small squash-and-spring.
+  const handleFlickCard = (i: number) => {
+    const card = myHand[i];
+    if (!card || !isPlayable(card)) return;
+    const pose = fanPose(i, myHand.length);
+    const rect = handRectRef.current;
+    const from = { x: rect.x + rect.width / 2 + pose.x, y: rect.y + rect.height - scGeometry.handCard.h / 2 - pose.translateY };
+    setHiddenHandIndex(i);
+    setFlyingCard({ card, from, rotateDeg: pose.rotateDeg });
+    handleCardPress(card).then((result) => {
+      if (result?.error) setHiddenHandIndex(null);
+    });
+  };
+
   const handScrub = useHandScrub({
     enabled: isMyTurn && !busy,
     count: myHand.length,
@@ -389,6 +469,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       if (card) handleCardPress(card);
     },
     onActiveIndexChange: setActiveBrowseIndex,
+    onFlickCard: (i) => handleFlickCard(i),
   });
 
   const handleCardPress = async (card: PlayingCard) => {
@@ -561,8 +642,9 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       )}
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <View style={styles.hand} onLayout={(e) => { handWidthRef.current = e.nativeEvent.layout.width; }}>
+      <View ref={handViewRef} style={styles.hand} onLayout={measureHand}>
         {myHand.map((card, i) => {
+          if (i === hiddenHandIndex) return null;
           const key = `${card.suit}-${card.rank}-${i}`;
           const pose = fanPose(i, myHand.length);
           const slotStyle = [styles.handCardSlot, { marginLeft: pose.x - scGeometry.handCard.w / 2, zIndex: activeBrowseIndex === i ? 100 : i }];
@@ -615,7 +697,18 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
         )}
       </View>
 
-      <ColourWheel visible={!!pendingWild} onLockColour={handleChooseSuit} onCancel={() => setPendingWild(null)} reduceMotion={reduceMotion} />
+      <ColourWheel
+        visible={!!pendingWild}
+        onLockColour={handleChooseSuit}
+        onCancel={() => {
+          setPendingWild(null);
+          // A flicked wild never actually plays until a colour is chosen — cancelling
+          // means it was never played at all, so undo the flick's optimistic hide/flight.
+          setHiddenHandIndex(null);
+          setFlyingCard(null);
+        }}
+        reduceMotion={reduceMotion}
+      />
 
       {flying && (
         <Animated.View
@@ -638,6 +731,16 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
           onDone={() => setOpponentFlights((prev) => prev.filter((flight) => flight.id !== f.id))}
         />
       ))}
+
+      {flyingCard && (
+        <PlayFlight
+          card={flyingCard.card}
+          from={flyingCard.from}
+          to={discardPoint}
+          startRotateDeg={flyingCard.rotateDeg}
+          onDone={() => setFlyingCard(null)}
+        />
+      )}
     </LinearGradient>
   );
 }
