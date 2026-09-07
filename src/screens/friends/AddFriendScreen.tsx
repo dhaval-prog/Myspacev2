@@ -9,6 +9,8 @@ import { Icon } from '../../components/Icon';
 import { CopyIcon } from '../../components/icons/CopyIcon';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { BottomNav } from '../../components/BottomNav';
+import { GlassSurface } from '../../components/friends/GlassSurface';
+import { FriendsGlow } from '../../components/friends/FriendsGlow';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFriends } from '../../context/FriendsContext';
 
@@ -104,11 +106,14 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFrie
       end={{ x: 0.5, y: 1 }}
       style={styles.screen}
     >
+      <FriendsGlow />
       <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + spacing.sm }}>
       <View style={styles.topRow}>
-        <Pressable onPress={() => setShareOpen(true)} style={styles.sharePill} accessibilityRole="button" accessibilityLabel="Share your invite code">
-          <Icon path={SHARE_ICON} color={colors.textPrimary} size={15} strokeWidth={2} />
-          <Text style={styles.shareLabel}>Share</Text>
+        <Pressable onPress={() => setShareOpen(true)} accessibilityRole="button" accessibilityLabel="Share your invite code">
+          <GlassSurface tint="light" tintColor="rgba(255,255,255,0.65)" style={styles.sharePill}>
+            <Icon path={SHARE_ICON} color={colors.textPrimary} size={15} strokeWidth={2} />
+            <Text style={styles.shareLabel}>Share</Text>
+          </GlassSurface>
         </Pressable>
       </View>
 
@@ -116,7 +121,7 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFrie
         <Text style={styles.title}>Add a friend</Text>
         <Text style={styles.sub}>Let them scan your code, or type in the six characters they send you.</Text>
 
-        <View style={styles.qrPanel}>
+        <GlassSurface tint="dark" tintColor="rgba(22,33,12,0.62)" style={styles.qrPanel}>
           <View style={styles.qrTile}>
             {friendCode ? (
               <QRCode
@@ -139,7 +144,7 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFrie
             </Pressable>
           </View>
           {copied && <Text style={styles.copiedNote}>Copied</Text>}
-        </View>
+        </GlassSurface>
 
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
@@ -250,10 +255,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#fff',
     borderRadius: radius.pill,
     paddingVertical: 12,
     paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
   },
   shareLabel: {
     fontFamily: fontFamily.sans600,
@@ -282,11 +288,17 @@ const styles = StyleSheet.create({
     marginTop: 26,
     alignItems: 'center',
     gap: 9,
-    backgroundColor: colors.ink,
     borderRadius: radius.organic,
     paddingTop: 26,
     paddingHorizontal: 26,
     paddingBottom: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    shadowColor: colors.lime,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 14 },
+    shadowRadius: 28,
+    elevation: 5,
   },
   qrTile: {
     width: QR_BOX,
