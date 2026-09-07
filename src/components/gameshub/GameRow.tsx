@@ -11,13 +11,13 @@ const BODY_HEIGHT = 74;
 function NpatIcon() {
   return (
     <View style={styles.npatIconRow}>
-      <View style={[styles.npatTile, { backgroundColor: ghColor.gradientPink, transform: [{ rotate: '-8deg' }] }]}>
+      <View style={[styles.npatTile, { backgroundColor: ghColor.gradientA, transform: [{ rotate: '-8deg' }] }]}>
         <Text style={[styles.npatTileLabel, { color: ghColor.textOnGradient }]}>N</Text>
       </View>
       <View style={[styles.npatTile, { backgroundColor: 'rgba(255,255,255,.92)', transform: [{ rotate: '4deg' }] }]}>
         <Text style={styles.npatTileLabel}>P</Text>
       </View>
-      <View style={[styles.npatTile, { backgroundColor: ghColor.gradientPink, transform: [{ rotate: '-3deg' }] }]}>
+      <View style={[styles.npatTile, { backgroundColor: ghColor.gradientA, transform: [{ rotate: '-3deg' }] }]}>
         <Text style={[styles.npatTileLabel, { color: ghColor.textOnGradient }]}>A</Text>
       </View>
     </View>
@@ -67,7 +67,7 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
   const isNpat = variant === 'npat';
   const glassFill = isNpat ? ghColor.npatGlassFill : ghColor.cardsGlassFill;
   const glassBorder = isNpat ? ghColor.npatGlassBorder : ghColor.cardsGlassBorder;
-  const accent = isNpat ? ghColor.gradientPink : ghColor.gradientBlue;
+  const accent = isNpat ? ghColor.gradientA : ghColor.gradientB;
 
   return (
     <View style={[styles.card, { borderColor: glassBorder }, expanded && [styles.cardExpanded, { borderColor: accent, shadowColor: accent }]]}>
@@ -86,7 +86,7 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
       <Animated.View style={[styles.body, { height: bodyHeight, opacity: bodyProgress }]}>
         <View style={styles.bodyRow}>
           <Pressable onPress={onCreate} style={styles.createBtn} accessibilityRole="button">
-            <LinearGradient colors={[ghColor.gradientPink, ghColor.gradientBlue]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <LinearGradient colors={[ghColor.gradientA, ghColor.gradientB]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
             <Text style={styles.createLabel}>Create a game</Text>
           </Pressable>
           <Pressable onPress={onJoin} style={styles.joinBtn} accessibilityRole="button">

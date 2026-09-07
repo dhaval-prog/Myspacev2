@@ -21,21 +21,21 @@ export function GlassBackdrop() {
     <View style={styles.svgWrap} pointerEvents="none">
       <Svg width={SCREEN_WIDTH} height={SCREEN_WIDTH * 1.4}>
         <DefsAny>
-          <RadialGradient id="blobPink" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={ghColor.blobPink} stopOpacity={1} />
-            <Stop offset="100%" stopColor={ghColor.blobPink} stopOpacity={0} />
+          <RadialGradient id="blobWhite" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={ghColor.blobWhite} stopOpacity={1} />
+            <Stop offset="100%" stopColor={ghColor.blobWhite} stopOpacity={0} />
           </RadialGradient>
-          <RadialGradient id="blobBlue" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={ghColor.blobBlue} stopOpacity={1} />
-            <Stop offset="100%" stopColor={ghColor.blobBlue} stopOpacity={0} />
+          <RadialGradient id="blobMint" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={ghColor.blobMint} stopOpacity={1} />
+            <Stop offset="100%" stopColor={ghColor.blobMint} stopOpacity={0} />
           </RadialGradient>
           <RadialGradient id="blobViolet" cx="50%" cy="50%" r="50%">
             <Stop offset="0%" stopColor={ghColor.blobViolet} stopOpacity={1} />
             <Stop offset="100%" stopColor={ghColor.blobViolet} stopOpacity={0} />
           </RadialGradient>
         </DefsAny>
-        <Circle cx={SCREEN_WIDTH * 0.82} cy={SCREEN_WIDTH * 0.18} r={SCREEN_WIDTH * 0.55} fill="url(#blobPink)" />
-        <Circle cx={SCREEN_WIDTH * 0.1} cy={SCREEN_WIDTH * 0.62} r={SCREEN_WIDTH * 0.5} fill="url(#blobBlue)" />
+        <Circle cx={SCREEN_WIDTH * 0.82} cy={SCREEN_WIDTH * 0.18} r={SCREEN_WIDTH * 0.55} fill="url(#blobWhite)" />
+        <Circle cx={SCREEN_WIDTH * 0.1} cy={SCREEN_WIDTH * 0.62} r={SCREEN_WIDTH * 0.5} fill="url(#blobMint)" />
         <Circle cx={SCREEN_WIDTH * 0.7} cy={SCREEN_WIDTH * 1.05} r={SCREEN_WIDTH * 0.6} fill="url(#blobViolet)" />
       </Svg>
     </View>

@@ -26,8 +26,8 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const DefsAny = Defs as unknown as React.ComponentType<{ children?: React.ReactNode }>;
 
 function badgeStyleFor(rank: number) {
-  if (rank === 1) return { bg: ghColor.gradientPink, fg: ghColor.textOnGradient };
-  if (rank === 2) return { bg: ghColor.gradientBlue, fg: ghColor.textOnGradient };
+  if (rank === 1) return { bg: ghColor.gradientA, fg: ghColor.textOnGradient };
+  if (rank === 2) return { bg: ghColor.gradientB, fg: ghColor.textOnGradient };
   return { bg: ghColor.surfaceStrong, fg: ghColor.textPrimary };
 }
 
@@ -47,8 +47,8 @@ function ProgressRing({ pct, reduceMotion, children }: { pct: number; reduceMoti
       <Svg width={RING_SIZE} height={RING_SIZE}>
         <DefsAny>
           <SvgLinearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor={ghColor.gradientPink} />
-            <Stop offset="100%" stopColor={ghColor.gradientBlue} />
+            <Stop offset="0%" stopColor={ghColor.gradientA} />
+            <Stop offset="100%" stopColor={ghColor.gradientB} />
           </SvgLinearGradient>
         </DefsAny>
         <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={radius} stroke={ghColor.surface} strokeWidth={RING_THICKNESS} fill="none" />
@@ -134,7 +134,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
                     radius={28}
                     initialsFontFamily={ghFont.sans800}
                     initialsFontSize={entry.isSelf ? 17 : 16}
-                    colorOverride={entry.isSelf ? { bg: ghColor.gradientPink, fg: ghColor.textOnGradient } : { bg: '#FFFFFF', fg: ghColor.avatarMuted }}
+                    colorOverride={entry.isSelf ? { bg: ghColor.gradientB, fg: ghColor.textOnGradient } : { bg: '#FFFFFF', fg: ghColor.avatarMuted }}
                   />
                   <View style={[styles.rankBadge, { backgroundColor: badge.bg }]}>
                     <Text style={[styles.rankBadgeLabel, { color: badge.fg }]}>{entry.rank}</Text>
@@ -173,8 +173,8 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
                 {myEntry && myEntry.rank > 1 ? `${gapToFirst} TO #1` : 'LEADING'}
               </Text>
             </View>
-            <BreakdownBar label="NPAT" value={npat?.net ?? 0} total={myTotal} color={ghColor.gradientPink} />
-            <BreakdownBar label="CARDS" value={cards?.net ?? 0} total={myTotal} color={ghColor.gradientBlue} />
+            <BreakdownBar label="NPAT" value={npat?.net ?? 0} total={myTotal} color={ghColor.gradientA} />
+            <BreakdownBar label="CARDS" value={cards?.net ?? 0} total={myTotal} color={ghColor.gradientB} />
           </View>
         </Pressable>
 
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: ghColor.glassBorder,
-    shadowColor: ghColor.gradientPink,
+    shadowColor: ghColor.gradientB,
     shadowOpacity: 0.18,
     shadowOffset: { width: 0, height: 14 },
     shadowRadius: 30,
