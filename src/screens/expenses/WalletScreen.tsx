@@ -15,11 +15,24 @@ const HISTORY_ICON = 'M4 6h16M4 12h16M4 18h16';
 const INVITE_ICON = 'M12 3v12M7 8l5-5 5 5M5 21h14';
 const LEAVE_ICON = 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9';
 const MEMBERS_ICON = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
+const TRANSFER_ICON = 'M4 7h13l-3.5-3.5M20 17H7l3.5 3.5';
 
-function ActionPill({ icon, label, onPress, small }: { icon: string; label: string; onPress: () => void; small?: boolean }) {
+function ActionPill({
+  icon,
+  label,
+  onPress,
+  small,
+  active,
+}: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+  small?: boolean;
+  active?: boolean;
+}) {
   return (
-    <Pressable onPress={onPress} style={styles.pill} accessibilityRole="button" accessibilityLabel={label}>
-      <View style={[styles.pillIcon, small && styles.pillIconSmall]}>
+    <Pressable onPress={onPress} style={[styles.pill, active && styles.pillActive]} accessibilityRole="button" accessibilityLabel={label}>
+      <View style={[styles.pillIcon, small && styles.pillIconSmall, active && styles.pillIconActive]}>
         <Icon path={icon} color="#fff" size={small ? 13 : 14} strokeWidth={1.8} />
       </View>
       <Text style={styles.pillLabel} numberOfLines={1}>
@@ -36,7 +49,23 @@ interface WalletScreenProps {
 export function WalletScreen({ onHome }: WalletScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { focusedCard, backToPick, openSpend, openAddMoney, askDelete, askLeave, openHistory, openInvite, openMembers, expensesFor } = useExpenses();
+  const {
+    focusedCard,
+    backToPick,
+    openSpend,
+    openAddMoney,
+    askDelete,
+    askLeave,
+    openHistory,
+    openInvite,
+    openMembers,
+    expensesFor,
+    transferMode,
+    toggleTransferMode,
+    selectedExpenseIds,
+    toggleExpenseSelected,
+    openTransferSheet,
+  } = useExpenses();
 
   const expenses = expensesFor(focusedCard);
 
@@ -80,20 +109,41 @@ export function WalletScreen({ onHome }: WalletScreenProps) {
             <ActionPill icon={HISTORY_ICON} label="History" onPress={openHistory} small />
             {focusedCard && !focusedCard.isOwner && <ActionPill icon={LEAVE_ICON} label="Leave" onPress={askLeave} small />}
             <ActionPill icon={INVITE_ICON} label="Invite" onPress={openInvite} small />
+            <ActionPill icon={TRANSFER_ICON} label="Transfer Expenses" onPress={toggleTransferMode} active={transferMode} small />
           </ScrollView>
         </View>
 
         <View style={styles.sheet}>
-          <Text style={styles.sheetTitle}>Expenses</Text>
+          <View style={styles.sheetTitleRow}>
+            <Text style={styles.sheetTitle}>{transferMode ? 'Select expenses to transfer' : 'Expenses'}</Text>
+            {transferMode && selectedExpenseIds.size > 0 && <Text style={styles.sheetSelectedNote}>{selectedExpenseIds.size} selected</Text>}
+          </View>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetList}>
             {expenses.length === 0 ? (
               <Text style={styles.emptyText}>No spends on this card yet.{'\n'}Add one and it shows up here.</Text>
             ) : (
-              expenses.map((expense, i) => <ExpenseRow key={`${expense.title}-${i}`} expense={expense} />)
+              expenses.map((expense) => (
+                <ExpenseRow
+                  key={expense.id}
+                  expense={expense}
+                  selection={transferMode ? { checked: selectedExpenseIds.has(expense.id), onToggle: () => toggleExpenseSelected(expense.id) } : undefined}
+                />
+              ))
             )}
           </ScrollView>
         </View>
       </Animated.View>
+
+      {transferMode && selectedExpenseIds.size > 0 && (
+        <Pressable
+          onPress={openTransferSheet}
+          style={[styles.confirmTransferButton, { bottom: Math.max(insets.bottom, spacing.md) + spacing.md + 52 + spacing.sm }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Confirm transfer of ${selectedExpenseIds.size} expenses`}
+        >
+          <Text style={styles.confirmTransferLabel}>Confirm ({selectedExpenseIds.size})</Text>
+        </Pressable>
+      )}
 
       <Pressable
         onPress={backToPick}
@@ -161,6 +211,10 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 14,
   },
+  pillActive: {
+    backgroundColor: colors.walletAccentBlue,
+    borderColor: colors.walletAccentBlue,
+  },
   pillIcon: {
     width: 32,
     height: 32,
@@ -174,6 +228,9 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
+  },
+  pillIconActive: {
+    borderColor: 'rgba(255,255,255,.4)',
   },
   pillLabel: {
     fontFamily: fontFamily.sans600,
@@ -189,16 +246,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxxl,
     paddingTop: spacing.xxl,
   },
+  sheetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
   sheetTitle: {
     fontFamily: fontFamily.sans700,
     fontSize: 19,
     letterSpacing: -0.19,
     color: colors.walletSheetTextPrimary,
-    marginBottom: spacing.md,
+  },
+  sheetSelectedNote: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 12.5,
+    color: colors.walletAccentBlue,
   },
   sheetList: {
     gap: spacing.md,
     paddingBottom: spacing.huge,
+  },
+  confirmTransferButton: {
+    position: 'absolute',
+    left: spacing.xxxl,
+    right: spacing.xxxl,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.walletAccentBlue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+    shadowColor: colors.walletAccentBlue,
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 20,
+    elevation: 4,
+  },
+  confirmTransferLabel: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 15.5,
+    color: '#fff',
   },
   emptyText: {
     marginTop: spacing.xxl,

@@ -182,8 +182,6 @@ interface SplitContextValue {
   /** Owner-only: permanently deletes the group and everything filed under it (expenses, shares, settlements, chat, members). No-op for non-owners. */
   deleteGroup: (groupId: string) => Promise<void>;
   addExpense: (input: NewExpenseInput) => Promise<void>;
-  /** Copies the given expenses (from the focused group) into another group as new, independent expenses — split equally among the target group's current members. */
-  duplicateExpenses: (expenseIds: string[], targetGroupId: string) => Promise<{ error: string | null }>;
   settleUp: (toUserId: string, amount: number) => Promise<void>;
   sendChat: (text: string) => Promise<void>;
 
@@ -752,83 +750,6 @@ export function SplitProvider({ children, initialGroupId }: SplitProviderProps) 
     warn('notify split expense activity', notifyError);
   };
 
-  const duplicateExpenses = async (expenseIds: string[], targetGroupId: string): Promise<{ error: string | null }> => {
-    if (!focusedGroup || expenseIds.length === 0) return { error: null };
-    const targetGroup = groupRows.find((g) => g.id === targetGroupId);
-    if (!targetGroup) return { error: 'That card no longer exists.' };
-
-    const sourceExpenses = expenseRows.filter((e) => e.group_id === focusedGroup.id && expenseIds.includes(e.id));
-    if (sourceExpenses.length === 0) return { error: null };
-
-    const targetMemberIds = Array.from(
-      new Set([targetGroup.owner_id, ...memberRows.filter((m) => m.group_id === targetGroupId).map((m) => m.user_id)]),
-    );
-    if (targetMemberIds.length === 0) return { error: null };
-    const payerId = userId ?? targetGroup.owner_id;
-
-    if (!userId || !isSupabaseConfigured) {
-      const newExpenseRows: ExpenseRow[] = [];
-      const newShareRows: ShareRow[] = [];
-      sourceExpenses.forEach((e, i) => {
-        const id = `local-expense-${Date.now()}-${i}`;
-        newExpenseRows.push({
-          id,
-          group_id: targetGroupId,
-          paid_by: payerId,
-          title: e.title,
-          amount: e.amount,
-          category: e.category,
-          split_mode: 'equal',
-          created_at: new Date().toISOString(),
-        });
-        const share = e.amount / targetMemberIds.length;
-        for (const uid of targetMemberIds) newShareRows.push({ expense_id: id, user_id: uid, share_amount: share });
-      });
-      setExpenseRows((prev) => [...newExpenseRows, ...prev]);
-      setShareRows((prev) => [...prev, ...newShareRows]);
-      return { error: null };
-    }
-
-    const { data, error } = await supabase
-      .from('split_expenses')
-      .insert(
-        sourceExpenses.map((e) => ({
-          group_id: targetGroupId,
-          paid_by: payerId,
-          title: e.title,
-          amount: e.amount,
-          category: e.category,
-          split_mode: 'equal' as const,
-        })),
-      )
-      .select('*');
-    warn('duplicate expenses', error);
-    if (error) return { error: error.message };
-    const newRows = (data as ExpenseRow[] | null) ?? [];
-    setExpenseRows((prev) => [...newRows, ...prev]);
-
-    const shareInserts = newRows.flatMap((row) => {
-      const share = row.amount / targetMemberIds.length;
-      return targetMemberIds.map((uid) => ({ expense_id: row.id, user_id: uid, share_amount: share }));
-    });
-    if (shareInserts.length > 0) {
-      const { data: shareData, error: shareError } = await supabase.from('split_expense_shares').insert(shareInserts).select('*');
-      warn('duplicate expense shares', shareError);
-      if (shareData) setShareRows((prev) => [...prev, ...(shareData as ShareRow[])]);
-    }
-
-    for (const row of newRows) {
-      const { error: notifyError } = await supabase.rpc('notify_split_expense_activity', {
-        p_group_id: targetGroupId,
-        p_expense_title: row.title,
-        p_amount: row.amount,
-      });
-      warn('notify split expense activity', notifyError);
-    }
-
-    return { error: null };
-  };
-
   const settleUp = async (toUserId: string, amount: number) => {
     if (!focusedGroup || !userId || amount <= 0) return;
     const groupId = focusedGroup.id;
@@ -1065,7 +986,6 @@ export function SplitProvider({ children, initialGroupId }: SplitProviderProps) 
     addKnownMember,
     deleteGroup,
     addExpense,
-    duplicateExpenses,
     settleUp,
     sendChat,
     createUpiPayment,

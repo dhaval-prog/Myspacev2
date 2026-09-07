@@ -1,12 +1,28 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fontFamily, spacing } from '../../theme';
 import { Icon } from '../Icon';
 import type { Expense } from '../../types/expenses';
 
-export function ExpenseRow({ expense }: { expense: Expense }) {
-  return (
+const CHECK_ICON = 'M5 12.5l4.5 4.5L19 7';
+
+interface ExpenseRowProps {
+  expense: Expense;
+  /** When set, renders a checkbox and makes the whole row tappable — used by Transfer Expenses' multi-select. */
+  selection?: { checked: boolean; onToggle: () => void };
+}
+
+export function ExpenseRow({ expense, selection }: ExpenseRowProps) {
+  const row = (
     <View style={styles.row}>
+      {selection &&
+        (selection.checked ? (
+          <View style={[styles.checkbox, styles.checkboxOn]}>
+            <Icon path={CHECK_ICON} color="#fff" size={13} strokeWidth={3} />
+          </View>
+        ) : (
+          <View style={[styles.checkbox, styles.checkboxOff]} />
+        ))}
       <View style={[styles.tile, { backgroundColor: expense.tile }]}>
         <Icon path={expense.icon} color={colors.walletSheetTextPrimary} size={20} strokeWidth={1.7} />
       </View>
@@ -19,6 +35,13 @@ export function ExpenseRow({ expense }: { expense: Expense }) {
       </Text>
     </View>
   );
+
+  if (!selection) return row;
+  return (
+    <Pressable onPress={selection.onToggle} accessibilityRole="checkbox" accessibilityState={{ checked: selection.checked }} accessibilityLabel={expense.title}>
+      {row}
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -26,6 +49,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.ms,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  checkboxOn: {
+    backgroundColor: colors.walletAccentBlue,
+  },
+  checkboxOff: {
+    backgroundColor: '#EDEDF3',
   },
   tile: {
     width: 42,
