@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { BottomNav } from '../../components/BottomNav';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { GameRow } from '../../components/gameshub/GameRow';
+import { GlassBackdrop } from '../../components/gameshub/GlassBackdrop';
 import { LeaderboardSheet } from '../../components/gameshub/LeaderboardSheet';
 import { PointsSheet } from '../../components/gameshub/PointsSheet';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -96,6 +98,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
 
   return (
     <LinearGradient colors={[ghColor.bgTop, ghColor.bgMid, ghColor.bgBottom]} locations={[0, 0.46, 1]} style={styles.screen}>
+      <GlassBackdrop />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 100 }]}>
         <Text style={styles.title}>Games</Text>
         <Text style={styles.subtitle}>Your gaming circle · {circle.length} seated</Text>
@@ -142,6 +145,8 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
         </View>
 
         <Pressable onPress={() => setPointsVisible(true)} style={styles.pointsCard} accessibilityRole="button" accessibilityLabel="Your points">
+          <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+          <View style={styles.pointsCardTint} pointerEvents="none" />
           <ProgressRing pct={ringPct} reduceMotion={reduceMotion}>
             <Text style={styles.ringValue}>{myTotal}</Text>
             <Text style={styles.ringLabel}>POINTS</Text>
@@ -255,14 +260,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 15,
     marginTop: 16,
-    backgroundColor: '#FFFFFF',
     borderRadius: 26,
     padding: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: ghColor.glassBorder,
     shadowColor: ghColor.ink,
-    shadowOpacity: 0.09,
-    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 14 },
     shadowRadius: 30,
   },
+  pointsCardTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: ghColor.glassFill },
   ringWrap: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
   ringCenter: { position: 'absolute', alignItems: 'center' },
   ringValue: { fontFamily: ghFont.sans800, fontSize: 24, letterSpacing: -1.2, color: ghColor.ink },
