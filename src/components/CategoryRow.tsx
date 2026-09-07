@@ -103,7 +103,7 @@ export function CategoryRow({ count, label, active, onPress, reduceMotion, locke
       style={[
         active && !locked ? typography.categoryLabelActive : typography.categoryLabelInactive,
         styles.label,
-        { color: fg },
+        { color: glass ? '#212121' : fg },
       ]}
       numberOfLines={1}
     >
