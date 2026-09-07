@@ -1,10 +1,12 @@
 /**
  * Games hub design tokens — "LiquidGlass": a futuristic glassmorphism reskin
  * built around a deep-space dark background and a single brand gradient
- * (#ffffff → #ABFA87) used sparingly at hero moments — CTAs, the points
- * ring, active states — while everything else stays neutral frosted glass.
- * Self-contained (like spaceCardsTokens.ts and npatTokens.ts) and scoped to
- * just the Games hub screen and its own sheets/rows.
+ * (#EDFDFF → #C3EA4F) — the same pale/lime identity as the app's homepage
+ * (src/theme/colors.ts's `pale`/`lime`) — used sparingly at hero moments:
+ * CTAs, the points ring, active states — while everything else stays
+ * neutral frosted glass. Self-contained (like spaceCardsTokens.ts and
+ * npatTokens.ts) and scoped to just the Games hub screen and its own
+ * sheets/rows.
  */
 
 export const ghFont = {
@@ -22,9 +24,10 @@ export const ghColor = {
   bgMid: '#140B2E',
   bgBottom: '#1B0A35',
 
-  // The one brand gradient — white to mint — reserved for hero surfaces.
-  gradientA: '#FFFFFF',
-  gradientB: '#ABFA87',
+  // The one brand gradient — pale to lime, the homepage's own identity
+  // colors (src/theme/colors.ts's `pale`/`lime`) — reserved for hero surfaces.
+  gradientA: '#EDFDFF',
+  gradientB: '#C3EA4F',
 
   ink: '#150A2A',
   white: '#FFFFFF',
@@ -34,25 +37,25 @@ export const ghColor = {
   textTertiary: 'rgba(255,255,255,.48)',
   textFaint: 'rgba(255,255,255,.34)',
   // Both gradient stops are light, so label text on a gradient fill needs to
-  // be dark ink rather than white.
-  textOnGradient: '#150A2A',
+  // be dark ink rather than white — the homepage's own deep-olive ink.
+  textOnGradient: '#16210C',
 
   hairline: 'rgba(255,255,255,.16)',
   hairlineStrong: 'rgba(255,255,255,.28)',
   surface: 'rgba(255,255,255,.07)',
   surfaceStrong: 'rgba(255,255,255,.12)',
 
-  up: '#ABFA87',
-  upBg: 'rgba(171,250,135,.18)',
+  up: '#C3EA4F',
+  upBg: 'rgba(195,234,79,.18)',
   danger: '#FF5C7A',
 
   avatarMuted: '#4A3A66',
 
   scrim: 'rgba(5,3,15,.62)',
-  rank1RowBg: 'rgba(255,255,255,.14)',
+  rank1RowBg: 'rgba(237,253,255,.14)',
 
-  npatTile: 'rgba(255,255,255,.14)',
-  cardsTile: 'rgba(171,250,135,.16)',
+  npatTile: 'rgba(237,253,255,.14)',
+  cardsTile: 'rgba(195,234,79,.16)',
 
   // Frosted-glass surfaces: a dark BlurView backdrop plus a translucent tint on
   // top (the tint carries most of the "glass" color since blur intensity is
@@ -62,14 +65,14 @@ export const ghColor = {
   // floating, not sitting flush on the page.
   glassFill: 'rgba(255,255,255,.08)',
   glassBorder: 'rgba(255,255,255,.2)',
-  npatGlassFill: 'rgba(255,255,255,.09)',
-  npatGlassBorder: 'rgba(255,255,255,.4)',
-  cardsGlassFill: 'rgba(171,250,135,.1)',
-  cardsGlassBorder: 'rgba(171,250,135,.42)',
+  npatGlassFill: 'rgba(237,253,255,.09)',
+  npatGlassBorder: 'rgba(237,253,255,.4)',
+  cardsGlassFill: 'rgba(195,234,79,.1)',
+  cardsGlassBorder: 'rgba(195,234,79,.42)',
   sheetGlassFill: 'rgba(16,9,32,.74)',
   rowGlassFill: 'rgba(255,255,255,.06)',
   rowGlassBorder: 'rgba(255,255,255,.14)',
-  rowGlassSelfFill: 'rgba(171,250,135,.14)',
+  rowGlassSelfFill: 'rgba(195,234,79,.14)',
 
   // Soft color blobs floating behind the glass — the thing a glassmorphism
   // surface actually blurs. Without something colorful under it, a frosted
@@ -78,7 +81,7 @@ export const ghColor = {
   // Radial gradients (not plain circles) so the edges dissolve rather than
   // reading as flat colored discs floating on the page outside the glass
   // panels covering them.
-  blobWhite: 'rgba(255,255,255,.45)',
-  blobMint: 'rgba(171,250,135,.55)',
+  blobPale: 'rgba(237,253,255,.45)',
+  blobLime: 'rgba(195,234,79,.55)',
   blobViolet: 'rgba(151,84,255,.32)',
 } as const;
