@@ -71,7 +71,7 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
 
   return (
     <View style={[styles.card, { borderColor: glassBorder }, expanded && [styles.cardExpanded, { borderColor: accent, shadowColor: accent }]]}>
-      <BlurView intensity={34} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+      <BlurView intensity={34} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: glassFill }]} pointerEvents="none" />
       <Pressable onPress={onToggle} style={styles.header} accessibilityRole="button" accessibilityLabel={title}>
         {variant === 'npat' ? <NpatIcon /> : <CardsIcon />}
@@ -112,14 +112,14 @@ const styles = StyleSheet.create({
   cardExpanded: { borderWidth: 2, shadowOpacity: 0.32, shadowRadius: 30 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 16 },
   headerMid: { flex: 1 },
-  headerTitle: { fontFamily: ghFont.sans700, fontSize: 15, lineHeight: 17.25, color: '#FFFFFF' },
+  headerTitle: { fontFamily: ghFont.sans700, fontSize: 15, lineHeight: 17.25, color: ghColor.textPrimary },
   headerSub: { fontFamily: ghFont.sans400, fontSize: 11, color: ghColor.textTertiary, marginTop: 4 },
   body: { overflow: 'hidden' },
   bodyRow: { flexDirection: 'row', gap: 9, paddingHorizontal: 16, paddingBottom: 15 },
   createBtn: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, overflow: 'hidden' },
   createLabel: { fontFamily: ghFont.sans700, fontSize: 13.5, color: ghColor.textOnGradient },
   joinBtn: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: ghColor.surfaceStrong, borderWidth: 1, borderColor: ghColor.hairline },
-  joinLabel: { fontFamily: ghFont.sans600, fontSize: 13.5, color: '#FFFFFF' },
+  joinLabel: { fontFamily: ghFont.sans600, fontSize: 13.5, color: ghColor.textPrimary },
   npatIconRow: { flexDirection: 'row', gap: 3, flexShrink: 0 },
   npatTile: { width: 20, height: 26, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
   npatTileLabel: { fontFamily: ghFont.sans800, fontSize: 12, color: ghColor.ink },
