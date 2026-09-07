@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../../components/Icon';
 import { BottomNav } from '../../../components/BottomNav';
 import { PrimaryCta } from '../../../components/spacecards/PrimaryCta';
 import { NpatHeader } from '../../../components/npat/NpatHeader';
+import { NpatGlassBackdrop } from '../../../components/npat/NpatGlassBackdrop';
 import { RoomCodeCells } from '../../../components/npat/RoomCodeCells';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useFocusBorder } from '../../../hooks/useFocusBorder';
@@ -124,12 +126,15 @@ function NpatHub({
 
   return (
     <LinearGradient colors={[npColor.headerTop, npColor.headerMid, npColor.headerBottom]} locations={[0, 0.52, 1]} style={styles.screen}>
+      <NpatGlassBackdrop colors={[npColor.blobLimeDark, npColor.blobGoldDark]} />
       <View style={{ paddingTop: insets.top }}>
         <NpatHeader showOnlineRow={!isJoin} reduceMotion={reduceMotion} />
       </View>
 
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={styles.sheet}>
+          <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} />
+          <View style={styles.sheetTint} pointerEvents="none" />
           <View style={styles.handle} />
 
           <View style={styles.tabs}>
@@ -269,12 +274,15 @@ function NpatReadyRoom({
 
   return (
     <LinearGradient colors={[npColor.headerTop, npColor.headerMid, npColor.headerBottom]} locations={[0, 0.52, 1]} style={styles.screen}>
+      <NpatGlassBackdrop colors={[npColor.blobLimeDark, npColor.blobGoldDark]} />
       <View style={{ paddingTop: insets.top }}>
         <NpatHeader showOnlineRow={false} reduceMotion={reduceMotion} />
       </View>
 
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={styles.sheet}>
+          <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} />
+          <View style={styles.sheetTint} pointerEvents="none" />
           <View style={styles.handle} />
 
           <View style={styles.field}>
@@ -356,27 +364,31 @@ const styles = StyleSheet.create({
   sheetScroll: { flexGrow: 1, justifyContent: 'flex-end' },
   sheet: {
     marginTop: 18,
-    backgroundColor: npColor.sheet,
+    overflow: 'hidden',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: npColor.glassBorder,
     paddingHorizontal: 22,
     paddingTop: 14,
     paddingBottom: 26,
     gap: 14,
   },
+  sheetTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: npColor.sheetGlassFill },
   handle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(22,33,12,.14)', marginBottom: 2 },
-  tabs: { flexDirection: 'row', backgroundColor: 'rgba(22,33,12,.06)', borderRadius: 999, padding: 4 },
+  tabs: { flexDirection: 'row', backgroundColor: npColor.rowGlassFill, borderRadius: 999, padding: 4, borderWidth: 1, borderColor: npColor.rowGlassBorder },
   tab: { flex: 1, paddingVertical: 12, borderRadius: 999, alignItems: 'center' },
   tabActive: { backgroundColor: npColor.ink },
   tabLabel: { fontFamily: npFont.sans500, fontSize: 13.5, color: npColor.tabInactiveText },
   tabLabelActive: { fontFamily: npFont.sans700, color: '#FFFFFF' },
   field: { gap: 9 },
   label: { fontFamily: npFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.12, color: npColor.fieldLabel, textTransform: 'uppercase' },
-  input: { backgroundColor: npColor.fieldBg, borderRadius: 16, borderWidth: 1.5, paddingVertical: 15, paddingHorizontal: 17 },
+  input: { backgroundColor: npColor.rowGlassFill, borderRadius: 16, borderWidth: 1.5, borderColor: npColor.rowGlassBorder, paddingVertical: 15, paddingHorizontal: 17 },
   inputText: { fontFamily: npFont.sans700, fontSize: 16, color: npColor.ink },
   pillRow: { flexDirection: 'row', gap: 8 },
-  optionPill: { flex: 1, paddingVertical: 13, borderRadius: 14, alignItems: 'center', backgroundColor: npColor.fieldBg },
-  optionPillActive: { backgroundColor: npColor.ink },
+  optionPill: { flex: 1, paddingVertical: 13, borderRadius: 14, alignItems: 'center', backgroundColor: npColor.rowGlassFill, borderWidth: 1, borderColor: npColor.rowGlassBorder },
+  optionPillActive: { backgroundColor: npColor.ink, borderColor: npColor.ink },
   optionLabel: { fontFamily: npFont.sans600, fontSize: 13.5, color: npColor.pillInactiveText },
   optionLabelActive: { fontFamily: npFont.sans700, color: npColor.lime },
   error: { fontFamily: npFont.sans500, fontSize: 12.5, color: '#D33243' },
@@ -387,8 +399,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     borderWidth: 1.6,
-    borderColor: 'rgba(22,33,12,.16)',
-    backgroundColor: npColor.fieldBg,
+    borderColor: npColor.rowGlassBorder,
+    backgroundColor: npColor.rowGlassFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -398,14 +410,14 @@ const styles = StyleSheet.create({
   roomSub: { fontFamily: npFont.sans400, fontSize: 11.5, color: npColor.fieldLabel, textAlign: 'center' },
   playersHeaderRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   playerList: { gap: 5 },
-  playerRow: { flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: npColor.fieldBg, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 15 },
+  playerRow: { flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: npColor.rowGlassFill, borderRadius: 999, borderWidth: 1, borderColor: npColor.rowGlassBorder, paddingVertical: 10, paddingHorizontal: 15 },
   readyDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: npColor.neutralDot },
   readyDotActive: { backgroundColor: npColor.ready },
   playerName: { flex: 1, fontFamily: npFont.sans700, fontSize: 13.5, color: npColor.ink },
   playerStatus: { fontFamily: npFont.mono500, fontSize: 11, letterSpacing: 11 * 0.06, color: npColor.notReady },
   playerStatusActive: { color: npColor.ready },
   readyRow: { flexDirection: 'row', gap: 10 },
-  readyBtn: { flex: 1, paddingVertical: 17, borderRadius: 999, alignItems: 'center', backgroundColor: npColor.fieldBg },
+  readyBtn: { flex: 1, paddingVertical: 17, borderRadius: 999, alignItems: 'center', backgroundColor: npColor.rowGlassFill, borderWidth: 1, borderColor: npColor.rowGlassBorder },
   readyBtnActive: { backgroundColor: npColor.lime },
   notReadyBtnActive: { backgroundColor: npColor.ink },
   readyBtnLabel: { fontFamily: npFont.sans600, fontSize: 14.5, color: npColor.pillInactiveText },

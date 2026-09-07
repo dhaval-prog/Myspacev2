@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, radius, spacing } from '../../../theme';
+import { npColor } from '../../../theme/npatTokens';
 import { Icon } from '../../../components/Icon';
 import { BottomNav } from '../../../components/BottomNav';
+import { NpatGlassBackdrop } from '../../../components/npat/NpatGlassBackdrop';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useAuth } from '../../../context/AuthContext';
 import { useGame } from '../../../context/GameContext';
@@ -69,6 +72,7 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
       end={{ x: 0.5, y: 1 }}
       style={styles.screen}
     >
+      <NpatGlassBackdrop colors={[npColor.blobLimeLight, npColor.blobGoldLight]} heightMultiplier={1.6} />
       <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Round {round.roundNumber} results</Text>
@@ -78,7 +82,9 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
         <Text style={styles.eyebrow}>LEADERBOARD</Text>
         <View style={styles.list}>
           {active.map((p, i) => (
-            <View key={p.id} style={[styles.rankRow, p.id === myPlayerId && styles.rankRowMe]}>
+            <View key={p.id} style={styles.rankRow}>
+              <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+              <View style={[styles.rankRowTint, p.id === myPlayerId && styles.rankRowTintMe]} pointerEvents="none" />
               <Text style={styles.rankNumber}>{i + 1}</Text>
               <Text style={styles.rankName}>
                 {p.name}
@@ -96,6 +102,8 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
             const roundPoints = theirAnswers.reduce((sum, a) => sum + a.points, 0);
             return (
               <View key={p.id} style={styles.playerCard}>
+                <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+                <View style={styles.playerCardTint} pointerEvents="none" />
                 <View style={styles.playerCardHead}>
                   <Text style={styles.playerCardName}>
                     {p.name}
@@ -145,6 +153,8 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
           accessibilityRole="button"
           accessibilityLabel="Back to Home"
         >
+          <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+          <View style={styles.iconButtonTint} pointerEvents="none" />
           <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
         </Pressable>
       </View>
@@ -184,16 +194,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'rgba(255,255,255,.7)',
+    overflow: 'hidden',
     borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,.6)',
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
-  rankRowMe: { backgroundColor: 'rgba(255,255,255,.95)' },
+  rankRowTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.5)' },
+  rankRowTintMe: { backgroundColor: 'rgba(255,255,255,.8)' },
   rankNumber: { fontFamily: fontFamily.mono500, fontSize: 13, color: colors.ink50, width: 18 },
   rankName: { flex: 1, fontFamily: fontFamily.sans600, fontSize: 14.5, color: colors.textPrimary },
   rankScore: { fontFamily: fontFamily.mono500, fontSize: 15, color: colors.textPrimary },
-  playerCard: { backgroundColor: 'rgba(255,255,255,.7)', borderRadius: 18, padding: 14, gap: 10 },
+  playerCard: { overflow: 'hidden', borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,.6)', padding: 14, gap: 10 },
+  playerCardTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.5)' },
   playerCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   playerCardName: { fontFamily: fontFamily.sans600, fontSize: 14.5, color: colors.textPrimary },
   playerCardPoints: { fontFamily: fontFamily.mono500, fontSize: 12, color: colors.textFaint },
@@ -223,7 +237,9 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#fff',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,.6)',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.ink,
@@ -232,4 +248,5 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 1,
   },
+  iconButtonTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.7)' },
 });

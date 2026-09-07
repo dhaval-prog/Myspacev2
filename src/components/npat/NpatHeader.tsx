@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { useFriends } from '../../context/FriendsContext';
 import { npColor, npFont, LETTER_TILES } from '../../theme/npatTokens';
@@ -64,6 +65,8 @@ function OnlineNowRow({ reduceMotion }: { reduceMotion?: boolean }) {
         <View style={styles.chipsRow}>
           {shown.map((f) => (
             <View key={f.connectionId} style={styles.chip}>
+              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+              <View style={styles.chipTint} pointerEvents="none" />
               <FriendAvatar userId={f.userId} name={f.name} avatarUrl={f.avatarUrl} size={34} initialsFontFamily={npFont.sans700} initialsFontSize={12.5} />
               <Text style={styles.chipName} numberOfLines={1}>
                 {f.name.split(' ')[0]}
@@ -71,7 +74,9 @@ function OnlineNowRow({ reduceMotion }: { reduceMotion?: boolean }) {
             </View>
           ))}
           {overflow > 0 && (
-            <View style={[styles.chip, styles.chipMuted]}>
+            <View style={styles.chip}>
+              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+              <View style={[styles.chipTint, styles.chipTintMuted]} pointerEvents="none" />
               <View style={styles.overflowCircle}>
                 <Text style={styles.overflowLabel}>+{overflow}</Text>
               </View>
@@ -120,8 +125,19 @@ const styles = StyleSheet.create({
   inviteAll: { fontFamily: npFont.sans600, fontSize: 11.5, color: npColor.lime },
   emptyOnline: { fontFamily: npFont.sans400, fontSize: 11.5, color: npColor.onDark42 },
   chipsRow: { flexDirection: 'row', gap: 8 },
-  chip: { flex: 1, backgroundColor: 'rgba(255,255,255,.08)', borderRadius: 16, paddingVertical: 8, paddingHorizontal: 6, alignItems: 'center', gap: 5 },
-  chipMuted: { backgroundColor: 'rgba(255,255,255,.05)' },
+  chip: {
+    flex: 1,
+    overflow: 'hidden',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,.16)',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    gap: 5,
+  },
+  chipTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.08)' },
+  chipTintMuted: { backgroundColor: 'rgba(255,255,255,.05)' },
   chipName: { fontFamily: npFont.sans600, fontSize: 10.5, color: '#FFFFFF' },
   chipNameMuted: { fontFamily: npFont.sans500, fontSize: 10.5, color: npColor.onDark50 },
   overflowCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,.12)', alignItems: 'center', justifyContent: 'center' },

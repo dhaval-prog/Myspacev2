@@ -1,8 +1,11 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, radius, spacing } from '../../../theme';
+import { npColor } from '../../../theme/npatTokens';
+import { NpatGlassBackdrop } from '../../../components/npat/NpatGlassBackdrop';
 import { useGame } from '../../../context/GameContext';
 
 interface NpatGameOverScreenProps {
@@ -27,10 +30,13 @@ export function NpatGameOverScreen({ onHome, onOpenExpenses: _onOpenExpenses, on
       end={{ x: 0.5, y: 1 }}
       style={styles.screen}
     >
+      <NpatGlassBackdrop colors={[npColor.blobLimeLight, npColor.blobGoldLight]} heightMultiplier={1.6} />
       <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.xxl, paddingBottom: insets.bottom + spacing.lg }]}>
         <Text style={styles.kicker}>GAME COMPLETE</Text>
         {winner && (
           <View style={styles.winnerCard}>
+            <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+            <View style={styles.winnerCardTint} pointerEvents="none" />
             <Text style={styles.trophy}>🏆</Text>
             <Text style={styles.winnerName}>{winner.name}{winner.id === myPlayerId ? ' (you)' : ''}</Text>
             <Text style={styles.winnerSub}>wins with {winner.totalScore} points</Text>
@@ -40,7 +46,9 @@ export function NpatGameOverScreen({ onHome, onOpenExpenses: _onOpenExpenses, on
         <Text style={styles.eyebrow}>FINAL STANDINGS</Text>
         <View style={styles.list}>
           {standings.map((p, i) => (
-            <View key={p.id} style={[styles.row, p.id === myPlayerId && styles.rowMe]}>
+            <View key={p.id} style={styles.row}>
+              <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+              <View style={[styles.rowTint, p.id === myPlayerId && styles.rowTintMe]} pointerEvents="none" />
               <Text style={styles.rank}>{i + 1}</Text>
               <Text style={styles.name}>
                 {p.name}
@@ -84,7 +92,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.textFaint,
   },
-  winnerCard: { alignItems: 'center', gap: 4, marginBottom: 8 },
+  winnerCard: {
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+    overflow: 'hidden',
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,.6)',
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+  },
+  winnerCardTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.45)' },
   trophy: { fontSize: 56 },
   winnerName: { fontFamily: fontFamily.sans700, fontSize: 26, letterSpacing: -0.6, color: colors.textPrimary },
   winnerSub: { fontFamily: fontFamily.sans400, fontSize: 14, color: colors.textSecondary },
@@ -100,12 +119,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'rgba(255,255,255,.7)',
+    overflow: 'hidden',
     borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,.6)',
     paddingVertical: 14,
     paddingHorizontal: 16,
   },
-  rowMe: { backgroundColor: 'rgba(255,255,255,.95)' },
+  rowTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.5)' },
+  rowTintMe: { backgroundColor: 'rgba(255,255,255,.8)' },
   rank: { fontFamily: fontFamily.mono500, fontSize: 13, color: colors.ink50, width: 18 },
   name: { flex: 1, fontFamily: fontFamily.sans600, fontSize: 15, color: colors.textPrimary },
   score: { fontFamily: fontFamily.mono500, fontSize: 16, color: colors.textPrimary },
