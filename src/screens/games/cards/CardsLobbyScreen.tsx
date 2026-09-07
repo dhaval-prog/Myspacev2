@@ -1,12 +1,14 @@
 import React, { useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../../components/Icon';
 import { BottomNav } from '../../../components/BottomNav';
 import { LobbyHeader } from '../../../components/spacecards/LobbyHeader';
 import { OpponentStack } from '../../../components/spacecards/OpponentStack';
 import { PrimaryCta } from '../../../components/spacecards/PrimaryCta';
+import { SpaceCardsGlassBackdrop } from '../../../components/spacecards/SpaceCardsGlassBackdrop';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useFocusBorder } from '../../../hooks/useFocusBorder';
 import { useAuth } from '../../../context/AuthContext';
@@ -114,6 +116,7 @@ function CardsHub({
 
   return (
     <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
+      <SpaceCardsGlassBackdrop colors={[scColor.blobEmber, scColor.blobTide]} />
       <View style={{ paddingTop: insets.top + 14 }}>
         <LobbyHeader
           title={!isJoin ? 'UNO Space Cards' : undefined}
@@ -128,10 +131,14 @@ function CardsHub({
           (rather than leaving leftover room pool below it), while still
           scrolling if the sheet's content ever grows taller than that space. */}
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
-        <LinearGradient colors={[scColor.sheet2, scColor.sheet3]} style={styles.sheet}>
+        <View style={styles.sheet}>
+          <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={[scColor.sheetGlassTop, scColor.sheetGlassBottom]} style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.handle} />
 
           <View style={styles.tabs}>
+            <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={styles.tabsTint} pointerEvents="none" />
             <Pressable onPress={() => setTab('create')} style={[styles.tab, !isJoin && styles.tabActive]} accessibilityRole="button" accessibilityLabel="Create a game">
               <Text style={[styles.tabLabel, !isJoin && styles.tabLabelActive]}>Create a game</Text>
             </Pressable>
@@ -143,6 +150,8 @@ function CardsHub({
           <View style={styles.field}>
             <Text style={styles.label}>YOUR NAME</Text>
             <Animated.View style={[styles.input, { borderColor: nameBorderColor }]}>
+              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+              <View style={styles.inputTint} pointerEvents="none" />
               <TextInput
                 value={name}
                 onChangeText={setName}
@@ -162,6 +171,8 @@ function CardsHub({
                 <View style={styles.optionRow}>
                   {PLAYER_OPTIONS.map((n) => (
                     <Pressable key={n} onPress={() => setMaxPlayers(n)} style={[styles.optionTile, maxPlayers === n && styles.optionTileActive]} accessibilityRole="button" accessibilityLabel={`${n} players`}>
+                      {maxPlayers !== n && <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />}
+                      {maxPlayers !== n && <View style={styles.optionTileTint} pointerEvents="none" />}
                       <Text style={[styles.optionLabel, maxPlayers === n && styles.optionLabelActive]}>{n}</Text>
                     </Pressable>
                   ))}
@@ -173,6 +184,8 @@ function CardsHub({
                 <View style={styles.optionRow}>
                   {TIMER_OPTIONS.map((t) => (
                     <Pressable key={t.label} onPress={() => setTimerSeconds(t.value)} style={[styles.optionTile, timerSeconds === t.value && styles.optionTileActive]} accessibilityRole="button" accessibilityLabel={`${t.value} second timer`}>
+                      {timerSeconds !== t.value && <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />}
+                      {timerSeconds !== t.value && <View style={styles.optionTileTint} pointerEvents="none" />}
                       <Text style={[styles.optionLabel, timerSeconds === t.value && styles.optionLabelActive]}>{t.label}</Text>
                     </Pressable>
                   ))}
@@ -182,6 +195,8 @@ function CardsHub({
               {error && <Text style={styles.error}>{error}</Text>}
               <View style={styles.actionsRow}>
                 <Pressable onPress={onHome} style={styles.backChip} accessibilityRole="button" accessibilityLabel="Back to Games">
+                  <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+                  <View style={styles.backChipTint} pointerEvents="none" />
                   <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
                 </Pressable>
                 <View style={styles.ctaFlex}>
@@ -218,6 +233,8 @@ function CardsHub({
               {error && <Text style={styles.error}>{error}</Text>}
               <View style={styles.actionsRow}>
                 <Pressable onPress={onHome} style={styles.backChip} accessibilityRole="button" accessibilityLabel="Back to Games">
+                  <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+                  <View style={styles.backChipTint} pointerEvents="none" />
                   <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
                 </Pressable>
                 <View style={styles.ctaFlex}>
@@ -226,7 +243,7 @@ function CardsHub({
               </View>
             </>
           )}
-        </LinearGradient>
+        </View>
       </ScrollView>
 
       <BottomNav
@@ -276,6 +293,7 @@ function CardsReadyRoom({
 
   return (
     <LinearGradient colors={[scColor.sheet1, scColor.sheet1, scColor.tableMid]} locations={[0, 0.5, 1]} style={styles.screen}>
+      <SpaceCardsGlassBackdrop colors={[scColor.blobEmber, scColor.blobTide]} />
       <View style={{ paddingTop: insets.top + 14 }}>
         <LobbyHeader
           cards={JOIN_FAN}
@@ -288,7 +306,9 @@ function CardsReadyRoom({
       </View>
 
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
-        <LinearGradient colors={[scColor.sheet2, scColor.sheet3]} style={styles.sheet}>
+        <View style={styles.sheet}>
+          <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={[scColor.sheetGlassTop, scColor.sheetGlassBottom]} style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.handle} />
 
           <View style={styles.field}>
@@ -300,6 +320,8 @@ function CardsReadyRoom({
           <View style={styles.waitList}>
             {active.map((p) => (
               <View key={p.id} style={styles.waitRow}>
+                <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+                <View style={styles.waitRowTint} pointerEvents="none" />
                 <View style={[styles.statusDot, p.userId === game.hostId ? styles.statusDotHost : styles.statusDotReady]} />
                 <OpponentStack style={styles.waitAvatar} />
                 <Text style={styles.waitName}>
@@ -310,7 +332,9 @@ function CardsReadyRoom({
               </View>
             ))}
             {Array.from({ length: Math.max(0, game.maxPlayers - active.length) }).map((_, i) => (
-              <View key={`empty-${i}`} style={[styles.waitRow, styles.waitRowEmpty]}>
+              <View key={`empty-${i}`} style={styles.waitRow}>
+                <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+                <View style={[styles.waitRowTint, styles.waitRowTintEmpty]} pointerEvents="none" />
                 <View style={styles.statusDot} />
                 <View style={[styles.waitAvatar, styles.waitAvatarEmpty]} />
                 <Text style={styles.waitNameEmpty}>Waiting for a player…</Text>
@@ -330,7 +354,7 @@ function CardsReadyRoom({
             <Icon path={LEAVE_ICON} color="rgba(255,255,255,.5)" size={16} strokeWidth={1.8} />
             <Text style={styles.leaveLabel}>Leave game</Text>
           </Pressable>
-        </LinearGradient>
+        </View>
       </ScrollView>
 
       <BottomNav
@@ -353,10 +377,11 @@ const styles = StyleSheet.create({
   sheetScroll: { flexGrow: 1, justifyContent: 'center' },
   sheet: {
     marginTop: 18,
+    overflow: 'hidden',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,.20)',
+    borderColor: scColor.glassBorder,
     borderBottomWidth: 0,
     paddingHorizontal: 22,
     paddingTop: 14,
@@ -364,23 +389,27 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   handle: { alignSelf: 'center', width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,.28)', marginBottom: 4 },
-  tabs: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,.08)', borderRadius: 999, padding: 4 },
+  tabs: { flexDirection: 'row', overflow: 'hidden', borderRadius: 999, borderWidth: 1, borderColor: scColor.glassBorder, padding: 4 },
+  tabsTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   tab: { flex: 1, paddingVertical: 11, borderRadius: 999, alignItems: 'center' },
   tabActive: { backgroundColor: scColor.ink },
   tabLabel: { fontFamily: scFont.sans500, fontSize: 13.5, color: 'rgba(255,255,255,.62)' },
   tabLabelActive: { fontFamily: scFont.sans700, color: scColor.lime },
   field: { gap: 9 },
   label: { fontFamily: scFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.12, color: 'rgba(255,255,255,.52)' },
-  input: { backgroundColor: 'rgba(255,255,255,.14)', borderRadius: 16, borderWidth: 1.5, paddingVertical: 15, paddingHorizontal: 17 },
+  input: { overflow: 'hidden', borderRadius: 16, borderWidth: 1.5, paddingVertical: 15, paddingHorizontal: 17 },
+  inputTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   inputText: { fontFamily: scFont.sans700, fontSize: 16, color: '#FFFFFF' },
   optionRow: { flexDirection: 'row', gap: 8 },
-  optionTile: { flex: 1, paddingVertical: 13, borderRadius: 14, alignItems: 'center', backgroundColor: 'rgba(255,255,255,.14)' },
-  optionTileActive: { backgroundColor: scColor.lime },
+  optionTile: { flex: 1, overflow: 'hidden', paddingVertical: 13, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: scColor.glassBorder },
+  optionTileTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  optionTileActive: { backgroundColor: scColor.lime, borderColor: scColor.lime },
   optionLabel: { fontFamily: scFont.sans600, fontSize: 14, color: 'rgba(255,255,255,.82)' },
   optionLabelActive: { fontFamily: scFont.sans700, color: scColor.ink },
   error: { fontFamily: scFont.sans500, fontSize: 12.5, color: scColor.urgent },
   actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  backChip: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,.12)', alignItems: 'center', justifyContent: 'center' },
+  backChip: { width: 56, height: 56, overflow: 'hidden', borderRadius: 28, borderWidth: 1, borderColor: scColor.glassBorder, alignItems: 'center', justifyContent: 'center' },
+  backChipTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   ctaFlex: { flex: 1 },
   codeRow: { flexDirection: 'row', gap: 10 },
   codeCell: { flex: 1, aspectRatio: 1, borderRadius: 16, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
@@ -393,8 +422,9 @@ const styles = StyleSheet.create({
   roomCodeValue: { fontFamily: scFont.mono500, fontSize: 32, letterSpacing: 32 * 0.2, color: scColor.lime },
   roomCodeSub: { fontFamily: scFont.sans400, fontSize: 12, color: 'rgba(255,255,255,.55)', marginTop: 2 },
   waitList: { gap: 8 },
-  waitRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,.08)', borderRadius: 16, padding: 10 },
-  waitRowEmpty: { backgroundColor: 'rgba(255,255,255,.04)' },
+  waitRow: { flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden', borderRadius: 16, borderWidth: 1, borderColor: scColor.glassBorder, padding: 10 },
+  waitRowTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  waitRowTintEmpty: { backgroundColor: 'rgba(255,255,255,.04)' },
   statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,.2)' },
   statusDotReady: { backgroundColor: '#4FA83A' },
   statusDotHost: { backgroundColor: scColor.lime },

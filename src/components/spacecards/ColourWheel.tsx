@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Icon } from '../Icon';
 import { SC_COLOURS, SC_COLOUR_HEX, SC_COLOUR_LABEL, scColor, scFont, scGeometry, type ScColourName } from '../../theme/spaceCardsTokens';
 import { WildSwatch } from './WildSwatch';
@@ -170,6 +171,8 @@ export function ColourWheel({ visible, onLockColour, onCancel, reduceMotion }: C
               accessibilityRole="button"
               accessibilityLabel={selected ? `Lock in ${SC_COLOUR_LABEL[selected]}` : 'Pick a colour'}
             >
+              {!selected && <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />}
+              {!selected && <View style={styles.confirmTint} pointerEvents="none" />}
               <Text style={[styles.confirmLabel, selected && styles.confirmLabelActive]}>
                 {selected ? `Lock in ${SC_COLOUR_LABEL[selected]}` : 'Pick a colour'}
               </Text>
@@ -265,10 +268,14 @@ const styles = StyleSheet.create({
     paddingVertical: 17,
     borderRadius: 999,
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,.08)',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: scColor.glassBorder,
   },
+  confirmTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   confirmActive: {
     backgroundColor: scColor.lime,
+    borderColor: scColor.lime,
   },
   confirmLabel: {
     fontFamily: scFont.sans700,

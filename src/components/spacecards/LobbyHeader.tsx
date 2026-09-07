@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
-import { scFont } from '../../theme/spaceCardsTokens';
+import { BlurView } from 'expo-blur';
+import { scColor, scFont } from '../../theme/spaceCardsTokens';
 import { CardFace } from '../../screens/games/cards/CardFace';
 import { Icon } from '../Icon';
 import type { PlayingCard } from '../../types/cards';
@@ -46,6 +47,8 @@ export function LobbyHeader({ title, subtitle, cards, onBack, reduceMotion }: Lo
     <View style={styles.wrap}>
       {onBack ? (
         <Pressable onPress={onBack} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back to Games">
+          <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.backButtonTint} pointerEvents="none" />
           <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
         </Pressable>
       ) : null}
@@ -80,12 +83,15 @@ const styles = StyleSheet.create({
     left: 22,
     width: 44,
     height: 44,
+    overflow: 'hidden',
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,.12)',
+    borderWidth: 1,
+    borderColor: scColor.glassBorder,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
   },
+  backButtonTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   title: {
     alignSelf: 'flex-start',
     fontFamily: scFont.sans800,

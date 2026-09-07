@@ -53,6 +53,20 @@ export const scColor = {
   fillMid: 'rgba(255,255,255,.10)',
   fillStrong: 'rgba(255,255,255,.14)',
   navInk: 'rgba(17,17,17,.94)',
+
+  // Frosted-glass surfaces — same idea as the Games hub's own glass tokens: a
+  // BlurView backdrop plus a translucent tint (using the `glass`/`glassBorder`
+  // pair above for individual rows/chips) and a couple of soft radial blobs
+  // behind everything so there's something colorful for the glass to blur,
+  // on top of the table's own purple gradient.
+  sheetGlassTop: 'rgba(58,27,94,.55)',
+  sheetGlassBottom: 'rgba(91,52,119,.55)',
+  rowGlassFillActive: 'rgba(195,234,79,.16)',
+
+  blobEmber: 'rgba(232,83,59,.28)',
+  blobTide: 'rgba(47,147,216,.28)',
+  blobMoss: 'rgba(47,158,79,.22)',
+  blobLime: 'rgba(195,234,79,.22)',
 } as const;
 
 /** The four playable colours, in wheel order (top-left, top-right, bottom-left, bottom-right). */
