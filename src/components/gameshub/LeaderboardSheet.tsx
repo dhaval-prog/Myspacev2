@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   rowLeader: { backgroundColor: ghColor.rank1RowBg },
-  rowSelf: { backgroundColor: ghColor.rowGlassSelfFill, borderColor: 'rgba(171,250,135,.4)' },
+  rowSelf: { backgroundColor: ghColor.rowGlassSelfFill, borderColor: 'rgba(195,234,79,.4)' },
   rank: { width: 19, fontFamily: ghFont.mono500, fontSize: 12, color: ghColor.textTertiary },
   rankLeader: { color: ghColor.gradientA },
   rankSelf: { color: ghColor.gradientB },
