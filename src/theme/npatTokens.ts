@@ -44,6 +44,22 @@ export const npColor = {
   onDark42: 'rgba(255,255,255,.4)',
 
   glowShadow: '#C3EA4F',
+
+  // Frosted-glass surfaces — same idea as the Games hub's own glass tokens: a
+  // BlurView backdrop plus a translucent tint, a hairline near-white border,
+  // and (on the dark lobby/header screens) a couple of soft radial blobs
+  // behind everything so there's something colorful for the glass to blur.
+  sheetGlassFill: 'rgba(251,252,247,.7)',
+  glassBorder: 'rgba(255,255,255,.5)',
+  rowGlassFill: 'rgba(255,255,255,.4)',
+  rowGlassFillDark: 'rgba(255,255,255,.08)',
+  rowGlassBorder: 'rgba(255,255,255,.6)',
+  rowGlassBorderDark: 'rgba(255,255,255,.16)',
+
+  blobLimeDark: 'rgba(195,234,79,.35)',
+  blobGoldDark: 'rgba(233,176,47,.22)',
+  blobLimeLight: 'rgba(195,234,79,.5)',
+  blobGoldLight: 'rgba(233,176,47,.32)',
 } as const;
 
 export const npRoundColor = {
@@ -77,6 +93,8 @@ export const npRoundColor = {
   onDark42: 'rgba(255,255,255,.42)',
   onDark40: 'rgba(255,255,255,.4)',
   onDark38: 'rgba(255,255,255,.38)',
+
+  glassBorder: 'rgba(255,255,255,.16)',
 } as const;
 
 export const ROUND_OPTIONS = [3, 5, 10] as const;
