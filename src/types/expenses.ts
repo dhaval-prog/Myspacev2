@@ -21,6 +21,8 @@ export interface WalletCard {
 
 /** A single logged spend against a card. */
 export interface Expense {
+  /** Stable id for the underlying row — lets a spend be selected (e.g. for Transfer Expenses) without relying on title/date matching. */
+  id: string;
   title: string;
   date: string;
   /** Formatted, signed amount e.g. "-₹150". */
