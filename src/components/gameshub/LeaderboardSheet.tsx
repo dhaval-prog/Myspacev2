@@ -44,7 +44,7 @@ export function LeaderboardSheet({ visible, onClose, leaderboard, breakdownFor, 
         {TABS.map((t, i) => (
           <View key={t} style={[styles.tab, i === 0 && styles.tabActive]}>
             {i === 0 && (
-              <LinearGradient colors={[ghColor.gradientPink, ghColor.gradientBlue]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+              <LinearGradient colors={[ghColor.gradientA, ghColor.gradientB]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
             )}
             <Text style={[styles.tabLabel, i === 0 && styles.tabLabelActive]}>{t}</Text>
           </View>
@@ -66,7 +66,7 @@ export function LeaderboardSheet({ visible, onClose, leaderboard, breakdownFor, 
                 radius={16}
                 initialsFontFamily={ghFont.sans800}
                 initialsFontSize={11}
-                colorOverride={highlight ? { bg: ghColor.gradientPink, fg: ghColor.textOnGradient } : undefined}
+                colorOverride={highlight ? { bg: ghColor.gradientB, fg: ghColor.textOnGradient } : undefined}
               />
               <View style={styles.rowMid}>
                 <Text style={[styles.rowName, highlight && styles.rowNameSelf]}>{entry.isSelf ? 'You' : entry.name}</Text>
@@ -107,16 +107,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   rowLeader: { backgroundColor: ghColor.rank1RowBg },
-  rowSelf: { backgroundColor: ghColor.rowGlassSelfFill, borderColor: 'rgba(255,118,233,.4)' },
+  rowSelf: { backgroundColor: ghColor.rowGlassSelfFill, borderColor: 'rgba(171,250,135,.4)' },
   rank: { width: 19, fontFamily: ghFont.mono500, fontSize: 12, color: ghColor.textTertiary },
-  rankLeader: { color: ghColor.gradientPink },
-  rankSelf: { color: ghColor.accentBlueLight },
+  rankLeader: { color: ghColor.gradientA },
+  rankSelf: { color: ghColor.gradientB },
   rowMid: { flex: 1 },
   rowName: { fontFamily: ghFont.sans700, fontSize: 13, color: ghColor.textPrimary },
   rowNameSelf: {},
   rowSub: { fontFamily: ghFont.mono500, fontSize: 9.5, color: ghColor.textTertiary, marginTop: 4 },
   rowSubSelf: {},
   rowPoints: { fontFamily: ghFont.sans800, fontSize: 15, color: ghColor.textPrimary },
-  rowPointsSelf: { color: ghColor.gradientPink },
+  rowPointsSelf: { color: ghColor.gradientB },
   footer: { marginTop: 12, textAlign: 'center', fontFamily: ghFont.sans400, fontSize: 10.5, color: ghColor.textFaint },
 });

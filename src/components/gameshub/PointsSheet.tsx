@@ -92,7 +92,7 @@ export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, 
         ) : (
           recentActivity.slice(0, 12).map((tx) => (
             <View key={tx.id} style={styles.txRow}>
-              <View style={[styles.txBadge, { backgroundColor: tx.gameType === 'NPAT' ? ghColor.gradientPink : ghColor.gradientBlue }]}>
+              <View style={[styles.txBadge, { backgroundColor: tx.gameType === 'NPAT' ? ghColor.gradientA : ghColor.gradientB }]}>
                 <Text style={styles.txBadgeLabel}>{tx.gameType === 'NPAT' ? 'N' : 'S'}</Text>
               </View>
               <View style={styles.txMid}>
@@ -108,7 +108,7 @@ export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, 
       </ScrollView>
 
       <Pressable onPress={onSeeLeaderboard} style={styles.cta} accessibilityRole="button">
-        <LinearGradient colors={[ghColor.gradientPink, ghColor.gradientBlue]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+        <LinearGradient colors={[ghColor.gradientA, ghColor.gradientB]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
         <Text style={styles.ctaLabel}>See full leaderboard</Text>
       </Pressable>
     </HubSheet>
