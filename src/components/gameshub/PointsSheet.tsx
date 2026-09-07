@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Icon } from '../Icon';
 import { HubSheet } from './HubSheet';
 import { ghColor, ghFont } from '../../theme/gamesHubTokens';
@@ -57,7 +58,7 @@ export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, 
           <Text style={styles.subtitle}>This week · rank #{myEntry?.rank ?? '—'} of {circleSize}</Text>
         </View>
         <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
-          <Icon path={CLOSE_ICON} color={ghColor.ink} size={15} strokeWidth={2.2} />
+          <Icon path={CLOSE_ICON} color={ghColor.textPrimary} size={15} strokeWidth={2.2} />
         </Pressable>
       </View>
 
@@ -91,7 +92,7 @@ export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, 
         ) : (
           recentActivity.slice(0, 12).map((tx) => (
             <View key={tx.id} style={styles.txRow}>
-              <View style={[styles.txBadge, { backgroundColor: tx.gameType === 'NPAT' ? ghColor.lime : ghColor.gold }]}>
+              <View style={[styles.txBadge, { backgroundColor: tx.gameType === 'NPAT' ? ghColor.gradientPink : ghColor.gradientBlue }]}>
                 <Text style={styles.txBadgeLabel}>{tx.gameType === 'NPAT' ? 'N' : 'S'}</Text>
               </View>
               <View style={styles.txMid}>
@@ -107,6 +108,7 @@ export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, 
       </ScrollView>
 
       <Pressable onPress={onSeeLeaderboard} style={styles.cta} accessibilityRole="button">
+        <LinearGradient colors={[ghColor.gradientPink, ghColor.gradientBlue]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
         <Text style={styles.ctaLabel}>See full leaderboard</Text>
       </Pressable>
     </HubSheet>
@@ -115,23 +117,23 @@ export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, 
 
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  title: { fontFamily: ghFont.sans800, fontSize: 21, letterSpacing: -0.7, color: ghColor.ink },
-  subtitle: { fontFamily: ghFont.sans400, fontSize: 11.5, color: ghColor.ink50, marginTop: 5 },
-  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: ghColor.ink06, alignItems: 'center', justifyContent: 'center' },
+  title: { fontFamily: ghFont.sans800, fontSize: 21, letterSpacing: -0.7, color: ghColor.textPrimary },
+  subtitle: { fontFamily: ghFont.sans400, fontSize: 11.5, color: ghColor.textSecondary, marginTop: 5 },
+  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: ghColor.surface, alignItems: 'center', justifyContent: 'center' },
   heroRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, marginTop: 14 },
-  heroValue: { fontFamily: ghFont.sans800, fontSize: 46, letterSpacing: -2, color: ghColor.ink },
+  heroValue: { fontFamily: ghFont.sans800, fontSize: 46, letterSpacing: -2, color: ghColor.textPrimary },
   deltaChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: ghColor.upBg, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 999, marginBottom: 7 },
   deltaGlyph: { fontSize: 8, color: ghColor.up },
   deltaLabel: { fontFamily: ghFont.mono500, fontSize: 10.5, color: ghColor.up },
   tilesRow: { flexDirection: 'row', gap: 9, marginTop: 14 },
   tile: { flex: 1, borderRadius: 18, padding: 13, borderWidth: 1, borderColor: ghColor.rowGlassBorder },
-  tileLabel: { fontFamily: ghFont.mono500, fontSize: 8.5, letterSpacing: 8.5 * 0.12, color: ghColor.ink50 },
-  tileValue: { fontFamily: ghFont.sans800, fontSize: 24, letterSpacing: -1, color: ghColor.ink, marginTop: 8 },
-  tileSub: { fontFamily: ghFont.sans400, fontSize: 10, color: ghColor.ink50, marginTop: 6 },
-  eyebrow: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.14, color: ghColor.ink42, marginTop: 18, marginBottom: 9 },
+  tileLabel: { fontFamily: ghFont.mono500, fontSize: 8.5, letterSpacing: 8.5 * 0.12, color: ghColor.textSecondary },
+  tileValue: { fontFamily: ghFont.sans800, fontSize: 24, letterSpacing: -1, color: ghColor.textPrimary, marginTop: 8 },
+  tileSub: { fontFamily: ghFont.sans400, fontSize: 10, color: ghColor.textSecondary, marginTop: 6 },
+  eyebrow: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.14, color: ghColor.textTertiary, marginTop: 18, marginBottom: 9 },
   list: { maxHeight: 280 },
   listContent: { gap: 5, paddingBottom: 2 },
-  emptyText: { fontFamily: ghFont.sans400, fontSize: 13, color: ghColor.ink45, textAlign: 'center', paddingVertical: 12 },
+  emptyText: { fontFamily: ghFont.sans400, fontSize: 13, color: ghColor.textTertiary, textAlign: 'center', paddingVertical: 12 },
   txRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -144,12 +146,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   txBadge: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  txBadgeLabel: { fontFamily: ghFont.sans800, fontSize: 10, color: ghColor.ink },
+  txBadgeLabel: { fontFamily: ghFont.sans800, fontSize: 10, color: ghColor.textOnGradient },
   txMid: { flex: 1 },
-  txTitle: { fontFamily: ghFont.sans700, fontSize: 12.5, color: ghColor.ink },
-  txTime: { fontFamily: ghFont.mono500, fontSize: 9.5, color: ghColor.ink42, marginTop: 4 },
+  txTitle: { fontFamily: ghFont.sans700, fontSize: 12.5, color: ghColor.textPrimary },
+  txTime: { fontFamily: ghFont.mono500, fontSize: 9.5, color: ghColor.textTertiary, marginTop: 4 },
   txChange: { fontFamily: ghFont.mono500, fontSize: 13, color: ghColor.up },
   txChangeNegative: { color: ghColor.danger },
-  cta: { marginTop: 14, paddingVertical: 15, borderRadius: 999, backgroundColor: ghColor.lime, alignItems: 'center' },
-  ctaLabel: { fontFamily: ghFont.sans700, fontSize: 14, color: ghColor.ink },
+  cta: { marginTop: 14, paddingVertical: 15, borderRadius: 999, alignItems: 'center', overflow: 'hidden' },
+  ctaLabel: { fontFamily: ghFont.sans700, fontSize: 14, color: ghColor.textOnGradient },
 });

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Icon } from '../Icon';
 import { ghColor, ghFont } from '../../theme/gamesHubTokens';
 
@@ -10,14 +11,14 @@ const BODY_HEIGHT = 74;
 function NpatIcon() {
   return (
     <View style={styles.npatIconRow}>
-      <View style={[styles.npatTile, { backgroundColor: ghColor.lime, transform: [{ rotate: '-8deg' }] }]}>
-        <Text style={styles.npatTileLabel}>N</Text>
+      <View style={[styles.npatTile, { backgroundColor: ghColor.gradientPink, transform: [{ rotate: '-8deg' }] }]}>
+        <Text style={[styles.npatTileLabel, { color: ghColor.textOnGradient }]}>N</Text>
       </View>
-      <View style={[styles.npatTile, { backgroundColor: 'rgba(255,255,255,.9)', transform: [{ rotate: '4deg' }] }]}>
+      <View style={[styles.npatTile, { backgroundColor: 'rgba(255,255,255,.92)', transform: [{ rotate: '4deg' }] }]}>
         <Text style={styles.npatTileLabel}>P</Text>
       </View>
-      <View style={[styles.npatTile, { backgroundColor: ghColor.lime, transform: [{ rotate: '-3deg' }] }]}>
-        <Text style={styles.npatTileLabel}>A</Text>
+      <View style={[styles.npatTile, { backgroundColor: ghColor.gradientPink, transform: [{ rotate: '-3deg' }] }]}>
+        <Text style={[styles.npatTileLabel, { color: ghColor.textOnGradient }]}>A</Text>
       </View>
     </View>
   );
@@ -66,9 +67,10 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
   const isNpat = variant === 'npat';
   const glassFill = isNpat ? ghColor.npatGlassFill : ghColor.cardsGlassFill;
   const glassBorder = isNpat ? ghColor.npatGlassBorder : ghColor.cardsGlassBorder;
+  const accent = isNpat ? ghColor.gradientPink : ghColor.gradientBlue;
 
   return (
-    <View style={[styles.card, { borderColor: glassBorder }, expanded && styles.cardExpanded]}>
+    <View style={[styles.card, { borderColor: glassBorder }, expanded && [styles.cardExpanded, { borderColor: accent, shadowColor: accent }]]}>
       <BlurView intensity={34} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: glassFill }]} pointerEvents="none" />
       <Pressable onPress={onToggle} style={styles.header} accessibilityRole="button" accessibilityLabel={title}>
@@ -78,12 +80,13 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
           <Text style={styles.headerSub}>{subtitle}</Text>
         </View>
         <Animated.View style={{ transform: [{ rotate: chevRotate }] }}>
-          <Icon path={CHEV_ICON} color={ghColor.onDark70} size={16} strokeWidth={2.2} />
+          <Icon path={CHEV_ICON} color={ghColor.textSecondary} size={16} strokeWidth={2.2} />
         </Animated.View>
       </Pressable>
       <Animated.View style={[styles.body, { height: bodyHeight, opacity: bodyProgress }]}>
         <View style={styles.bodyRow}>
           <Pressable onPress={onCreate} style={styles.createBtn} accessibilityRole="button">
+            <LinearGradient colors={[ghColor.gradientPink, ghColor.gradientBlue]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
             <Text style={styles.createLabel}>Create a game</Text>
           </Pressable>
           <Pressable onPress={onJoin} style={styles.joinBtn} accessibilityRole="button">
@@ -106,16 +109,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     shadowRadius: 24,
   },
-  cardExpanded: { borderWidth: 2, borderColor: 'rgba(195,234,79,.5)' },
+  cardExpanded: { borderWidth: 2, shadowOpacity: 0.32, shadowRadius: 30 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 16 },
   headerMid: { flex: 1 },
   headerTitle: { fontFamily: ghFont.sans700, fontSize: 15, lineHeight: 17.25, color: '#FFFFFF' },
-  headerSub: { fontFamily: ghFont.sans400, fontSize: 11, color: ghColor.onDark50, marginTop: 4 },
+  headerSub: { fontFamily: ghFont.sans400, fontSize: 11, color: ghColor.textTertiary, marginTop: 4 },
   body: { overflow: 'hidden' },
   bodyRow: { flexDirection: 'row', gap: 9, paddingHorizontal: 16, paddingBottom: 15 },
-  createBtn: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: ghColor.lime },
-  createLabel: { fontFamily: ghFont.sans700, fontSize: 13.5, color: ghColor.ink },
-  joinBtn: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: ghColor.onDark14 },
+  createBtn: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, overflow: 'hidden' },
+  createLabel: { fontFamily: ghFont.sans700, fontSize: 13.5, color: ghColor.textOnGradient },
+  joinBtn: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: ghColor.surfaceStrong, borderWidth: 1, borderColor: ghColor.hairline },
   joinLabel: { fontFamily: ghFont.sans600, fontSize: 13.5, color: '#FFFFFF' },
   npatIconRow: { flexDirection: 'row', gap: 3, flexShrink: 0 },
   npatTile: { width: 20, height: 26, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },

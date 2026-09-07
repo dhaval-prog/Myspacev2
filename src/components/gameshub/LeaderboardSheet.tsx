@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { HubSheet } from './HubSheet';
@@ -35,13 +36,16 @@ export function LeaderboardSheet({ visible, onClose, leaderboard, breakdownFor, 
           <Text style={styles.subtitle}>Your circle · {leaderboard.length} player{leaderboard.length === 1 ? '' : 's'}</Text>
         </View>
         <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
-          <Icon path={CLOSE_ICON} color={ghColor.ink} size={15} strokeWidth={2.2} />
+          <Icon path={CLOSE_ICON} color={ghColor.textPrimary} size={15} strokeWidth={2.2} />
         </Pressable>
       </View>
 
       <View style={styles.tabs}>
         {TABS.map((t, i) => (
           <View key={t} style={[styles.tab, i === 0 && styles.tabActive]}>
+            {i === 0 && (
+              <LinearGradient colors={[ghColor.gradientPink, ghColor.gradientBlue]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+            )}
             <Text style={[styles.tabLabel, i === 0 && styles.tabLabelActive]}>{t}</Text>
           </View>
         ))}
@@ -62,7 +66,7 @@ export function LeaderboardSheet({ visible, onClose, leaderboard, breakdownFor, 
                 radius={16}
                 initialsFontFamily={ghFont.sans800}
                 initialsFontSize={11}
-                colorOverride={highlight ? { bg: ghColor.lime, fg: ghColor.ink } : undefined}
+                colorOverride={highlight ? { bg: ghColor.gradientPink, fg: ghColor.textOnGradient } : undefined}
               />
               <View style={styles.rowMid}>
                 <Text style={[styles.rowName, highlight && styles.rowNameSelf]}>{entry.isSelf ? 'You' : entry.name}</Text>
@@ -81,14 +85,14 @@ export function LeaderboardSheet({ visible, onClose, leaderboard, breakdownFor, 
 
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontFamily: ghFont.sans800, fontSize: 21, letterSpacing: -0.7, color: ghColor.ink },
-  subtitle: { fontFamily: ghFont.sans400, fontSize: 11.5, color: ghColor.ink50, marginTop: 5 },
-  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: ghColor.ink06, alignItems: 'center', justifyContent: 'center' },
-  tabs: { flexDirection: 'row', backgroundColor: ghColor.ink06, borderRadius: 999, padding: 3, marginTop: 14 },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 999 },
-  tabActive: { backgroundColor: ghColor.ink },
-  tabLabel: { fontFamily: ghFont.sans500, fontSize: 11.5, color: ghColor.avatarMuted },
-  tabLabelActive: { fontFamily: ghFont.sans700, color: ghColor.lime },
+  title: { fontFamily: ghFont.sans800, fontSize: 21, letterSpacing: -0.7, color: ghColor.textPrimary },
+  subtitle: { fontFamily: ghFont.sans400, fontSize: 11.5, color: ghColor.textSecondary, marginTop: 5 },
+  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: ghColor.surface, alignItems: 'center', justifyContent: 'center' },
+  tabs: { flexDirection: 'row', backgroundColor: ghColor.surface, borderRadius: 999, padding: 3, marginTop: 14 },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 999, overflow: 'hidden' },
+  tabActive: {},
+  tabLabel: { fontFamily: ghFont.sans500, fontSize: 11.5, color: ghColor.textSecondary },
+  tabLabelActive: { fontFamily: ghFont.sans700, color: ghColor.textOnGradient },
   list: { marginTop: 12 },
   listContent: { gap: 6, paddingBottom: 4 },
   row: {
@@ -103,16 +107,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   rowLeader: { backgroundColor: ghColor.rank1RowBg },
-  rowSelf: { backgroundColor: ghColor.rowGlassSelfFill, borderColor: 'rgba(195,234,79,.35)' },
-  rank: { width: 19, fontFamily: ghFont.mono500, fontSize: 12, color: ghColor.ink42 },
-  rankLeader: { color: ghColor.goldMuted },
-  rankSelf: { color: ghColor.lime },
+  rowSelf: { backgroundColor: ghColor.rowGlassSelfFill, borderColor: 'rgba(255,118,233,.4)' },
+  rank: { width: 19, fontFamily: ghFont.mono500, fontSize: 12, color: ghColor.textTertiary },
+  rankLeader: { color: ghColor.gradientPink },
+  rankSelf: { color: ghColor.accentBlueLight },
   rowMid: { flex: 1 },
-  rowName: { fontFamily: ghFont.sans700, fontSize: 13, color: ghColor.ink },
-  rowNameSelf: { color: '#FFFFFF' },
-  rowSub: { fontFamily: ghFont.mono500, fontSize: 9.5, color: ghColor.ink45, marginTop: 4 },
-  rowSubSelf: { color: ghColor.onDark50 },
-  rowPoints: { fontFamily: ghFont.sans800, fontSize: 15, color: ghColor.ink },
-  rowPointsSelf: { color: ghColor.lime },
-  footer: { marginTop: 12, textAlign: 'center', fontFamily: ghFont.sans400, fontSize: 10.5, color: ghColor.ink40 },
+  rowName: { fontFamily: ghFont.sans700, fontSize: 13, color: ghColor.textPrimary },
+  rowNameSelf: {},
+  rowSub: { fontFamily: ghFont.mono500, fontSize: 9.5, color: ghColor.textTertiary, marginTop: 4 },
+  rowSubSelf: {},
+  rowPoints: { fontFamily: ghFont.sans800, fontSize: 15, color: ghColor.textPrimary },
+  rowPointsSelf: { color: ghColor.gradientPink },
+  footer: { marginTop: 12, textAlign: 'center', fontFamily: ghFont.sans400, fontSize: 10.5, color: ghColor.textFaint },
 });

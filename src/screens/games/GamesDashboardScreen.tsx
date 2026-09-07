@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { BottomNav } from '../../components/BottomNav';
@@ -22,10 +22,13 @@ const RING_HOLE = 68;
 const RING_THICKNESS = (RING_SIZE - RING_HOLE) / 2;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
+// react-native-svg's web typings omit `children` on Defs (a typing gap, not a runtime issue) — cast once.
+const DefsAny = Defs as unknown as React.ComponentType<{ children?: React.ReactNode }>;
+
 function badgeStyleFor(rank: number) {
-  if (rank === 1) return { bg: ghColor.gold, fg: ghColor.ink };
-  if (rank === 2) return { bg: ghColor.ink, fg: ghColor.lime };
-  return { bg: ghColor.ink16, fg: ghColor.ink };
+  if (rank === 1) return { bg: ghColor.gradientPink, fg: ghColor.textOnGradient };
+  if (rank === 2) return { bg: ghColor.gradientBlue, fg: ghColor.textOnGradient };
+  return { bg: ghColor.surfaceStrong, fg: ghColor.textPrimary };
 }
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -42,12 +45,18 @@ function ProgressRing({ pct, reduceMotion, children }: { pct: number; reduceMoti
   return (
     <View style={styles.ringWrap}>
       <Svg width={RING_SIZE} height={RING_SIZE}>
-        <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={radius} stroke={ghColor.ink09} strokeWidth={RING_THICKNESS} fill="none" />
+        <DefsAny>
+          <SvgLinearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor={ghColor.gradientPink} />
+            <Stop offset="100%" stopColor={ghColor.gradientBlue} />
+          </SvgLinearGradient>
+        </DefsAny>
+        <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={radius} stroke={ghColor.surface} strokeWidth={RING_THICKNESS} fill="none" />
         <AnimatedCircle
           cx={RING_SIZE / 2}
           cy={RING_SIZE / 2}
           r={radius}
-          stroke={ghColor.lime}
+          stroke="url(#ringGrad)"
           strokeWidth={RING_THICKNESS}
           fill="none"
           strokeDasharray={`${circumference} ${circumference}`}
@@ -125,7 +134,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
                     radius={28}
                     initialsFontFamily={ghFont.sans800}
                     initialsFontSize={entry.isSelf ? 17 : 16}
-                    colorOverride={entry.isSelf ? { bg: ghColor.lime, fg: ghColor.ink } : { bg: '#FFFFFF', fg: ghColor.avatarMuted }}
+                    colorOverride={entry.isSelf ? { bg: ghColor.gradientPink, fg: ghColor.textOnGradient } : { bg: '#FFFFFF', fg: ghColor.avatarMuted }}
                   />
                   <View style={[styles.rankBadge, { backgroundColor: badge.bg }]}>
                     <Text style={[styles.rankBadgeLabel, { color: badge.fg }]}>{entry.rank}</Text>
@@ -138,14 +147,14 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
           })}
           <Pressable onPress={onOpenFriends} style={styles.inviteItem} accessibilityRole="button" accessibilityLabel="Invite a friend">
             <View style={styles.inviteCircle}>
-              <Icon path={PLUS_ICON} color={ghColor.ink45} size={20} strokeWidth={2.2} />
+              <Icon path={PLUS_ICON} color={ghColor.textTertiary} size={20} strokeWidth={2.2} />
             </View>
             <Text style={styles.inviteLabel}>INVITE</Text>
           </Pressable>
         </View>
 
         <Pressable onPress={() => setPointsVisible(true)} style={styles.pointsCard} accessibilityRole="button" accessibilityLabel="Your points">
-          <BlurView intensity={45} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+          <BlurView intensity={45} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <View style={styles.pointsCardTint} pointerEvents="none" />
           <ProgressRing pct={ringPct} reduceMotion={reduceMotion}>
             <Text style={styles.ringValue}>{myTotal}</Text>
@@ -164,8 +173,8 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
                 {myEntry && myEntry.rank > 1 ? `${gapToFirst} TO #1` : 'LEADING'}
               </Text>
             </View>
-            <BreakdownBar label="NPAT" value={npat?.net ?? 0} total={myTotal} color={ghColor.lime} />
-            <BreakdownBar label="CARDS" value={cards?.net ?? 0} total={myTotal} color={ghColor.gold} />
+            <BreakdownBar label="NPAT" value={npat?.net ?? 0} total={myTotal} color={ghColor.gradientPink} />
+            <BreakdownBar label="CARDS" value={cards?.net ?? 0} total={myTotal} color={ghColor.gradientBlue} />
           </View>
         </Pressable>
 
@@ -237,10 +246,10 @@ function BreakdownBar({ label, value, total, color }: { label: string; value: nu
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   scroll: { paddingHorizontal: 20 },
-  title: { fontFamily: ghFont.sans800, fontSize: 30, lineHeight: 30, letterSpacing: -1.2, color: ghColor.ink },
-  subtitle: { fontFamily: ghFont.sans400, fontSize: 12.5, color: ghColor.ink52, marginTop: 6 },
+  title: { fontFamily: ghFont.sans800, fontSize: 30, lineHeight: 30, letterSpacing: -1.2, color: ghColor.textPrimary },
+  subtitle: { fontFamily: ghFont.sans400, fontSize: 12.5, color: ghColor.textSecondary, marginTop: 6 },
   eyebrowRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 16, marginBottom: 9 },
-  eyebrow: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.14, color: ghColor.ink42 },
+  eyebrow: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.14, color: ghColor.textTertiary },
   seeAll: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   seeAllLabel: { fontFamily: ghFont.sans600, fontSize: 11, color: ghColor.up },
   topRow: { flexDirection: 'row', gap: 9 },
@@ -248,13 +257,13 @@ const styles = StyleSheet.create({
   topAvatarWrap: { width: 56, height: 56 },
   rankBadge: { position: 'absolute', left: -2, top: -3, width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: ghColor.bgMid, alignItems: 'center', justifyContent: 'center' },
   rankBadgeLabel: { fontFamily: ghFont.mono500, fontSize: 9 },
-  topName: { fontFamily: ghFont.sans600, fontSize: 10, color: ghColor.ink, textAlign: 'center' },
+  topName: { fontFamily: ghFont.sans600, fontSize: 10, color: ghColor.textPrimary, textAlign: 'center' },
   topNameSelf: { fontFamily: ghFont.sans700 },
-  topPoints: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.06, color: ghColor.ink50, marginTop: -3 },
-  topPointsSelf: { fontFamily: ghFont.sans700, color: ghColor.ink },
+  topPoints: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.06, color: ghColor.textSecondary, marginTop: -3 },
+  topPointsSelf: { fontFamily: ghFont.sans700, color: ghColor.textPrimary },
   inviteItem: { flex: 1, alignItems: 'center', gap: 6 },
-  inviteCircle: { width: 56, height: 56, borderRadius: 28, borderWidth: 1.6, borderStyle: 'dashed', borderColor: ghColor.ink28, alignItems: 'center', justifyContent: 'center' },
-  inviteLabel: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.1, color: ghColor.ink42 },
+  inviteCircle: { width: 56, height: 56, borderRadius: 28, borderWidth: 1.6, borderStyle: 'dashed', borderColor: ghColor.hairlineStrong, alignItems: 'center', justifyContent: 'center' },
+  inviteLabel: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.1, color: ghColor.textTertiary },
   pointsCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -265,27 +274,27 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: ghColor.glassBorder,
-    shadowColor: ghColor.ink,
-    shadowOpacity: 0.1,
+    shadowColor: ghColor.gradientPink,
+    shadowOpacity: 0.18,
     shadowOffset: { width: 0, height: 14 },
     shadowRadius: 30,
   },
   pointsCardTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: ghColor.glassFill },
   ringWrap: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
   ringCenter: { position: 'absolute', alignItems: 'center' },
-  ringValue: { fontFamily: ghFont.sans800, fontSize: 24, letterSpacing: -1.2, color: ghColor.ink },
-  ringLabel: { fontFamily: ghFont.mono500, fontSize: 8, letterSpacing: 8 * 0.12, color: ghColor.ink42 },
+  ringValue: { fontFamily: ghFont.sans800, fontSize: 24, letterSpacing: -1.2, color: ghColor.textPrimary },
+  ringLabel: { fontFamily: ghFont.mono500, fontSize: 8, letterSpacing: 8 * 0.12, color: ghColor.textTertiary },
   pointsMid: { flex: 1, gap: 8 },
   rankRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  rankTitle: { fontFamily: ghFont.sans800, fontSize: 15, color: ghColor.ink },
+  rankTitle: { fontFamily: ghFont.sans800, fontSize: 15, color: ghColor.textPrimary },
   rankDeltaChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: ghColor.upBg, paddingVertical: 4, paddingHorizontal: 7, borderRadius: 999 },
   rankDeltaGlyph: { fontSize: 8, color: ghColor.up },
   rankDeltaLabel: { fontFamily: ghFont.mono500, fontSize: 9.5, color: ghColor.up },
-  gapLabel: { flex: 1, textAlign: 'right', fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.06, color: ghColor.ink40 },
+  gapLabel: { flex: 1, textAlign: 'right', fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.06, color: ghColor.textFaint },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  barLabel: { width: 40, fontFamily: ghFont.mono500, fontSize: 9, letterSpacing: 9 * 0.06, color: ghColor.ink45 },
-  barTrack: { flex: 1, height: 8, borderRadius: 999, backgroundColor: ghColor.ink07, overflow: 'hidden' },
+  barLabel: { width: 40, fontFamily: ghFont.mono500, fontSize: 9, letterSpacing: 9 * 0.06, color: ghColor.textTertiary },
+  barTrack: { flex: 1, height: 8, borderRadius: 999, backgroundColor: ghColor.surface, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 999 },
-  barValue: { width: 30, textAlign: 'right', fontFamily: ghFont.mono500, fontSize: 10.5, color: ghColor.ink },
-  playEyebrow: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.14, color: ghColor.ink42, marginTop: 18, marginBottom: 10 },
+  barValue: { width: 30, textAlign: 'right', fontFamily: ghFont.mono500, fontSize: 10.5, color: ghColor.textPrimary },
+  playEyebrow: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.14, color: ghColor.textTertiary, marginTop: 18, marginBottom: 10 },
 });

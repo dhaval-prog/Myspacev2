@@ -21,22 +21,22 @@ export function GlassBackdrop() {
     <View style={styles.svgWrap} pointerEvents="none">
       <Svg width={SCREEN_WIDTH} height={SCREEN_WIDTH * 1.4}>
         <DefsAny>
-          <RadialGradient id="blobLime" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={ghColor.blobLime} stopOpacity={1} />
-            <Stop offset="100%" stopColor={ghColor.blobLime} stopOpacity={0} />
+          <RadialGradient id="blobPink" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={ghColor.blobPink} stopOpacity={1} />
+            <Stop offset="100%" stopColor={ghColor.blobPink} stopOpacity={0} />
           </RadialGradient>
-          <RadialGradient id="blobGold" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={ghColor.blobGold} stopOpacity={1} />
-            <Stop offset="100%" stopColor={ghColor.blobGold} stopOpacity={0} />
+          <RadialGradient id="blobBlue" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={ghColor.blobBlue} stopOpacity={1} />
+            <Stop offset="100%" stopColor={ghColor.blobBlue} stopOpacity={0} />
           </RadialGradient>
-          <RadialGradient id="blobPurple" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={ghColor.blobPurple} stopOpacity={1} />
-            <Stop offset="100%" stopColor={ghColor.blobPurple} stopOpacity={0} />
+          <RadialGradient id="blobViolet" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={ghColor.blobViolet} stopOpacity={1} />
+            <Stop offset="100%" stopColor={ghColor.blobViolet} stopOpacity={0} />
           </RadialGradient>
         </DefsAny>
-        <Circle cx={SCREEN_WIDTH * 0.82} cy={SCREEN_WIDTH * 0.18} r={SCREEN_WIDTH * 0.55} fill="url(#blobLime)" />
-        <Circle cx={SCREEN_WIDTH * 0.1} cy={SCREEN_WIDTH * 0.62} r={SCREEN_WIDTH * 0.5} fill="url(#blobGold)" />
-        <Circle cx={SCREEN_WIDTH * 0.7} cy={SCREEN_WIDTH * 1.05} r={SCREEN_WIDTH * 0.6} fill="url(#blobPurple)" />
+        <Circle cx={SCREEN_WIDTH * 0.82} cy={SCREEN_WIDTH * 0.18} r={SCREEN_WIDTH * 0.55} fill="url(#blobPink)" />
+        <Circle cx={SCREEN_WIDTH * 0.1} cy={SCREEN_WIDTH * 0.62} r={SCREEN_WIDTH * 0.5} fill="url(#blobBlue)" />
+        <Circle cx={SCREEN_WIDTH * 0.7} cy={SCREEN_WIDTH * 1.05} r={SCREEN_WIDTH * 0.6} fill="url(#blobViolet)" />
       </Svg>
     </View>
   );
