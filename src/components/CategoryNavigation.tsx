@@ -9,6 +9,8 @@ export interface CategoryRowData {
   locked?: boolean;
   /** Overrides the badge's count text with an icon — e.g. Orbit/Radar, which have no count of their own. */
   icon?: string;
+  /** Renders this row as a standalone frosted-glass card instead of a plain bordered list row. */
+  glass?: boolean;
 }
 
 interface CategoryNavigationProps {
@@ -30,6 +32,7 @@ export function CategoryNavigation({ rows, activeId, onSelect, reduceMotion }: C
           label={row.label}
           active={row.id === activeId}
           locked={row.locked}
+          glass={row.glass}
           onPress={() => onSelect(row.id)}
           reduceMotion={reduceMotion}
         />
