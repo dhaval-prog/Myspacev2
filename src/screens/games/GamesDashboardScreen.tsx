@@ -25,10 +25,8 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 // react-native-svg's web typings omit `children` on Defs (a typing gap, not a runtime issue) — cast once.
 const DefsAny = Defs as unknown as React.ComponentType<{ children?: React.ReactNode }>;
 
-function badgeStyleFor(rank: number) {
-  if (rank === 1) return { bg: ghColor.gradientA, fg: ghColor.textOnGradient };
-  if (rank === 2) return { bg: ghColor.gradientB, fg: ghColor.textOnGradient };
-  return { bg: ghColor.surfaceStrong, fg: ghColor.textPrimary };
+function badgeStyleFor(_rank: number) {
+  return { bg: ghColor.gradientB, fg: ghColor.textOnGradient };
 }
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
