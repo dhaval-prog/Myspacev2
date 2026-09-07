@@ -18,7 +18,8 @@ interface CategoryRowProps {
   /**
    * Renders as a standalone frosted-glass card (soft lime/gold blobs blurred
    * behind a translucent white surface) instead of a plain bordered list row —
-   * used to make Orbit stand out from the flat editorial list around it.
+   * used to make a row (Orbit, Games) stand out from the flat editorial list
+   * around it.
    */
   glass?: boolean;
 }
@@ -26,8 +27,8 @@ interface CategoryRowProps {
 // react-native-svg's web typings omit `children` on Defs (a typing gap, not a runtime issue) — cast once.
 const DefsAny = Defs as unknown as React.ComponentType<{ children?: React.ReactNode }>;
 
-/** Soft color blobs behind the glass card — the thing the blur actually diffuses. */
-function OrbitGlassBackdrop() {
+/** Soft color blobs behind a glass row — the thing the blur actually diffuses. */
+function CategoryGlassBackdrop() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Svg width="100%" height="100%" viewBox="0 0 200 100" preserveAspectRatio="none">
@@ -125,7 +126,7 @@ export function CategoryRow({ count, label, active, onPress, reduceMotion, locke
         }
         style={({ pressed }) => [styles.glassCard, pressed && !locked && styles.glassCardPressed]}
       >
-        <OrbitGlassBackdrop />
+        <CategoryGlassBackdrop />
         <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
         <View style={styles.glassTint} pointerEvents="none" />
         <View style={styles.row}>
