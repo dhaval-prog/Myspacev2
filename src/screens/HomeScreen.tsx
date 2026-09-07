@@ -96,7 +96,7 @@ export function HomeScreen({
       icon: receivedRequests.length ? undefined : CHAT_ICON,
       glass: true,
     });
-    list.push({ id: 'games', label: 'Games', count: '', icon: DICE_ICON });
+    list.push({ id: 'games', label: 'Games', count: '', icon: DICE_ICON, glass: true });
     return list;
   }, [items.length, showAttention, attentionEntries.length, receivedRequests.length]);
 
