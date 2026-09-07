@@ -550,7 +550,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       {game.timerSeconds ? <EdgeGlow urgent={urgent} reduceMotion={reduceMotion} /> : null}
       <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
         <Pressable onPress={leaveGame ? () => { leaveGame(); onHome(); } : onHome} style={styles.leaveChip} accessibilityRole="button" accessibilityLabel="Leave the table">
-          <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+          <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.leaveChipTint} pointerEvents="none" />
           <Text style={styles.leaveChipLabel}>Leave</Text>
         </Pressable>
@@ -574,7 +574,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       <ScrollView style={styles.opponentsScroll} contentContainerStyle={styles.opponentsRow} horizontal showsHorizontalScrollIndicator={false}>
         {opponents.map((p) => (
           <View key={p.id} style={styles.opponent}>
-            <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
             <View style={[styles.opponentTint, p.id === currentPlayer?.id && styles.opponentTintActive]} pointerEvents="none" />
             <OpponentStack />
             <Text style={styles.opponentName} numberOfLines={1}>{p.name}</Text>

@@ -32,7 +32,7 @@ export function CardsResultsScreen({ onHome, onOpenExpenses: _onOpenExpenses, on
         <Text style={styles.kicker}>GAME OVER</Text>
         {winner && (
           <View style={styles.winnerCard}>
-            <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
             <View style={styles.winnerCardTint} pointerEvents="none" />
             <View style={styles.winnerBadge}>
               <Text style={styles.winnerBadgeLabel}>1</Text>
@@ -49,7 +49,7 @@ export function CardsResultsScreen({ onHome, onOpenExpenses: _onOpenExpenses, on
         <View style={styles.list}>
           {(result?.rankings ?? []).map((r) => (
             <View key={r.playerId} style={styles.row}>
-              <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+              <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
               <View style={[styles.rowTint, r.playerId === myPlayerId && styles.rowTintMe]} pointerEvents="none" />
               <Text style={styles.rank}>{r.position}</Text>
               <Text style={styles.name}>

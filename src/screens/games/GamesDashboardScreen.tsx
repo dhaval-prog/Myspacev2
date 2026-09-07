@@ -145,7 +145,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
         </View>
 
         <Pressable onPress={() => setPointsVisible(true)} style={styles.pointsCard} accessibilityRole="button" accessibilityLabel="Your points">
-          <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+          <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.pointsCardTint} pointerEvents="none" />
           <ProgressRing pct={ringPct} reduceMotion={reduceMotion}>
             <Text style={styles.ringValue}>{myTotal}</Text>

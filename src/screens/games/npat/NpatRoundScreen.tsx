@@ -53,7 +53,7 @@ function AnswerRow({ label, value, onChangeText, locked, reduceMotion, delay }: 
 
   return (
     <Animated.View style={[styles.row, { opacity, transform: [{ translateY }], borderColor: focusBorderColor }]}>
-      <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+      <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
       <View style={[styles.rowTint, locked && styles.rowTintLocked]} pointerEvents="none" />
       <Text style={styles.rowLabel} numberOfLines={1}>
         {label.toUpperCase()}
@@ -106,7 +106,7 @@ function PlayerChip({ player, isMe, filledCount, total, reduceMotion }: { player
 
   return (
     <View style={styles.chip}>
-      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
       <View style={styles.chipTint} pointerEvents="none" />
       <FriendAvatar userId={player.userId} name={player.name} size={28} initialsFontFamily={npFont.sans700} initialsFontSize={10.5} />
       <Text style={styles.chipName} numberOfLines={1}>
@@ -122,7 +122,7 @@ function PlayerChip({ player, isMe, filledCount, total, reduceMotion }: { player
 function Ticker({ text }: { text: string }) {
   return (
     <View style={styles.ticker}>
-      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
       <View style={styles.tickerTint} pointerEvents="none" />
       <View style={styles.tickerDots}>
         {[0, 150, 300].map((d) => (
@@ -176,7 +176,7 @@ function SubmitButton({ active, label, onPress, disabled, glowMs, reduceMotion }
       <Pressable onPress={onPress} disabled={disabled} style={[styles.submit, active && styles.submitActive]} accessibilityRole="button" accessibilityLabel={label}>
         {!active && (
           <>
-            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
             <View style={styles.submitTint} pointerEvents="none" />
           </>
         )}
@@ -336,7 +336,7 @@ export function NpatRoundScreen() {
           </>
         ) : (
           <View style={styles.waitingCard}>
-            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
             <View style={styles.waitingCardTint} pointerEvents="none" />
             <Text style={styles.waitingTitle}>{hasSubmittedAll ? "You're locked in" : 'Round locked'}</Text>
             <Text style={styles.waitingBody}>{categories.map((c) => `${c}: ${values[c] || '—'}`).join('  ·  ')}</Text>
