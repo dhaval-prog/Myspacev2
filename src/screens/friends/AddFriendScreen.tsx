@@ -184,7 +184,6 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFrie
           autoCorrect={false}
           maxLength={CELL_COUNT}
           style={styles.hiddenInput}
-          autoFocus
         />
         {error && <Text style={styles.error}>{error}</Text>}
       </View>
