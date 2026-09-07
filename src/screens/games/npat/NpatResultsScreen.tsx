@@ -83,7 +83,7 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
         <View style={styles.list}>
           {active.map((p, i) => (
             <View key={p.id} style={styles.rankRow}>
-              <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+              <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
               <View style={[styles.rankRowTint, p.id === myPlayerId && styles.rankRowTintMe]} pointerEvents="none" />
               <Text style={styles.rankNumber}>{i + 1}</Text>
               <Text style={styles.rankName}>
@@ -102,7 +102,7 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
             const roundPoints = theirAnswers.reduce((sum, a) => sum + a.points, 0);
             return (
               <View key={p.id} style={styles.playerCard}>
-                <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+                <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
                 <View style={styles.playerCardTint} pointerEvents="none" />
                 <View style={styles.playerCardHead}>
                   <Text style={styles.playerCardName}>
@@ -153,7 +153,7 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
           accessibilityRole="button"
           accessibilityLabel="Back to Home"
         >
-          <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+          <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.iconButtonTint} pointerEvents="none" />
           <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
         </Pressable>

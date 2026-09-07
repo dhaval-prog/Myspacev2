@@ -47,7 +47,7 @@ export function LobbyHeader({ title, subtitle, cards, onBack, reduceMotion }: Lo
     <View style={styles.wrap}>
       {onBack ? (
         <Pressable onPress={onBack} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back to Games">
-          <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+          <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.backButtonTint} pointerEvents="none" />
           <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
         </Pressable>

@@ -65,7 +65,7 @@ function OnlineNowRow({ reduceMotion }: { reduceMotion?: boolean }) {
         <View style={styles.chipsRow}>
           {shown.map((f) => (
             <View key={f.connectionId} style={styles.chip}>
-              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
               <View style={styles.chipTint} pointerEvents="none" />
               <FriendAvatar userId={f.userId} name={f.name} avatarUrl={f.avatarUrl} size={34} initialsFontFamily={npFont.sans700} initialsFontSize={12.5} />
               <Text style={styles.chipName} numberOfLines={1}>
@@ -75,7 +75,7 @@ function OnlineNowRow({ reduceMotion }: { reduceMotion?: boolean }) {
           ))}
           {overflow > 0 && (
             <View style={styles.chip}>
-              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
               <View style={[styles.chipTint, styles.chipTintMuted]} pointerEvents="none" />
               <View style={styles.overflowCircle}>
                 <Text style={styles.overflowLabel}>+{overflow}</Text>

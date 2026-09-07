@@ -132,12 +132,12 @@ function CardsHub({
           scrolling if the sheet's content ever grows taller than that space. */}
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={styles.sheet}>
-          <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} />
+          <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
           <LinearGradient colors={[scColor.sheetGlassTop, scColor.sheetGlassBottom]} style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.handle} />
 
           <View style={styles.tabs}>
-            <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
             <View style={styles.tabsTint} pointerEvents="none" />
             <Pressable onPress={() => setTab('create')} style={[styles.tab, !isJoin && styles.tabActive]} accessibilityRole="button" accessibilityLabel="Create a game">
               <Text style={[styles.tabLabel, !isJoin && styles.tabLabelActive]}>Create a game</Text>
@@ -150,7 +150,7 @@ function CardsHub({
           <View style={styles.field}>
             <Text style={styles.label}>YOUR NAME</Text>
             <Animated.View style={[styles.input, { borderColor: nameBorderColor }]}>
-              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
               <View style={styles.inputTint} pointerEvents="none" />
               <TextInput
                 value={name}
@@ -171,7 +171,7 @@ function CardsHub({
                 <View style={styles.optionRow}>
                   {PLAYER_OPTIONS.map((n) => (
                     <Pressable key={n} onPress={() => setMaxPlayers(n)} style={[styles.optionTile, maxPlayers === n && styles.optionTileActive]} accessibilityRole="button" accessibilityLabel={`${n} players`}>
-                      {maxPlayers !== n && <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />}
+                      {maxPlayers !== n && <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />}
                       {maxPlayers !== n && <View style={styles.optionTileTint} pointerEvents="none" />}
                       <Text style={[styles.optionLabel, maxPlayers === n && styles.optionLabelActive]}>{n}</Text>
                     </Pressable>
@@ -184,7 +184,7 @@ function CardsHub({
                 <View style={styles.optionRow}>
                   {TIMER_OPTIONS.map((t) => (
                     <Pressable key={t.label} onPress={() => setTimerSeconds(t.value)} style={[styles.optionTile, timerSeconds === t.value && styles.optionTileActive]} accessibilityRole="button" accessibilityLabel={`${t.value} second timer`}>
-                      {timerSeconds !== t.value && <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />}
+                      {timerSeconds !== t.value && <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />}
                       {timerSeconds !== t.value && <View style={styles.optionTileTint} pointerEvents="none" />}
                       <Text style={[styles.optionLabel, timerSeconds === t.value && styles.optionLabelActive]}>{t.label}</Text>
                     </Pressable>
@@ -195,7 +195,7 @@ function CardsHub({
               {error && <Text style={styles.error}>{error}</Text>}
               <View style={styles.actionsRow}>
                 <Pressable onPress={onHome} style={styles.backChip} accessibilityRole="button" accessibilityLabel="Back to Games">
-                  <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+                  <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
                   <View style={styles.backChipTint} pointerEvents="none" />
                   <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
                 </Pressable>
@@ -233,7 +233,7 @@ function CardsHub({
               {error && <Text style={styles.error}>{error}</Text>}
               <View style={styles.actionsRow}>
                 <Pressable onPress={onHome} style={styles.backChip} accessibilityRole="button" accessibilityLabel="Back to Games">
-                  <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+                  <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
                   <View style={styles.backChipTint} pointerEvents="none" />
                   <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
                 </Pressable>
@@ -307,7 +307,7 @@ function CardsReadyRoom({
 
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={styles.sheet}>
-          <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} />
+          <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
           <LinearGradient colors={[scColor.sheetGlassTop, scColor.sheetGlassBottom]} style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.handle} />
 
@@ -320,7 +320,7 @@ function CardsReadyRoom({
           <View style={styles.waitList}>
             {active.map((p) => (
               <View key={p.id} style={styles.waitRow}>
-                <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+                <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
                 <View style={styles.waitRowTint} pointerEvents="none" />
                 <View style={[styles.statusDot, p.userId === game.hostId ? styles.statusDotHost : styles.statusDotReady]} />
                 <OpponentStack style={styles.waitAvatar} />
@@ -333,7 +333,7 @@ function CardsReadyRoom({
             ))}
             {Array.from({ length: Math.max(0, game.maxPlayers - active.length) }).map((_, i) => (
               <View key={`empty-${i}`} style={styles.waitRow}>
-                <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+                <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
                 <View style={[styles.waitRowTint, styles.waitRowTintEmpty]} pointerEvents="none" />
                 <View style={styles.statusDot} />
                 <View style={[styles.waitAvatar, styles.waitAvatarEmpty]} />

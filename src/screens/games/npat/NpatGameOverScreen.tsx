@@ -35,7 +35,7 @@ export function NpatGameOverScreen({ onHome, onOpenExpenses: _onOpenExpenses, on
         <Text style={styles.kicker}>GAME COMPLETE</Text>
         {winner && (
           <View style={styles.winnerCard}>
-            <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
             <View style={styles.winnerCardTint} pointerEvents="none" />
             <Text style={styles.trophy}>🏆</Text>
             <Text style={styles.winnerName}>{winner.name}{winner.id === myPlayerId ? ' (you)' : ''}</Text>
@@ -47,7 +47,7 @@ export function NpatGameOverScreen({ onHome, onOpenExpenses: _onOpenExpenses, on
         <View style={styles.list}>
           {standings.map((p, i) => (
             <View key={p.id} style={styles.row}>
-              <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
+              <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
               <View style={[styles.rowTint, p.id === myPlayerId && styles.rowTintMe]} pointerEvents="none" />
               <Text style={styles.rank}>{i + 1}</Text>
               <Text style={styles.name}>

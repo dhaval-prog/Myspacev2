@@ -133,7 +133,7 @@ function NpatHub({
 
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={styles.sheet}>
-          <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} />
+          <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.sheetTint} pointerEvents="none" />
           <View style={styles.handle} />
 
@@ -281,7 +281,7 @@ function NpatReadyRoom({
 
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={styles.sheet}>
-          <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} />
+          <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.sheetTint} pointerEvents="none" />
           <View style={styles.handle} />
 
