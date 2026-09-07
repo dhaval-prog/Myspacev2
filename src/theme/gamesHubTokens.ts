@@ -69,7 +69,6 @@ export const ghColor = {
   npatGlassBorder: 'rgba(237,253,255,.4)',
   cardsGlassFill: 'rgba(195,234,79,.1)',
   cardsGlassBorder: 'rgba(195,234,79,.42)',
-  sheetGlassFill: 'rgba(16,9,32,.74)',
   rowGlassFill: 'rgba(255,255,255,.06)',
   rowGlassBorder: 'rgba(255,255,255,.14)',
   rowGlassSelfFill: 'rgba(195,234,79,.14)',
@@ -84,4 +83,29 @@ export const ghColor = {
   blobPale: 'rgba(237,253,255,.45)',
   blobLime: 'rgba(195,234,79,.55)',
   blobViolet: 'rgba(151,84,255,.32)',
+
+  // --- Sheet (Leaderboard / Points) — light theme ---
+  // The hub screen itself stays the dark LiquidGlass surface above, but the
+  // two bottom sheets it opens render as a light frosted panel instead —
+  // this is a parallel light text/surface scale just for their content.
+  // Lime and pale read fine as *fills* here (avatars, gradients, tinted
+  // backgrounds) but not as small text on a near-white sheet, so accents
+  // that must be legible as foreground text use a darker derivative of the
+  // same brand hue instead of the raw fill color (mirrors how the homepage
+  // itself keeps a separate darker green for its CTA shadow).
+  sheetBg: 'rgba(255,255,255,.88)',
+  sheetBorder: 'rgba(22,33,12,.12)',
+  sheetHandle: 'rgba(22,33,12,.22)',
+  sheetTextPrimary: '#16210C',
+  sheetTextSecondary: 'rgba(22,33,12,.64)',
+  sheetTextTertiary: 'rgba(22,33,12,.48)',
+  sheetTextFaint: 'rgba(22,33,12,.34)',
+  sheetSurface: 'rgba(22,33,12,.06)',
+  sheetRowFill: 'rgba(22,33,12,.04)',
+  sheetRowBorder: 'rgba(22,33,12,.08)',
+  sheetLeaderBg: 'rgba(22,33,12,.05)',
+  sheetSelfFill: 'rgba(195,234,79,.16)',
+  sheetSelfBorder: 'rgba(195,234,79,.55)',
+  sheetAccentOnLight: '#7AA82C',
+  sheetDanger: '#D33243',
 } as const;
