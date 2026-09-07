@@ -113,7 +113,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
         <Text style={styles.subtitle}>Your gaming circle · {circle.length} seated</Text>
 
         <View style={styles.leaderboardCard}>
-          <BlurView intensity={45} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+          <BlurView intensity={45} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <View style={styles.leaderboardCardTint} pointerEvents="none" />
           <View style={styles.eyebrowRow}>
             <Text style={styles.eyebrow}>LEADERBOARD · THIS WEEK</Text>
@@ -137,7 +137,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
                       radius={28}
                       initialsFontFamily={ghFont.sans800}
                       initialsFontSize={entry.isSelf ? 17 : 16}
-                      colorOverride={entry.isSelf ? { bg: ghColor.gradientB, fg: ghColor.textOnGradient } : { bg: '#FFFFFF', fg: ghColor.avatarMuted }}
+                      colorOverride={entry.isSelf ? { bg: ghColor.gradientB, fg: ghColor.textOnGradient } : { bg: ghColor.avatarFallbackBg, fg: ghColor.avatarMuted }}
                     />
                     <View style={[styles.rankBadge, { backgroundColor: badge.bg }]}>
                       <Text style={[styles.rankBadgeLabel, { color: badge.fg }]}>{entry.rank}</Text>
@@ -158,7 +158,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
         </View>
 
         <Pressable onPress={() => setPointsVisible(true)} style={styles.pointsCard} accessibilityRole="button" accessibilityLabel="Your points">
-          <BlurView intensity={45} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+          <BlurView intensity={45} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <View style={styles.pointsCardTint} pointerEvents="none" />
           <ProgressRing pct={ringPct} reduceMotion={reduceMotion}>
             <Text style={styles.ringValue}>{myTotal}</Text>

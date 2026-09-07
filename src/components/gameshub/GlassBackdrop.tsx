@@ -11,12 +11,12 @@ const DefsAny = Defs as unknown as React.ComponentType<{ children?: React.ReactN
 /**
  * Soft color blobs behind the hub's content — the thing a glassmorphism surface
  * actually blurs. Without something colorful under it, a frosted panel over this
- * hub's pale, nearly-flat background gradient would just read as plain translucent
- * white, with nothing to tell it apart from a plain card at a lower opacity.
+ * hub's soft off-white background would just read as plain translucent white,
+ * with nothing to tell it apart from a plain card at a lower opacity.
  * Radial gradients (not plain circles) so the edges dissolve rather than reading as
  * flat colored discs floating on the page outside the glass panels covering them.
  * Spans the full screen height (not just the area behind the fold) so the ambient
- * gradient carries all the way down — otherwise the screen reads as this ambient
+ * glow carries all the way down — otherwise the screen reads as this ambient
  * treatment up top over a flat, solid-color base for the rest of the scroll.
  */
 export function GlassBackdrop() {
@@ -24,23 +24,19 @@ export function GlassBackdrop() {
     <View style={styles.svgWrap} pointerEvents="none">
       <Svg width={SCREEN_WIDTH} height={SCREEN_HEIGHT}>
         <DefsAny>
-          <RadialGradient id="blobPale" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={ghColor.blobPale} stopOpacity={1} />
-            <Stop offset="100%" stopColor={ghColor.blobPale} stopOpacity={0} />
+          <RadialGradient id="blobGreen" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={ghColor.blobGreen} stopOpacity={1} />
+            <Stop offset="100%" stopColor={ghColor.blobGreen} stopOpacity={0} />
           </RadialGradient>
-          <RadialGradient id="blobLime" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={ghColor.blobLime} stopOpacity={1} />
-            <Stop offset="100%" stopColor={ghColor.blobLime} stopOpacity={0} />
-          </RadialGradient>
-          <RadialGradient id="blobViolet" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={ghColor.blobViolet} stopOpacity={1} />
-            <Stop offset="100%" stopColor={ghColor.blobViolet} stopOpacity={0} />
+          <RadialGradient id="blobSecondary" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={ghColor.blobSecondary} stopOpacity={1} />
+            <Stop offset="100%" stopColor={ghColor.blobSecondary} stopOpacity={0} />
           </RadialGradient>
         </DefsAny>
-        <Circle cx={SCREEN_WIDTH * 0.82} cy={SCREEN_HEIGHT * 0.1} r={SCREEN_WIDTH * 0.55} fill="url(#blobPale)" />
-        <Circle cx={SCREEN_WIDTH * 0.08} cy={SCREEN_HEIGHT * 0.38} r={SCREEN_WIDTH * 0.55} fill="url(#blobLime)" />
-        <Circle cx={SCREEN_WIDTH * 0.75} cy={SCREEN_HEIGHT * 0.66} r={SCREEN_WIDTH * 0.6} fill="url(#blobViolet)" />
-        <Circle cx={SCREEN_WIDTH * 0.15} cy={SCREEN_HEIGHT * 0.92} r={SCREEN_WIDTH * 0.55} fill="url(#blobLime)" />
+        <Circle cx={SCREEN_WIDTH * 0.82} cy={SCREEN_HEIGHT * 0.1} r={SCREEN_WIDTH * 0.55} fill="url(#blobSecondary)" />
+        <Circle cx={SCREEN_WIDTH * 0.08} cy={SCREEN_HEIGHT * 0.38} r={SCREEN_WIDTH * 0.55} fill="url(#blobGreen)" />
+        <Circle cx={SCREEN_WIDTH * 0.75} cy={SCREEN_HEIGHT * 0.66} r={SCREEN_WIDTH * 0.6} fill="url(#blobSecondary)" />
+        <Circle cx={SCREEN_WIDTH * 0.15} cy={SCREEN_HEIGHT * 0.92} r={SCREEN_WIDTH * 0.55} fill="url(#blobGreen)" />
       </Svg>
     </View>
   );

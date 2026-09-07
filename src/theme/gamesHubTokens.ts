@@ -1,12 +1,11 @@
 /**
- * Games hub design tokens — "LiquidGlass": a futuristic glassmorphism reskin
- * built around a deep-space dark background and a single brand gradient
- * (#EDFDFF → #C3EA4F) — the same pale/lime identity as the app's homepage
- * (src/theme/colors.ts's `pale`/`lime`) — used sparingly at hero moments:
- * CTAs, the points ring, active states — while everything else stays
- * neutral frosted glass. Self-contained (like spaceCardsTokens.ts and
- * npatTokens.ts) and scoped to just the Games hub screen and its own
- * sheets/rows.
+ * Games hub design tokens — a light glassmorphism reskin: a soft off-white
+ * background with green/olive glows the frosted glass panels diffuse, and
+ * one accent green reserved for hero moments (CTAs, the points ring, active
+ * states) — while everything else stays neutral frosted-white glass. No
+ * dark/deep-space surface anywhere on this screen. Self-contained (like
+ * spaceCardsTokens.ts and npatTokens.ts) and scoped to just the Games hub
+ * screen and its own sheets/rows.
  */
 
 export const ghFont = {
@@ -19,93 +18,91 @@ export const ghFont = {
 } as const;
 
 export const ghColor = {
-  // Deep-space background the glass floats over.
-  bgTop: '#0A0518',
-  bgMid: '#140B2E',
-  bgBottom: '#1B0A35',
+  // Soft off-white background the glass floats over — flat, not a gradient,
+  // since the ambient variation now comes from the glow blobs behind it.
+  bgTop: '#F5F6F1',
+  bgMid: '#F5F6F1',
+  bgBottom: '#F5F6F1',
 
-  // The one brand gradient — pale to lime, the homepage's own identity
-  // colors (src/theme/colors.ts's `pale`/`lime`) — reserved for hero surfaces.
-  gradientA: '#EDFDFF',
-  gradientB: '#C3EA4F',
+  // The two glow hues behind the glass panels.
+  glowGreen: '#DCEBAA',
+  glowSecondary: '#E8EBD9',
 
-  ink: '#150A2A',
+  // The one brand gradient — pale to accent — reserved for hero surfaces.
+  gradientA: '#E8EBD9',
+  gradientB: '#B8E83E',
+
+  ink: '#20231F',
   white: '#FFFFFF',
 
-  textPrimary: '#FFFFFF',
-  textSecondary: 'rgba(255,255,255,.64)',
-  textTertiary: 'rgba(255,255,255,.48)',
-  textFaint: 'rgba(255,255,255,.34)',
-  // Both gradient stops are light, so label text on a gradient fill needs to
-  // be dark ink rather than white — the homepage's own deep-olive ink.
-  textOnGradient: '#16210C',
+  textPrimary: '#20231F',
+  textSecondary: 'rgba(32,35,31,.64)',
+  textTertiary: 'rgba(32,35,31,.48)',
+  textFaint: 'rgba(32,35,31,.34)',
+  // The gradient's accent stop is light, so label text on a gradient fill
+  // still needs to be dark ink rather than white.
+  textOnGradient: '#20231F',
 
-  hairline: 'rgba(255,255,255,.16)',
-  hairlineStrong: 'rgba(255,255,255,.28)',
-  surface: 'rgba(255,255,255,.07)',
-  surfaceStrong: 'rgba(255,255,255,.12)',
+  hairline: 'rgba(32,35,31,.1)',
+  hairlineStrong: 'rgba(32,35,31,.18)',
+  surface: 'rgba(32,35,31,.05)',
+  surfaceStrong: 'rgba(32,35,31,.09)',
 
-  up: '#C3EA4F',
-  upBg: 'rgba(195,234,79,.18)',
-  danger: '#FF5C7A',
+  // A darker, text-safe green — the raw accent reads fine as a fill (badges,
+  // rings, tinted pill backgrounds) but too light for small text on a white
+  // card, so legible foreground text (links, rank deltas) uses this instead.
+  up: '#7AA82C',
+  upBg: 'rgba(184,232,62,.22)',
+  danger: '#D33243',
 
-  avatarMuted: '#4A3A66',
+  avatarMuted: 'rgba(32,35,31,.55)',
+  avatarFallbackBg: '#E8EBD9',
 
-  scrim: 'rgba(5,3,15,.62)',
-  rank1RowBg: 'rgba(237,253,255,.14)',
+  scrim: 'rgba(32,35,31,.45)',
+  rank1RowBg: 'rgba(220,235,170,.4)',
 
-  npatTile: 'rgba(237,253,255,.14)',
-  cardsTile: 'rgba(195,234,79,.16)',
+  npatTile: '#E8EBD9',
+  cardsTile: '#DCEBAA',
 
-  // Frosted-glass surfaces: a dark BlurView backdrop plus a translucent tint on
-  // top (the tint carries most of the "glass" color since blur intensity is
-  // kept low enough that content underneath stays legible through it), a
-  // hairline near-white border to catch the light along the edge, and a
-  // softer shadow than a flat opaque card would use — glass reads as
-  // floating, not sitting flush on the page.
-  glassFill: 'rgba(255,255,255,.08)',
-  glassBorder: 'rgba(255,255,255,.2)',
-  npatGlassFill: 'rgba(237,253,255,.09)',
-  npatGlassBorder: 'rgba(237,253,255,.4)',
-  cardsGlassFill: 'rgba(195,234,79,.1)',
-  cardsGlassBorder: 'rgba(195,234,79,.42)',
-  rowGlassFill: 'rgba(255,255,255,.06)',
-  rowGlassBorder: 'rgba(255,255,255,.14)',
-  rowGlassSelfFill: 'rgba(195,234,79,.14)',
+  // Frosted-glass surfaces: a light BlurView backdrop plus a translucent
+  // white tint on top (the tint carries most of the "glass" color since blur
+  // intensity is kept low enough that the glow blobs underneath stay visible
+  // through it), a soft dark hairline border to define the edge, and a
+  // gentle shadow — glass reads as a floating card, not flush with the page.
+  glassFill: 'rgba(255,255,255,.72)',
+  glassBorder: 'rgba(32,35,31,.08)',
+  npatGlassFill: 'rgba(232,235,217,.6)',
+  npatGlassBorder: 'rgba(32,35,31,.08)',
+  cardsGlassFill: 'rgba(220,235,170,.55)',
+  cardsGlassBorder: 'rgba(32,35,31,.08)',
+  rowGlassFill: 'rgba(255,255,255,.55)',
+  rowGlassBorder: 'rgba(32,35,31,.08)',
+  rowGlassSelfFill: 'rgba(184,232,62,.22)',
 
   // Soft color blobs floating behind the glass — the thing a glassmorphism
   // surface actually blurs. Without something colorful under it, a frosted
-  // panel over a flat dark background would just read as plain translucent
-  // grey, with nothing to tell it apart from an opaque card at low opacity.
+  // panel over a flat off-white background would just read as plain
+  // translucent white, with nothing to tell it apart from an opaque card.
   // Radial gradients (not plain circles) so the edges dissolve rather than
   // reading as flat colored discs floating on the page outside the glass
   // panels covering them.
-  blobPale: 'rgba(237,253,255,.45)',
-  blobLime: 'rgba(195,234,79,.55)',
-  blobViolet: 'rgba(151,84,255,.32)',
+  blobGreen: 'rgba(220,235,170,.65)',
+  blobSecondary: 'rgba(232,235,217,.6)',
 
-  // --- Sheet (Leaderboard / Points) — light theme ---
-  // The hub screen itself stays the dark LiquidGlass surface above, but the
-  // two bottom sheets it opens render as a light frosted panel instead —
-  // this is a parallel light text/surface scale just for their content.
-  // Lime and pale read fine as *fills* here (avatars, gradients, tinted
-  // backgrounds) but not as small text on a near-white sheet, so accents
-  // that must be legible as foreground text use a darker derivative of the
-  // same brand hue instead of the raw fill color (mirrors how the homepage
-  // itself keeps a separate darker green for its CTA shadow).
-  sheetBg: 'rgba(255,255,255,.88)',
-  sheetBorder: 'rgba(22,33,12,.12)',
-  sheetHandle: 'rgba(22,33,12,.22)',
-  sheetTextPrimary: '#16210C',
-  sheetTextSecondary: 'rgba(22,33,12,.64)',
-  sheetTextTertiary: 'rgba(22,33,12,.48)',
-  sheetTextFaint: 'rgba(22,33,12,.34)',
-  sheetSurface: 'rgba(22,33,12,.06)',
-  sheetRowFill: 'rgba(22,33,12,.04)',
-  sheetRowBorder: 'rgba(22,33,12,.08)',
-  sheetLeaderBg: 'rgba(22,33,12,.05)',
-  sheetSelfFill: 'rgba(195,234,79,.16)',
-  sheetSelfBorder: 'rgba(195,234,79,.55)',
+  // --- Sheet (Leaderboard / Points) — same light palette, aligned exactly ---
+  sheetBg: 'rgba(255,255,255,.9)',
+  sheetBorder: 'rgba(32,35,31,.1)',
+  sheetHandle: 'rgba(32,35,31,.2)',
+  sheetTextPrimary: '#20231F',
+  sheetTextSecondary: 'rgba(32,35,31,.64)',
+  sheetTextTertiary: 'rgba(32,35,31,.48)',
+  sheetTextFaint: 'rgba(32,35,31,.34)',
+  sheetSurface: 'rgba(32,35,31,.05)',
+  sheetRowFill: 'rgba(32,35,31,.04)',
+  sheetRowBorder: 'rgba(32,35,31,.08)',
+  sheetLeaderBg: '#E8EBD9',
+  sheetSelfFill: 'rgba(184,232,62,.18)',
+  sheetSelfBorder: 'rgba(184,232,62,.55)',
   sheetAccentOnLight: '#7AA82C',
   sheetDanger: '#D33243',
 } as const;
