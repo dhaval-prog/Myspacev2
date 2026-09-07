@@ -112,45 +112,49 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
         <Text style={styles.title}>Games</Text>
         <Text style={styles.subtitle}>Your gaming circle · {circle.length} seated</Text>
 
-        <View style={styles.eyebrowRow}>
-          <Text style={styles.eyebrow}>LEADERBOARD · THIS WEEK</Text>
-          <Pressable onPress={() => setLeaderboardVisible(true)} style={styles.seeAll} accessibilityRole="button" accessibilityLabel="See all">
-            <Text style={styles.seeAllLabel}>See all</Text>
-            <Icon path={CHEV_ICON} color={ghColor.up} size={12} strokeWidth={2.4} />
-          </Pressable>
-        </View>
+        <View style={styles.leaderboardCard}>
+          <BlurView intensity={45} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+          <View style={styles.leaderboardCardTint} pointerEvents="none" />
+          <View style={styles.eyebrowRow}>
+            <Text style={styles.eyebrow}>LEADERBOARD · THIS WEEK</Text>
+            <Pressable onPress={() => setLeaderboardVisible(true)} style={styles.seeAll} accessibilityRole="button" accessibilityLabel="See all">
+              <Text style={styles.seeAllLabel}>See all</Text>
+              <Icon path={CHEV_ICON} color={ghColor.up} size={12} strokeWidth={2.4} />
+            </Pressable>
+          </View>
 
-        <View style={styles.topRow}>
-          {topThree.map((entry) => {
-            const badge = badgeStyleFor(entry.rank);
-            return (
-              <View key={entry.userId} style={styles.topItem}>
-                <View style={styles.topAvatarWrap}>
-                  <FriendAvatar
-                    userId={entry.userId}
-                    name={entry.name}
-                    avatarUrl={entry.avatarUrl}
-                    size={56}
-                    radius={28}
-                    initialsFontFamily={ghFont.sans800}
-                    initialsFontSize={entry.isSelf ? 17 : 16}
-                    colorOverride={entry.isSelf ? { bg: ghColor.gradientB, fg: ghColor.textOnGradient } : { bg: '#FFFFFF', fg: ghColor.avatarMuted }}
-                  />
-                  <View style={[styles.rankBadge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.rankBadgeLabel, { color: badge.fg }]}>{entry.rank}</Text>
+          <View style={styles.topRow}>
+            {topThree.map((entry) => {
+              const badge = badgeStyleFor(entry.rank);
+              return (
+                <View key={entry.userId} style={styles.topItem}>
+                  <View style={styles.topAvatarWrap}>
+                    <FriendAvatar
+                      userId={entry.userId}
+                      name={entry.name}
+                      avatarUrl={entry.avatarUrl}
+                      size={56}
+                      radius={28}
+                      initialsFontFamily={ghFont.sans800}
+                      initialsFontSize={entry.isSelf ? 17 : 16}
+                      colorOverride={entry.isSelf ? { bg: ghColor.gradientB, fg: ghColor.textOnGradient } : { bg: '#FFFFFF', fg: ghColor.avatarMuted }}
+                    />
+                    <View style={[styles.rankBadge, { backgroundColor: badge.bg }]}>
+                      <Text style={[styles.rankBadgeLabel, { color: badge.fg }]}>{entry.rank}</Text>
+                    </View>
                   </View>
+                  <Text style={[styles.topName, entry.isSelf && styles.topNameSelf]}>{entry.isSelf ? 'You' : entry.name}</Text>
+                  <Text style={[styles.topPoints, entry.isSelf && styles.topPointsSelf]}>{entry.stats.totalPoints}</Text>
                 </View>
-                <Text style={[styles.topName, entry.isSelf && styles.topNameSelf]}>{entry.isSelf ? 'You' : entry.name}</Text>
-                <Text style={[styles.topPoints, entry.isSelf && styles.topPointsSelf]}>{entry.stats.totalPoints}</Text>
+              );
+            })}
+            <Pressable onPress={onOpenFriends} style={styles.inviteItem} accessibilityRole="button" accessibilityLabel="Invite a friend">
+              <View style={styles.inviteCircle}>
+                <Icon path={PLUS_ICON} color={ghColor.textTertiary} size={20} strokeWidth={2.2} />
               </View>
-            );
-          })}
-          <Pressable onPress={onOpenFriends} style={styles.inviteItem} accessibilityRole="button" accessibilityLabel="Invite a friend">
-            <View style={styles.inviteCircle}>
-              <Icon path={PLUS_ICON} color={ghColor.textTertiary} size={20} strokeWidth={2.2} />
-            </View>
-            <Text style={styles.inviteLabel}>INVITE</Text>
-          </Pressable>
+              <Text style={styles.inviteLabel}>INVITE</Text>
+            </Pressable>
+          </View>
         </View>
 
         <Pressable onPress={() => setPointsVisible(true)} style={styles.pointsCard} accessibilityRole="button" accessibilityLabel="Your points">
@@ -248,7 +252,20 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 20 },
   title: { fontFamily: ghFont.sans800, fontSize: 30, lineHeight: 30, letterSpacing: -1.2, color: ghColor.textPrimary },
   subtitle: { fontFamily: ghFont.sans400, fontSize: 12.5, color: ghColor.textSecondary, marginTop: 6 },
-  eyebrowRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 16, marginBottom: 9 },
+  leaderboardCard: {
+    marginTop: 16,
+    borderRadius: 26,
+    padding: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: ghColor.glassBorder,
+    shadowColor: ghColor.gradientB,
+    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 14 },
+    shadowRadius: 32,
+  },
+  leaderboardCardTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: ghColor.glassFill },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 9 },
   eyebrow: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.14, color: ghColor.textTertiary },
   seeAll: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   seeAllLabel: { fontFamily: ghFont.sans600, fontSize: 11, color: ghColor.up },
