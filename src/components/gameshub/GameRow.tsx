@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Icon } from '../Icon';
 import { ghColor, ghFont } from '../../theme/gamesHubTokens';
 
@@ -63,10 +63,14 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
 
   const bodyHeight = bodyProgress.interpolate({ inputRange: [0, 1], outputRange: [0, BODY_HEIGHT] });
   const chevRotate = chevProgress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
-  const colors = variant === 'npat' ? ghColor.npatCard : ghColor.cardsCard;
+  const isNpat = variant === 'npat';
+  const glassFill = isNpat ? ghColor.npatGlassFill : ghColor.cardsGlassFill;
+  const glassBorder = isNpat ? ghColor.npatGlassBorder : ghColor.cardsGlassBorder;
 
   return (
-    <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.card, expanded && styles.cardExpanded]}>
+    <View style={[styles.card, { borderColor: glassBorder }, expanded && styles.cardExpanded]}>
+      <BlurView intensity={34} tint="dark" style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: glassFill }]} pointerEvents="none" />
       <Pressable onPress={onToggle} style={styles.header} accessibilityRole="button" accessibilityLabel={title}>
         {variant === 'npat' ? <NpatIcon /> : <CardsIcon />}
         <View style={styles.headerMid}>
@@ -87,7 +91,7 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
           </Pressable>
         </View>
       </Animated.View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -96,8 +100,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     marginBottom: 10,
     overflow: 'hidden',
+    borderWidth: 1,
     shadowColor: ghColor.ink,
-    shadowOpacity: 0.16,
+    shadowOpacity: 0.14,
     shadowOffset: { width: 0, height: 10 },
     shadowRadius: 24,
   },

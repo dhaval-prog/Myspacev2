@@ -47,13 +47,8 @@ export const ghColor = {
 
   avatarMuted: '#5A6B4B',
 
-  sheet: '#FBFCF7',
   scrim: 'rgba(22,33,12,.42)',
-  rowMuted: 'rgba(22,33,12,.05)',
   rank1RowBg: 'rgba(233,176,47,.12)',
-
-  npatCard: ['#1E3009', '#2C4118'] as const,
-  cardsCard: ['#2A1148', '#3F1C63'] as const,
 
   npatTile: 'rgba(195,234,79,.2)',
   cardsTile: 'rgba(233,176,47,.18)',
@@ -61,4 +56,27 @@ export const ghColor = {
   onDark50: 'rgba(255,255,255,.5)',
   onDark70: 'rgba(255,255,255,.7)',
   onDark14: 'rgba(255,255,255,.14)',
+
+  // Frosted-glass surfaces: a light BlurView backdrop plus a translucent tint on top
+  // (the tint is what actually carries most of the "glass" color, since intensity is
+  // kept low enough that content underneath stays legible through it), a hairline
+  // near-white border to catch the light along the edge, and a softer shadow than a
+  // flat opaque card would use — glass reads as floating, not sitting flush on the page.
+  glassFill: 'rgba(255,255,255,.38)',
+  glassBorder: 'rgba(255,255,255,.55)',
+  npatGlassFill: 'rgba(30,48,9,.46)',
+  npatGlassBorder: 'rgba(195,234,79,.32)',
+  cardsGlassFill: 'rgba(42,17,72,.5)',
+  cardsGlassBorder: 'rgba(233,176,47,.28)',
+  sheetGlassFill: 'rgba(251,252,247,.72)',
+  rowGlassFill: 'rgba(255,255,255,.4)',
+  rowGlassBorder: 'rgba(255,255,255,.6)',
+  rowGlassSelfFill: 'rgba(22,33,12,.82)',
+
+  // Soft color blobs floating behind the glass — without something colorful to blur,
+  // frosted panels over this hub's pale gradient would just look like plain translucent
+  // white with nothing distinguishing them as "glass".
+  blobLime: 'rgba(195,234,79,.55)',
+  blobGold: 'rgba(233,176,47,.4)',
+  blobPurple: 'rgba(63,28,99,.22)',
 } as const;
