@@ -32,7 +32,7 @@ export function CardsResultsScreen({ onHome, onOpenExpenses: _onOpenExpenses, on
         <Text style={styles.kicker}>GAME OVER</Text>
         {winner && (
           <View style={styles.winnerCard}>
-            <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <BlurView intensity={40} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
             <View style={styles.winnerCardTint} pointerEvents="none" />
             <View style={styles.winnerBadge}>
               <Text style={styles.winnerBadgeLabel}>1</Text>
@@ -49,7 +49,7 @@ export function CardsResultsScreen({ onHome, onOpenExpenses: _onOpenExpenses, on
         <View style={styles.list}>
           {(result?.rankings ?? []).map((r) => (
             <View key={r.playerId} style={styles.row}>
-              <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+              <BlurView intensity={40} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
               <View style={[styles.rowTint, r.playerId === myPlayerId && styles.rowTintMe]} pointerEvents="none" />
               <Text style={styles.rank}>{r.position}</Text>
               <Text style={styles.name}>
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingHorizontal: 20,
   },
-  winnerCardTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  winnerCardTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   winnerBadge: { width: 64, height: 64, borderRadius: 32, backgroundColor: scColor.lime, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   winnerBadgeLabel: { fontFamily: scFont.sans800, fontSize: 26, color: scColor.ink },
   winnerName: { fontFamily: scFont.sans700, fontSize: 26, letterSpacing: -0.6, color: '#fff' },
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   eyebrow: { fontFamily: scFont.mono500, fontSize: 11.5, letterSpacing: 1.495, textTransform: 'uppercase', color: 'rgba(255,255,255,.5)' },
   list: { gap: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, overflow: 'hidden', borderRadius: 18, borderWidth: 1, borderColor: scColor.glassBorder, paddingVertical: 14, paddingHorizontal: 16 },
-  rowTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  rowTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   rowTintMe: { backgroundColor: 'rgba(255,255,255,.2)' },
   rank: { fontFamily: scFont.mono500, fontSize: 13, color: 'rgba(255,255,255,.5)', width: 18 },
   name: { flex: 1, fontFamily: scFont.sans600, fontSize: 15, color: '#fff' },

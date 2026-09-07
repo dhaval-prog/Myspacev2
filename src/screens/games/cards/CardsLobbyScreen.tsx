@@ -132,12 +132,12 @@ function CardsHub({
           scrolling if the sheet's content ever grows taller than that space. */}
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={styles.sheet}>
-          <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+          <BlurView intensity={45} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <LinearGradient colors={[scColor.sheetGlassTop, scColor.sheetGlassBottom]} style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.handle} />
 
           <View style={styles.tabs}>
-            <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
             <View style={styles.tabsTint} pointerEvents="none" />
             <Pressable onPress={() => setTab('create')} style={[styles.tab, !isJoin && styles.tabActive]} accessibilityRole="button" accessibilityLabel="Create a game">
               <Text style={[styles.tabLabel, !isJoin && styles.tabLabelActive]}>Create a game</Text>
@@ -150,7 +150,7 @@ function CardsHub({
           <View style={styles.field}>
             <Text style={styles.label}>YOUR NAME</Text>
             <Animated.View style={[styles.input, { borderColor: nameBorderColor }]}>
-              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+              <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
               <View style={styles.inputTint} pointerEvents="none" />
               <TextInput
                 value={name}
@@ -171,7 +171,7 @@ function CardsHub({
                 <View style={styles.optionRow}>
                   {PLAYER_OPTIONS.map((n) => (
                     <Pressable key={n} onPress={() => setMaxPlayers(n)} style={[styles.optionTile, maxPlayers === n && styles.optionTileActive]} accessibilityRole="button" accessibilityLabel={`${n} players`}>
-                      {maxPlayers !== n && <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />}
+                      {maxPlayers !== n && <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />}
                       {maxPlayers !== n && <View style={styles.optionTileTint} pointerEvents="none" />}
                       <Text style={[styles.optionLabel, maxPlayers === n && styles.optionLabelActive]}>{n}</Text>
                     </Pressable>
@@ -184,7 +184,7 @@ function CardsHub({
                 <View style={styles.optionRow}>
                   {TIMER_OPTIONS.map((t) => (
                     <Pressable key={t.label} onPress={() => setTimerSeconds(t.value)} style={[styles.optionTile, timerSeconds === t.value && styles.optionTileActive]} accessibilityRole="button" accessibilityLabel={`${t.value} second timer`}>
-                      {timerSeconds !== t.value && <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />}
+                      {timerSeconds !== t.value && <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />}
                       {timerSeconds !== t.value && <View style={styles.optionTileTint} pointerEvents="none" />}
                       <Text style={[styles.optionLabel, timerSeconds === t.value && styles.optionLabelActive]}>{t.label}</Text>
                     </Pressable>
@@ -195,7 +195,7 @@ function CardsHub({
               {error && <Text style={styles.error}>{error}</Text>}
               <View style={styles.actionsRow}>
                 <Pressable onPress={onHome} style={styles.backChip} accessibilityRole="button" accessibilityLabel="Back to Games">
-                  <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                  <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
                   <View style={styles.backChipTint} pointerEvents="none" />
                   <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
                 </Pressable>
@@ -233,7 +233,7 @@ function CardsHub({
               {error && <Text style={styles.error}>{error}</Text>}
               <View style={styles.actionsRow}>
                 <Pressable onPress={onHome} style={styles.backChip} accessibilityRole="button" accessibilityLabel="Back to Games">
-                  <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                  <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
                   <View style={styles.backChipTint} pointerEvents="none" />
                   <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
                 </Pressable>
@@ -307,7 +307,7 @@ function CardsReadyRoom({
 
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={styles.sheet}>
-          <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+          <BlurView intensity={45} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <LinearGradient colors={[scColor.sheetGlassTop, scColor.sheetGlassBottom]} style={StyleSheet.absoluteFill} pointerEvents="none" />
           <View style={styles.handle} />
 
@@ -320,7 +320,7 @@ function CardsReadyRoom({
           <View style={styles.waitList}>
             {active.map((p) => (
               <View key={p.id} style={styles.waitRow}>
-                <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
                 <View style={styles.waitRowTint} pointerEvents="none" />
                 <View style={[styles.statusDot, p.userId === game.hostId ? styles.statusDotHost : styles.statusDotReady]} />
                 <OpponentStack style={styles.waitAvatar} />
@@ -333,7 +333,7 @@ function CardsReadyRoom({
             ))}
             {Array.from({ length: Math.max(0, game.maxPlayers - active.length) }).map((_, i) => (
               <View key={`empty-${i}`} style={styles.waitRow}>
-                <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                <BlurView intensity={20} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
                 <View style={[styles.waitRowTint, styles.waitRowTintEmpty]} pointerEvents="none" />
                 <View style={styles.statusDot} />
                 <View style={[styles.waitAvatar, styles.waitAvatarEmpty]} />
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   },
   handle: { alignSelf: 'center', width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,.28)', marginBottom: 4 },
   tabs: { flexDirection: 'row', overflow: 'hidden', borderRadius: 999, borderWidth: 1, borderColor: scColor.glassBorder, padding: 4 },
-  tabsTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  tabsTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   tab: { flex: 1, paddingVertical: 11, borderRadius: 999, alignItems: 'center' },
   tabActive: { backgroundColor: scColor.ink },
   tabLabel: { fontFamily: scFont.sans500, fontSize: 13.5, color: 'rgba(255,255,255,.62)' },
@@ -398,18 +398,18 @@ const styles = StyleSheet.create({
   field: { gap: 9 },
   label: { fontFamily: scFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.12, color: 'rgba(255,255,255,.52)' },
   input: { overflow: 'hidden', borderRadius: 16, borderWidth: 1.5, paddingVertical: 15, paddingHorizontal: 17 },
-  inputTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  inputTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   inputText: { fontFamily: scFont.sans700, fontSize: 16, color: '#FFFFFF' },
   optionRow: { flexDirection: 'row', gap: 8 },
   optionTile: { flex: 1, overflow: 'hidden', paddingVertical: 13, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: scColor.glassBorder },
-  optionTileTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  optionTileTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   optionTileActive: { backgroundColor: scColor.lime, borderColor: scColor.lime },
   optionLabel: { fontFamily: scFont.sans600, fontSize: 14, color: 'rgba(255,255,255,.82)' },
   optionLabelActive: { fontFamily: scFont.sans700, color: scColor.ink },
   error: { fontFamily: scFont.sans500, fontSize: 12.5, color: scColor.urgent },
   actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   backChip: { width: 56, height: 56, overflow: 'hidden', borderRadius: 28, borderWidth: 1, borderColor: scColor.glassBorder, alignItems: 'center', justifyContent: 'center' },
-  backChipTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  backChipTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   ctaFlex: { flex: 1 },
   codeRow: { flexDirection: 'row', gap: 10 },
   codeCell: { flex: 1, aspectRatio: 1, borderRadius: 16, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
   roomCodeSub: { fontFamily: scFont.sans400, fontSize: 12, color: 'rgba(255,255,255,.55)', marginTop: 2 },
   waitList: { gap: 8 },
   waitRow: { flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden', borderRadius: 16, borderWidth: 1, borderColor: scColor.glassBorder, padding: 10 },
-  waitRowTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  waitRowTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   waitRowTintEmpty: { backgroundColor: 'rgba(255,255,255,.04)' },
   statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,.2)' },
   statusDotReady: { backgroundColor: '#4FA83A' },

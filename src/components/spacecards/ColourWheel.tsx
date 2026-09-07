@@ -171,7 +171,7 @@ export function ColourWheel({ visible, onLockColour, onCancel, reduceMotion }: C
               accessibilityRole="button"
               accessibilityLabel={selected ? `Lock in ${SC_COLOUR_LABEL[selected]}` : 'Pick a colour'}
             >
-              {!selected && <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />}
+              {!selected && <BlurView intensity={35} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />}
               {!selected && <View style={styles.confirmTint} pointerEvents="none" />}
               <Text style={[styles.confirmLabel, selected && styles.confirmLabelActive]}>
                 {selected ? `Lock in ${SC_COLOUR_LABEL[selected]}` : 'Pick a colour'}
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: scColor.glassBorder,
   },
-  confirmTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  confirmTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   confirmActive: {
     backgroundColor: scColor.lime,
     borderColor: scColor.lime,

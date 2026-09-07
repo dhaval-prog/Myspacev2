@@ -69,7 +69,7 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
 
   return (
     <View style={[styles.card, { borderColor: glassBorder }, expanded && styles.cardExpanded]}>
-      <BlurView intensity={34} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <BlurView intensity={34} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: glassFill }]} pointerEvents="none" />
       <Pressable onPress={onToggle} style={styles.header} accessibilityRole="button" accessibilityLabel={title}>
         {variant === 'npat' ? <NpatIcon /> : <CardsIcon />}

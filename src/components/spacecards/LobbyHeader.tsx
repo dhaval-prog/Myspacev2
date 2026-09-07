@@ -47,7 +47,7 @@ export function LobbyHeader({ title, subtitle, cards, onBack, reduceMotion }: Lo
     <View style={styles.wrap}>
       {onBack ? (
         <Pressable onPress={onBack} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back to Games">
-          <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+          <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <View style={styles.backButtonTint} pointerEvents="none" />
           <Icon path={BACK_ICON} color="#fff" size={18} strokeWidth={2} />
         </Pressable>
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 10,
   },
-  backButtonTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  backButtonTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   title: {
     alignSelf: 'flex-start',
     fontFamily: scFont.sans800,

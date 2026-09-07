@@ -133,7 +133,7 @@ function NpatHub({
 
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={styles.sheet}>
-          <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
+          <BlurView intensity={50} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <View style={styles.sheetTint} pointerEvents="none" />
           <View style={styles.handle} />
 
@@ -281,7 +281,7 @@ function NpatReadyRoom({
 
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={styles.sheet}>
-          <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
+          <BlurView intensity={50} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <View style={styles.sheetTint} pointerEvents="none" />
           <View style={styles.handle} />
 
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     paddingBottom: 26,
     gap: 14,
   },
-  sheetTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: npColor.sheetGlassFill },
+  sheetTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: npColor.sheetGlassFill },
   handle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(22,33,12,.14)', marginBottom: 2 },
   tabs: { flexDirection: 'row', backgroundColor: npColor.rowGlassFill, borderRadius: 999, padding: 4, borderWidth: 1, borderColor: npColor.rowGlassBorder },
   tab: { flex: 1, paddingVertical: 12, borderRadius: 999, alignItems: 'center' },

@@ -35,7 +35,7 @@ export function NpatGameOverScreen({ onHome, onOpenExpenses: _onOpenExpenses, on
         <Text style={styles.kicker}>GAME COMPLETE</Text>
         {winner && (
           <View style={styles.winnerCard}>
-            <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <BlurView intensity={45} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
             <View style={styles.winnerCardTint} pointerEvents="none" />
             <Text style={styles.trophy}>🏆</Text>
             <Text style={styles.winnerName}>{winner.name}{winner.id === myPlayerId ? ' (you)' : ''}</Text>
@@ -47,7 +47,7 @@ export function NpatGameOverScreen({ onHome, onOpenExpenses: _onOpenExpenses, on
         <View style={styles.list}>
           {standings.map((p, i) => (
             <View key={p.id} style={styles.row}>
-              <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
+              <BlurView intensity={45} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
               <View style={[styles.rowTint, p.id === myPlayerId && styles.rowTintMe]} pointerEvents="none" />
               <Text style={styles.rank}>{i + 1}</Text>
               <Text style={styles.name}>
@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     paddingVertical: 22,
     paddingHorizontal: 20,
   },
-  winnerCardTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.45)' },
+  winnerCardTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.45)' },
   trophy: { fontSize: 56 },
   winnerName: { fontFamily: fontFamily.sans700, fontSize: 26, letterSpacing: -0.6, color: colors.textPrimary },
   winnerSub: { fontFamily: fontFamily.sans400, fontSize: 14, color: colors.textSecondary },
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
   },
-  rowTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.5)' },
+  rowTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.5)' },
   rowTintMe: { backgroundColor: 'rgba(255,255,255,.8)' },
   rank: { fontFamily: fontFamily.mono500, fontSize: 13, color: colors.ink50, width: 18 },
   name: { flex: 1, fontFamily: fontFamily.sans600, fontSize: 15, color: colors.textPrimary },
