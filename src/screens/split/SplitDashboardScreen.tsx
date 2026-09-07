@@ -8,17 +8,26 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { initialsOf } from '../../components/split/MemberAvatar';
 import { InviteSplitSheet } from '../../components/split/InviteSplitSheet';
 import { SplitMembersSheet } from '../../components/split/SplitMembersSheet';
+import { TransferGroupPickerSheet } from '../../components/split/TransferGroupPickerSheet';
 import { useSplit } from '../../context/SplitContext';
 import { SPLIT_EXPENSE_ICON_DEFAULT, SPLIT_EXPENSE_ICON_MAP } from '../../data/splitExpenseCategories';
 
 const SCAN_ICON = 'M4 8V5.6A1.6 1.6 0 0 1 5.6 4H8M16 4h2.4A1.6 1.6 0 0 1 20 5.6V8M20 16v2.4a1.6 1.6 0 0 1-1.6 1.6H16M8 20H5.6A1.6 1.6 0 0 1 4 18.4V16M7 12h10';
 const BACK_ICON = 'M15 5l-7 7 7 7';
 const CHAT_ICON = 'M4 4h16v12H8l-4 4z';
+const CHECK_ICON = 'M5 12.5l4.5 4.5L19 7';
+
+const GRADIENT_PROPS = {
+  colors: colors.splitGradient as [string, string, ...string[]],
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 1 },
+};
 
 /** One split group's dashboard: totals, balances, recent expenses. */
 export function SplitDashboardScreen() {
   const insets = useSafeAreaInsets();
   const {
+    groups,
     focusedGroup,
     membersFor,
     expensesFor,
@@ -33,11 +42,18 @@ export function SplitDashboardScreen() {
     leaveGroup,
     confirmLeaveOpen,
     deleteGroup,
+    duplicateExpenses,
   } = useSplit();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [transferMode, setTransferMode] = useState(false);
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
+  const [transferSheetOpen, setTransferSheetOpen] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+  const [transferDone, setTransferDone] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
 
   if (!focusedGroup) return null;
 
@@ -48,6 +64,35 @@ export function SplitDashboardScreen() {
   const owed = balances.filter((b) => b.net > 0).reduce((s, b) => s + b.net, 0);
   const owe = balances.filter((b) => b.net < 0).reduce((s, b) => s - b.net, 0);
   const recent = expenses.slice(0, 6);
+  const otherGroups = groups.filter((g) => g.id !== focusedGroup.id);
+
+  const toggleTransferMode = () => {
+    setTransferMode((prev) => !prev);
+    setSelectedExpenseIds(new Set());
+  };
+
+  const toggleExpenseSelected = (id: string) => {
+    setSelectedExpenseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const confirmTransfer = async (targetGroupId: string) => {
+    setTransferring(true);
+    const { error } = await duplicateExpenses(Array.from(selectedExpenseIds), targetGroupId);
+    setTransferring(false);
+    setTransferSheetOpen(false);
+    if (error) {
+      setTransferError(error);
+      return;
+    }
+    setTransferMode(false);
+    setSelectedExpenseIds(new Set());
+    setTransferDone(true);
+  };
 
   return (
     <View style={styles.screen}>
@@ -110,6 +155,14 @@ export function SplitDashboardScreen() {
           <Pressable onPress={() => setInviteOpen(true)} style={styles.chip}>
             <Text style={styles.chipLabel}>Invite</Text>
           </Pressable>
+          <Pressable
+            onPress={toggleTransferMode}
+            style={[styles.chip, transferMode && styles.chipActive]}
+            accessibilityRole="button"
+            accessibilityLabel="Transfer expenses to another card"
+          >
+            <Text style={[styles.chipLabel, transferMode && styles.chipLabelActive]}>Transfer Expenses</Text>
+          </Pressable>
           {focusedGroup.isOwner ? (
             <Pressable onPress={() => setConfirmDeleteOpen(true)} style={styles.chip}>
               <Text style={styles.chipLabel}>Delete</Text>
@@ -163,15 +216,29 @@ export function SplitDashboardScreen() {
           )}
         </View>
 
-        <Text style={[styles.sectionTitle, styles.sectionSpacer]}>Recent expenses</Text>
+        <View style={[styles.sectionHeaderRow, styles.sectionSpacer]}>
+          <Text style={styles.sectionTitle}>{transferMode ? 'Select expenses to transfer' : 'Recent expenses'}</Text>
+          {transferMode && selectedExpenseIds.size > 0 && (
+            <Text style={styles.settleLink}>{selectedExpenseIds.size} selected</Text>
+          )}
+        </View>
         <View style={styles.rows}>
-          {recent.length === 0 ? (
+          {(transferMode ? expenses : recent).length === 0 ? (
             <Text style={styles.emptyNote}>No expenses yet. Add the first one below.</Text>
           ) : (
-            recent.map((e) => {
+            (transferMode ? expenses : recent).map((e) => {
               const iconPath = SPLIT_EXPENSE_ICON_MAP[e.category] ?? SPLIT_EXPENSE_ICON_DEFAULT;
-              return (
-                <View key={e.id} style={styles.expenseRow}>
+              const checked = selectedExpenseIds.has(e.id);
+              const row = (
+                <View style={styles.expenseRow}>
+                  {transferMode &&
+                    (checked ? (
+                      <LinearGradient {...GRADIENT_PROPS} style={styles.expenseCheckbox}>
+                        <Icon path={CHECK_ICON} color="#fff" size={13} strokeWidth={3} />
+                      </LinearGradient>
+                    ) : (
+                      <View style={[styles.expenseCheckbox, styles.expenseCheckboxOff]} />
+                    ))}
                   <View style={styles.expenseIcon}>
                     <Icon path={iconPath} color={colors.splitAccent} size={18} strokeWidth={1.8} />
                   </View>
@@ -184,6 +251,18 @@ export function SplitDashboardScreen() {
                   <Text style={styles.expenseAmt}>₹{Math.round(e.amount).toLocaleString('en-IN')}</Text>
                 </View>
               );
+              if (!transferMode) return <View key={e.id}>{row}</View>;
+              return (
+                <Pressable
+                  key={e.id}
+                  onPress={() => toggleExpenseSelected(e.id)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked }}
+                  accessibilityLabel={`${e.title}, ₹${Math.round(e.amount)}`}
+                >
+                  {row}
+                </Pressable>
+              );
             })
           )}
         </View>
@@ -195,14 +274,29 @@ export function SplitDashboardScreen() {
             <Icon path={BACK_ICON} color={colors.splitInk} size={19} strokeWidth={2} />
           </Pressable>
         </View>
-        <View style={styles.footerRow}>
-          <Pressable onPress={goAdd} style={styles.addButton}>
-            <Text style={styles.addButtonLabel}>+ Add Expense</Text>
-          </Pressable>
-          <Pressable onPress={goItems} style={styles.itemsButton}>
-            <Text style={styles.itemsButtonLabel}>By items</Text>
-          </Pressable>
-        </View>
+        {transferMode ? (
+          <View style={styles.footerRow}>
+            <Pressable onPress={toggleTransferMode} style={styles.itemsButton}>
+              <Text style={styles.itemsButtonLabel}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setTransferSheetOpen(true)}
+              disabled={selectedExpenseIds.size === 0}
+              style={[styles.addButton, selectedExpenseIds.size === 0 && styles.addButtonDisabled]}
+            >
+              <Text style={styles.addButtonLabel}>Confirm ({selectedExpenseIds.size})</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.footerRow}>
+            <Pressable onPress={goAdd} style={styles.addButton}>
+              <Text style={styles.addButtonLabel}>+ Add Expense</Text>
+            </Pressable>
+            <Pressable onPress={goItems} style={styles.itemsButton}>
+              <Text style={styles.itemsButtonLabel}>By items</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       <InviteSplitSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} />
@@ -230,6 +324,33 @@ export function SplitDashboardScreen() {
           deleteGroup(focusedGroup.id);
         }}
         onCancel={() => setConfirmDeleteOpen(false)}
+      />
+      <TransferGroupPickerSheet
+        visible={transferSheetOpen}
+        onClose={() => setTransferSheetOpen(false)}
+        groups={otherGroups}
+        memberCountFor={(id) => membersFor(id).length}
+        expenseCount={selectedExpenseIds.size}
+        busy={transferring}
+        onSelect={confirmTransfer}
+      />
+      <ConfirmDialog
+        visible={transferDone}
+        title="Expenses transferred"
+        message="The selected expenses were duplicated onto that card."
+        confirmLabel="OK"
+        hideCancel
+        onConfirm={() => setTransferDone(false)}
+        onCancel={() => setTransferDone(false)}
+      />
+      <ConfirmDialog
+        visible={!!transferError}
+        title="Couldn't transfer expenses"
+        message={transferError ?? ''}
+        confirmLabel="OK"
+        hideCancel
+        onConfirm={() => setTransferError(null)}
+        onCancel={() => setTransferError(null)}
       />
     </View>
   );
@@ -477,6 +598,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  expenseCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  expenseCheckboxOff: {
+    backgroundColor: '#EDEDF3',
+  },
   expenseTextCol: {
     flex: 1,
     minWidth: 0,
@@ -520,6 +651,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 14 },
     shadowRadius: 30,
     elevation: 4,
+  },
+  addButtonDisabled: {
+    opacity: 0.45,
   },
   addButtonLabel: {
     fontFamily: fontFamily.sans700,
