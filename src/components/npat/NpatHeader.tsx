@@ -65,7 +65,7 @@ function OnlineNowRow({ reduceMotion }: { reduceMotion?: boolean }) {
         <View style={styles.chipsRow}>
           {shown.map((f) => (
             <View key={f.connectionId} style={styles.chip}>
-              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+              <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
               <View style={styles.chipTint} pointerEvents="none" />
               <FriendAvatar userId={f.userId} name={f.name} avatarUrl={f.avatarUrl} size={34} initialsFontFamily={npFont.sans700} initialsFontSize={12.5} />
               <Text style={styles.chipName} numberOfLines={1}>
@@ -75,7 +75,7 @@ function OnlineNowRow({ reduceMotion }: { reduceMotion?: boolean }) {
           ))}
           {overflow > 0 && (
             <View style={styles.chip}>
-              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+              <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
               <View style={[styles.chipTint, styles.chipTintMuted]} pointerEvents="none" />
               <View style={styles.overflowCircle}>
                 <Text style={styles.overflowLabel}>+{overflow}</Text>
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
   },
-  chipTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.08)' },
+  chipTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.08)' },
   chipTintMuted: { backgroundColor: 'rgba(255,255,255,.05)' },
   chipName: { fontFamily: npFont.sans600, fontSize: 10.5, color: '#FFFFFF' },
   chipNameMuted: { fontFamily: npFont.sans500, fontSize: 10.5, color: npColor.onDark50 },

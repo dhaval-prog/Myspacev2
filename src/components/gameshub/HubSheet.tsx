@@ -26,7 +26,7 @@ export function HubSheet({ visible, onClose, children, reduceMotion }: HubSheetP
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
       </Animated.View>
       <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
-        <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
+        <BlurView intensity={50} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
         <View style={styles.sheetTint} pointerEvents="none" />
         <View style={styles.handle} />
         {children}
@@ -57,6 +57,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -18 },
     shadowRadius: 44,
   },
-  sheetTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: ghColor.sheetGlassFill },
+  sheetTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: ghColor.sheetGlassFill },
   handle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: ghColor.ink14, marginBottom: 16 },
 });

@@ -53,7 +53,7 @@ function AnswerRow({ label, value, onChangeText, locked, reduceMotion, delay }: 
 
   return (
     <Animated.View style={[styles.row, { opacity, transform: [{ translateY }], borderColor: focusBorderColor }]}>
-      <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <BlurView intensity={35} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
       <View style={[styles.rowTint, locked && styles.rowTintLocked]} pointerEvents="none" />
       <Text style={styles.rowLabel} numberOfLines={1}>
         {label.toUpperCase()}
@@ -106,7 +106,7 @@ function PlayerChip({ player, isMe, filledCount, total, reduceMotion }: { player
 
   return (
     <View style={styles.chip}>
-      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
       <View style={styles.chipTint} pointerEvents="none" />
       <FriendAvatar userId={player.userId} name={player.name} size={28} initialsFontFamily={npFont.sans700} initialsFontSize={10.5} />
       <Text style={styles.chipName} numberOfLines={1}>
@@ -122,7 +122,7 @@ function PlayerChip({ player, isMe, filledCount, total, reduceMotion }: { player
 function Ticker({ text }: { text: string }) {
   return (
     <View style={styles.ticker}>
-      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
       <View style={styles.tickerTint} pointerEvents="none" />
       <View style={styles.tickerDots}>
         {[0, 150, 300].map((d) => (
@@ -176,7 +176,7 @@ function SubmitButton({ active, label, onPress, disabled, glowMs, reduceMotion }
       <Pressable onPress={onPress} disabled={disabled} style={[styles.submit, active && styles.submitActive]} accessibilityRole="button" accessibilityLabel={label}>
         {!active && (
           <>
-            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <BlurView intensity={35} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
             <View style={styles.submitTint} pointerEvents="none" />
           </>
         )}
@@ -336,7 +336,7 @@ export function NpatRoundScreen() {
           </>
         ) : (
           <View style={styles.waitingCard}>
-            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <BlurView intensity={35} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
             <View style={styles.waitingCardTint} pointerEvents="none" />
             <Text style={styles.waitingTitle}>{hasSubmittedAll ? "You're locked in" : 'Round locked'}</Text>
             <Text style={styles.waitingBody}>{categories.map((c) => `${c}: ${values[c] || '—'}`).join('  ·  ')}</Text>
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
   },
-  chipTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: npRoundColor.chipBg },
+  chipTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: npRoundColor.chipBg },
   chipName: { fontFamily: npFont.sans600, fontSize: 10, color: '#FFFFFF' },
   chipStatus: { fontFamily: npFont.mono500, fontSize: 9, letterSpacing: 9 * 0.06, color: npRoundColor.onDark40 },
   chipStatusMe: { color: npColor.lime },
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
     gap: 9,
     alignSelf: 'stretch',
   },
-  tickerTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: npRoundColor.chipBg },
+  tickerTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: npRoundColor.chipBg },
   tickerDots: { flexDirection: 'row', gap: 3 },
   tickerDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: npColor.lime },
   tickerText: { fontFamily: npFont.sans600, fontSize: 12, color: npRoundColor.onDark75 },
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   timer: { marginTop: 11, fontFamily: npFont.sans700, fontSize: 25, letterSpacing: -0.6, color: '#FFFFFF' },
   form: { gap: 12, marginTop: 18 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, overflow: 'hidden', borderRadius: 999, borderWidth: 1.5, paddingVertical: 13, paddingHorizontal: 16 },
-  rowTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: npRoundColor.rowBg },
+  rowTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: npRoundColor.rowBg },
   rowTintLocked: { backgroundColor: npRoundColor.rowBgLocked },
   rowLabel: { width: 52, fontFamily: npFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.1, color: npRoundColor.promptLabel },
   // iOS Safari auto-zooms the whole page on focus for any text input under
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   error: { fontFamily: npFont.sans500, fontSize: 12.5, color: npRoundColor.danger, textAlign: 'center', marginTop: 10 },
   bottom: { marginTop: 22, gap: 4 },
   submit: { paddingVertical: 18, borderRadius: 999, alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: npRoundColor.glassBorder },
-  submitTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: npRoundColor.submitInactiveBg },
+  submitTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: npRoundColor.submitInactiveBg },
   submitActive: { backgroundColor: npColor.lime, borderColor: npColor.lime },
   submitLabel: { fontFamily: npFont.sans700, fontSize: 16, color: npRoundColor.submitInactiveText },
   submitLabelActive: { color: npColor.ink },
@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
   leaveRow: { paddingVertical: 12, alignItems: 'center' },
   leaveLabel: { fontFamily: npFont.sans500, fontSize: 12.5, color: npRoundColor.onDark38 },
   waitingCard: { overflow: 'hidden', borderRadius: 24, borderWidth: 1, borderColor: npRoundColor.glassBorder, padding: 20, gap: 8, marginTop: 20 },
-  waitingCardTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.08)' },
+  waitingCardTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.08)' },
   waitingTitle: { fontFamily: npFont.sans600, fontSize: 16, color: '#fff', textAlign: 'center' },
   waitingBody: { fontFamily: npFont.sans400, fontSize: 12.5, color: npRoundColor.onDark65, textAlign: 'center' },
   waitingSub: { fontFamily: npFont.sans400, fontSize: 12, color: npRoundColor.onDark45, textAlign: 'center', marginTop: 4 },

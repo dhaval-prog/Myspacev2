@@ -550,7 +550,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       {game.timerSeconds ? <EdgeGlow urgent={urgent} reduceMotion={reduceMotion} /> : null}
       <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
         <Pressable onPress={leaveGame ? () => { leaveGame(); onHome(); } : onHome} style={styles.leaveChip} accessibilityRole="button" accessibilityLabel="Leave the table">
-          <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+          <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <View style={styles.leaveChipTint} pointerEvents="none" />
           <Text style={styles.leaveChipLabel}>Leave</Text>
         </Pressable>
@@ -574,7 +574,7 @@ export function CardsBoardScreen({ onHome }: CardsBoardScreenProps) {
       <ScrollView style={styles.opponentsScroll} contentContainerStyle={styles.opponentsRow} horizontal showsHorizontalScrollIndicator={false}>
         {opponents.map((p) => (
           <View key={p.id} style={styles.opponent}>
-            <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <BlurView intensity={28} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
             <View style={[styles.opponentTint, p.id === currentPlayer?.id && styles.opponentTintActive]} pointerEvents="none" />
             <OpponentStack />
             <Text style={styles.opponentName} numberOfLines={1}>{p.name}</Text>
@@ -763,7 +763,7 @@ const styles = StyleSheet.create({
   edgeGlow: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 6, borderWidth: 28, borderColor: 'rgba(240,96,60,.4)' },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingBottom: 10 },
   leaveChip: { overflow: 'hidden', paddingVertical: 9, paddingHorizontal: 15, borderRadius: 999, borderWidth: 1, borderColor: scColor.glassBorder },
-  leaveChipTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  leaveChipTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   leaveChipLabel: { fontFamily: scFont.sans600, fontSize: 13, color: 'rgba(255,255,255,.82)' },
   roomCode: { fontFamily: scFont.mono500, fontSize: 12, letterSpacing: 12 * 0.34, color: 'rgba(255,255,255,.44)' },
   overflowBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
@@ -781,7 +781,7 @@ const styles = StyleSheet.create({
   // discard pile below it, and there wasn't room to also enlarge the pile without the
   // two crowding or overlapping on shorter screens.
   opponent: { alignItems: 'center', gap: 2, overflow: 'hidden', borderRadius: 15, borderWidth: 1, borderColor: scColor.glassBorder, padding: 7, minWidth: 70 },
-  opponentTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
+  opponentTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: scColor.glass },
   opponentTintActive: { backgroundColor: scColor.rowGlassFillActive },
   opponentName: { fontFamily: scFont.sans700, fontSize: 11, color: '#fff', maxWidth: 62, marginTop: 1 },
   opponentCount: { fontFamily: scFont.mono500, fontSize: 9, color: 'rgba(255,255,255,.5)' },

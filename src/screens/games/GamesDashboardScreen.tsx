@@ -145,7 +145,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
         </View>
 
         <Pressable onPress={() => setPointsVisible(true)} style={styles.pointsCard} accessibilityRole="button" accessibilityLabel="Your points">
-          <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
+          <BlurView intensity={45} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <View style={styles.pointsCardTint} pointerEvents="none" />
           <ProgressRing pct={ringPct} reduceMotion={reduceMotion}>
             <Text style={styles.ringValue}>{myTotal}</Text>
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 14 },
     shadowRadius: 30,
   },
-  pointsCardTint: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: ghColor.glassFill },
+  pointsCardTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: ghColor.glassFill },
   ringWrap: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
   ringCenter: { position: 'absolute', alignItems: 'center' },
   ringValue: { fontFamily: ghFont.sans800, fontSize: 24, letterSpacing: -1.2, color: ghColor.ink },
