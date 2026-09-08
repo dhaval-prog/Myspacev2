@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
-import type { TriviaDifficulty, TriviaGame, TriviaGameStatus, TriviaPlayer } from '../types/trivia';
+import type { TriviaAnswer, TriviaDifficulty, TriviaGame, TriviaGameStatus, TriviaPlayer, TriviaQuestion, TriviaQuestionStatus } from '../types/trivia';
 
 interface TriviaGameRow {
   id: string;
@@ -28,6 +28,32 @@ interface TriviaPlayerRow {
   unanswered: number;
   fastest_answers: number;
   left_at: string | null;
+}
+
+interface TriviaQuestionRow {
+  id: string;
+  game_id: string;
+  question_index: number;
+  question_text: string;
+  category: string;
+  difficulty: string;
+  answers: { id: string; text: string }[];
+  status: TriviaQuestionStatus;
+  starts_at: string | null;
+  ends_at: string | null;
+  reveal_ends_at: string | null;
+}
+
+interface TriviaAnswerRow {
+  id: string;
+  game_id: string;
+  question_id: string;
+  player_id: string;
+  answer_id: string;
+  is_correct: boolean;
+  response_time_ms: number;
+  speed_bonus: number;
+  points: number;
 }
 
 function toGame(row: TriviaGameRow): TriviaGame {
@@ -61,6 +87,36 @@ function toPlayer(row: TriviaPlayerRow): TriviaPlayer {
   };
 }
 
+function toQuestion(row: TriviaQuestionRow): TriviaQuestion {
+  return {
+    id: row.id,
+    gameId: row.game_id,
+    questionIndex: row.question_index,
+    questionText: row.question_text,
+    category: row.category,
+    difficulty: row.difficulty,
+    answers: row.answers,
+    status: row.status,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    revealEndsAt: row.reveal_ends_at,
+  };
+}
+
+function toAnswer(row: TriviaAnswerRow): TriviaAnswer {
+  return {
+    id: row.id,
+    gameId: row.game_id,
+    questionId: row.question_id,
+    playerId: row.player_id,
+    answerId: row.answer_id,
+    isCorrect: row.is_correct,
+    responseTimeMs: row.response_time_ms,
+    speedBonus: row.speed_bonus,
+    points: row.points,
+  };
+}
+
 function warn(action: string, error: { message: string } | null) {
   if (error) console.warn(`[trivia] failed to ${action}:`, error.message);
 }
@@ -80,21 +136,36 @@ interface TriviaGameContextValue {
   loading: boolean;
   error: string | null;
 
+  /** The current (or most recently reached) question — null until the game starts. */
+  currentQuestion: TriviaQuestion | null;
+  /** My own submission for currentQuestion, if I've answered it. */
+  myAnswer: TriviaAnswer | null;
+  /** Every player's submission for currentQuestion — only populated (by RLS) once it's revealed. */
+  answers: TriviaAnswer[];
+  /** The correct answer id for currentQuestion — fetched on demand, only selectable once revealed. */
+  correctAnswerId: string | null;
+  submittingAnswer: boolean;
+  answerError: string | null;
+
   createGame: (input: NewTriviaGameInput) => Promise<{ error: string | null; roomCode?: string }>;
   joinGame: (roomCode: string, name: string) => Promise<{ error: string | null }>;
   updateSettings: (input: Omit<NewTriviaGameInput, 'name'>) => Promise<{ error: string | null }>;
   leaveGame: () => Promise<void>;
+  /** Host-only: fetches questions from Open Trivia DB (via edge function) and starts the game. */
+  startGame: () => Promise<{ error: string | null }>;
+  submitAnswer: (answerId: string) => Promise<{ error: string | null }>;
 }
 
 const TriviaGameContext = createContext<TriviaGameContextValue | null>(null);
 
 /**
  * Multiplayer Trivia Night. Same shape as GameContext/CardsGameContext: this
- * context only mirrors `trivia_games`/`trivia_players` via Realtime (plus a
- * 3s poll backstop so a dropped event can never strand a player on a stale
- * screen) and calls the RPCs that actually mutate them — it never computes
- * state itself. Phase 1 only covers create/join/lobby/settings/leave; the
- * question engine (start, answer, scoring, reveal) lands in later phases.
+ * context only mirrors `trivia_games`/`trivia_players`/`trivia_questions`/
+ * `trivia_answers` via Realtime (plus a 3s poll backstop) and calls the RPCs/
+ * edge function that actually mutate them — it never computes a score or a
+ * timer deadline itself. `correct_answer_id` lives in a separate table RLS
+ * only lets a client select once the question is revealed, so it's never
+ * fetched (or fetchable) while a question is still active.
  */
 export function TriviaGameProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -103,10 +174,15 @@ export function TriviaGameProvider({ children }: { children: React.ReactNode }) 
   const [gameId, setGameId] = useState<string | null>(null);
   const [game, setGame] = useState<TriviaGame | null>(null);
   const [players, setPlayers] = useState<TriviaPlayer[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState<TriviaQuestion | null>(null);
+  const [answerRows, setAnswerRows] = useState<TriviaAnswerRow[]>([]);
+  const [correctAnswerId, setCorrectAnswerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submittingAnswer, setSubmittingAnswer] = useState(false);
+  const [answerError, setAnswerError] = useState<string | null>(null);
 
-  // Room row: initial load + live status/settings updates.
+  // Room row: initial load + live status/settings/current-question-index updates.
   useEffect(() => {
     if (!gameId || !isSupabaseConfigured) {
       setGame(null);
@@ -194,6 +270,139 @@ export function TriviaGameProvider({ children }: { children: React.ReactNode }) 
     };
   }, [gameId]);
 
+  // Current question: keeps `currentQuestion` pointed at the latest question
+  // for this game (by question_index) — RLS already restricts this to the
+  // current or a past one, never a future one.
+  useEffect(() => {
+    if (!gameId || !isSupabaseConfigured) {
+      setCurrentQuestion(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('trivia_questions')
+      .select('*')
+      .eq('game_id', gameId)
+      .order('question_index', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error: err }) => {
+        warn('load trivia question', err);
+        if (!cancelled) setCurrentQuestion(data ? toQuestion(data as TriviaQuestionRow) : null);
+      });
+
+    const upsert = (row: TriviaQuestionRow) =>
+      setCurrentQuestion((prev) => (!prev || row.question_index >= prev.questionIndex ? toQuestion(row) : prev));
+
+    const channel = supabase
+      .channel(`trivia-questions-${gameId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trivia_questions', filter: `game_id=eq.${gameId}` }, (p) =>
+        upsert(p.new as TriviaQuestionRow),
+      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'trivia_questions', filter: `game_id=eq.${gameId}` }, (p) =>
+        upsert(p.new as TriviaQuestionRow),
+      )
+      .subscribe();
+
+    const poll = setInterval(() => {
+      supabase
+        .from('trivia_questions')
+        .select('*')
+        .eq('game_id', gameId)
+        .order('question_index', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (!cancelled && data) setCurrentQuestion((prev) => (!prev || data.question_index >= prev.questionIndex ? toQuestion(data as TriviaQuestionRow) : prev));
+        });
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      supabase.removeChannel(channel);
+    };
+  }, [gameId]);
+
+  // Answers for the current question only — RLS hides everyone else's until
+  // it's revealed, so this always reflects exactly what this account can see.
+  useEffect(() => {
+    if (!currentQuestion || !isSupabaseConfigured) {
+      setAnswerRows([]);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('trivia_answers')
+      .select('*')
+      .eq('question_id', currentQuestion.id)
+      .then(({ data, error: err }) => {
+        warn('load trivia answers', err);
+        if (!cancelled) setAnswerRows((data as TriviaAnswerRow[] | null) ?? []);
+      });
+
+    const upsert = (row: TriviaAnswerRow) =>
+      setAnswerRows((prev) => (prev.some((a) => a.id === row.id) ? prev.map((a) => (a.id === row.id ? row : a)) : [...prev, row]));
+
+    const channel = supabase
+      .channel(`trivia-answers-${currentQuestion.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trivia_answers', filter: `question_id=eq.${currentQuestion.id}` }, (p) =>
+        upsert(p.new as TriviaAnswerRow),
+      )
+      .subscribe();
+
+    const poll = setInterval(() => {
+      supabase
+        .from('trivia_answers')
+        .select('*')
+        .eq('question_id', currentQuestion.id)
+        .then(({ data }) => {
+          if (!cancelled && data) setAnswerRows(data as TriviaAnswerRow[]);
+        });
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      supabase.removeChannel(channel);
+    };
+  }, [currentQuestion?.id]);
+
+  // The correct answer is only fetchable once the question is revealed — a
+  // plain one-off select, no realtime needed since it never changes after.
+  useEffect(() => {
+    setCorrectAnswerId(null);
+    if (!currentQuestion || currentQuestion.status !== 'revealed' || !isSupabaseConfigured) return;
+    let cancelled = false;
+    supabase
+      .from('trivia_correct_answers')
+      .select('correct_answer_id')
+      .eq('question_id', currentQuestion.id)
+      .maybeSingle()
+      .then(({ data, error: err }) => {
+        warn('load correct answer', err);
+        if (!cancelled && data) setCorrectAnswerId(data.correct_answer_id as string);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentQuestion?.id, currentQuestion?.status]);
+
+  // Nudges the server past a question's deadline (active → revealed) or its
+  // reveal window (revealed → next question / completed) — a nudge, not
+  // authority: advance_trivia_question itself re-checks the real deadline
+  // regardless of when this fires, exactly like lock_expired_round.
+  useEffect(() => {
+    if (!currentQuestion || !gameId || !isSupabaseConfigured || game?.status !== 'active') return;
+    const deadline = currentQuestion.status === 'active' ? currentQuestion.endsAt : currentQuestion.revealEndsAt;
+    if (!deadline) return;
+    const msLeft = new Date(deadline).getTime() - Date.now();
+    const timer = setTimeout(() => {
+      supabase.rpc('advance_trivia_question', { p_game_id: gameId }).then(({ error: err }) => warn('advance trivia question', err));
+    }, Math.max(0, msLeft) + 300);
+    return () => clearTimeout(timer);
+  }, [gameId, game?.status, currentQuestion?.id, currentQuestion?.status, currentQuestion?.endsAt, currentQuestion?.revealEndsAt]);
+
   const createGame = async (input: NewTriviaGameInput): Promise<{ error: string | null; roomCode?: string }> => {
     if (!userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
     setLoading(true);
@@ -252,10 +461,36 @@ export function TriviaGameProvider({ children }: { children: React.ReactNode }) 
     setGameId(null);
     setGame(null);
     setPlayers([]);
+    setCurrentQuestion(null);
+    setAnswerRows([]);
+    setCorrectAnswerId(null);
     setError(null);
   };
 
+  const startGame = async (): Promise<{ error: string | null }> => {
+    if (!gameId || !isSupabaseConfigured) return { error: 'No game.' };
+    const { data, error: err } = await supabase.functions.invoke('start-trivia-game', { body: { game_id: gameId } });
+    if (err) return { error: err.message };
+    if (data?.error) return { error: data.error as string };
+    return { error: null };
+  };
+
+  const submitAnswer = async (answerId: string): Promise<{ error: string | null }> => {
+    if (!currentQuestion || !isSupabaseConfigured) return { error: 'No active question.' };
+    setSubmittingAnswer(true);
+    setAnswerError(null);
+    const { error: err } = await supabase.rpc('submit_trivia_answer', { p_question_id: currentQuestion.id, p_answer_id: answerId });
+    setSubmittingAnswer(false);
+    if (err) {
+      setAnswerError(err.message);
+      return { error: err.message };
+    }
+    return { error: null };
+  };
+
   const myPlayerId = players.find((p) => p.userId === userId)?.id ?? null;
+  const answers = answerRows.map(toAnswer);
+  const myAnswer = answers.find((a) => a.playerId === myPlayerId) ?? null;
 
   const value: TriviaGameContextValue = {
     game,
@@ -263,10 +498,18 @@ export function TriviaGameProvider({ children }: { children: React.ReactNode }) 
     myPlayerId,
     loading,
     error,
+    currentQuestion,
+    myAnswer,
+    answers,
+    correctAnswerId,
+    submittingAnswer,
+    answerError,
     createGame,
     joinGame,
     updateSettings,
     leaveGame,
+    startGame,
+    submitAnswer,
   };
 
   return <TriviaGameContext.Provider value={value}>{children}</TriviaGameContext.Provider>;
