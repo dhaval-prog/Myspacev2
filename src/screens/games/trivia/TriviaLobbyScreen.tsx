@@ -92,7 +92,7 @@ export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initial
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
-  const { game, players, myPlayerId, loading, createGame, joinGame, leaveGame } = useTriviaGame();
+  const { game, players, myPlayerId, loading, createGame, joinGame, leaveGame, startGame } = useTriviaGame();
 
   if (game) {
     return (
@@ -104,6 +104,7 @@ export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initial
         players={players}
         myPlayerId={myPlayerId}
         leaveGame={leaveGame}
+        startGame={startGame}
         insets={insets}
         reduceMotion={reduceMotion}
       />
@@ -311,6 +312,7 @@ function TriviaReadyRoom({
   players,
   myPlayerId,
   leaveGame,
+  startGame,
   insets,
   reduceMotion,
 }: {
@@ -321,6 +323,7 @@ function TriviaReadyRoom({
   players: ReturnType<typeof useTriviaGame>['players'];
   myPlayerId: string | null;
   leaveGame: () => Promise<void>;
+  startGame: ReturnType<typeof useTriviaGame>['startGame'];
   insets: { top: number; bottom: number };
   reduceMotion?: boolean;
 }) {
@@ -328,7 +331,17 @@ function TriviaReadyRoom({
   const isHost = !!user && user.id === game.hostId;
   const active = players.filter((p) => p.active);
   const host = active.find((p) => p.userId === game.hostId);
-  const [startNote, setStartNote] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const isStarting = starting || game.status === 'starting';
+
+  const handleStart = async () => {
+    setStarting(true);
+    setStartError(null);
+    const { error: err } = await startGame();
+    setStarting(false);
+    if (err) setStartError(err);
+  };
 
   return (
     <LinearGradient colors={[trColor.headerTop, trColor.headerMid, trColor.headerBottom]} locations={[0, 0.52, 1]} style={styles.screen}>
@@ -376,11 +389,18 @@ function TriviaReadyRoom({
 
           {isHost ? (
             <>
-              <PrimaryCta label="Start Game" onPress={() => setStartNote(true)} reduceMotion={reduceMotion} />
-              {startNote && <Text style={styles.hint}>The question engine is coming in the next build phase — hang tight!</Text>}
+              <PrimaryCta
+                label={isStarting ? 'Starting…' : active.length < 2 ? 'Need 2+ players' : 'Start Game'}
+                onPress={handleStart}
+                disabled={isStarting || active.length < 2}
+                reduceMotion={reduceMotion}
+              />
+              {startError && <Text style={styles.error}>{startError}</Text>}
             </>
           ) : (
-            <Text style={styles.waitHint}>Waiting for {host?.name ?? 'the host'} to start…</Text>
+            <Text style={styles.waitHint}>
+              {game.status === 'starting' ? 'The host is starting the game…' : `Waiting for ${host?.name ?? 'the host'} to start…`}
+            </Text>
           )}
 
           <Pressable onPress={leaveGame} style={styles.leaveRow} accessibilityRole="button" accessibilityLabel="Leave game">
