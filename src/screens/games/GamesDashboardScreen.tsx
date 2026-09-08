@@ -77,6 +77,7 @@ interface GamesDashboardScreenProps {
   onOpenFriends: () => void;
   onOpenNpat: (initialTab?: 'create' | 'join') => void;
   onOpenCards: (initialTab?: 'create' | 'join') => void;
+  onOpenTrivia: (initialTab?: 'create' | 'join') => void;
 }
 
 /**
@@ -84,14 +85,14 @@ interface GamesDashboardScreenProps {
  * Real leaderboard/points data from GameStatsContext throughout; a game row
  * expands in place into Create/Join instead of pushing a new screen.
  */
-export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenFriends, onOpenNpat, onOpenCards }: GamesDashboardScreenProps) {
+export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenFriends, onOpenNpat, onOpenCards, onOpenTrivia }: GamesDashboardScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { circle, leaderboard, myEntry, myRankDelta, breakdown, recentActivity, breakdownFor } = useGameStats();
 
   const [leaderboardVisible, setLeaderboardVisible] = useState(false);
   const [pointsVisible, setPointsVisible] = useState(false);
-  const [expandedRow, setExpandedRow] = useState<'npat' | 'cards' | null>(null);
+  const [expandedRow, setExpandedRow] = useState<'npat' | 'cards' | 'trivia' | null>(null);
 
   const myTotal = myEntry?.stats.totalPoints ?? 0;
   const leader = leaderboard[0];
@@ -199,6 +200,15 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
           onToggle={() => setExpandedRow((r) => (r === 'cards' ? null : 'cards'))}
           onCreate={() => onOpenCards('create')}
           onJoin={() => onOpenCards('join')}
+        />
+        <GameRow
+          variant="trivia"
+          title="Trivia Night"
+          subtitle="Think fast. Answer faster."
+          expanded={expandedRow === 'trivia'}
+          onToggle={() => setExpandedRow((r) => (r === 'trivia' ? null : 'trivia'))}
+          onCreate={() => onOpenTrivia('create')}
+          onJoin={() => onOpenTrivia('join')}
         />
       </ScrollView>
 

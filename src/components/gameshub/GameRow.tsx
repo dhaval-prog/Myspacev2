@@ -42,8 +42,16 @@ function CardsIcon() {
   );
 }
 
+function TriviaIcon() {
+  return (
+    <View style={styles.triviaIconWrap}>
+      <Text style={styles.triviaGlyph}>🧠</Text>
+    </View>
+  );
+}
+
 interface GameRowProps {
-  variant: 'npat' | 'cards';
+  variant: 'npat' | 'cards' | 'trivia';
   title: string;
   subtitle: string;
   expanded: boolean;
@@ -65,7 +73,8 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
   const bodyHeight = bodyProgress.interpolate({ inputRange: [0, 1], outputRange: [0, BODY_HEIGHT] });
   const chevRotate = chevProgress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
   const isNpat = variant === 'npat';
-  const glassFill = isNpat ? ghColor.npatGlassFill : ghColor.cardsGlassFill;
+  const isTrivia = variant === 'trivia';
+  const glassFill = isNpat ? ghColor.npatGlassFill : isTrivia ? ghColor.cardsGlassFill : ghColor.cardsGlassFill;
   const glassBorder = isNpat ? ghColor.npatGlassBorder : ghColor.cardsGlassBorder;
   const accent = isNpat ? ghColor.gradientA : ghColor.gradientB;
 
@@ -74,7 +83,7 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
       <BlurView intensity={34} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: glassFill }]} pointerEvents="none" />
       <Pressable onPress={onToggle} style={styles.header} accessibilityRole="button" accessibilityLabel={title}>
-        {variant === 'npat' ? <NpatIcon /> : <CardsIcon />}
+        {variant === 'npat' ? <NpatIcon /> : variant === 'cards' ? <CardsIcon /> : <TriviaIcon />}
         <View style={styles.headerMid}>
           <Text style={styles.headerTitle}>{title}</Text>
           <Text style={styles.headerSub}>{subtitle}</Text>
@@ -138,4 +147,6 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
   },
   cardMiniOval: { width: 15, height: 21, borderRadius: 999, transform: [{ rotate: '-22deg' }] },
+  triviaIconWrap: { width: 46, height: 30, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
+  triviaGlyph: { fontSize: 26, lineHeight: 30 },
 });
