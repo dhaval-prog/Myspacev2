@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -92,7 +92,7 @@ export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initial
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
-  const { game, players, myPlayerId, loading, createGame, joinGame, leaveGame, startGame } = useTriviaGame();
+  const { game, players, myPlayerId, loading, createGame, joinGame, leaveGame, startGame, hostChangedTo, dismissHostChanged } = useTriviaGame();
 
   if (game) {
     return (
@@ -107,6 +107,8 @@ export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initial
         startGame={startGame}
         insets={insets}
         reduceMotion={reduceMotion}
+        hostChangedTo={hostChangedTo}
+        dismissHostChanged={dismissHostChanged}
       />
     );
   }
@@ -304,6 +306,9 @@ function TriviaHub({
   );
 }
 
+/** A player counts as disconnected once their heartbeat is older than this — comfortably past the 20s window the host-transfer RPC itself uses. */
+const STALE_MS = 15000;
+
 function TriviaReadyRoom({
   onHome,
   onOpenExpenses,
@@ -315,6 +320,8 @@ function TriviaReadyRoom({
   startGame,
   insets,
   reduceMotion,
+  hostChangedTo,
+  dismissHostChanged,
 }: {
   onHome: () => void;
   onOpenExpenses: () => void;
@@ -326,6 +333,8 @@ function TriviaReadyRoom({
   startGame: ReturnType<typeof useTriviaGame>['startGame'];
   insets: { top: number; bottom: number };
   reduceMotion?: boolean;
+  hostChangedTo: string | null;
+  dismissHostChanged: () => void;
 }) {
   const { user } = useAuth();
   const isHost = !!user && user.id === game.hostId;
@@ -334,6 +343,14 @@ function TriviaReadyRoom({
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const isStarting = starting || game.status === 'starting';
+
+  // Re-renders every few seconds purely so each player row's "disconnected"
+  // badge (derived from lastSeenAt) stays fresh without a realtime event.
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => forceTick((n) => n + 1), 4000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleStart = async () => {
     setStarting(true);
@@ -358,6 +375,12 @@ function TriviaReadyRoom({
           <View style={styles.sheetTint} pointerEvents="none" />
           <View style={styles.handle} />
 
+          {hostChangedTo && (
+            <Pressable onPress={dismissHostChanged} style={styles.hostChangedBanner} accessibilityRole="button" accessibilityLabel={`${hostChangedTo} is now the host. Dismiss.`}>
+              <Text style={styles.hostChangedText}>👑 {hostChangedTo} is now the host</Text>
+            </Pressable>
+          )}
+
           <View style={styles.field}>
             <Text style={styles.label}>INVITE CODE</Text>
             <CodeCells value={game.roomCode} />
@@ -372,18 +395,22 @@ function TriviaReadyRoom({
               <Text style={styles.label}>{active.length}</Text>
             </View>
             <View style={styles.playerList}>
-              {active.map((p) => (
-                <View key={p.id} style={styles.playerRow}>
-                  <View style={styles.avatarDot}>
-                    <Text style={styles.avatarInitial}>{p.name.trim().slice(0, 1).toUpperCase() || '?'}</Text>
+              {active.map((p) => {
+                const disconnected = p.id !== myPlayerId && Date.now() - new Date(p.lastSeenAt).getTime() > STALE_MS;
+                return (
+                  <View key={p.id} style={styles.playerRow}>
+                    <View style={[styles.avatarDot, disconnected && styles.avatarDotDisconnected]}>
+                      <Text style={styles.avatarInitial}>{p.name.trim().slice(0, 1).toUpperCase() || '?'}</Text>
+                    </View>
+                    <Text style={styles.playerName}>
+                      {p.name}
+                      {p.id === myPlayerId ? ' (you)' : ''}
+                    </Text>
+                    {disconnected && <Text style={styles.disconnectedBadge}>DISCONNECTED</Text>}
+                    {p.userId === game.hostId && <Text style={styles.hostBadge}>HOST</Text>}
                   </View>
-                  <Text style={styles.playerName}>
-                    {p.name}
-                    {p.id === myPlayerId ? ' (you)' : ''}
-                  </Text>
-                  {p.userId === game.hostId && <Text style={styles.hostBadge}>HOST</Text>}
-                </View>
-              ))}
+                );
+              })}
             </View>
           </View>
 
@@ -486,9 +513,20 @@ const styles = StyleSheet.create({
   playerList: { gap: 5 },
   playerRow: { flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: trColor.rowGlassFill, borderRadius: 999, borderWidth: 1, borderColor: trColor.rowGlassBorder, paddingVertical: 8, paddingHorizontal: 12 },
   avatarDot: { width: 26, height: 26, borderRadius: 13, backgroundColor: trColor.ink, alignItems: 'center', justifyContent: 'center' },
+  avatarDotDisconnected: { opacity: 0.4 },
   avatarInitial: { fontFamily: trFont.sans700, fontSize: 11, color: trColor.lime },
   playerName: { flex: 1, fontFamily: trFont.sans700, fontSize: 13.5, color: trColor.ink },
   hostBadge: { fontFamily: trFont.mono500, fontSize: 9, letterSpacing: 9 * 0.1, color: trColor.ready },
+  disconnectedBadge: { fontFamily: trFont.mono500, fontSize: 8.5, letterSpacing: 8.5 * 0.08, color: '#D33243' },
+  hostChangedBanner: {
+    backgroundColor: 'rgba(195,234,79,.16)',
+    borderWidth: 1,
+    borderColor: trColor.lime,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  hostChangedText: { fontFamily: trFont.sans700, fontSize: 12.5, color: trColor.ink, textAlign: 'center' },
   waitHint: { fontFamily: trFont.sans400, fontSize: 11.5, color: trColor.fieldLabel, textAlign: 'center' },
   leaveRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 6 },
   leaveLabel: { fontFamily: trFont.sans500, fontSize: 12.5, color: trColor.fieldLabel },

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import type { TriviaAnswer, TriviaDifficulty, TriviaGame, TriviaGameStatus, TriviaPlayer, TriviaQuestion, TriviaQuestionStatus } from '../types/trivia';
@@ -28,6 +29,7 @@ interface TriviaPlayerRow {
   unanswered: number;
   fastest_answers: number;
   left_at: string | null;
+  last_seen_at: string;
 }
 
 interface TriviaQuestionRow {
@@ -84,6 +86,7 @@ function toPlayer(row: TriviaPlayerRow): TriviaPlayer {
     unanswered: row.unanswered,
     fastestAnswers: row.fastest_answers,
     active: row.left_at === null,
+    lastSeenAt: row.last_seen_at,
   };
 }
 
@@ -147,6 +150,10 @@ interface TriviaGameContextValue {
   submittingAnswer: boolean;
   answerError: string | null;
 
+  /** Name of the player who just became host (via disconnect-based transfer) — null once dismissed or no change pending. */
+  hostChangedTo: string | null;
+  dismissHostChanged: () => void;
+
   createGame: (input: NewTriviaGameInput) => Promise<{ error: string | null; roomCode?: string }>;
   joinGame: (roomCode: string, name: string) => Promise<{ error: string | null }>;
   updateSettings: (input: Omit<NewTriviaGameInput, 'name'>) => Promise<{ error: string | null }>;
@@ -181,6 +188,8 @@ export function TriviaGameProvider({ children }: { children: React.ReactNode }) 
   const [error, setError] = useState<string | null>(null);
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
   const [answerError, setAnswerError] = useState<string | null>(null);
+  const [hostChangedTo, setHostChangedTo] = useState<string | null>(null);
+  const prevHostId = useRef<string | null>(null);
 
   // Room row: initial load + live status/settings/current-question-index updates.
   useEffect(() => {
@@ -403,6 +412,65 @@ export function TriviaGameProvider({ children }: { children: React.ReactNode }) 
     return () => clearTimeout(timer);
   }, [gameId, game?.status, currentQuestion?.id, currentQuestion?.status, currentQuestion?.endsAt, currentQuestion?.revealEndsAt]);
 
+  // Detects a disconnect-driven host handoff (private.maybe_transfer_trivia_host)
+  // so the lobby can show a one-time "X is now the host" banner. Skips the
+  // very first observation of hostId (game just loaded, not a real change).
+  useEffect(() => {
+    if (!game) {
+      prevHostId.current = null;
+      return;
+    }
+    if (prevHostId.current === null) {
+      prevHostId.current = game.hostId;
+      return;
+    }
+    if (game.hostId !== prevHostId.current) {
+      prevHostId.current = game.hostId;
+      const newHost = players.find((p) => p.userId === game.hostId);
+      if (newHost) setHostChangedTo(newHost.name);
+    }
+  }, [game?.hostId, players]);
+
+  // Heartbeat: tells the server this account is still around every ~10s so a
+  // disconnected host can be replaced — a nudge, same spirit as the question
+  // advance timer. Also fires once immediately when a game is joined.
+  useEffect(() => {
+    if (!gameId || !isSupabaseConfigured) return;
+    const beat = () => supabase.rpc('heartbeat_trivia_presence', { p_game_id: gameId }).then(({ error: err }) => warn('send trivia heartbeat', err));
+    beat();
+    const id = setInterval(beat, 10000);
+    return () => clearInterval(id);
+  }, [gameId]);
+
+  // On mobile, backgrounding this app pauses realtime + the poll backstop —
+  // returning to foreground should immediately re-sync everything rather
+  // than waiting for the next 3s tick, same pattern as LiveLocationsScreen.
+  useEffect(() => {
+    if (!gameId || !isSupabaseConfigured) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      supabase.rpc('heartbeat_trivia_presence', { p_game_id: gameId }).then(({ error: err }) => warn('send trivia heartbeat', err));
+      supabase
+        .from('trivia_games')
+        .select('*')
+        .eq('id', gameId)
+        .single()
+        .then(({ data }) => {
+          if (data) setGame(toGame(data as TriviaGameRow));
+        });
+      supabase
+        .from('trivia_players')
+        .select('*')
+        .eq('game_id', gameId)
+        .then(({ data }) => {
+          if (data) setPlayers((data as TriviaPlayerRow[]).map(toPlayer));
+        });
+    });
+    return () => sub.remove();
+  }, [gameId]);
+
+  const dismissHostChanged = () => setHostChangedTo(null);
+
   const createGame = async (input: NewTriviaGameInput): Promise<{ error: string | null; roomCode?: string }> => {
     if (!userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
     setLoading(true);
@@ -465,6 +533,8 @@ export function TriviaGameProvider({ children }: { children: React.ReactNode }) 
     setAnswerRows([]);
     setCorrectAnswerId(null);
     setError(null);
+    setHostChangedTo(null);
+    prevHostId.current = null;
   };
 
   const startGame = async (): Promise<{ error: string | null }> => {
@@ -504,6 +574,8 @@ export function TriviaGameProvider({ children }: { children: React.ReactNode }) 
     correctAnswerId,
     submittingAnswer,
     answerError,
+    hostChangedTo,
+    dismissHostChanged,
     createGame,
     joinGame,
     updateSettings,
