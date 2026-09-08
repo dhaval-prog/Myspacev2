@@ -48,6 +48,7 @@ export interface TriviaPlayer {
   unanswered: number;
   fastestAnswers: number;
   active: boolean;
+  lastSeenAt: string;
 }
 
 export interface TriviaAnswerOption {
