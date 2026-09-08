@@ -5,6 +5,8 @@
  * Trivia's own hue, the way NPAT reads green and Space Cards reads violet.
  */
 
+import { Easing } from 'react-native';
+
 export const trFont = {
   sans400: 'PlusJakartaSans_400Regular',
   sans500: 'PlusJakartaSans_500Medium',
@@ -78,3 +80,16 @@ export const QUESTION_COUNT_OPTIONS = [5, 10, 15, 20] as const;
 export const TIME_PER_QUESTION_OPTIONS = [10, 20, 30, 60] as const;
 
 export const TRIVIA_MAX_PLAYERS = 20;
+
+/** Phase 4 UI-polish durations/easings — same shape as Space Cards' scMotion. */
+export const trMotion = {
+  easeEntrance: Easing.bezier(0.2, 0.85, 0.25, 1),
+  urgentPulseMs: 560,
+  answerLockMs: 260,
+  revealEntranceMs: 320,
+  revealStaggerMs: 80,
+  winnerEntranceMs: 420,
+  winnerEntranceDelayMs: 150,
+  confettiFallMs: 1500,
+  confettiStaggerMs: 90,
+} as const;

@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NpatGlassBackdrop } from '../../../components/npat/NpatGlassBackdrop';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useTriviaGame } from '../../../context/TriviaGameContext';
-import { trColor, trFont } from '../../../theme/triviaTokens';
+import { trColor, trFont, trMotion } from '../../../theme/triviaTokens';
 
 /** Local, display-only countdown — the server's `ends_at` is the only real deadline; this just renders it. */
 function useCountdown(endsAt: string | null): number {
@@ -28,13 +29,73 @@ function formatClock(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+/** Scales the timer up and down in a tight loop once time is nearly out — a purely visual nudge, the real deadline is still only `endsAt`. */
+function useUrgentPulse(urgent: boolean, reduceMotion: boolean): Animated.Value {
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!urgent || reduceMotion) {
+      pulse.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.12, duration: trMotion.urgentPulseMs / 2, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: trMotion.urgentPulseMs / 2, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [urgent, reduceMotion, pulse]);
+  return pulse;
+}
+
+/**
+ * Per-answer-option scale/opacity used the moment a choice locks in: the
+ * selected card pops slightly, the rest fade back — purely cosmetic, driven
+ * off `myAnswer` rather than anything server-authoritative.
+ */
+function useAnswerLockAnim(optionIds: string[], selectedId: string | null, reduceMotion: boolean) {
+  const anims = useRef<Record<string, Animated.Value>>({}).current;
+  optionIds.forEach((id) => {
+    if (!anims[id]) anims[id] = new Animated.Value(1);
+  });
+
+  useEffect(() => {
+    optionIds.forEach((id) => anims[id]?.setValue(1));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [optionIds.join('|')]);
+
+  useEffect(() => {
+    if (!selectedId || reduceMotion) return;
+    optionIds.forEach((id) => {
+      const anim = anims[id];
+      if (!anim) return;
+      if (id === selectedId) {
+        Animated.sequence([
+          Animated.timing(anim, { toValue: 1.05, duration: trMotion.answerLockMs / 2, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 1, duration: trMotion.answerLockMs / 2, useNativeDriver: true }),
+        ]).start();
+      } else {
+        Animated.timing(anim, { toValue: 0.94, duration: trMotion.answerLockMs, useNativeDriver: true }).start();
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, reduceMotion]);
+
+  return anims;
+}
+
 /** The primary in-game screen: question, timer, four answer options. Locks the moment you answer; never reveals correctness until the question is revealed. */
 export function TriviaQuestionScreen() {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { game, currentQuestion, myPlayerId, players, myAnswer, submitAnswer, submittingAnswer, answerError } = useTriviaGame();
   const secondsLeft = useCountdown(currentQuestion?.endsAt ?? null);
   const urgent = secondsLeft <= 5;
   const me = players.find((p) => p.id === myPlayerId);
+  const pulse = useUrgentPulse(urgent, reduceMotion);
+  const optionIds = currentQuestion?.answers.map((a) => a.id) ?? [];
+  const lockAnims = useAnswerLockAnim(optionIds, myAnswer?.answerId ?? null, reduceMotion);
 
   if (!game || !currentQuestion) return null;
 
@@ -50,7 +111,7 @@ export function TriviaQuestionScreen() {
         <Text style={styles.topLabel}>{me?.score ?? 0} points</Text>
       </View>
 
-      <Text style={[styles.timer, urgent && styles.timerUrgent]}>{formatClock(secondsLeft)}</Text>
+      <Animated.Text style={[styles.timer, urgent && styles.timerUrgent, { transform: [{ scale: pulse }] }]}>{formatClock(secondsLeft)}</Animated.Text>
 
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.sheet}>
@@ -63,27 +124,28 @@ export function TriviaQuestionScreen() {
             {currentQuestion.answers.map((option) => {
               const selected = myAnswer?.answerId === option.id;
               return (
-                <Pressable
-                  key={option.id}
-                  onPress={() => {
-                    if (!locked) submitAnswer(option.id);
-                  }}
-                  disabled={locked}
-                  style={({ pressed }) => [
-                    styles.answerCard,
-                    selected && styles.answerCardSelected,
-                    locked && !selected && styles.answerCardDisabled,
-                    pressed && !locked && styles.answerCardPressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${option.id.toUpperCase()}. ${option.text}`}
-                  accessibilityState={{ disabled: locked, selected }}
-                >
-                  <Text style={[styles.answerLetter, selected && styles.answerLetterSelected]}>{option.id.toUpperCase()}</Text>
-                  <Text style={[styles.answerText, selected && styles.answerTextSelected]} numberOfLines={3}>
-                    {option.text}
-                  </Text>
-                </Pressable>
+                <Animated.View key={option.id} style={{ transform: [{ scale: lockAnims[option.id] ?? 1 }] }}>
+                  <Pressable
+                    onPress={() => {
+                      if (!locked) submitAnswer(option.id);
+                    }}
+                    disabled={locked}
+                    style={({ pressed }) => [
+                      styles.answerCard,
+                      selected && styles.answerCardSelected,
+                      locked && !selected && styles.answerCardDisabled,
+                      pressed && !locked && styles.answerCardPressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${option.id.toUpperCase()}. ${option.text}`}
+                    accessibilityState={{ disabled: locked, selected }}
+                  >
+                    <Text style={[styles.answerLetter, selected && styles.answerLetterSelected]}>{option.id.toUpperCase()}</Text>
+                    <Text style={[styles.answerText, selected && styles.answerTextSelected]} numberOfLines={3}>
+                      {option.text}
+                    </Text>
+                  </Pressable>
+                </Animated.View>
               );
             })}
           </View>

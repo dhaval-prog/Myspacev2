@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NpatGlassBackdrop } from '../../../components/npat/NpatGlassBackdrop';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useTriviaGame } from '../../../context/TriviaGameContext';
-import { trColor, trFont } from '../../../theme/triviaTokens';
+import { trColor, trFont, trMotion } from '../../../theme/triviaTokens';
 
 function useSecondsUntil(target: string | null): number {
   const [secondsLeft, setSecondsLeft] = useState(() => (target ? Math.max(0, Math.ceil((new Date(target).getTime() - Date.now()) / 1000)) : 0));
@@ -22,24 +23,48 @@ function useSecondsUntil(target: string | null): number {
 /** Correct answer + every player's result for this question, then a running leaderboard — the reveal and leaderboard moments combined into one screen. */
 export function TriviaRevealScreen() {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { currentQuestion, correctAnswerId, answers, players, myPlayerId } = useTriviaGame();
   const secondsLeft = useSecondsUntil(currentQuestion?.revealEndsAt ?? null);
 
-  if (!currentQuestion) return null;
-
-  const correctText = currentQuestion.answers.find((a) => a.id === correctAnswerId)?.text ?? '—';
   const ranked = players
     .filter((p) => p.active)
     .slice()
     .sort((a, b) => b.score - a.score);
 
+  // This screen mounts fresh every time a question is revealed (the parent
+  // swaps it in/out), so a plain mount-time entrance is enough — no need to
+  // key anything off the question id.
+  const bannerAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  const [rowAnims] = useState(() => ranked.map(() => new Animated.Value(reduceMotion ? 1 : 0)));
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    Animated.timing(bannerAnim, { toValue: 1, duration: trMotion.revealEntranceMs, easing: trMotion.easeEntrance, useNativeDriver: true }).start();
+    Animated.stagger(
+      trMotion.revealStaggerMs,
+      rowAnims.map((v) => Animated.timing(v, { toValue: 1, duration: trMotion.revealEntranceMs, easing: trMotion.easeEntrance, useNativeDriver: true })),
+    ).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!currentQuestion) return null;
+
+  const correctText = currentQuestion.answers.find((a) => a.id === correctAnswerId)?.text ?? '—';
+
   return (
     <LinearGradient colors={[trColor.headerTop, trColor.headerMid, trColor.headerBottom]} locations={[0, 0.52, 1]} style={styles.screen}>
       <NpatGlassBackdrop colors={[trColor.blobIndigoDark, trColor.blobLimeDark]} />
-      <View style={{ paddingTop: insets.top + 18 }}>
+      <Animated.View
+        style={{
+          paddingTop: insets.top + 18,
+          opacity: bannerAnim,
+          transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
+        }}
+      >
         <Text style={styles.correctLabel}>✓ CORRECT ANSWER</Text>
         <Text style={styles.correctText}>{correctText}</Text>
-      </View>
+      </Animated.View>
 
       <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.sheet}>
@@ -51,8 +76,16 @@ export function TriviaRevealScreen() {
             {ranked.map((p, i) => {
               const answer = answers.find((a) => a.playerId === p.id);
               const isMe = p.id === myPlayerId;
+              const rowAnim = rowAnims[i];
+              const rowStyle = rowAnim
+                ? {
+                    opacity: rowAnim,
+                    transform: [{ translateY: rowAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+                  }
+                : undefined;
+              const pointsScale = rowAnim ? rowAnim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.4, 1.2, 1] }) : 1;
               return (
-                <View key={p.id} style={[styles.row, isMe && styles.rowSelf]}>
+                <Animated.View key={p.id} style={[styles.row, isMe && styles.rowSelf, rowStyle]}>
                   <Text style={styles.rank}>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}</Text>
                   <View style={styles.rowMid}>
                     <Text style={styles.name} numberOfLines={1}>
@@ -64,10 +97,12 @@ export function TriviaRevealScreen() {
                     </Text>
                   </View>
                   <View style={styles.scoreCol}>
-                    {answer && answer.points > 0 && <Text style={styles.pointsGained}>+{answer.points}</Text>}
+                    {answer && answer.points > 0 && (
+                      <Animated.Text style={[styles.pointsGained, { transform: [{ scale: pointsScale }] }]}>+{answer.points}</Animated.Text>
+                    )}
                     <Text style={styles.totalScore}>{p.score}</Text>
                   </View>
-                </View>
+                </Animated.View>
               );
             })}
           </View>

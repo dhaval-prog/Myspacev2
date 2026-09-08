@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,10 +7,40 @@ import { NpatGlassBackdrop } from '../../../components/npat/NpatGlassBackdrop';
 import { PrimaryCta } from '../../../components/spacecards/PrimaryCta';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useTriviaGame } from '../../../context/TriviaGameContext';
-import { trColor, trFont } from '../../../theme/triviaTokens';
+import { trColor, trFont, trMotion } from '../../../theme/triviaTokens';
 
 interface TriviaFinalResultsScreenProps {
   onHome: () => void;
+}
+
+const CONFETTI = ['🎉', '✨', '🎊', '⭐', '💛', '🎉', '✨', '🎊', '⭐', '💛'];
+const CONFETTI_X = [-150, -112, -74, -36, 2, 40, 78, 116, -130, 60];
+
+/** A one-shot, non-looping confetti burst over the winner banner — skipped entirely under reduce-motion. */
+function TriviaConfetti() {
+  const anims = useRef(CONFETTI.map(() => new Animated.Value(0))).current;
+  useEffect(() => {
+    Animated.stagger(
+      trMotion.confettiStaggerMs,
+      anims.map((v) => Animated.timing(v, { toValue: 1, duration: trMotion.confettiFallMs, easing: Easing.out(Easing.quad), useNativeDriver: true })),
+    ).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <View style={styles.confettiLayer} pointerEvents="none">
+      {CONFETTI.map((emoji, i) => {
+        const translateY = anims[i].interpolate({ inputRange: [0, 1], outputRange: [-16, 220] });
+        const rotate = anims[i].interpolate({ inputRange: [0, 1], outputRange: ['0deg', i % 2 === 0 ? '340deg' : '-340deg'] });
+        const opacity = anims[i].interpolate({ inputRange: [0, 0.85, 1], outputRange: [1, 1, 0] });
+        return (
+          <Animated.Text key={i} style={[styles.confettiPiece, { left: 195 + CONFETTI_X[i], opacity, transform: [{ translateY }, { rotate }] }]}>
+            {emoji}
+          </Animated.Text>
+        );
+      })}
+    </View>
+  );
 }
 
 /** Winner banner, final leaderboard, and personal stats — the last screen of a Trivia Night. */
@@ -25,6 +55,21 @@ export function TriviaFinalResultsScreen({ onHome }: TriviaFinalResultsScreenPro
   const answeredTotal = me ? me.correctAnswers + me.incorrectAnswers + me.unanswered : 0;
   const accuracy = me && answeredTotal > 0 ? Math.round((me.correctAnswers / answeredTotal) * 100) : 0;
 
+  const trophyAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  const winnerAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    Animated.spring(trophyAnim, { toValue: 1, useNativeDriver: true, friction: 4, tension: 60 }).start();
+    Animated.timing(winnerAnim, {
+      toValue: 1,
+      duration: trMotion.winnerEntranceMs,
+      delay: trMotion.winnerEntranceDelayMs,
+      easing: trMotion.easeEntrance,
+      useNativeDriver: true,
+    }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const backToGames = () => {
     leaveGame();
     onHome();
@@ -33,15 +78,29 @@ export function TriviaFinalResultsScreen({ onHome }: TriviaFinalResultsScreenPro
   return (
     <LinearGradient colors={[trColor.headerTop, trColor.headerMid, trColor.headerBottom]} locations={[0, 0.52, 1]} style={styles.screen}>
       <NpatGlassBackdrop colors={[trColor.blobIndigoDark, trColor.blobLimeDark]} heightMultiplier={1.6} />
+      {!reduceMotion && winner && <TriviaConfetti />}
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]} showsVerticalScrollIndicator={false}>
-        <Text style={styles.trophy}>🏆</Text>
+        <Animated.Text
+          style={[
+            styles.trophy,
+            { transform: [{ scale: trophyAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }] },
+          ]}
+        >
+          🏆
+        </Animated.Text>
         <Text style={styles.complete}>TRIVIA NIGHT COMPLETE</Text>
         {winner && (
-          <>
+          <Animated.View
+            style={{
+              alignItems: 'center',
+              opacity: winnerAnim,
+              transform: [{ translateY: winnerAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+            }}
+          >
             <Text style={styles.winnerLabel}>WINNER</Text>
             <Text style={styles.winnerName}>{winner.name}</Text>
             <Text style={styles.winnerScore}>{winner.score.toLocaleString()} POINTS</Text>
-          </>
+          </Animated.View>
         )}
 
         <View style={styles.sheet}>
@@ -146,4 +205,6 @@ const styles = StyleSheet.create({
   statValue: { fontFamily: trFont.sans800, fontSize: 19, color: trColor.ink },
   statLabel: { fontFamily: trFont.sans400, fontSize: 10.5, color: trColor.fieldLabel, textAlign: 'center' },
   ctaWrap: { marginTop: 4 },
+  confettiLayer: { position: 'absolute', top: 0, left: 0, right: 0, height: 260, zIndex: 1 },
+  confettiPiece: { position: 'absolute', top: 0, fontSize: 22 },
 });
