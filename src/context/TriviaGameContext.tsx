@@ -4,7 +4,7 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import type { TriviaAnswer, TriviaDifficulty, TriviaGame, TriviaGameStatus, TriviaPlayer, TriviaQuestion, TriviaQuestionStatus } from '../types/trivia';
 
-interface TriviaGameRow {
+export interface TriviaGameRow {
   id: string;
   room_code: string;
   host_id: string;
@@ -18,7 +18,7 @@ interface TriviaGameRow {
   completed_at: string | null;
 }
 
-interface TriviaPlayerRow {
+export interface TriviaPlayerRow {
   id: string;
   game_id: string;
   user_id: string;
@@ -32,7 +32,7 @@ interface TriviaPlayerRow {
   last_seen_at: string;
 }
 
-interface TriviaQuestionRow {
+export interface TriviaQuestionRow {
   id: string;
   game_id: string;
   question_index: number;
@@ -46,7 +46,7 @@ interface TriviaQuestionRow {
   reveal_ends_at: string | null;
 }
 
-interface TriviaAnswerRow {
+export interface TriviaAnswerRow {
   id: string;
   game_id: string;
   question_id: string;
@@ -58,7 +58,8 @@ interface TriviaAnswerRow {
   points: number;
 }
 
-function toGame(row: TriviaGameRow): TriviaGame {
+/** Snake_case DB row -> camelCase app shape. Exported for unit testing only — not part of the context's public API surface. */
+export function toGame(row: TriviaGameRow): TriviaGame {
   return {
     id: row.id,
     roomCode: row.room_code,
@@ -74,7 +75,7 @@ function toGame(row: TriviaGameRow): TriviaGame {
   };
 }
 
-function toPlayer(row: TriviaPlayerRow): TriviaPlayer {
+export function toPlayer(row: TriviaPlayerRow): TriviaPlayer {
   return {
     id: row.id,
     gameId: row.game_id,
@@ -90,7 +91,7 @@ function toPlayer(row: TriviaPlayerRow): TriviaPlayer {
   };
 }
 
-function toQuestion(row: TriviaQuestionRow): TriviaQuestion {
+export function toQuestion(row: TriviaQuestionRow): TriviaQuestion {
   return {
     id: row.id,
     gameId: row.game_id,
@@ -106,7 +107,7 @@ function toQuestion(row: TriviaQuestionRow): TriviaQuestion {
   };
 }
 
-function toAnswer(row: TriviaAnswerRow): TriviaAnswer {
+export function toAnswer(row: TriviaAnswerRow): TriviaAnswer {
   return {
     id: row.id,
     gameId: row.game_id,

@@ -38,8 +38,14 @@
     "react-native-webrtc": "^124.0.8"
   },
   "devDependencies": {
+    "@react-native/jest-preset": "0.86.3",
+    "@testing-library/react-native": "14.0.1",
+    "@types/jest": "30.0.0",
     "@types/leaflet": "^1.9.22",
     "@types/react": "~19.2.2",
+    "jest": "30.5.1",
+    "jest-expo": "57.0.5",
+    "test-renderer": "1.2.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -47,7 +53,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:web": "expo export -p web"
+    "build:web": "expo export -p web",
+    "test": "jest"
   },
   "private": true
 }
