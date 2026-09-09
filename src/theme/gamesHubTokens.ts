@@ -63,6 +63,12 @@ export const ghColor = {
 
   npatTile: '#E8EBD9',
   cardsTile: '#DCEBAA',
+  triviaTile: '#DCE1F5',
+
+  // Trivia's own brand indigo, at full strength — used for its recent-
+  // activity badge, since the pale tile tint above reads too faint at badge size.
+  triviaBadgeBg: '#2E4590',
+  triviaBadgeFg: '#FFFFFF',
 
   // Frosted-glass surfaces: a light BlurView backdrop plus a translucent
   // white tint on top (the tint carries most of the "glass" color since blur

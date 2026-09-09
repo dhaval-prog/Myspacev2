@@ -1,4 +1,4 @@
-export type GameType = 'NPAT' | 'CARDS';
+export type GameType = 'NPAT' | 'CARDS' | 'TRIVIA';
 export type GamePointResult = 'win' | 'loss' | 'draw';
 
 /** A user's persistent, cross-game score — separate from any single game's internal score. */
@@ -56,8 +56,20 @@ export interface GameBreakdownEntry {
 export const GAME_TYPE_LABELS: Record<string, string> = {
   NPAT: 'Name, Place, Animal, Thing',
   CARDS: 'Space Cards',
+  TRIVIA: 'Trivia Night',
 };
 
 export function gameTypeLabel(gameType: string): string {
   return GAME_TYPE_LABELS[gameType] ?? gameType;
+}
+
+/** Short names for tight spaces (activity feed rows, per-game subtitles) — GAME_TYPE_LABELS' full names (e.g. "Name, Place, Animal, Thing") read as a mouthful there. */
+export const GAME_TYPE_SHORT_LABELS: Record<string, string> = {
+  NPAT: 'NPAT',
+  CARDS: 'Space Cards',
+  TRIVIA: 'Trivia Night',
+};
+
+export function gameTypeShortLabel(gameType: string): string {
+  return GAME_TYPE_SHORT_LABELS[gameType] ?? gameType;
 }

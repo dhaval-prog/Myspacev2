@@ -5,13 +5,14 @@ import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { HubSheet } from './HubSheet';
 import { ghColor, ghFont } from '../../theme/gamesHubTokens';
+import { gameTypeShortLabel } from '../../types/gameStats';
 import type { GameBreakdownEntry, LeaderboardEntry } from '../../types/gameStats';
 
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 const TABS = ['This week', 'All time', 'By game'] as const;
 
 function subtitleFor(breakdown: GameBreakdownEntry[]): string {
-  return breakdown.map((b) => `${b.gameType} ${Math.max(0, b.net)}`).join(' · ') || 'No games yet';
+  return breakdown.map((b) => `${gameTypeShortLabel(b.gameType)} ${Math.max(0, b.net)}`).join(' · ') || 'No games yet';
 }
 
 interface LeaderboardSheetProps {

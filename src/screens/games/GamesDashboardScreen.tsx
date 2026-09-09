@@ -103,6 +103,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
   const weeklyDelta = recentActivity.filter((tx) => Date.now() - new Date(tx.createdAt).getTime() <= WEEK_MS).reduce((sum, tx) => sum + tx.pointsChange, 0);
   const npat = breakdown.find((b) => b.gameType === 'NPAT');
   const cards = breakdown.find((b) => b.gameType === 'CARDS');
+  const trivia = breakdown.find((b) => b.gameType === 'TRIVIA');
 
   return (
     <LinearGradient colors={[ghColor.bgTop, ghColor.bgMid, ghColor.bgBottom]} locations={[0, 0.46, 1]} style={styles.screen}>
@@ -178,6 +179,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
             </View>
             <BreakdownBar label="NPAT" value={npat?.net ?? 0} total={myTotal} color={ghColor.gradientA} />
             <BreakdownBar label="CARDS" value={cards?.net ?? 0} total={myTotal} color={ghColor.gradientB} />
+            <BreakdownBar label="TRIVIA" value={trivia?.net ?? 0} total={myTotal} color={ghColor.triviaBadgeBg} />
           </View>
         </Pressable>
 
@@ -317,7 +319,7 @@ const styles = StyleSheet.create({
   rankDeltaLabel: { fontFamily: ghFont.mono500, fontSize: 9.5, color: ghColor.up },
   gapLabel: { flex: 1, textAlign: 'right', fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.06, color: ghColor.textFaint },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  barLabel: { width: 40, fontFamily: ghFont.mono500, fontSize: 9, letterSpacing: 9 * 0.06, color: ghColor.textTertiary },
+  barLabel: { width: 46, fontFamily: ghFont.mono500, fontSize: 9, letterSpacing: 9 * 0.06, color: ghColor.textTertiary },
   barTrack: { flex: 1, height: 8, borderRadius: 999, backgroundColor: ghColor.surface, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 999 },
   barValue: { width: 30, textAlign: 'right', fontFamily: ghFont.mono500, fontSize: 10.5, color: ghColor.textPrimary },
