@@ -4,9 +4,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Icon } from '../Icon';
 import { HubSheet } from './HubSheet';
 import { ghColor, ghFont } from '../../theme/gamesHubTokens';
+import { gameTypeShortLabel } from '../../types/gameStats';
 import type { GameBreakdownEntry, GamePointTransaction, LeaderboardEntry } from '../../types/gameStats';
 
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
+
+function badgeFor(gameType: string): { letter: string; bg: string; fg: string } {
+  if (gameType === 'NPAT') return { letter: 'N', bg: ghColor.gradientA, fg: ghColor.textOnGradient };
+  if (gameType === 'TRIVIA') return { letter: 'T', bg: ghColor.triviaBadgeBg, fg: ghColor.triviaBadgeFg };
+  return { letter: 'S', bg: ghColor.gradientB, fg: ghColor.textOnGradient };
+}
 
 function dayLabel(iso: string): string {
   const d = new Date(iso);
@@ -26,7 +33,7 @@ function timeLabel(iso: string): string {
 
 function describeTx(tx: GamePointTransaction): string {
   const noun = tx.gameType === 'NPAT' ? 'round' : 'game';
-  const gameLabel = tx.gameType === 'NPAT' ? 'NPAT' : 'Space Cards';
+  const gameLabel = gameTypeShortLabel(tx.gameType);
   if (tx.result === 'win') return `${gameLabel} ${noun} won`;
   if (tx.result === 'loss') return `${gameLabel} ${noun} lost`;
   return `${gameLabel} ${noun} drawn`;
@@ -49,6 +56,7 @@ export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, 
   const total = myEntry?.stats.totalPoints ?? 0;
   const npat = breakdown.find((b) => b.gameType === 'NPAT');
   const cards = breakdown.find((b) => b.gameType === 'CARDS');
+  const trivia = breakdown.find((b) => b.gameType === 'TRIVIA');
 
   return (
     <HubSheet visible={visible} onClose={onClose} reduceMotion={reduceMotion}>
@@ -83,6 +91,11 @@ export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, 
           <Text style={styles.tileValue}>{cards?.net ?? 0}</Text>
           <Text style={styles.tileSub}>{cards?.gamesPlayed ?? 0} games · {cards?.wins ?? 0} wins</Text>
         </View>
+        <View style={[styles.tile, { backgroundColor: ghColor.triviaTile }]}>
+          <Text style={styles.tileLabel}>TRIVIA NIGHT</Text>
+          <Text style={styles.tileValue}>{trivia?.net ?? 0}</Text>
+          <Text style={styles.tileSub}>{trivia?.gamesPlayed ?? 0} games · {trivia?.wins ?? 0} wins</Text>
+        </View>
       </View>
 
       <Text style={styles.eyebrow}>HOW YOU EARNED IT</Text>
@@ -90,10 +103,12 @@ export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, 
         {recentActivity.length === 0 ? (
           <Text style={styles.emptyText}>No games played yet.</Text>
         ) : (
-          recentActivity.slice(0, 12).map((tx) => (
+          recentActivity.slice(0, 12).map((tx) => {
+            const badge = badgeFor(tx.gameType);
+            return (
             <View key={tx.id} style={styles.txRow}>
-              <View style={[styles.txBadge, { backgroundColor: tx.gameType === 'NPAT' ? ghColor.gradientA : ghColor.gradientB }]}>
-                <Text style={styles.txBadgeLabel}>{tx.gameType === 'NPAT' ? 'N' : 'S'}</Text>
+              <View style={[styles.txBadge, { backgroundColor: badge.bg }]}>
+                <Text style={[styles.txBadgeLabel, { color: badge.fg }]}>{badge.letter}</Text>
               </View>
               <View style={styles.txMid}>
                 <Text style={styles.txTitle}>{describeTx(tx)}</Text>
@@ -103,7 +118,8 @@ export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, 
                 {tx.pointsChange > 0 ? `+${tx.pointsChange}` : tx.pointsChange}
               </Text>
             </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
 
