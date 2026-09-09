@@ -56,23 +56,14 @@ export const trColor = {
 
 export const CATEGORY_OPTIONS = [
   'Random',
-  'General Knowledge',
-  'Books',
-  'Film',
-  'Music',
-  'Television',
-  'Video Games',
-  'Sports',
-  'Science',
-  'History',
-  'Geography',
-  'Technology',
-  'Food',
-  'Nature',
-  'Animals',
-  'Art',
-  'Computers',
-  'Mathematics',
+  'Bollywood',
+  'Cricket',
+  'Indian History',
+  'Indian Geography',
+  'Festivals & Culture',
+  'Regional Cinema',
+  'Indian Food',
+  'Famous Indians',
 ] as const;
 
 export const DIFFICULTY_OPTIONS = ['easy', 'medium', 'hard', 'mixed'] as const;

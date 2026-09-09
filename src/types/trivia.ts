@@ -3,23 +3,14 @@ export type TriviaQuestionStatus = 'pending' | 'active' | 'revealed';
 
 export type TriviaCategory =
   | 'Random'
-  | 'General Knowledge'
-  | 'Books'
-  | 'Film'
-  | 'Music'
-  | 'Television'
-  | 'Video Games'
-  | 'Sports'
-  | 'Science'
-  | 'History'
-  | 'Geography'
-  | 'Technology'
-  | 'Food'
-  | 'Nature'
-  | 'Animals'
-  | 'Art'
-  | 'Computers'
-  | 'Mathematics';
+  | 'Bollywood'
+  | 'Cricket'
+  | 'Indian History'
+  | 'Indian Geography'
+  | 'Festivals & Culture'
+  | 'Regional Cinema'
+  | 'Indian Food'
+  | 'Famous Indians';
 
 export type TriviaDifficulty = 'easy' | 'medium' | 'hard' | 'mixed';
 
