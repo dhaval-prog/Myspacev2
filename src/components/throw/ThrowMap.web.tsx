@@ -7,16 +7,40 @@ import { latLngAtProgress } from '../../utils/mapProjection';
 import { LocationPin } from './LocationPin';
 import { PaperPlane } from './PaperPlane';
 import type { ThrowMapProps } from './throwMapTypes';
+import type { LatLng } from '../../utils/geo';
 
 // A whole-world-ish default before there's anything to focus on.
 const WORLD_CENTER: [number, number] = [15, 10];
 const WORLD_ZOOM = 2;
-// How far a single-point focus zooms in — regional/multi-city scale (Throw's location data is a
-// city-level lat/lng, not live GPS, so this stays well short of Live Locations' street-level 15).
-const FOCUS_ZOOM = 6;
+// How far a single-point focus zooms in — city scale (Throw's location data is a city-level
+// lat/lng, not live GPS, so this stays short of Live Locations' street-level 15). Zoom 6 was tried
+// first and was wrong: at that zoom the viewport spans roughly 9° of longitude and 24° of
+// latitude, so OSM's own tile labels are dominated by whichever *neighboring* cities happen to be
+// biggest (Kota, Bhopal, Indore around Pune, say) while the actual focused city's name never
+// renders at all — the pin's mathematical position was correct, but nothing on the map read as
+// "this is Pune," which is what actually prompted the "can't see contact location" report.
+const FOCUS_ZOOM = 11;
 
 function pointsKey(points: { latitude: number; longitude: number }[] | null | undefined): string {
   return points ? points.map((p) => `${p.latitude.toFixed(3)},${p.longitude.toFixed(3)}`).join('|') : '';
+}
+
+type Target = { kind: 'fit'; points: LatLng[] } | { kind: 'focus'; point: LatLng } | null;
+
+// Always an instant jump, never an animated pan/fly — both `flyTo` and an animated `setView`
+// proved unreliable here: the selected contact can change twice in quick succession right after
+// mount (self location and friend data from ThrowContext often resolve a render or two apart), and
+// a second positioning call fired while the first's pan animation is still in flight interrupts
+// it, leaving Leaflet's reported center stuck at whatever point the animation had reached —
+// nowhere near either the old or the new target. An instant jump has no in-flight state to
+// interrupt, so it's correct regardless of how close together these calls land.
+function applyTarget(map: L.Map, target: Target) {
+  if (!target) return;
+  if (target.kind === 'fit') {
+    map.fitBounds(L.latLngBounds(target.points.map((p) => [p.latitude, p.longitude])), { padding: [60, 60], animate: false });
+  } else {
+    map.setView([target.point.latitude, target.point.longitude], FOCUS_ZOOM, { animate: false });
+  }
 }
 
 /**
@@ -34,6 +58,11 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const routeLineRef = useRef<L.Polyline | null>(null);
   const [, forceRender] = useState(0);
 
+  // Always holds whatever `focus`/`fitPoints` currently resolve to — mutated directly during
+  // render (not in an effect) so it's never stale by the time a Leaflet event callback reads it.
+  const targetRef = useRef<Target>(null);
+  targetRef.current = fitPoints && fitPoints.length > 0 ? { kind: 'fit', points: fitPoints } : focus ? { kind: 'focus', point: focus } : null;
+
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(WORLD_CENTER, WORLD_ZOOM);
@@ -47,7 +76,29 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     map.on('resize', rerender);
     mapRef.current = map;
     rerender();
+
+    // Unlike Live Locations' MapCanvas (a full-screen absoluteFill, already correctly sized the
+    // instant its container mounts), this map sits several `flex: 1` levels deep inside
+    // ThrowHomeScreen/ThrowFlightScreen — React Native Web's flex layout can still be settling
+    // the container's real pixel size well after this effect runs (and after the *first* resize
+    // notification too — the container's size can change more than once before it truly settles),
+    // so any positioning call issued too early converges on a geographically wrong center that
+    // never self-corrects afterward on its own (only the tile viewport does, via
+    // `invalidateSize()` — not wherever an earlier positioning call already decided to land).
+    // Rather than guess which resize event is "the last one", every one of them re-applies
+    // whatever the current target is — cheap, and idempotent once the size (and therefore the
+    // projected target position) stops changing.
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        map.invalidateSize();
+        applyTarget(map, targetRef.current);
+      });
+      resizeObserver.observe(containerRef.current);
+    }
+
     return () => {
+      resizeObserver?.disconnect();
       map.off('move', rerender);
       map.off('zoom', rerender);
       map.off('resize', rerender);
@@ -56,22 +107,13 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     };
   }, []);
 
+  // Re-position whenever the selected contact (or the flight endpoints) actually changes.
   const fitKey = pointsKey(fitPoints);
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !fitPoints || fitPoints.length === 0) return;
-    map.fitBounds(
-      L.latLngBounds(fitPoints.map((p) => [p.latitude, p.longitude])),
-      { padding: [60, 60], animate: true }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fitKey]);
-
   const focusKey = focus ? `${focus.latitude.toFixed(3)},${focus.longitude.toFixed(3)}` : '';
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || (fitPoints && fitPoints.length > 0) || !focus) return;
-    map.flyTo([focus.latitude, focus.longitude], FOCUS_ZOOM, { animate: true });
+    if (!map) return;
+    applyTarget(map, targetRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey, fitKey]);
 
