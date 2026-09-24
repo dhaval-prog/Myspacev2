@@ -18,7 +18,8 @@ type SubScreen =
   | { name: 'home'; lockedRecipient?: { friendUserId: string; repliedToThrowId: string } }
   | { name: 'flight'; letter: ThrowLetter }
   | { name: 'inbox' }
-  | { name: 'letter'; throwId: string };
+  | { name: 'letter'; throwId: string }
+  | { name: 'settings' };
 
 function ThrowNavigator({ onHome, initialThrowId }: { onHome: () => void; initialThrowId?: string }) {
   const { loading, myLocation } = useThrow();
@@ -37,10 +38,15 @@ function ThrowNavigator({ onHome, initialThrowId }: { onHome: () => void; initia
       <ThrowHomeScreen
         onHome={onHome}
         onOpenInbox={() => setScreen({ name: 'inbox' })}
+        onOpenSettings={() => setScreen({ name: 'settings' })}
         onThrown={(letter) => setScreen({ name: 'flight', letter })}
         lockedRecipient={screen.lockedRecipient}
       />
     );
+  }
+
+  if (screen.name === 'settings') {
+    return <ThrowLocationSetupScreen mode="edit" onDone={() => setScreen({ name: 'home' })} onBack={() => setScreen({ name: 'home' })} />;
   }
 
   if (screen.name === 'flight') {

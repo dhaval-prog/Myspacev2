@@ -82,6 +82,14 @@ export function useVoiceToText({ onFinalText }: UseVoiceToTextOptions): UseVoice
   }, []);
 
   const stop = useCallback(() => {
+    // Flip the UI back immediately rather than waiting on the module's own 'end' event — on some
+    // devices/browsers that event doesn't reliably fire promptly (or at all) once `continuous`
+    // recognition is running, which made the stop button look broken (recording state stuck
+    // true forever). A late 'result' event for whatever was already said can still arrive and
+    // append normally — the `result` handler above doesn't gate on `recording` — so nothing said
+    // right before stopping is lost, it just doesn't wait around for it.
+    setRecording(false);
+    setInterimText('');
     ExpoSpeechRecognitionModule.stop();
   }, []);
 

@@ -4,20 +4,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
 import { FoldingLetter } from '../../components/throw/FoldingLetter';
+import { Icon } from '../../components/Icon';
 import { throwColor, throwFont } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import type { StrokePath, ThrowLetter } from '../../types/throw';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 
+// Feather Icons' "settings" gear glyph (24x24 viewBox) — a known-good path rather than a
+// freehand approximation.
+const GEAR_ICON =
+  'M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z';
+
 interface ThrowHomeScreenProps {
   onHome: () => void;
   onOpenInbox: () => void;
+  onOpenSettings: () => void;
   onThrown: (letter: ThrowLetter) => void;
   /** Set when arriving here via "Throw Back" — recipient is fixed, carousel is hidden. */
   lockedRecipient?: { friendUserId: string; repliedToThrowId: string } | null;
 }
 
-export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient }: ThrowHomeScreenProps) {
+export function ThrowHomeScreen({ onHome, onOpenInbox, onOpenSettings, onThrown, lockedRecipient }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const { myLocation, friends, unreadCount, sendThrow, uploadPhoto } = useThrow();
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
@@ -90,9 +97,9 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient
           <Text style={styles.headerBack}>‹ Home</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Throw</Text>
-        {/* Balances the back button so the title stays centered — Inbox itself now lives in
-            FoldingLetter's bottom-right control, alongside Photo and Voice. */}
-        <View style={styles.headerSpacer} />
+        <Pressable onPress={onOpenSettings} hitSlop={10} style={styles.headerSpacer} accessibilityRole="button" accessibilityLabel="Throw settings">
+          <Icon path={GEAR_ICON} size={19} color={throwColor.inkSoft} strokeWidth={1.8} />
+        </Pressable>
       </View>
 
       <View style={styles.mapArea}>
@@ -147,7 +154,7 @@ const styles = StyleSheet.create({
   },
   headerBack: { fontFamily: throwFont.ui600, fontSize: 13.5, color: throwColor.inkSoft },
   headerTitle: { fontFamily: throwFont.hand700, fontSize: 26, color: throwColor.ink },
-  headerSpacer: { width: 48 },
+  headerSpacer: { width: 48, alignItems: 'flex-end' },
   mapArea: { flex: 1, marginHorizontal: 12, marginTop: 4, marginBottom: 12, borderRadius: 20, overflow: 'hidden' },
   recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
   replyLine: {
