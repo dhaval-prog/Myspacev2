@@ -9,7 +9,7 @@ export interface AppNotification {
   body: string;
   createdAt: string;
   /** What this notification is about — set server-side so a tap can jump straight to it. */
-  entityType: 'card' | 'group' | 'connection' | null;
+  entityType: 'card' | 'group' | 'connection' | 'throw' | null;
   entityId: string | null;
 }
 
