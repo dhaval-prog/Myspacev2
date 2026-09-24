@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutChangeEvent, PanResponder, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, LayoutChangeEvent, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import { LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
@@ -65,6 +65,10 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
   const stageRef = useRef<PaperPlaneStageHandle>(null);
   const flyDoneRef = useRef<(() => void) | null>(null);
   const bakedRef = useRef(false);
+  // Web-only fallback tracking for an in-progress fold drag — see the comment on the effect below
+  // for why this exists. { y, progress } is the last point we know is accurate: a screen Y
+  // coordinate and the fold progress computed for it.
+  const dragAnchorRef = useRef<{ y: number; progress: number } | null>(null);
 
   const handleStageError = useCallback((err: unknown) => {
     console.warn('[Throw] paper plane 3D stage failed to initialize, falling back to a static glyph:', err);
@@ -90,6 +94,7 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
       setPhase(target === 1 ? 'ready' : 'writing');
       if (target === 1) stageRef.current?.holdReady();
       if (target === 0) bakedRef.current = false;
+      dragAnchorRef.current = null;
     });
   };
 
@@ -129,56 +134,121 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
     // On success the parent navigates away — nothing left to reset here.
   };
 
+  // The PanResponder below is built exactly once (see the empty useMemo deps) and never rebuilt
+  // for the component's lifetime. It used to depend on `phase`/`hasContent`/`content`/`paperSize`
+  // — but `onPanResponderMove` itself calls `setPhase('folding')` the instant a fold-drag starts,
+  // which recreated the whole PanResponder (and its panHandlers) mid-gesture. Swapping the DOM's
+  // touch/mouse handlers out from under an in-progress touch broke tracking: RN Web's responder
+  // polyfill doesn't hand the live gesture off to the new instance, so `dy` froze a few pixels
+  // into the drag no matter how far the user kept dragging (the fold visibly stalled after its
+  // first couple of steps). This ref mirrors whatever state and closures the responder's
+  // callbacks need, updated every render, so they always read fresh values without the responder
+  // object itself ever changing identity while a touch is active.
+  const latest = useRef({ disabled, phase, hasContent, content, paperSize, launch, settleFold, springLiftBack });
+  latest.current = { disabled, phase, hasContent, content, paperSize, launch, settleFold, springLiftBack };
+
+  const applyFoldProgress = useCallback(
+    (next: number) => {
+      progress.setValue(next);
+      if (latest.current.phase !== 'folding' && next > 0) setPhase('folding');
+      // RN Web's responder polyfill doesn't reliably fire onPanResponderGrant when this capture
+      // steals the gesture from LetterCanvas mid-touch (only Move/Release fire on the new owner),
+      // so the one-time content bake is triggered from here instead, guarded by bakedRef rather
+      // than relying on Grant.
+      if (!bakedRef.current && next > 0) {
+        bakedRef.current = true;
+        stageRef.current?.setContent(latest.current.content, latest.current.paperSize);
+      }
+    },
+    [progress],
+  );
+
+  // react-native-web's PanResponder polyfill dedupes move events against
+  // `touchHistory.mostRecentTimeStamp`, and once `onMoveShouldSetPanResponderCapture` below
+  // steals the gesture from LetterCanvas mid-touch, that history stops advancing for this
+  // gesture — so `onPanResponderMove` fires at most once per drag on web, freezing the fold a
+  // few percent in no matter how much further the user keeps dragging (this is a real,
+  // reproducible library bug, not an app-level race). Real React Native's own touch system
+  // doesn't have this bug, so native keeps using PanResponder's own tracking untouched; on web,
+  // once the first successful move seeds `dragAnchorRef`, these raw window-level listeners take
+  // over computing fold progress directly from pointer position, bypassing the broken dedupe.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || phase !== 'folding') return;
+    const getY = (e: MouseEvent | TouchEvent): number | null => {
+      if ('touches' in e) return e.touches[0]?.clientY ?? null;
+      return e.clientY;
+    };
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      const y = getY(e);
+      const anchor = dragAnchorRef.current;
+      if (y == null || !anchor) return;
+      const next = Math.max(0, Math.min(1, anchor.progress + (y - anchor.y) / FOLD_DRAG_DISTANCE));
+      applyFoldProgress(next);
+    };
+    const onUp = () => latest.current.settleFold(progressRef.current >= 0.5 ? 1 : 0);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchend', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
+    };
+  }, [phase, applyFoldProgress]);
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         // A brand-new gesture only needs an immediate claim in the 'ready' phase (swipe-up-to-
         // throw) — a fold-drag starting from 'writing' is negotiated via move-capture below, since
         // LetterCanvas's own stroke responder needs first refusal on short/lateral touches.
-        onStartShouldSetPanResponder: () => !disabled && phase === 'ready',
+        onStartShouldSetPanResponder: () => !latest.current.disabled && latest.current.phase === 'ready',
         onStartShouldSetPanResponderCapture: () => false,
         onMoveShouldSetPanResponderCapture: (_, g) => {
+          const { disabled, phase, hasContent } = latest.current;
           if (disabled || phase === 'throwing') return false;
           if (phase === 'ready' || phase === 'folding') return true;
           return hasContent && g.dy > FOLD_CAPTURE_DY && g.dy > Math.abs(g.dx) * FOLD_CAPTURE_RATIO;
         },
         onPanResponderGrant: () => {
-          if (phase === 'ready') {
+          if (latest.current.phase === 'ready') {
             liftY.setValue(0);
           }
         },
         onPanResponderMove: (_, g) => {
-          if (phase === 'ready') {
+          if (latest.current.phase === 'ready') {
             liftY.setValue(Math.min(0, g.dy));
             return;
           }
           const next = Math.max(0, Math.min(1, g.dy / FOLD_DRAG_DISTANCE));
-          progress.setValue(next);
-          if (phase !== 'folding' && next > 0) setPhase('folding');
-          // RN Web's responder polyfill doesn't reliably fire onPanResponderGrant when this
-          // capture steals the gesture from LetterCanvas mid-touch (only Move/Release fire on
-          // the new owner), so the one-time content bake is triggered from here instead, guarded
-          // by bakedRef rather than relying on Grant.
-          if (!bakedRef.current && next > 0) {
-            bakedRef.current = true;
-            stageRef.current?.setContent(content, paperSize);
-          }
+          // Keep the web fallback's anchor in sync every time RN's own tracking does manage to
+          // fire (see the effect below) — it may only ever fire this once for a given drag, but
+          // when it does, this is the most accurate anchor available.
+          dragAnchorRef.current = { y: g.moveY, progress: next };
+          applyFoldProgress(next);
         },
         onPanResponderRelease: (_, g) => {
-          if (phase === 'ready') {
+          if (latest.current.phase === 'ready') {
             if (g.dy <= -LAUNCH_THRESHOLD || g.vy <= -LAUNCH_VELOCITY) {
-              launch();
+              latest.current.launch();
             } else {
-              springLiftBack();
+              latest.current.springLiftBack();
             }
             return;
           }
-          settleFold(progressRef.current >= 0.5 ? 1 : 0);
+          // On web, the fold-drag's release is handled by the raw window listener above — RN
+          // Web's touch-history dedupe bug that freezes onPanResponderMove mid-drag (see the
+          // effect's comment) also leaves gestureState stale by the time release fires here.
+          if (Platform.OS !== 'web') {
+            latest.current.settleFold(progressRef.current >= 0.5 ? 1 : 0);
+          }
         },
         onPanResponderTerminationRequest: () => true,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [disabled, phase, hasContent, content, paperSize, reduceMotion, stageFailed],
+    [],
   );
 
   const onPaperLayout = (e: LayoutChangeEvent) => {

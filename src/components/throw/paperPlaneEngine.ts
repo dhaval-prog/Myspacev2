@@ -661,8 +661,9 @@ export function createPaperPlane(options: PaperPlaneOptions) {
       mat.map = next;
       if (old && old !== next) old.dispose();
     },
+    /** `tt` is a 0..1 progress fraction over the whole fold timeline (see PaperPlaneStageHandle.seek). */
     seek(tt: number) {
-      t = clamp01(tt / FOLD_END) * FOLD_END;
+      t = clamp01(tt) * FOLD_END;
       dirty = true;
       if (mat.opacity !== 1) {
         resetT = 1;
