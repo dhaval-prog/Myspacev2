@@ -22,7 +22,6 @@ import { DotPairThrobber } from '../components/throbbers';
 
 const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
 const DICE_ICON = 'M4 4h16v16H4z M8 8h.01 M16 8h.01 M8 16h.01 M16 16h.01 M12 12h.01';
-const DROP_ICON = 'M12 2c1 3-2 4-2 7a4 4 0 0 0 8 0c0-2-1-3-1-3s2 2 2 6a6 6 0 0 1-12 0c0-4 3-6 5-10z';
 
 interface HomeScreenProps {
   onOpenNotificationTarget?: (target: NotificationTarget) => void;
@@ -31,7 +30,6 @@ interface HomeScreenProps {
   onOpenSplit: () => void;
   onOpenFriends: () => void;
   onOpenGames: () => void;
-  onOpenDrop: () => void;
   onOpenAccount: () => void;
 }
 
@@ -49,7 +47,6 @@ export function HomeScreen({
   onOpenSplit,
   onOpenFriends,
   onOpenGames,
-  onOpenDrop,
   onOpenAccount,
 }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
@@ -100,7 +97,6 @@ export function HomeScreen({
       glass: true,
     });
     list.push({ id: 'games', label: 'Games', count: '', icon: DICE_ICON, glass: true });
-    list.push({ id: 'drop', label: 'Drop', count: '', icon: DROP_ICON, glass: true });
     return list;
   }, [items.length, showAttention, attentionEntries.length, receivedRequests.length]);
 
@@ -111,9 +107,9 @@ export function HomeScreen({
   // appears to change on its own. A real tap always navigates away
   // immediately. Off entirely when the OS asks for reduced motion.
   useEffect(() => {
-    // "Orbit" (friends & chat), "Games", and "Drop" each open a whole separate
-    // section, not a detail rail — none join the ambient preview rotation.
-    const ids = rows.map((r) => r.id).filter((id) => id !== 'friends' && id !== 'games' && id !== 'drop');
+    // "Orbit" (friends & chat) and "Games" each open a whole separate
+    // section, not a detail rail — neither joins the ambient preview rotation.
+    const ids = rows.map((r) => r.id).filter((id) => id !== 'friends' && id !== 'games');
     if (reduceMotion || ids.length <= 1) return;
     const timer = setInterval(() => {
       setPreviewViewId((current) => {
@@ -190,10 +186,6 @@ export function HomeScreen({
               }
               if (id === 'games') {
                 onOpenGames();
-                return;
-              }
-              if (id === 'drop') {
-                onOpenDrop();
                 return;
               }
               setActiveViewId(id as ViewId);
