@@ -9,6 +9,7 @@ import { BottomNav } from '../../components/BottomNav';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
+import { GlassSurface } from '../../components/friends/GlassSurface';
 import { MapCanvas } from '../../components/location/MapCanvas';
 import type { MapCanvasHandle } from '../../components/location/mapTypes';
 import { PinPreviewCard } from '../../components/location/PinPreviewCard';
@@ -366,8 +367,10 @@ function MapPage({
           <Text style={styles.title}>Nearby friends</Text>
           <Text style={styles.sub}>{rows.length} friend{rows.length === 1 ? '' : 's'}</Text>
         </View>
-        <Pressable onPress={onOpenPrivacy} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Location & privacy settings">
-          <Icon path={GEAR_ICON} color={colors.textPrimary} size={18} strokeWidth={1.7} />
+        <Pressable onPress={onOpenPrivacy} accessibilityRole="button" accessibilityLabel="Location & privacy settings">
+          <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={styles.iconButton}>
+            <Icon path={GEAR_ICON} color={colors.textPrimary} size={18} strokeWidth={1.7} />
+          </GlassSurface>
         </Pressable>
       </View>
 
@@ -382,17 +385,14 @@ function MapPage({
       ) : null}
 
       {/* Back — floats above the sheet, over "Share my location" */}
-      <Pressable
-        onPress={onBack}
-        style={[styles.backFab, { bottom: sheetHeight + spacing.md }]}
-        accessibilityRole="button"
-        accessibilityLabel="Back to Home"
-      >
-        <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2.2} />
+      <Pressable onPress={onBack} style={{ position: 'absolute', left: spacing.xxxl, bottom: sheetHeight + spacing.md }} accessibilityRole="button" accessibilityLabel="Back to Home">
+        <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={styles.backFab}>
+          <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2.2} />
+        </GlassSurface>
       </Pressable>
 
       {/* Bottom sheet — pinned at the very bottom; the nav dock is its last row, below "NEARBY" */}
-      <View style={styles.sheet} onLayout={(e) => setSheetHeight(e.nativeEvent.layout.height)}>
+      <GlassSurface tint="light" tintColor="rgba(255,255,255,0.75)" style={styles.sheet} onLayout={(e) => setSheetHeight(e.nativeEvent.layout.height)}>
         <View style={styles.sheetHandle} />
 
         {sharing ? (
@@ -414,14 +414,16 @@ function MapPage({
         ) : (
           <ScrollView showsVerticalScrollIndicator={false} style={styles.list}>
             {rows.map((f) => (
-              <Pressable key={f.userId} onPress={() => openDetail(f.userId)} style={styles.row} accessibilityRole="button" accessibilityLabel={`${f.name} — ${f.statusText}`}>
-                <FriendAvatar userId={f.userId} name={f.name} size={42} online={f.live} />
-                <View style={styles.rowText}>
-                  <Text style={styles.rowName}>{f.name}</Text>
-                  <Text style={styles.rowStatus}>{f.statusText}</Text>
-                </View>
-                {f.distanceText ? <Text style={styles.rowDistance}>{f.distanceText}</Text> : null}
-                <Icon path={CHEVRON_ICON} color={colors.textFaint} size={15} strokeWidth={2} />
+              <Pressable key={f.userId} onPress={() => openDetail(f.userId)} accessibilityRole="button" accessibilityLabel={`${f.name} — ${f.statusText}`}>
+                <GlassSurface tint="light" tintColor="rgba(255,255,255,0.4)" style={styles.row}>
+                  <FriendAvatar userId={f.userId} name={f.name} size={42} online={f.live} />
+                  <View style={styles.rowText}>
+                    <Text style={styles.rowName}>{f.name}</Text>
+                    <Text style={styles.rowStatus}>{f.statusText}</Text>
+                  </View>
+                  {f.distanceText ? <Text style={styles.rowDistance}>{f.distanceText}</Text> : null}
+                  <Icon path={CHEVRON_ICON} color={colors.textFaint} size={15} strokeWidth={2} />
+                </GlassSurface>
               </Pressable>
             ))}
           </ScrollView>
@@ -441,7 +443,7 @@ function MapPage({
           bottomInset={insets.bottom}
           reduceMotion={reduceMotion}
         />
-      </View>
+      </GlassSurface>
 
       {/* Share sheet */}
       <BottomSheet visible={sheetView === 'share'} onClose={closeSheet}>
@@ -559,9 +561,10 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
     shadowColor: colors.ink,
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 6 },
@@ -600,14 +603,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   backFab: {
-    position: 'absolute',
-    left: spacing.xxxl,
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
     shadowColor: colors.ink,
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 6 },
@@ -619,13 +621,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#fff',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     paddingHorizontal: spacing.xxxl,
     paddingTop: spacing.ms,
     gap: spacing.md,
     maxHeight: 400,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
     shadowColor: colors.ink,
     shadowOpacity: 0.12,
     shadowOffset: { width: 0, height: -14 },
@@ -700,11 +703,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.ms,
-    backgroundColor: 'rgba(22,33,12,0.04)',
     borderRadius: 18,
     paddingVertical: 10,
     paddingHorizontal: spacing.ms,
     marginBottom: spacing.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   rowText: {
     flex: 1,

@@ -11,6 +11,7 @@ import { InviteSheet } from '../../components/expenses/InviteSheet';
 import { JoinCardSheet } from '../../components/expenses/JoinCardSheet';
 import { ConfirmDeleteModal } from '../../components/expenses/ConfirmDeleteModal';
 import { BudgetResetPrompt } from '../../components/expenses/BudgetResetPrompt';
+import { TransferCardPickerSheet } from '../../components/expenses/TransferCardPickerSheet';
 import type { NotificationTarget } from '../../utils/notify';
 
 interface ExpensesScreenProps {
@@ -40,6 +41,7 @@ function ExpensesRoot({ onHome, onOpenSplit, onOpenAccount, onOpenNotificationTa
       <JoinCardSheet />
       <ConfirmDeleteModal />
       <BudgetResetPrompt />
+      <TransferCardPickerSheet />
     </>
   );
 }

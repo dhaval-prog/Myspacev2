@@ -8,6 +8,7 @@ import { colors, fontFamily, noOutline, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { OverflowIcon } from '../../components/icons/OverflowIcon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
+import { GlassSurface } from '../../components/friends/GlassSurface';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { ActionButton } from '../../components/account/rows';
 import { MediaGalleryModal } from '../../components/chat/MediaGalleryModal';
@@ -168,7 +169,7 @@ export function ChatThreadScreen() {
       style={styles.screen}
     >
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      <GlassSurface tint="dark" tintColor="rgba(22,33,12,0.6)" style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} colorOverride={HEADER_AVATAR_COLOR} avatarUrl={focusedFriend.avatarUrl} />
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>{focusedFriend.name}</Text>
@@ -185,7 +186,7 @@ export function ChatThreadScreen() {
         <Pressable onPress={() => setOptionsOpen(true)} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="More options">
           <OverflowIcon size={19} color="#FFFFFF" />
         </Pressable>
-      </View>
+      </GlassSurface>
 
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {showFriendsChip && (
@@ -221,10 +222,14 @@ export function ChatThreadScreen() {
                     </View>
                     <Text style={[styles.locationText, mine && styles.bubbleTextMine]}>Location shared · Open in Maps</Text>
                   </Pressable>
-                ) : (
-                  <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                    <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{m.text}</Text>
+                ) : mine ? (
+                  <View style={[styles.bubble, styles.bubbleMine]}>
+                    <Text style={styles.bubbleText}>{m.text}</Text>
                   </View>
+                ) : (
+                  <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={[styles.bubble, styles.bubbleTheirs]}>
+                    <Text style={styles.bubbleText}>{m.text}</Text>
+                  </GlassSurface>
                 )}
                 <Text style={[styles.meta, mine ? styles.metaMine : styles.metaTheirs]}>
                   {timeLabel(m.createdAt)}
@@ -242,11 +247,11 @@ export function ChatThreadScreen() {
           )}
           {theirTyping && (
             <View style={[styles.msgWrap, styles.msgWrapTheirs]}>
-              <View style={styles.typingBubble}>
+              <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={styles.typingBubble}>
                 <View style={[styles.typingDot, styles.typingDot1]} />
                 <View style={[styles.typingDot, styles.typingDot2]} />
                 <View style={[styles.typingDot, styles.typingDot3]} />
-              </View>
+              </GlassSurface>
             </View>
           )}
         </View>
@@ -262,7 +267,7 @@ export function ChatThreadScreen() {
       </View>
 
       <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <View style={styles.composer}>
+        <GlassSurface tint="light" tintColor="rgba(255,255,255,0.65)" style={styles.composer}>
           <Pressable onPress={() => setAttachOpen(true)} style={styles.attachButton} accessibilityRole="button" accessibilityLabel="Share a photo or your location">
             <Icon path={ATTACH_ICON} color={colors.textMuted} size={21} strokeWidth={1.8} />
           </Pressable>
@@ -278,7 +283,7 @@ export function ChatThreadScreen() {
           <Pressable onPress={submit} style={styles.sendButton} accessibilityRole="button" accessibilityLabel="Send">
             <Icon path={SEND_ICON} color={colors.lime} size={19} strokeWidth={1.9} />
           </Pressable>
-        </View>
+        </GlassSurface>
       </View>
 
       <BottomSheet visible={optionsOpen} onClose={() => setOptionsOpen(false)}>
@@ -358,9 +363,15 @@ const styles = StyleSheet.create({
     gap: 13,
     paddingHorizontal: 22,
     paddingBottom: 18,
-    backgroundColor: colors.ink,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    shadowColor: colors.lime,
+    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 3,
   },
   iconButton: {
     width: 42,
@@ -457,8 +468,9 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   bubbleTheirs: {
-    backgroundColor: '#fff',
     borderBottomLeftRadius: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
     shadowColor: colors.ink,
     shadowOpacity: 0.06,
     shadowOffset: { width: 0, height: 3 },
@@ -515,11 +527,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#fff',
     borderRadius: 22,
     borderBottomLeftRadius: 7,
     paddingVertical: 15,
     paddingHorizontal: 17,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
     shadowColor: colors.ink,
     shadowOpacity: 0.06,
     shadowOffset: { width: 0, height: 3 },
@@ -577,11 +590,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#fff',
     borderRadius: 999,
     paddingVertical: 9,
     paddingRight: 9,
     paddingLeft: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.75)',
     shadowColor: colors.ink,
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 8 },

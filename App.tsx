@@ -11,6 +11,7 @@ import { FriendsProvider, useFriends } from './src/context/FriendsContext';
 import { CallProvider } from './src/context/CallContext';
 import { GameProvider } from './src/context/GameContext';
 import { CardsGameProvider } from './src/context/CardsGameContext';
+import { TriviaGameProvider } from './src/context/TriviaGameContext';
 import { GameStatsProvider } from './src/context/GameStatsContext';
 import { DropProvider } from './src/context/DropContext';
 import { CallOverlay } from './src/components/calls/CallOverlay';
@@ -33,6 +34,7 @@ import { DropRefocusScreen } from './src/screens/drop/DropRefocusScreen';
 import { DropLoveMapScreen } from './src/screens/drop/DropLoveMapScreen';
 import { DropSettingsScreen } from './src/screens/drop/DropSettingsScreen';
 import { DropPaywallScreen } from './src/screens/drop/DropPaywallScreen';
+import { TriviaGameScreen } from './src/screens/games/trivia/TriviaGameScreen';
 import { LiveLocationsScreen } from './src/screens/location/LiveLocationsScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
 import type { ViewId } from './src/data/views';
@@ -56,6 +58,7 @@ type Screen =
   | { name: 'dropLoveMap' }
   | { name: 'dropSettings' }
   | { name: 'dropPaywall' }
+  | { name: 'trivia'; initialTab?: 'create' | 'join' }
   | { name: 'liveLocations' }
   | { name: 'account'; from: 'home' | 'expenses' | 'split' };
 
@@ -141,6 +144,7 @@ function AppNavigator() {
         onOpenFriends={() => setScreen({ name: 'friends' })}
         onOpenNpat={(initialTab) => setScreen({ name: 'games', initialTab })}
         onOpenCards={(initialTab) => setScreen({ name: 'cards', initialTab })}
+        onOpenTrivia={(initialTab) => setScreen({ name: 'trivia', initialTab })}
       />
     );
   }
@@ -207,6 +211,16 @@ function AppNavigator() {
   if (screen.name === 'dropPaywall') {
     return <DropPaywallScreen onBack={() => setScreen({ name: 'dropSettings' })} />;
   }
+  if (screen.name === 'trivia') {
+    return (
+      <TriviaGameScreen
+        onHome={() => setScreen({ name: 'gamesHub' })}
+        onOpenExpenses={() => setScreen({ name: 'expenses' })}
+        onOpenSplit={() => setScreen({ name: 'split' })}
+        initialTab={screen.initialTab}
+      />
+    );
+  }
   if (screen.name === 'liveLocations') {
     return (
       <LiveLocationsScreen
@@ -255,12 +269,14 @@ function RootNavigator() {
           <CallProvider>
             <GameProvider>
               <CardsGameProvider>
-                <GameStatsProvider>
-                  <DropProvider>
-                    <AppNavigator />
-                    <CallOverlay />
-                  </DropProvider>
-                </GameStatsProvider>
+                <TriviaGameProvider>
+                  <GameStatsProvider>
+                    <DropProvider>
+                      <AppNavigator />
+                      <CallOverlay />
+                    </DropProvider>
+                  </GameStatsProvider>
+                </TriviaGameProvider>
               </CardsGameProvider>
             </GameProvider>
           </CallProvider>

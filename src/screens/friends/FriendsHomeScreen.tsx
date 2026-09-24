@@ -7,6 +7,8 @@ import { Icon } from '../../components/Icon';
 import { SearchIcon } from '../../components/icons/SearchIcon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { BottomNav } from '../../components/BottomNav';
+import { GlassSurface } from '../../components/friends/GlassSurface';
+import { FriendsGlow } from '../../components/friends/FriendsGlow';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFriends } from '../../context/FriendsContext';
 
@@ -56,6 +58,7 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenL
       end={{ x: 0.5, y: 1 }}
       style={styles.screen}
     >
+      <FriendsGlow />
       <ScrollView style={styles.scrollFlex} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Friends</Text>
@@ -66,21 +69,23 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenL
 
         <Pressable
           onPress={onOpenLiveLocations}
-          style={({ pressed }) => [styles.radarBanner, pressed && styles.pressed]}
+          style={({ pressed }) => [pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel="Radar - Find Your People"
         >
-          <View style={styles.radarIcon}>
-            <Icon path={PIN_ICON} color={colors.lime} size={19} strokeWidth={1.8} />
-          </View>
-          <View style={styles.requestsText}>
-            <Text style={styles.radarTitle}>Radar - Find Your People</Text>
-            <Text style={styles.radarSub}>See where your friends are right now</Text>
-          </View>
-          <Icon path={CHEVRON_ICON} color={colors.lime} size={18} strokeWidth={2} />
+          <GlassSurface tint="dark" tintColor="rgba(22,33,12,0.55)" style={styles.radarBanner}>
+            <View style={styles.radarIcon}>
+              <Icon path={PIN_ICON} color={colors.lime} size={19} strokeWidth={1.8} />
+            </View>
+            <View style={styles.requestsText}>
+              <Text style={styles.radarTitle}>Radar - Find Your People</Text>
+              <Text style={styles.radarSub}>See where your friends are right now</Text>
+            </View>
+            <Icon path={CHEVRON_ICON} color={colors.lime} size={18} strokeWidth={2} />
+          </GlassSurface>
         </Pressable>
 
-        <View style={styles.searchField}>
+        <GlassSurface tint="light" tintColor="rgba(255,255,255,0.5)" style={styles.searchField}>
           <SearchIcon size={19} color={colors.ink55} />
           <TextInput
             value={query}
@@ -89,30 +94,32 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenL
             placeholderTextColor={colors.placeholder}
             style={[styles.searchInput, noOutline]}
           />
-        </View>
+        </GlassSurface>
 
         {receivedRequests.length > 0 && (
-          <Pressable onPress={goRequests} style={({ pressed }) => [styles.requestsBanner, pressed && styles.pressed]}>
-            <View style={styles.requestsAvatars}>
-              {receivedRequests.slice(0, 2).map((r, i) => (
-                <FriendAvatar
-                  key={r.connectionId}
-                  userId={r.userId}
-                  name={r.name}
-                  size={38}
-                  initialsFontSize={i > 0 ? 13 : 14}
-                  style={i > 0 ? styles.requestsAvatarOverlap : undefined}
-                  avatarUrl={r.avatarUrl}
-                />
-              ))}
-            </View>
-            <View style={styles.requestsText}>
-              <Text style={styles.requestsTitle}>
-                {receivedRequests.length} friend request{receivedRequests.length === 1 ? '' : 's'}
-              </Text>
-              <Text style={styles.requestsSub}>{requestSummary}</Text>
-            </View>
-            <Icon path={CHEVRON_ICON} color={colors.lime} size={18} strokeWidth={2} />
+          <Pressable onPress={goRequests} style={({ pressed }) => [pressed && styles.pressed]}>
+            <GlassSurface tint="dark" tintColor="rgba(22,33,12,0.55)" style={styles.requestsBanner}>
+              <View style={styles.requestsAvatars}>
+                {receivedRequests.slice(0, 2).map((r, i) => (
+                  <FriendAvatar
+                    key={r.connectionId}
+                    userId={r.userId}
+                    name={r.name}
+                    size={38}
+                    initialsFontSize={i > 0 ? 13 : 14}
+                    style={i > 0 ? styles.requestsAvatarOverlap : undefined}
+                    avatarUrl={r.avatarUrl}
+                  />
+                ))}
+              </View>
+              <View style={styles.requestsText}>
+                <Text style={styles.requestsTitle}>
+                  {receivedRequests.length} friend request{receivedRequests.length === 1 ? '' : 's'}
+                </Text>
+                <Text style={styles.requestsSub}>{requestSummary}</Text>
+              </View>
+              <Icon path={CHEVRON_ICON} color={colors.lime} size={18} strokeWidth={2} />
+            </GlassSurface>
           </Pressable>
         )}
 
@@ -125,21 +132,23 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenL
                   <Pressable
                     key={p.connectionId}
                     onPress={() => openChat(p.connectionId)}
-                    style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                    style={({ pressed }) => [pressed && styles.rowPressed]}
                     accessibilityRole="button"
                     accessibilityLabel={`Message ${p.name}`}
                   >
-                    <FriendAvatar userId={p.userId} name={p.name} size={44} avatarUrl={p.avatarUrl} />
-                    <View style={styles.rowText}>
-                      <Text style={styles.rowName}>{p.name}</Text>
-                      {p.username && <Text style={styles.rowMeta}>@{p.username}</Text>}
-                    </View>
-                    <View style={styles.rowAction} pointerEvents="none">
-                      <Icon path={CHAT_ICON} color={colors.lime} size={16} strokeWidth={1.9} />
-                    </View>
+                    <GlassSurface tint="light" tintColor="rgba(255,255,255,0.55)" style={styles.row}>
+                      <FriendAvatar userId={p.userId} name={p.name} size={44} avatarUrl={p.avatarUrl} />
+                      <View style={styles.rowText}>
+                        <Text style={styles.rowName}>{p.name}</Text>
+                        {p.username && <Text style={styles.rowMeta}>@{p.username}</Text>}
+                      </View>
+                      <View style={styles.rowAction} pointerEvents="none">
+                        <Icon path={CHAT_ICON} color={colors.lime} size={16} strokeWidth={1.9} />
+                      </View>
+                    </GlassSurface>
                   </Pressable>
                 ) : (
-                  <View key={p.connectionId} style={[styles.row, styles.rowPending]}>
+                  <GlassSurface key={p.connectionId} tint="light" tintColor="rgba(255,255,255,0.32)" style={[styles.row, styles.rowPending]}>
                     <FriendAvatar userId={p.userId} name={p.name} size={44} pending avatarUrl={p.avatarUrl} />
                     <View style={styles.rowText}>
                       <Text style={[styles.rowName, styles.rowNamePending]}>{p.name}</Text>
@@ -153,7 +162,7 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenL
                     >
                       <Text style={styles.cancelLabel}>Cancel</Text>
                     </Pressable>
-                  </View>
+                  </GlassSurface>
                 ),
               )}
             </View>
@@ -161,10 +170,10 @@ export function FriendsHomeScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenL
         )}
 
         {people.length === 0 && receivedRequests.length === 0 && (
-          <View style={styles.empty}>
+          <GlassSurface tint="light" tintColor="rgba(255,255,255,0.45)" style={styles.empty}>
             <Text style={styles.emptyTitle}>No friends yet</Text>
             <Text style={styles.emptyBody}>Share your code or scan someone else's to start connecting.</Text>
-          </View>
+          </GlassSurface>
         )}
 
         <Pressable
@@ -272,10 +281,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: 'rgba(255,255,255,.86)',
     borderRadius: radius.pill,
     paddingVertical: 15,
     paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
   },
   searchInput: {
     flex: 1,
@@ -287,10 +297,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.ms,
-    backgroundColor: colors.ink,
     borderRadius: 26,
     paddingVertical: 16,
     paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    shadowColor: colors.lime,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 22,
+    elevation: 4,
   },
   radarIcon: {
     width: 38,
@@ -314,10 +330,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.ms,
-    backgroundColor: colors.ink,
     borderRadius: 26,
     paddingVertical: 16,
     paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    shadowColor: colors.lime,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 22,
+    elevation: 4,
   },
   requestsAvatars: {
     flexDirection: 'row',
@@ -355,16 +377,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    backgroundColor: 'rgba(255,255,255,.86)',
     borderRadius: 24,
     paddingVertical: 14,
     paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
   },
   rowPressed: {
     opacity: 0.85,
   },
   rowPending: {
-    backgroundColor: 'rgba(255,255,255,.5)',
+    borderStyle: 'dashed',
   },
   rowText: {
     flex: 1,
@@ -409,10 +432,11 @@ const styles = StyleSheet.create({
   },
   empty: {
     borderRadius: radius.md,
-    backgroundColor: 'rgba(255,255,255,.7)',
     padding: spacing.xxl,
     alignItems: 'center',
     gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
   },
   emptyTitle: {
     fontFamily: fontFamily.sans600,

@@ -25,10 +25,8 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 // react-native-svg's web typings omit `children` on Defs (a typing gap, not a runtime issue) — cast once.
 const DefsAny = Defs as unknown as React.ComponentType<{ children?: React.ReactNode }>;
 
-function badgeStyleFor(rank: number) {
-  if (rank === 1) return { bg: ghColor.gradientA, fg: ghColor.textOnGradient };
-  if (rank === 2) return { bg: ghColor.gradientB, fg: ghColor.textOnGradient };
-  return { bg: ghColor.surfaceStrong, fg: ghColor.textPrimary };
+function badgeStyleFor(_rank: number) {
+  return { bg: ghColor.gradientB, fg: ghColor.textOnGradient };
 }
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -79,6 +77,7 @@ interface GamesDashboardScreenProps {
   onOpenFriends: () => void;
   onOpenNpat: (initialTab?: 'create' | 'join') => void;
   onOpenCards: (initialTab?: 'create' | 'join') => void;
+  onOpenTrivia: (initialTab?: 'create' | 'join') => void;
 }
 
 /**
@@ -86,14 +85,14 @@ interface GamesDashboardScreenProps {
  * Real leaderboard/points data from GameStatsContext throughout; a game row
  * expands in place into Create/Join instead of pushing a new screen.
  */
-export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenFriends, onOpenNpat, onOpenCards }: GamesDashboardScreenProps) {
+export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenFriends, onOpenNpat, onOpenCards, onOpenTrivia }: GamesDashboardScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { circle, leaderboard, myEntry, myRankDelta, breakdown, recentActivity, breakdownFor } = useGameStats();
 
   const [leaderboardVisible, setLeaderboardVisible] = useState(false);
   const [pointsVisible, setPointsVisible] = useState(false);
-  const [expandedRow, setExpandedRow] = useState<'npat' | 'cards' | null>(null);
+  const [expandedRow, setExpandedRow] = useState<'npat' | 'cards' | 'trivia' | null>(null);
 
   const myTotal = myEntry?.stats.totalPoints ?? 0;
   const leader = leaderboard[0];
@@ -104,6 +103,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
   const weeklyDelta = recentActivity.filter((tx) => Date.now() - new Date(tx.createdAt).getTime() <= WEEK_MS).reduce((sum, tx) => sum + tx.pointsChange, 0);
   const npat = breakdown.find((b) => b.gameType === 'NPAT');
   const cards = breakdown.find((b) => b.gameType === 'CARDS');
+  const trivia = breakdown.find((b) => b.gameType === 'TRIVIA');
 
   return (
     <LinearGradient colors={[ghColor.bgTop, ghColor.bgMid, ghColor.bgBottom]} locations={[0, 0.46, 1]} style={styles.screen}>
@@ -112,49 +112,53 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
         <Text style={styles.title}>Games</Text>
         <Text style={styles.subtitle}>Your gaming circle · {circle.length} seated</Text>
 
-        <View style={styles.eyebrowRow}>
-          <Text style={styles.eyebrow}>LEADERBOARD · THIS WEEK</Text>
-          <Pressable onPress={() => setLeaderboardVisible(true)} style={styles.seeAll} accessibilityRole="button" accessibilityLabel="See all">
-            <Text style={styles.seeAllLabel}>See all</Text>
-            <Icon path={CHEV_ICON} color={ghColor.up} size={12} strokeWidth={2.4} />
-          </Pressable>
-        </View>
+        <View style={styles.leaderboardCard}>
+          <BlurView intensity={45} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+          <View style={styles.leaderboardCardTint} pointerEvents="none" />
+          <View style={styles.eyebrowRow}>
+            <Text style={styles.eyebrow}>LEADERBOARD · THIS WEEK</Text>
+            <Pressable onPress={() => setLeaderboardVisible(true)} style={styles.seeAll} accessibilityRole="button" accessibilityLabel="See all">
+              <Text style={styles.seeAllLabel}>See all</Text>
+              <Icon path={CHEV_ICON} color={ghColor.up} size={12} strokeWidth={2.4} />
+            </Pressable>
+          </View>
 
-        <View style={styles.topRow}>
-          {topThree.map((entry) => {
-            const badge = badgeStyleFor(entry.rank);
-            return (
-              <View key={entry.userId} style={styles.topItem}>
-                <View style={styles.topAvatarWrap}>
-                  <FriendAvatar
-                    userId={entry.userId}
-                    name={entry.name}
-                    avatarUrl={entry.avatarUrl}
-                    size={56}
-                    radius={28}
-                    initialsFontFamily={ghFont.sans800}
-                    initialsFontSize={entry.isSelf ? 17 : 16}
-                    colorOverride={entry.isSelf ? { bg: ghColor.gradientB, fg: ghColor.textOnGradient } : { bg: '#FFFFFF', fg: ghColor.avatarMuted }}
-                  />
-                  <View style={[styles.rankBadge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.rankBadgeLabel, { color: badge.fg }]}>{entry.rank}</Text>
+          <View style={styles.topRow}>
+            {topThree.map((entry) => {
+              const badge = badgeStyleFor(entry.rank);
+              return (
+                <View key={entry.userId} style={styles.topItem}>
+                  <View style={styles.topAvatarWrap}>
+                    <FriendAvatar
+                      userId={entry.userId}
+                      name={entry.name}
+                      avatarUrl={entry.avatarUrl}
+                      size={56}
+                      radius={28}
+                      initialsFontFamily={ghFont.sans800}
+                      initialsFontSize={entry.isSelf ? 17 : 16}
+                      colorOverride={entry.isSelf ? { bg: ghColor.gradientB, fg: ghColor.textOnGradient } : { bg: ghColor.avatarFallbackBg, fg: ghColor.avatarMuted }}
+                    />
+                    <View style={[styles.rankBadge, { backgroundColor: badge.bg }]}>
+                      <Text style={[styles.rankBadgeLabel, { color: badge.fg }]}>{entry.rank}</Text>
+                    </View>
                   </View>
+                  <Text style={[styles.topName, entry.isSelf && styles.topNameSelf]}>{entry.isSelf ? 'You' : entry.name}</Text>
+                  <Text style={[styles.topPoints, entry.isSelf && styles.topPointsSelf]}>{entry.stats.totalPoints}</Text>
                 </View>
-                <Text style={[styles.topName, entry.isSelf && styles.topNameSelf]}>{entry.isSelf ? 'You' : entry.name}</Text>
-                <Text style={[styles.topPoints, entry.isSelf && styles.topPointsSelf]}>{entry.stats.totalPoints}</Text>
+              );
+            })}
+            <Pressable onPress={onOpenFriends} style={styles.inviteItem} accessibilityRole="button" accessibilityLabel="Invite a friend">
+              <View style={styles.inviteCircle}>
+                <Icon path={PLUS_ICON} color={ghColor.textTertiary} size={20} strokeWidth={2.2} />
               </View>
-            );
-          })}
-          <Pressable onPress={onOpenFriends} style={styles.inviteItem} accessibilityRole="button" accessibilityLabel="Invite a friend">
-            <View style={styles.inviteCircle}>
-              <Icon path={PLUS_ICON} color={ghColor.textTertiary} size={20} strokeWidth={2.2} />
-            </View>
-            <Text style={styles.inviteLabel}>INVITE</Text>
-          </Pressable>
+              <Text style={styles.inviteLabel}>INVITE</Text>
+            </Pressable>
+          </View>
         </View>
 
         <Pressable onPress={() => setPointsVisible(true)} style={styles.pointsCard} accessibilityRole="button" accessibilityLabel="Your points">
-          <BlurView intensity={45} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+          <BlurView intensity={45} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <View style={styles.pointsCardTint} pointerEvents="none" />
           <ProgressRing pct={ringPct} reduceMotion={reduceMotion}>
             <Text style={styles.ringValue}>{myTotal}</Text>
@@ -175,6 +179,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
             </View>
             <BreakdownBar label="NPAT" value={npat?.net ?? 0} total={myTotal} color={ghColor.gradientA} />
             <BreakdownBar label="CARDS" value={cards?.net ?? 0} total={myTotal} color={ghColor.gradientB} />
+            <BreakdownBar label="TRIVIA" value={trivia?.net ?? 0} total={myTotal} color={ghColor.triviaBadgeBg} />
           </View>
         </Pressable>
 
@@ -197,6 +202,15 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
           onToggle={() => setExpandedRow((r) => (r === 'cards' ? null : 'cards'))}
           onCreate={() => onOpenCards('create')}
           onJoin={() => onOpenCards('join')}
+        />
+        <GameRow
+          variant="trivia"
+          title="Trivia Night"
+          subtitle="Think fast. Answer faster."
+          expanded={expandedRow === 'trivia'}
+          onToggle={() => setExpandedRow((r) => (r === 'trivia' ? null : 'trivia'))}
+          onCreate={() => onOpenTrivia('create')}
+          onJoin={() => onOpenTrivia('join')}
         />
       </ScrollView>
 
@@ -248,7 +262,20 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 20 },
   title: { fontFamily: ghFont.sans800, fontSize: 30, lineHeight: 30, letterSpacing: -1.2, color: ghColor.textPrimary },
   subtitle: { fontFamily: ghFont.sans400, fontSize: 12.5, color: ghColor.textSecondary, marginTop: 6 },
-  eyebrowRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 16, marginBottom: 9 },
+  leaderboardCard: {
+    marginTop: 16,
+    borderRadius: 26,
+    padding: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: ghColor.glassBorder,
+    shadowColor: ghColor.gradientB,
+    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 14 },
+    shadowRadius: 32,
+  },
+  leaderboardCardTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: ghColor.glassFill },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 9 },
   eyebrow: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.14, color: ghColor.textTertiary },
   seeAll: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   seeAllLabel: { fontFamily: ghFont.sans600, fontSize: 11, color: ghColor.up },
@@ -292,7 +319,7 @@ const styles = StyleSheet.create({
   rankDeltaLabel: { fontFamily: ghFont.mono500, fontSize: 9.5, color: ghColor.up },
   gapLabel: { flex: 1, textAlign: 'right', fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.06, color: ghColor.textFaint },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  barLabel: { width: 40, fontFamily: ghFont.mono500, fontSize: 9, letterSpacing: 9 * 0.06, color: ghColor.textTertiary },
+  barLabel: { width: 46, fontFamily: ghFont.mono500, fontSize: 9, letterSpacing: 9 * 0.06, color: ghColor.textTertiary },
   barTrack: { flex: 1, height: 8, borderRadius: 999, backgroundColor: ghColor.surface, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 999 },
   barValue: { width: 30, textAlign: 'right', fontFamily: ghFont.mono500, fontSize: 10.5, color: ghColor.textPrimary },

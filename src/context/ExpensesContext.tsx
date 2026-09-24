@@ -98,6 +98,7 @@ function toWalletCard(row: CardRow, userId: string | null): WalletCard {
 function toExpense(row: ExpenseRow): Expense {
   const catDef = SPEND_CATEGORY_MAP[row.category] ?? SPEND_CATEGORY_MAP.Other;
   return {
+    id: row.id,
     title: row.title,
     date: longDateLabel(parseDateOnly(row.spent_on)),
     amt: `-₹${Math.round(row.amount).toLocaleString('en-IN')}`,
@@ -109,6 +110,7 @@ function toExpense(row: ExpenseRow): Expense {
 
 function toTopupExpense(row: TopupRow): Expense {
   return {
+    id: `topup-${row.id}`,
     title: 'Added money',
     date: longDateLabel(new Date(row.created_at)),
     amt: `+₹${Math.round(row.amount).toLocaleString('en-IN')}`,
@@ -147,6 +149,21 @@ interface ExpensesContextValue {
   /** Everyone with access to a card — the owner first, then each joined member. */
   membersFor: (card: WalletCard | undefined) => CardMember[];
   addExpense: (input: NewExpenseInput) => void;
+  /** True while the focused card's expense list is in multi-select mode for Transfer Expenses. */
+  transferMode: boolean;
+  toggleTransferMode: () => void;
+  selectedExpenseIds: Set<string>;
+  toggleExpenseSelected: (id: string) => void;
+  transferSheetOpen: boolean;
+  openTransferSheet: () => void;
+  closeTransferSheet: () => void;
+  transferring: boolean;
+  /** Duplicates the selected expenses (from the focused card) onto another card, as new independent spends. */
+  confirmTransfer: (targetCardId: string) => Promise<void>;
+  transferDone: boolean;
+  dismissTransferDone: () => void;
+  transferError: string | null;
+  dismissTransferError: () => void;
   addCard: (input: NewCardInput) => void;
   /** Owner or member: tops up the focused card's budget total by `amount`. */
   addMoney: (amount: number) => void;
@@ -233,6 +250,12 @@ export function ExpensesProvider({ children, initialCardId }: ExpensesProviderPr
   const [newCardOpen, setNewCardOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [resetPromptCard, setResetPromptCard] = useState<CardRow | null>(null);
+  const [transferMode, setTransferMode] = useState(false);
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
+  const [transferSheetOpen, setTransferSheetOpen] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+  const [transferDone, setTransferDone] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
 
   const localRef = useRef({ cardSeq: 0, expenseSeq: 0 });
 
@@ -550,6 +573,83 @@ export function ExpensesProvider({ children, initialCardId }: ExpensesProviderPr
       .then(({ error }) => warn('notify card expense activity', error));
   };
 
+  const toggleTransferMode = () => {
+    setTransferMode((prev) => !prev);
+    setSelectedExpenseIds(new Set());
+  };
+
+  const toggleExpenseSelected = (id: string) => {
+    setSelectedExpenseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const confirmTransfer = async (targetCardId: string): Promise<void> => {
+    if (!focusedCard || selectedExpenseIds.size === 0) return;
+    const sourceCardId = focusedCard.id;
+    const sourceRows = expenseRows.filter((r) => r.card_id === sourceCardId && selectedExpenseIds.has(r.id));
+    if (sourceRows.length === 0) return;
+
+    setTransferring(true);
+
+    if (!userId || !isSupabaseConfigured) {
+      const newRows: ExpenseRow[] = sourceRows.map((r, i) => {
+        localRef.current.expenseSeq += 1;
+        return {
+          id: `local-expense-${localRef.current.expenseSeq}-${i}`,
+          card_id: targetCardId,
+          user_id: userId ?? 'local',
+          title: r.title,
+          amount: r.amount,
+          category: r.category,
+          spent_on: r.spent_on,
+        };
+      });
+      setExpenseRows((prev) => [...newRows, ...prev]);
+      setTransferring(false);
+      setTransferSheetOpen(false);
+      setTransferMode(false);
+      setSelectedExpenseIds(new Set());
+      setTransferDone(true);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('card_expenses')
+      .insert(
+        sourceRows.map((r) => ({
+          card_id: targetCardId,
+          user_id: userId,
+          title: r.title,
+          amount: r.amount,
+          category: r.category,
+          spent_on: r.spent_on,
+        })),
+      )
+      .select('*');
+    warn('transfer expenses', error);
+    setTransferring(false);
+    setTransferSheetOpen(false);
+    if (error) {
+      setTransferError(error.message);
+      return;
+    }
+    const newRows = (data as ExpenseRow[] | null) ?? [];
+    setExpenseRows((prev) => [...newRows, ...prev]);
+    setTransferMode(false);
+    setSelectedExpenseIds(new Set());
+    setTransferDone(true);
+
+    for (const row of newRows) {
+      supabase
+        .rpc('notify_card_expense_activity', { p_card_id: targetCardId, p_expense_title: row.title, p_amount: row.amount })
+        .then(({ error: notifyError }) => warn('notify card expense activity', notifyError));
+    }
+  };
+
   const addCard = ({ name, amount, resetDay }: NewCardInput) => {
     const trimmedName = name.trim();
     if (!trimmedName || amount < 0) return;
@@ -776,6 +876,21 @@ export function ExpensesProvider({ children, initialCardId }: ExpensesProviderPr
     memberTopupsFor,
     membersFor,
     addExpense,
+    transferMode,
+    toggleTransferMode,
+    selectedExpenseIds,
+    toggleExpenseSelected,
+    transferSheetOpen,
+    openTransferSheet: () => {
+      if (selectedExpenseIds.size > 0) setTransferSheetOpen(true);
+    },
+    closeTransferSheet: () => setTransferSheetOpen(false),
+    transferring,
+    confirmTransfer,
+    transferDone,
+    dismissTransferDone: () => setTransferDone(false),
+    transferError,
+    dismissTransferError: () => setTransferError(null),
     addCard,
     addMoney,
     deleteFocusedCard,

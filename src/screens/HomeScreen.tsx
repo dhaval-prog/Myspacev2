@@ -97,9 +97,10 @@ export function HomeScreen({
       label: 'Orbit - Find Your Circle',
       count: receivedRequests.length ? String(receivedRequests.length) : '',
       icon: receivedRequests.length ? undefined : CHAT_ICON,
+      glass: true,
     });
-    list.push({ id: 'games', label: 'Games', count: '', icon: DICE_ICON });
-    list.push({ id: 'drop', label: 'Drop', count: '', icon: DROP_ICON });
+    list.push({ id: 'games', label: 'Games', count: '', icon: DICE_ICON, glass: true });
+    list.push({ id: 'drop', label: 'Drop', count: '', icon: DROP_ICON, glass: true });
     return list;
   }, [items.length, showAttention, attentionEntries.length, receivedRequests.length]);
 

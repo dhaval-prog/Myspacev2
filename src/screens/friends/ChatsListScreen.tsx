@@ -7,6 +7,8 @@ import { Icon } from '../../components/Icon';
 import { LockIcon } from '../../components/icons/LockIcon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { BottomNav } from '../../components/BottomNav';
+import { GlassSurface } from '../../components/friends/GlassSurface';
+import { FriendsGlow } from '../../components/friends/FriendsGlow';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFriends } from '../../context/FriendsContext';
 import { timeAgo } from '../../utils/relativeTime';
@@ -38,6 +40,7 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit }: ChatsLi
       end={{ x: 0.5, y: 1 }}
       style={styles.screen}
     >
+      <FriendsGlow />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.topRow}>
           <Text style={styles.title}>Chats</Text>
@@ -46,9 +49,9 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit }: ChatsLi
         <View style={styles.spacerUnderHeader} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
           <Pressable onPress={goCreateGroup} style={styles.railItem} accessibilityRole="button" accessibilityLabel="Start a group">
-            <View style={styles.railNewTile}>
+            <GlassSurface tint="light" tintColor="rgba(255,255,255,0.35)" style={styles.railNewTile}>
               <Icon path={GROUP_ICON} color={colors.ink50} size={22} strokeWidth={1.8} />
-            </View>
+            </GlassSurface>
             <Text style={styles.railLabelNew}>Groups</Text>
           </Pressable>
           {friends.map((f) => (
@@ -72,10 +75,10 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit }: ChatsLi
         </ScrollView>
 
         {friends.length === 0 && sentRequests.length === 0 && groups.length === 0 ? (
-          <View style={styles.empty}>
+          <GlassSurface tint="light" tintColor="rgba(255,255,255,0.45)" style={styles.empty}>
             <Text style={styles.emptyTitle}>No chats yet</Text>
             <Text style={styles.emptyBody}>Add a friend to start a conversation.</Text>
-          </View>
+          </GlassSurface>
         ) : (
           <>
             {groups.length > 0 && (
@@ -83,25 +86,23 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit }: ChatsLi
                 {groups.map((g) => {
                   const last = lastGroupMessageFor(g.id);
                   return (
-                    <Pressable
-                      key={g.id}
-                      onPress={() => openGroupChat(g.id)}
-                      style={({ pressed }) => [styles.row, styles.rowRead, pressed && styles.rowPressed]}
-                    >
-                      <View style={styles.groupAvatar}>
-                        <Icon path={GROUP_ICON} color={colors.lime} size={20} strokeWidth={1.8} />
-                      </View>
-                      <View style={styles.rowText}>
-                        <View style={styles.rowNameLine}>
-                          <Text style={styles.rowName}>{g.name}</Text>
-                          {last && <Text style={styles.rowTime}>{timeAgo(last.createdAt)}</Text>}
+                    <Pressable key={g.id} onPress={() => openGroupChat(g.id)} style={({ pressed }) => [pressed && styles.rowPressed]}>
+                      <GlassSurface tint="light" tintColor="rgba(255,255,255,0.4)" style={styles.row}>
+                        <View style={styles.groupAvatar}>
+                          <Icon path={GROUP_ICON} color={colors.lime} size={20} strokeWidth={1.8} />
                         </View>
-                        <View style={styles.rowPreviewLine}>
-                          <Text style={styles.rowPreview} numberOfLines={1}>
-                            {last ? last.text : 'Say hi to the group 👋'}
-                          </Text>
+                        <View style={styles.rowText}>
+                          <View style={styles.rowNameLine}>
+                            <Text style={styles.rowName}>{g.name}</Text>
+                            {last && <Text style={styles.rowTime}>{timeAgo(last.createdAt)}</Text>}
+                          </View>
+                          <View style={styles.rowPreviewLine}>
+                            <Text style={styles.rowPreview} numberOfLines={1}>
+                              {last ? last.text : 'Say hi to the group 👋'}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
+                      </GlassSurface>
                     </Pressable>
                   );
                 })}
@@ -116,28 +117,26 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit }: ChatsLi
                   const unreadCount = unreadCountFor(f.connectionId);
                   const typing = isTyping(f.connectionId);
                   return (
-                    <Pressable
-                      key={f.connectionId}
-                      onPress={() => openChat(f.connectionId)}
-                      style={({ pressed }) => [styles.row, unread ? styles.rowUnread : styles.rowRead, pressed && styles.rowPressed]}
-                    >
-                      <FriendAvatar userId={f.userId} name={f.name} size={48} initialsFontSize={16} online={isOnline(f.userId)} avatarUrl={f.avatarUrl} />
-                      <View style={styles.rowText}>
-                        <View style={styles.rowNameLine}>
-                          <Text style={styles.rowName}>{f.name}</Text>
-                          {last && <Text style={styles.rowTime}>{timeAgo(last.createdAt)}</Text>}
+                    <Pressable key={f.connectionId} onPress={() => openChat(f.connectionId)} style={({ pressed }) => [pressed && styles.rowPressed]}>
+                      <GlassSurface tint="light" tintColor={unread ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.35)'} style={styles.row}>
+                        <FriendAvatar userId={f.userId} name={f.name} size={48} initialsFontSize={16} online={isOnline(f.userId)} avatarUrl={f.avatarUrl} />
+                        <View style={styles.rowText}>
+                          <View style={styles.rowNameLine}>
+                            <Text style={styles.rowName}>{f.name}</Text>
+                            {last && <Text style={styles.rowTime}>{timeAgo(last.createdAt)}</Text>}
+                          </View>
+                          <View style={styles.rowPreviewLine}>
+                            <Text style={[styles.rowPreview, unread && styles.rowPreviewUnread]} numberOfLines={1}>
+                              {typing ? 'Typing…' : last ? last.text : 'Say hi 👋'}
+                            </Text>
+                            {unreadCount > 0 && (
+                              <View style={styles.unreadPill}>
+                                <Text style={styles.unreadPillText}>{unreadCount}</Text>
+                              </View>
+                            )}
+                          </View>
                         </View>
-                        <View style={styles.rowPreviewLine}>
-                          <Text style={[styles.rowPreview, unread && styles.rowPreviewUnread]} numberOfLines={1}>
-                            {typing ? 'Typing…' : last ? last.text : 'Say hi 👋'}
-                          </Text>
-                          {unreadCount > 0 && (
-                            <View style={styles.unreadPill}>
-                              <Text style={styles.unreadPillText}>{unreadCount}</Text>
-                            </View>
-                          )}
-                        </View>
-                      </View>
+                      </GlassSurface>
                     </Pressable>
                   );
                 })}
@@ -238,7 +237,6 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 29,
-    backgroundColor: colors.surface70,
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: 'rgba(22,33,12,0.3)',
@@ -274,10 +272,11 @@ const styles = StyleSheet.create({
   empty: {
     marginTop: 24,
     borderRadius: radius.md,
-    backgroundColor: colors.surface70,
     padding: spacing.xxl,
     alignItems: 'center',
     gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
   },
   emptyTitle: {
     fontFamily: fontFamily.sans600,
@@ -301,12 +300,8 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingVertical: 14,
     paddingHorizontal: 18,
-  },
-  rowRead: {
-    backgroundColor: colors.surface60,
-  },
-  rowUnread: {
-    backgroundColor: colors.surface90,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   rowPressed: {
     opacity: 0.85,
