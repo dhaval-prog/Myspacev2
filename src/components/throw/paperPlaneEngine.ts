@@ -203,8 +203,6 @@ export interface PaperPlaneCallbacks {
    * this the same as a setup failure and fall back to a static visual.
    */
   onError?: (err: unknown) => void;
-  /** TEMPORARY diagnostic hook — fires every applyFolds() call with a one-line status string. */
-  onDebugFrame?: (info: string) => void;
 }
 
 export interface PaperPlaneOptions extends PaperPlaneCallbacks {
@@ -216,7 +214,7 @@ export interface PaperPlaneOptions extends PaperPlaneCallbacks {
 
 /* ---------- engine ---------- */
 export function createPaperPlane(options: PaperPlaneOptions) {
-  const { renderer, texture, onPhase, onProgress, afterRender, onError, onDebugFrame } = options;
+  const { renderer, texture, onPhase, onProgress, afterRender, onError } = options;
   const { polys, defs, creases } = buildPattern();
 
   renderer.shadowMap.enabled = true;
@@ -463,13 +461,6 @@ export function createPaperPlane(options: PaperPlaneOptions) {
     geo.computeVertexNormals();
     geo.computeBoundingSphere();
     for (let i = 0; i < NC; i++) strU[i] = crease[creases[i].fold];
-    if (onDebugFrame) {
-      const activeCount = mats.filter((m) => m.active >= 0).length;
-      const angSum = Array.from(ang).reduce((s, a) => s + a, 0);
-      onDebugFrame(
-        `t=${t.toFixed(1)}/${FOLD_END.toFixed(1)} bb=${(bbMax.x - bbMin.x).toFixed(1)}x${(bbMax.y - bbMin.y).toFixed(1)}x${(bbMax.z - bbMin.z).toFixed(1)} act=${activeCount}/${polys.length} angSum=${angSum.toFixed(1)} NV=${NV}`,
-      );
-    }
   }
 
   /* ---------- camera ---------- */

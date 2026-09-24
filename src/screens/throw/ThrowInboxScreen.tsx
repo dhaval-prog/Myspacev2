@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LetterCard } from '../../components/throw/LetterCard';
+import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { throwColor, throwFont, throwSpace } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 
@@ -23,6 +24,7 @@ export function ThrowInboxScreen({ onBack, onOpenLetter }: ThrowInboxScreenProps
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
+      <ThrowGlassBackdrop heightMultiplier={1.4} />
       <Pressable onPress={onBack} style={styles.backBtn}>
         <Text style={styles.backLabel}>‹ Back to map</Text>
       </Pressable>

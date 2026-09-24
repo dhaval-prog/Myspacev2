@@ -11,6 +11,10 @@ export interface PaperPlaneLetterContent {
   strokes: StrokePath[] | null;
   messageText: string | null;
   penColor: string;
+  /** A locally-picked photo (camera or library), not yet uploaded — stamped onto the baked
+   * texture alongside the text/strokes so the folded/flying plane carries it too, instead of it
+   * only showing while the letter is still flat (see FoldingLetter's photoChip). */
+  photoUri: string | null;
 }
 
 export interface PaperPlaneStageHandle {

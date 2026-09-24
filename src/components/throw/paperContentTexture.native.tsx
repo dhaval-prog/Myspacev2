@@ -1,12 +1,19 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Svg, { G, Image as SvgImage, Path, Text as SvgText, TSpan } from 'react-native-svg';
+import Svg, { G, Image as SvgImage, Path, Rect, Text as SvgText, TSpan } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import { throwFont } from '../../theme/throwTokens';
 import type { PaperPlaneLetterContent } from './paperPlaneTypes';
 
 const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
 const RASTER_SIZE = 1024; // matches paper-texture.jpg's own pixel dimensions (square)
+
+// Mirrors FoldingLetter's photoChip geometry (top: 44, right: 14, 100x100, -4deg) — kept in sync
+// by hand so the baked plane shows the photo in roughly the same spot it sat on the flat paper.
+const PHOTO_TOP = 44;
+const PHOTO_RIGHT = 14;
+const PHOTO_SIZE = 100;
+const PHOTO_PAD = 6;
 
 export interface LetterRasterizerHandle {
   /**
@@ -55,7 +62,7 @@ function wrapApprox(text: string, maxChars: number): string[] {
 export const LetterRasterizer = forwardRef<LetterRasterizerHandle>(function LetterRasterizer(_props, ref) {
   const svgRef = useRef<Svg>(null);
   const imageReady = useRef(false);
-  const [draft, setDraft] = useState<{ content: PaperPlaneLetterContent; sx: number; sy: number } | null>(null);
+  const [draft, setDraft] = useState<{ content: PaperPlaneLetterContent; sx: number; sy: number; sourceWidth: number } | null>(null);
   const pendingRef = useRef<((uri: string | null) => void) | null>(null);
 
   useEffect(() => {
@@ -96,11 +103,19 @@ export const LetterRasterizer = forwardRef<LetterRasterizerHandle>(function Lett
         pendingRef.current = resolve;
         const sx = sourceSize.width > 0 ? RASTER_SIZE / sourceSize.width : 1;
         const sy = sourceSize.height > 0 ? RASTER_SIZE / sourceSize.height : 1;
-        setDraft({ content, sx, sy });
+        setDraft({ content, sx, sy, sourceWidth: sourceSize.width || RASTER_SIZE });
       }),
   }));
 
   const lines = draft?.content.messageText ? wrapApprox(draft.content.messageText, 30) : [];
+
+  // Photo geometry in raster space, mirroring paperContentTexture.web.ts's drawPhoto — computed
+  // from the same source-space constants (PHOTO_TOP/RIGHT/SIZE/PAD) scaled by sx/sy.
+  const photoScale = (d: { sx: number; sy: number }) => (d.sx + d.sy) / 2;
+  const photoSize = (d: { sx: number; sy: number }) => PHOTO_SIZE * photoScale(d);
+  const photoPad = (d: { sx: number; sy: number }) => PHOTO_PAD * photoScale(d);
+  const photoCx = (d: { sx: number; sy: number; sourceWidth: number }) => d.sourceWidth * d.sx - PHOTO_RIGHT * d.sx - photoSize(d) / 2;
+  const photoCy = (d: { sx: number; sy: number }) => PHOTO_TOP * d.sy + photoSize(d) / 2;
 
   // The strokes/text, as one reusable node list — stamped into all four canvas quadrants below
   // (see paperContentTexture.web.ts's doc comment: the fold turns this flat canvas into several
@@ -126,6 +141,19 @@ export const LetterRasterizer = forwardRef<LetterRasterizerHandle>(function Lett
             </TSpan>
           ))}
         </SvgText>
+      )}
+      {draft?.content.photoUri && (
+        <G transform={`translate(${photoCx(draft)}, ${photoCy(draft)}) rotate(-4)`}>
+          <Rect x={-photoSize(draft) / 2 - photoPad(draft)} y={-photoSize(draft) / 2 - photoPad(draft)} width={photoSize(draft) + photoPad(draft) * 2} height={photoSize(draft) + photoPad(draft) * 2} fill="#FBF6EC" />
+          <SvgImage
+            href={draft.content.photoUri}
+            x={-photoSize(draft) / 2}
+            y={-photoSize(draft) / 2}
+            width={photoSize(draft)}
+            height={photoSize(draft)}
+            preserveAspectRatio="xMidYMid slice"
+          />
+        </G>
       )}
     </>
   );

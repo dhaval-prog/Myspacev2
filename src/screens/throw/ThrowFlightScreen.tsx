@@ -3,7 +3,8 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { PaperPlane } from '../../components/throw/PaperPlane';
-import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
+import { GlassSurface } from '../../components/friends/GlassSurface';
+import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { formatMiles } from '../../utils/geo';
 import { flightPath } from '../../utils/mapProjection';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -55,13 +56,22 @@ export function ThrowFlightScreen({ recipientName, recipientCity, recipientCount
 
     async function run() {
       if (reduceMotion) {
-        // Skip the cinematic sequence entirely — a single gentle fade sender -> destination.
+        // Skips the fold/zoom flourish (the large-scale motion reduced-motion cares about) but
+        // still plays a real, shorter flight — jumping straight to a static 'delivered' state
+        // made the plane's journey (the whole point of this screen) invisible rather than just
+        // less flashy.
         setPhase('in_flight');
-        setProgress(1);
-        await animate(mapAnim, 1, 400);
+        await animate(mapAnim, 1, 300);
         if (cancelled) return;
+
+        flightAnim.setValue(0);
+        const listenerId = flightAnim.addListener(({ value }) => setProgress(value));
+        await animate(flightAnim, 1, 1400, Easing.linear);
+        flightAnim.removeListener(listenerId);
+        if (cancelled) return;
+
         setPhase('delivered');
-        Animated.timing(arrivalAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+        await animate(arrivalAnim, 1, 300);
         return;
       }
 
@@ -135,16 +145,18 @@ export function ThrowFlightScreen({ recipientName, recipientCity, recipientCount
       )}
 
       {phase === 'delivered' && (
-        <Animated.View style={[styles.arrivalCard, { opacity: arrivalAnim, bottom: insets.bottom + 30 }]}>
-          <Text style={styles.arrivalTitle}>Your letter has landed</Text>
-          <Text style={styles.arrivalBody}>
-            With {recipientName} in {recipientCity} · {formatMiles(distanceMiles)} away
-          </Text>
-          <Pressable onPress={onDone}>
-            <View style={styles.arrivalBtn}>
-              <Text style={styles.arrivalBtnLabel}>Back to map</Text>
-            </View>
-          </Pressable>
+        <Animated.View style={[styles.arrivalCardWrap, { opacity: arrivalAnim, bottom: insets.bottom + 30 }]}>
+          <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.arrivalCard}>
+            <Text style={styles.arrivalTitle}>Your letter has landed</Text>
+            <Text style={styles.arrivalBody}>
+              With {recipientName} in {recipientCity} · {formatMiles(distanceMiles)} away
+            </Text>
+            <Pressable onPress={onDone}>
+              <View style={styles.arrivalBtn}>
+                <Text style={styles.arrivalBtnLabel}>Back to map</Text>
+              </View>
+            </Pressable>
+          </GlassSurface>
         </Animated.View>
       )}
     </View>
@@ -174,15 +186,19 @@ const styles = StyleSheet.create({
     borderRadius: throwRadius.pill,
     overflow: 'hidden',
   },
-  arrivalCard: {
+  arrivalCardWrap: {
     position: 'absolute',
     left: 24,
     right: 24,
-    backgroundColor: throwColor.cardBg,
     borderRadius: throwRadius.card,
+    ...throwColor.shadowSoft,
+  },
+  arrivalCard: {
+    borderRadius: throwRadius.card,
+    borderWidth: 1,
+    borderColor: throwGlass.border,
     padding: 20,
     alignItems: 'center',
-    ...throwColor.shadowSoft,
   },
   arrivalTitle: { fontFamily: throwFont.hand700, fontSize: 24, color: throwColor.ink },
   arrivalBody: { fontFamily: throwFont.ui400, fontSize: 13, color: throwColor.inkSoft, marginTop: 6, marginBottom: 16 },

@@ -4,8 +4,9 @@ import { LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
 import { PhotoAttachSheet } from './PhotoAttachSheet';
+import { GlassSurface } from '../friends/GlassSurface';
 import { Icon } from '../Icon';
-import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useVoiceToText } from '../../hooks/useVoiceToText';
 import type { LetterCanvasHandle } from './LetterCanvas';
@@ -194,8 +195,8 @@ export function FoldingLetter({
   // first couple of steps). This ref mirrors whatever state and closures the responder's
   // callbacks need, updated every render, so they always read fresh values without the responder
   // object itself ever changing identity while a touch is active.
-  const latest = useRef({ disabled, phase, hasContent, content, paperSize, launch, settleFold, springLiftBack });
-  latest.current = { disabled, phase, hasContent, content, paperSize, launch, settleFold, springLiftBack };
+  const latest = useRef({ disabled, phase, hasContent, content, photoUri, paperSize, launch, settleFold, springLiftBack });
+  latest.current = { disabled, phase, hasContent, content, photoUri, paperSize, launch, settleFold, springLiftBack };
 
   const applyFoldProgress = useCallback(
     (next: number) => {
@@ -207,7 +208,7 @@ export function FoldingLetter({
       // than relying on Grant.
       if (!bakedRef.current && next > 0) {
         bakedRef.current = true;
-        stageRef.current?.setContent(latest.current.content, latest.current.paperSize);
+        stageRef.current?.setContent({ ...latest.current.content, photoUri: latest.current.photoUri }, latest.current.paperSize);
       }
     },
     [progress],
@@ -391,7 +392,7 @@ export function FoldingLetter({
 
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
-          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} />
+          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={photoUri !== null} />
         </Animated.View>
 
         {paperSize.width > 0 && (
@@ -409,8 +410,12 @@ export function FoldingLetter({
           </Animated.View>
         )}
 
-        {photoUri && phase !== 'throwing' && (
-          <View style={styles.photoChip} pointerEvents="box-none">
+        {photoUri && (
+          // Fades out in lockstep with LetterCanvas (same canvasOpacity) once folding starts —
+          // the photo is baked into the plane's own texture from that point on (see
+          // paperContentTexture.web/.native's photo handling), so this flat corner sticker
+          // would otherwise float on top of the plane as a second, un-folded copy of the photo.
+          <Animated.View style={[styles.photoChip, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'box-none' : 'none'}>
             <View style={styles.photoWrap}>
               <View style={styles.photoFrame}>
                 <Image source={{ uri: photoUri }} style={styles.photoThumb} />
@@ -419,7 +424,7 @@ export function FoldingLetter({
                 <Icon path={X_ICON} size={12} color={throwColor.paper} strokeWidth={2.6} />
               </Pressable>
             </View>
-          </View>
+          </Animated.View>
         )}
       </View>
 
@@ -428,31 +433,50 @@ export function FoldingLetter({
       {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
 
       <View style={styles.bottomRow}>
-        <Pressable
-          onPress={() => setPhotoSheetOpen(true)}
-          disabled={disabled || phase === 'throwing'}
-          style={({ pressed }) => [styles.roundBtn, pressed && styles.roundBtnPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Add a photo"
-        >
-          <Icon path={PHOTO_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
+        <Pressable onPress={() => setPhotoSheetOpen(true)} disabled={disabled || phase === 'throwing'} accessibilityRole="button" accessibilityLabel="Add a photo">
+          {({ pressed }) => (
+            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                <Icon path={PHOTO_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
+              </GlassSurface>
+            </View>
+          )}
         </Pressable>
 
         <Pressable
           onPress={() => (voice.recording ? voice.stop() : voice.start())}
           disabled={disabled || phase === 'throwing'}
-          style={({ pressed }) => [styles.micBtn, voice.recording && styles.micBtnActive, pressed && styles.roundBtnPressed]}
           accessibilityRole="button"
           accessibilityLabel={voice.recording ? 'Stop recording' : 'Speak your letter'}
         >
-          <Icon path={voice.recording ? STOP_ICON : MIC_ICON} size={voice.recording ? 16 : 21} color={voice.recording ? throwColor.paper : throwColor.ink} strokeWidth={1.8} />
+          {({ pressed }) =>
+            voice.recording ? (
+              <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
+                <View style={[styles.micBtn, styles.micBtnActive]}>
+                  <Icon path={STOP_ICON} size={16} color={throwColor.paper} strokeWidth={1.8} />
+                </View>
+              </View>
+            ) : (
+              <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
+                <GlassSurface tint="light" tintColor={throwGlass.tintStrong} style={styles.micBtn}>
+                  <Icon path={MIC_ICON} size={21} color={throwColor.ink} strokeWidth={1.8} />
+                </GlassSurface>
+              </View>
+            )
+          }
         </Pressable>
 
-        <Pressable onPress={onOpenInbox} style={({ pressed }) => [styles.roundBtn, pressed && styles.roundBtnPressed]} accessibilityRole="button" accessibilityLabel="Inbox">
-          <Icon path={INBOX_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
-          {unreadCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeLabel}>{unreadCount}</Text>
+        <Pressable onPress={onOpenInbox} accessibilityRole="button" accessibilityLabel="Inbox">
+          {({ pressed }) => (
+            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                <Icon path={INBOX_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
+              </GlassSurface>
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeLabel}>{unreadCount}</Text>
+                </View>
+              )}
             </View>
           )}
         </Pressable>
@@ -478,21 +502,21 @@ const styles = StyleSheet.create({
   // Compact on purpose — the bottom-controls row below now takes a fixed slice of `wrap`'s
   // height, and this being `flex: 1` rather than a hardcoded height means it shrinks to make
   // room for that row automatically, no matter what height the parent hands `wrap`.
-  paperArea: { flex: 1, minHeight: 180 },
+  paperArea: { flex: 1, minHeight: 150 },
   fallbackPlaneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   readyHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.inkMute, textAlign: 'center', marginTop: 10 },
   error: { fontFamily: throwFont.ui400, fontSize: 12, color: '#B3413A', textAlign: 'center', marginTop: 8 },
-  // A "photo pasted onto the letter" look — a small white-bordered frame near the top of the
-  // paper, tilted slightly like something actually stuck on by hand, rather than a small corner
-  // badge that read more like a UI chip than an attachment.
+  // A "photo pasted onto the letter" look — a small white-bordered frame tucked in the top-right
+  // corner (below the pen-color swatches), tilted slightly like something actually stuck on by
+  // hand. Pinned to a corner rather than spanning the paper's width so it never sits over the
+  // centered writing area below it — LetterCanvas also reserves extra top padding (hasPhoto) as
+  // a second guard against overlap.
   photoChip: {
     position: 'absolute',
-    top: 16,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    top: 44,
+    right: 14,
   },
-  photoWrap: { width: 132, height: 132 },
+  photoWrap: { width: 100, height: 100 },
   photoFrame: {
     width: '100%',
     height: '100%',
@@ -521,25 +545,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     marginTop: 14,
   },
-  roundBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(251,246,236,.88)',
-    ...throwColor.shadowSoft,
-  },
+  // Split in two: the outer *Shadow view carries the drop shadow (which needs `overflow: visible`
+  // to render), while the inner GlassSurface/View needs `overflow: hidden` so its blur/tint
+  // layers respect the rounded corners — the two requirements can't share one style.
+  roundBtnShadow: { width: 46, height: 46, borderRadius: 23, ...throwColor.shadowSoft },
+  roundBtn: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
   roundBtnPressed: { opacity: 0.7 },
-  micBtn: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(251,246,236,.88)',
-    ...throwColor.shadowSoft,
-  },
+  micBtnShadow: { width: 58, height: 58, borderRadius: 29, ...throwColor.shadowSoft },
+  micBtn: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
   micBtnActive: { backgroundColor: throwColor.clayDeep },
   badge: {
     position: 'absolute',
