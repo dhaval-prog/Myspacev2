@@ -13,7 +13,6 @@ import { GameProvider } from './src/context/GameContext';
 import { CardsGameProvider } from './src/context/CardsGameContext';
 import { TriviaGameProvider } from './src/context/TriviaGameContext';
 import { GameStatsProvider } from './src/context/GameStatsContext';
-import { DropProvider } from './src/context/DropContext';
 import { CallOverlay } from './src/components/calls/CallOverlay';
 import type { NotificationTarget } from './src/utils/notify';
 import { LaunchIntro } from './src/components/LaunchIntro';
@@ -27,13 +26,6 @@ import { FriendsScreen } from './src/screens/friends/FriendsScreen';
 import { GamesScreen } from './src/screens/games/GamesScreen';
 import { GamesDashboardScreen } from './src/screens/games/GamesDashboardScreen';
 import { CardsGameScreen } from './src/screens/games/cards/CardsGameScreen';
-import { DropHubScreen } from './src/screens/drop/DropHubScreen';
-import { DropAnswerScreen } from './src/screens/drop/DropAnswerScreen';
-import { DropRevealScreen } from './src/screens/drop/DropRevealScreen';
-import { DropRefocusScreen } from './src/screens/drop/DropRefocusScreen';
-import { DropLoveMapScreen } from './src/screens/drop/DropLoveMapScreen';
-import { DropSettingsScreen } from './src/screens/drop/DropSettingsScreen';
-import { DropPaywallScreen } from './src/screens/drop/DropPaywallScreen';
 import { TriviaGameScreen } from './src/screens/games/trivia/TriviaGameScreen';
 import { LiveLocationsScreen } from './src/screens/location/LiveLocationsScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
@@ -51,13 +43,6 @@ type Screen =
   | { name: 'gamesHub' }
   | { name: 'games'; initialTab?: 'create' | 'join' }
   | { name: 'cards'; initialTab?: 'create' | 'join' }
-  | { name: 'dropHub' }
-  | { name: 'dropAnswer' }
-  | { name: 'dropReveal' }
-  | { name: 'dropRefocus' }
-  | { name: 'dropLoveMap' }
-  | { name: 'dropSettings' }
-  | { name: 'dropPaywall' }
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
   | { name: 'liveLocations' }
   | { name: 'account'; from: 'home' | 'expenses' | 'split' };
@@ -168,49 +153,6 @@ function AppNavigator() {
       />
     );
   }
-  if (screen.name === 'dropHub') {
-    return (
-      <DropHubScreen
-        onHome={() => setScreen({ name: 'home' })}
-        onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenSplit={() => setScreen({ name: 'split' })}
-        onOpenAnswer={() => setScreen({ name: 'dropAnswer' })}
-        onOpenReveal={() => setScreen({ name: 'dropReveal' })}
-        onOpenRefocus={() => setScreen({ name: 'dropRefocus' })}
-        onOpenLoveMap={() => setScreen({ name: 'dropLoveMap' })}
-        onOpenSettings={() => setScreen({ name: 'dropSettings' })}
-      />
-    );
-  }
-  if (screen.name === 'dropAnswer') {
-    return (
-      <DropAnswerScreen
-        onBack={() => setScreen({ name: 'dropHub' })}
-        onSubmitted={(wasRevealed) => (wasRevealed ? setScreen({ name: 'dropReveal' }) : setScreen({ name: 'dropHub' }))}
-      />
-    );
-  }
-  if (screen.name === 'dropReveal') {
-    return <DropRevealScreen onBack={() => setScreen({ name: 'dropHub' })} />;
-  }
-  if (screen.name === 'dropRefocus') {
-    return <DropRefocusScreen onBack={() => setScreen({ name: 'dropHub' })} onOpenLoveMap={() => setScreen({ name: 'dropLoveMap' })} />;
-  }
-  if (screen.name === 'dropLoveMap') {
-    return <DropLoveMapScreen onBack={() => setScreen({ name: 'dropHub' })} />;
-  }
-  if (screen.name === 'dropSettings') {
-    return (
-      <DropSettingsScreen
-        onBack={() => setScreen({ name: 'dropHub' })}
-        onUnpaired={() => setScreen({ name: 'dropHub' })}
-        onOpenPaywall={() => setScreen({ name: 'dropPaywall' })}
-      />
-    );
-  }
-  if (screen.name === 'dropPaywall') {
-    return <DropPaywallScreen onBack={() => setScreen({ name: 'dropSettings' })} />;
-  }
   if (screen.name === 'trivia') {
     return (
       <TriviaGameScreen
@@ -244,7 +186,6 @@ function AppNavigator() {
       onOpenSplit={() => setScreen({ name: 'split' })}
       onOpenFriends={() => setScreen({ name: 'friends' })}
       onOpenGames={() => setScreen({ name: 'gamesHub' })}
-      onOpenDrop={() => setScreen({ name: 'dropHub' })}
       onOpenAccount={() => setScreen({ name: 'account', from: 'home' })}
       onOpenNotificationTarget={openNotificationTarget}
     />
@@ -271,10 +212,8 @@ function RootNavigator() {
               <CardsGameProvider>
                 <TriviaGameProvider>
                   <GameStatsProvider>
-                    <DropProvider>
-                      <AppNavigator />
-                      <CallOverlay />
-                    </DropProvider>
+                    <AppNavigator />
+                    <CallOverlay />
                   </GameStatsProvider>
                 </TriviaGameProvider>
               </CardsGameProvider>
