@@ -6,7 +6,7 @@ import { LocationPin } from '../../components/throw/LocationPin';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
 import { FoldingLetter } from '../../components/throw/FoldingLetter';
 import { project } from '../../utils/mapProjection';
-import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwFont } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import type { StrokePath, ThrowLetter } from '../../types/throw';
 
@@ -174,9 +174,5 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     top: '32%',
-    backgroundColor: throwColor.screenBg,
-    borderRadius: throwRadius.card,
-    padding: 14,
-    ...throwColor.shadowSoft,
   },
 });

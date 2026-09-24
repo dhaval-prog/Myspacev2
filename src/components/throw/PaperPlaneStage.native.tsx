@@ -4,6 +4,7 @@ import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { Renderer, TextureLoader } from 'expo-three';
 import * as THREE from 'three';
 import { createPaperPlane } from './paperPlaneEngine';
+import { LetterRasterizer, type LetterRasterizerHandle } from './paperContentTexture.native';
 import type { PaperPlaneStageHandle, PaperPlaneStageProps } from './paperPlaneTypes';
 
 const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
@@ -19,6 +20,7 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
 ) {
   const engineRef = useRef<ReturnType<typeof createPaperPlane> | null>(null);
   const sizeRef = useRef({ width: 0, height: 0 });
+  const rasterizerRef = useRef<LetterRasterizerHandle>(null);
 
   useImperativeHandle(
     ref,
@@ -29,6 +31,18 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
       holdReady: () => engineRef.current?.holdReady(),
       seek: (t: number) => engineRef.current?.seek(t),
       setOptions: (o) => engineRef.current?.setOptions(o),
+      setContent: (content, sourceSize) => {
+        rasterizerRef.current
+          ?.capture(content, sourceSize)
+          .then((uri) => {
+            if (!uri || !engineRef.current) return;
+            const texture = new TextureLoader().load({ uri });
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.anisotropy = 8;
+            engineRef.current.setTexture(texture);
+          })
+          .catch((err) => console.warn('[Throw] failed to bake letter texture (native):', err));
+      },
     }),
     [],
   );
@@ -81,6 +95,7 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
           plain WebGLRenderingContext. The real runtime value on native is always an
           ExpoWebGLRenderingContext, so this cast is safe. */}
       <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate as any} />
+      <LetterRasterizer ref={rasterizerRef} />
     </View>
   );
 });

@@ -1,8 +1,16 @@
+import type { StrokePath } from '../../types/throw';
+
 export interface PaperPlaneProgress {
   step: number;
   total: number;
   label: string;
   progress: number;
+}
+
+export interface PaperPlaneLetterContent {
+  strokes: StrokePath[] | null;
+  messageText: string | null;
+  penColor: string;
 }
 
 export interface PaperPlaneStageHandle {
@@ -16,6 +24,13 @@ export interface PaperPlaneStageHandle {
   /** 0..1 — maps directly onto the fold timeline (0 = flat sheet, 1 = fully folded plane). */
   seek: (progress: number) => void;
   setOptions: (o: { speed?: number; trail?: boolean; follow?: boolean }) => void;
+  /**
+   * Bakes the user's handwritten strokes or typed text onto the plane's texture, so the folded
+   * plane shows the actual letter instead of blank paper. `sourceSize` is the pixel box the
+   * strokes were captured in (the writing surface's own measured layout), used to scale points
+   * onto the baked texture. Fire-and-forget — swaps the texture in whenever baking finishes.
+   */
+  setContent: (content: PaperPlaneLetterContent, sourceSize: { width: number; height: number }) => void;
 }
 
 export interface PaperPlaneStageProps {

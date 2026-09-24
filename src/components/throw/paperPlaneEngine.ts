@@ -617,6 +617,13 @@ export function createPaperPlane(options: PaperPlaneOptions) {
       if (o.trail != null) trail = o.trail;
       if (o.follow != null) follow = o.follow;
     },
+    /** Swaps the material's texture (e.g. a freshly-baked letter texture) and disposes the old one. */
+    setTexture(next: THREE.Texture) {
+      const old = mat.map;
+      mat.map = next;
+      mat.needsUpdate = true;
+      if (old && old !== next) old.dispose();
+    },
     seek(tt: number) {
       t = clamp01(tt / FOLD_END) * FOLD_END;
       dirty = true;
