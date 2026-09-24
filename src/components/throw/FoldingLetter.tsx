@@ -3,7 +3,7 @@ import { Animated, LayoutChangeEvent, PanResponder, StyleSheet, Text, View } fro
 import { LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
-import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwFont } from '../../theme/throwTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { PaperPlaneStageHandle } from './paperPlaneTypes';
 import type { StrokePath } from '../../types/throw';
@@ -11,11 +11,10 @@ import type { StrokePath } from '../../types/throw';
 const FOLD_DRAG_DISTANCE = 150;
 const LAUNCH_THRESHOLD = 64;
 const LAUNCH_VELOCITY = 0.5;
-
-// RN's ViewStyle type doesn't model this CSS-only key — matches the same loosely-typed
-// pattern used by CardStack.tsx/CardsBoardScreen.tsx's own `noSelect` for a drag handle
-// that would otherwise start a native text selection mid-gesture.
-const noSelect: Record<string, unknown> = { userSelect: 'none' };
+// A downward drag on the paper only starts a fold once it's clearly vertical and past this many
+// px — short/lateral movement is left alone for LetterCanvas's own stroke gesture underneath.
+const FOLD_CAPTURE_DY = 14;
+const FOLD_CAPTURE_RATIO = 1.7;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
@@ -36,16 +35,20 @@ interface FoldingLetterProps {
 }
 
 /**
- * The paper letter, physically foldable into a paper plane by a downward drag on its pull-handle
- * (reversible — drag back up before it settles to keep writing) and thrown by a flick upward once
- * fully folded. The handle owns the fold gesture so it never fights with LetterCanvas's own
- * freehand-stroke PanResponder on the paper itself.
+ * The paper letter — pulling down anywhere on the paper itself folds it into a plane (reversible;
+ * let go before it settles to keep writing), and flicking the folded plane upward throws it. The
+ * fold/flight visual is a real 3D scene (PaperPlaneStage, ported from the design handoff's
+ * three.js origami-fold engine) driven directly by the drag via `seek(progress)` rather than
+ * autoplaying, with the user's actual handwriting baked onto the plane's texture right as the
+ * fold starts (see paperContentTexture.web.ts / .native.tsx) so it's a real letter, not a blank
+ * sheet. If WebGL init fails (old/unsupported device), it falls back to a static plane glyph.
  *
- * The fold/flight visual is a real 3D scene (PaperPlaneStage, ported from the design handoff's
- * three.js origami-fold engine) driven directly by the drag gesture via `seek(progress)`, rather
- * than autoplaying — reversible mid-fold exactly like the writing surface it replaces. If WebGL
- * init fails (old/unsupported device), it falls back to a static plane glyph rather than a blank
- * screen.
+ * There's no separate fold handle: the same paper the user writes on is what they drag, so the
+ * outer PanResponder here has to negotiate with LetterCanvas's own stroke-drawing responder for
+ * the exact same touches. It does that via the "capture" phase, which is RN's documented
+ * mechanism for a parent to steal an in-progress gesture from a child — it only steals once a
+ * drag is unambiguously a downward pull (past FOLD_CAPTURE_DY, and more vertical than horizontal
+ * by FOLD_CAPTURE_RATIO); anything shorter or more lateral is left alone as a stroke.
  */
 export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow, throwLabel = 'Swipe up to throw' }: FoldingLetterProps) {
   const reduceMotion = useReducedMotion();
@@ -61,6 +64,7 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
   const liftOpacity = useRef(new Animated.Value(1)).current;
   const stageRef = useRef<PaperPlaneStageHandle>(null);
   const flyDoneRef = useRef<(() => void) | null>(null);
+  const bakedRef = useRef(false);
 
   const handleStageError = useCallback((err: unknown) => {
     console.warn('[Throw] paper plane 3D stage failed to initialize, falling back to a static glyph:', err);
@@ -85,6 +89,7 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
     Animated.spring(progress, { toValue: target, useNativeDriver: false, friction: 9, tension: 55 }).start(() => {
       setPhase(target === 1 ? 'ready' : 'writing');
       if (target === 1) stageRef.current?.holdReady();
+      if (target === 0) bakedRef.current = false;
     });
   };
 
@@ -127,8 +132,16 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => !disabled && phase !== 'throwing' && (phase !== 'writing' || hasContent),
-        onMoveShouldSetPanResponder: () => !disabled && phase !== 'throwing' && (phase !== 'writing' || hasContent),
+        // A brand-new gesture only needs an immediate claim in the 'ready' phase (swipe-up-to-
+        // throw) — a fold-drag starting from 'writing' is negotiated via move-capture below, since
+        // LetterCanvas's own stroke responder needs first refusal on short/lateral touches.
+        onStartShouldSetPanResponder: () => !disabled && phase === 'ready',
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponderCapture: (_, g) => {
+          if (disabled || phase === 'throwing') return false;
+          if (phase === 'ready' || phase === 'folding') return true;
+          return hasContent && g.dy > FOLD_CAPTURE_DY && g.dy > Math.abs(g.dx) * FOLD_CAPTURE_RATIO;
+        },
         onPanResponderGrant: () => {
           if (phase === 'ready') {
             liftY.setValue(0);
@@ -142,6 +155,14 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
           const next = Math.max(0, Math.min(1, g.dy / FOLD_DRAG_DISTANCE));
           progress.setValue(next);
           if (phase !== 'folding' && next > 0) setPhase('folding');
+          // RN Web's responder polyfill doesn't reliably fire onPanResponderGrant when this
+          // capture steals the gesture from LetterCanvas mid-touch (only Move/Release fire on
+          // the new owner), so the one-time content bake is triggered from here instead, guarded
+          // by bakedRef rather than relying on Grant.
+          if (!bakedRef.current && next > 0) {
+            bakedRef.current = true;
+            stageRef.current?.setContent(content, paperSize);
+          }
         },
         onPanResponderRelease: (_, g) => {
           if (phase === 'ready') {
@@ -154,9 +175,10 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
           }
           settleFold(progressRef.current >= 0.5 ? 1 : 0);
         },
+        onPanResponderTerminationRequest: () => true,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [disabled, phase, hasContent, content, reduceMotion, stageFailed],
+    [disabled, phase, hasContent, content, paperSize, reduceMotion, stageFailed],
   );
 
   const onPaperLayout = (e: LayoutChangeEvent) => {
@@ -173,9 +195,9 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
         {phase === 'ready' || phase === 'throwing' ? 'Ready to throw' : `Writing to ${recipientName}`} · {recipientCity}
       </Text>
 
-      <View style={styles.paperArea} onLayout={onPaperLayout}>
+      <View style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
-          <LetterCanvas hideDoneButton onContentChange={setContent} />
+          <LetterCanvas onContentChange={setContent} />
         </Animated.View>
 
         {paperSize.width > 0 && (
@@ -194,36 +216,26 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
         )}
       </View>
 
+      {phase === 'ready' && <Text style={styles.readyHint}>{throwLabel}</Text>}
       {error && <Text style={styles.error}>{error}</Text>}
-
-      {!disabled && (
-        <View style={[styles.handleWrap, noSelect]} {...panResponder.panHandlers}>
-          <View style={styles.handleGrip} />
-          <Text style={[styles.handleHint, noSelect]}>
-            {phase === 'writing' ? (hasContent ? 'Pull down to fold your letter' : 'Write something, then pull down to fold') : phase === 'ready' ? throwLabel : ''}
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  toLine: { fontFamily: throwFont.ui600, fontSize: 12.5, color: throwColor.inkSoft, textAlign: 'center', marginBottom: 8 },
-  paperArea: {
-    flex: 1,
-    minHeight: 220,
-    backgroundColor: throwColor.paper,
-    borderRadius: throwRadius.paper,
-    borderWidth: 1,
-    borderColor: throwColor.paperLine,
-    overflow: 'hidden',
-    ...throwColor.shadowSoft,
+  toLine: {
+    fontFamily: throwFont.ui600,
+    fontSize: 12.5,
+    color: throwColor.inkSoft,
+    textAlign: 'center',
+    marginBottom: 8,
+    textShadowColor: 'rgba(255,255,255,.65)',
+    textShadowRadius: 4,
+    textShadowOffset: { width: 0, height: 1 },
   },
+  paperArea: { flex: 1, minHeight: 220 },
   fallbackPlaneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  readyHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.inkMute, textAlign: 'center', marginTop: 10 },
   error: { fontFamily: throwFont.ui400, fontSize: 12, color: '#B3413A', textAlign: 'center', marginTop: 8 },
-  handleWrap: { alignItems: 'center', paddingVertical: 14, gap: 6 },
-  handleGrip: { width: 44, height: 5, borderRadius: 3, backgroundColor: throwColor.paperLine },
-  handleHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.inkMute },
 });

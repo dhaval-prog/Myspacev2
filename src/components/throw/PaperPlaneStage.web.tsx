@@ -2,6 +2,7 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import { StyleSheet, View } from 'react-native';
 import * as THREE from 'three';
 import { createPaperPlane } from './paperPlaneEngine';
+import { bakeLetterTexture } from './paperContentTexture.web';
 import type { PaperPlaneStageHandle, PaperPlaneStageProps } from './paperPlaneTypes';
 
 const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
@@ -28,6 +29,11 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
       holdReady: () => engineRef.current?.holdReady(),
       seek: (t: number) => engineRef.current?.seek(t),
       setOptions: (o) => engineRef.current?.setOptions(o),
+      setContent: (content, sourceSize) => {
+        bakeLetterTexture(content, sourceSize)
+          .then((texture) => engineRef.current?.setTexture(texture))
+          .catch((err) => console.warn('[Throw] failed to bake letter texture (web):', err));
+      },
     }),
     [],
   );
