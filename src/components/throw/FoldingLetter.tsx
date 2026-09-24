@@ -65,10 +65,13 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
   const stageRef = useRef<PaperPlaneStageHandle>(null);
   const flyDoneRef = useRef<(() => void) | null>(null);
   const bakedRef = useRef(false);
-  // Web-only fallback tracking for an in-progress fold drag — see the comment on the effect below
-  // for why this exists. { y, progress } is the last point we know is accurate: a screen Y
-  // coordinate and the fold progress computed for it.
+  // Web-only fold-drag tracking, entirely independent of RN's PanResponder gestureState — see the
+  // comment on the effect further down for why. `rawStart` is where a touch/mouse-down landed
+  // (while still just possibly-a-stroke); `dragAnchor` is set once that's confirmed to be a fold
+  // (past FOLD_CAPTURE_DY/RATIO) and is the { y, progress } pair everything since is measured from.
+  const rawStartRef = useRef<{ x: number; y: number } | null>(null);
   const dragAnchorRef = useRef<{ y: number; progress: number } | null>(null);
+  const paperAreaRef = useRef<View>(null);
 
   const handleStageError = useCallback((err: unknown) => {
     console.warn('[Throw] paper plane 3D stage failed to initialize, falling back to a static glyph:', err);
@@ -163,40 +166,86 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
     [progress],
   );
 
-  // react-native-web's PanResponder polyfill dedupes move events against
-  // `touchHistory.mostRecentTimeStamp`, and once `onMoveShouldSetPanResponderCapture` below
-  // steals the gesture from LetterCanvas mid-touch, that history stops advancing for this
-  // gesture — so `onPanResponderMove` fires at most once per drag on web, freezing the fold a
-  // few percent in no matter how much further the user keeps dragging (this is a real,
-  // reproducible library bug, not an app-level race). Real React Native's own touch system
-  // doesn't have this bug, so native keeps using PanResponder's own tracking untouched; on web,
-  // once the first successful move seeds `dragAnchorRef`, these raw window-level listeners take
-  // over computing fold progress directly from pointer position, bypassing the broken dedupe.
+  // react-native-web's PanResponder polyfill dedupes move dispatch against
+  // `touchHistory.mostRecentTimeStamp`, and once `onMoveShouldSetPanResponderCapture` below steals
+  // the gesture from LetterCanvas mid-touch, that shared history essentially stops advancing for
+  // this touch — not deterministically "exactly once", but unpredictably: `onPanResponderMove`
+  // (and even `onMoveShouldSetPanResponderCapture` itself, sharing the same dedupe) fires for a
+  // few of the real pointer-move events and silently drops the rest, so how far the fold actually
+  // gets by release is closer to a coin flip than a function of drag distance — verified directly:
+  // a short drag and a very long one can both stall at nearly the same low progress, while
+  // occasionally a long one happens to get enough lucky retries to reach the end. Three narrower
+  // fixes targeting just *where* to read gestureState from (onPanResponderMove, then also seeding
+  // from onMoveShouldSetPanResponderCapture, then an always-attached window fallback anchored to
+  // whichever of those fired) all hit this same ceiling, because all three still ultimately trust
+  // RN's gestureState numbers. So on web this bypasses that machinery entirely: raw mouse/touch
+  // listeners on the paper's own DOM node re-implement the same FOLD_CAPTURE_DY/RATIO threshold
+  // this component already uses to decide "is this a fold, not a stroke", and once confirmed,
+  // compute progress purely from real pointer position deltas — no RN gestureState involved at
+  // any point. RN's PanResponder is still what makes LetterCanvas relinquish the touch (that part
+  // does work reliably), it's just no longer trusted for *measuring* the drag. Native's real touch
+  // system doesn't have the underlying bug, so it keeps using PanResponder's own tracking as-is.
   useEffect(() => {
-    if (Platform.OS !== 'web' || phase !== 'folding') return;
-    const getY = (e: MouseEvent | TouchEvent): number | null => {
-      if ('touches' in e) return e.touches[0]?.clientY ?? null;
-      return e.clientY;
+    if (Platform.OS !== 'web') return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const node = paperAreaRef.current as any as HTMLElement | null;
+    if (!node) return;
+    const getPoint = (e: MouseEvent | TouchEvent): { x: number; y: number } | null => {
+      if ('touches' in e) {
+        const t = e.touches[0];
+        return t ? { x: t.clientX, y: t.clientY } : null;
+      }
+      return { x: e.clientX, y: e.clientY };
+    };
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const { disabled, phase, hasContent } = latest.current;
+      if (disabled || phase !== 'writing' || !hasContent) return;
+      rawStartRef.current = getPoint(e);
     };
     const onMove = (e: MouseEvent | TouchEvent) => {
-      const y = getY(e);
+      const p = getPoint(e);
+      if (!p) return;
       const anchor = dragAnchorRef.current;
-      if (y == null || !anchor) return;
-      const next = Math.max(0, Math.min(1, anchor.progress + (y - anchor.y) / FOLD_DRAG_DISTANCE));
-      applyFoldProgress(next);
+      if (anchor) {
+        const next = Math.max(0, Math.min(1, anchor.progress + (p.y - anchor.y) / FOLD_DRAG_DISTANCE));
+        applyFoldProgress(next);
+        return;
+      }
+      const start = rawStartRef.current;
+      if (!start || latest.current.phase !== 'writing') return;
+      const dy = p.y - start.y;
+      const dx = p.x - start.x;
+      if (dy > FOLD_CAPTURE_DY && dy > Math.abs(dx) * FOLD_CAPTURE_RATIO) {
+        const next = Math.max(0, Math.min(1, dy / FOLD_DRAG_DISTANCE));
+        dragAnchorRef.current = { y: p.y, progress: next };
+        applyFoldProgress(next);
+      }
     };
-    const onUp = () => latest.current.settleFold(progressRef.current >= 0.5 ? 1 : 0);
+    const onUp = () => {
+      rawStartRef.current = null;
+      if (!dragAnchorRef.current) return;
+      // Clear the anchor first — this is what actually stops tracking, synchronously, before
+      // settleFold's spring even starts. Everything after this point no-ops in onMove above.
+      dragAnchorRef.current = null;
+      if (latest.current.phase === 'folding') {
+        latest.current.settleFold(progressRef.current >= 0.5 ? 1 : 0);
+      }
+    };
+    node.addEventListener('mousedown', onDown);
+    node.addEventListener('touchstart', onDown, { passive: true });
     window.addEventListener('mousemove', onMove);
     window.addEventListener('touchmove', onMove, { passive: true });
     window.addEventListener('mouseup', onUp);
     window.addEventListener('touchend', onUp);
     return () => {
+      node.removeEventListener('mousedown', onDown);
+      node.removeEventListener('touchstart', onDown);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('touchmove', onMove);
       window.removeEventListener('mouseup', onUp);
       window.removeEventListener('touchend', onUp);
     };
-  }, [phase, applyFoldProgress]);
+  }, [applyFoldProgress]);
 
   const panResponder = useMemo(
     () =>
@@ -222,11 +271,13 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
             liftY.setValue(Math.min(0, g.dy));
             return;
           }
+          if (Platform.OS === 'web') {
+            // On web, progress is driven entirely by the raw DOM listeners in the effect above —
+            // RN's own gestureState.dy here is unreliable (see that effect's comment) and writing
+            // it into dragAnchorRef would fight with the raw tracker's own anchor.
+            return;
+          }
           const next = Math.max(0, Math.min(1, g.dy / FOLD_DRAG_DISTANCE));
-          // Keep the web fallback's anchor in sync every time RN's own tracking does manage to
-          // fire (see the effect below) — it may only ever fire this once for a given drag, but
-          // when it does, this is the most accurate anchor available.
-          dragAnchorRef.current = { y: g.moveY, progress: next };
           applyFoldProgress(next);
         },
         onPanResponderRelease: (_, g) => {
@@ -265,7 +316,7 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
         {phase === 'ready' || phase === 'throwing' ? 'Ready to throw' : `Writing to ${recipientName}`} · {recipientCity}
       </Text>
 
-      <View style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
+      <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
           <LetterCanvas onContentChange={setContent} />
         </Animated.View>
