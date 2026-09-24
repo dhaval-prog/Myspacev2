@@ -15,6 +15,10 @@ const LAUNCH_VELOCITY = 0.5;
 // px — short/lateral movement is left alone for LetterCanvas's own stroke gesture underneath.
 const FOLD_CAPTURE_DY = 14;
 const FOLD_CAPTURE_RATIO = 1.7;
+// Once folded, an upward swipe only throws when it starts in this middle fraction of the paper's
+// width — the outer edges on either side are reserved for unfolding instead (see the 'ready'-phase
+// branches in the PanResponder below).
+const THROW_CENTER_ZONE = 0.5;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
@@ -36,8 +40,10 @@ interface FoldingLetterProps {
 
 /**
  * The paper letter — pulling down anywhere on the paper itself folds it into a plane (reversible;
- * let go before it settles to keep writing), and flicking the folded plane upward throws it. The
- * fold/flight visual is a real 3D scene (PaperPlaneStage, ported from the design handoff's
+ * let go before it settles to keep writing). Once folded, an upward swipe from the middle throws
+ * it; the same upward swipe from either side edge unfolds it back to writing instead — so an
+ * off-center flick can't accidentally launch the letter. The fold/flight visual is a real 3D scene
+ * (PaperPlaneStage, ported from the design handoff's
  * three.js origami-fold engine) driven directly by the drag via `seek(progress)` rather than
  * autoplaying, with the user's actual handwriting baked onto the plane's texture right as the
  * fold starts (see paperContentTexture.web.ts / .native.tsx) so it's a real letter, not a blank
@@ -72,6 +78,18 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
   const rawStartRef = useRef<{ x: number; y: number } | null>(null);
   const dragAnchorRef = useRef<{ y: number; progress: number } | null>(null);
   const paperAreaRef = useRef<View>(null);
+  // Which horizontal zone a 'ready'-phase gesture started in — set on grant, read by that same
+  // gesture's move/release handlers. 'center' throws on an upward swipe; 'side' unfolds instead.
+  const readyZoneRef = useRef<'center' | 'side'>('center');
+  // Whether the gesture currently in flight started from the 'ready' phase — set on grant,
+  // cleared on release. The side-zone unfold calls applyFoldProgress, which (by design, for the
+  // writing-phase fold-drag) flips `phase` to 'folding' the moment progress first moves off its
+  // endpoint; re-checking `phase === 'ready'` on every subsequent move/release tick would then see
+  // 'folding' instead and stop routing to this gesture's own handlers, permanently orphaning it
+  // mid-swipe (release never fires settleFold, so both phase and progress get stuck). This flag
+  // identifies the gesture by its own lifetime instead of by a `phase` value the gesture itself
+  // changes out from under it.
+  const readyGestureActiveRef = useRef(false);
 
   const handleStageError = useCallback((err: unknown) => {
     console.warn('[Throw] paper plane 3D stage failed to initialize, falling back to a static glyph:', err);
@@ -261,14 +279,33 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
           if (phase === 'ready' || phase === 'folding') return true;
           return hasContent && g.dy > FOLD_CAPTURE_DY && g.dy > Math.abs(g.dx) * FOLD_CAPTURE_RATIO;
         },
-        onPanResponderGrant: () => {
+        onPanResponderGrant: (e) => {
           if (latest.current.phase === 'ready') {
             liftY.setValue(0);
+            readyGestureActiveRef.current = true;
+            // Which zone this swipe started in decides throw-vs-unfold for its whole lifetime
+            // (below) — a fresh claim each touch, not the fold-drag's move-capture negotiation,
+            // so gestureState is reliable here even on web.
+            const width = latest.current.paperSize.width;
+            const x = e.nativeEvent.locationX;
+            const margin = (1 - THROW_CENTER_ZONE) / 2;
+            readyZoneRef.current = width > 0 && x / width >= margin && x / width <= 1 - margin ? 'center' : 'side';
           }
         },
         onPanResponderMove: (_, g) => {
-          if (latest.current.phase === 'ready') {
-            liftY.setValue(Math.min(0, g.dy));
+          if (readyGestureActiveRef.current) {
+            if (readyZoneRef.current === 'side') {
+              // Dragging up from a side edge unfolds — the mirror image of the fold-drag's own
+              // dy/FOLD_DRAG_DISTANCE math, just starting from 1 and counting down as dy goes
+              // negative. This calls applyFoldProgress, which flips `phase` to 'folding' the
+              // moment progress first moves — routing on readyGestureActiveRef instead of
+              // re-checking `phase` here is what keeps this gesture's own moves reaching this
+              // branch for its whole lifetime despite that.
+              const next = Math.max(0, Math.min(1, 1 + g.dy / FOLD_DRAG_DISTANCE));
+              applyFoldProgress(next);
+            } else {
+              liftY.setValue(Math.min(0, g.dy));
+            }
             return;
           }
           if (Platform.OS === 'web') {
@@ -281,7 +318,14 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
           applyFoldProgress(next);
         },
         onPanResponderRelease: (_, g) => {
-          if (latest.current.phase === 'ready') {
+          if (readyGestureActiveRef.current) {
+            // Clear before settling — same reasoning as the raw DOM tracker's onUp: closes off any
+            // stray move event that might otherwise land after release and re-drive progress.
+            readyGestureActiveRef.current = false;
+            if (readyZoneRef.current === 'side') {
+              latest.current.settleFold(progressRef.current >= 0.5 ? 1 : 0);
+              return;
+            }
             if (g.dy <= -LAUNCH_THRESHOLD || g.vy <= -LAUNCH_VELOCITY) {
               latest.current.launch();
             } else {
