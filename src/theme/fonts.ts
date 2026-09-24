@@ -13,6 +13,7 @@ import {
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
+import { Caveat_400Regular, Caveat_500Medium, Caveat_600SemiBold, Caveat_700Bold } from '@expo-google-fonts/caveat';
 export const fontsToLoad = {
   Figtree_400Regular,
   Figtree_500Medium,
@@ -30,4 +31,10 @@ export const fontsToLoad = {
   PlusJakartaSans_600SemiBold,
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
+  // Throw only — its handwritten-letter face, kept out of the shared fontFamily
+  // tokens for the same reason as the Games hub faces above.
+  Caveat_400Regular,
+  Caveat_500Medium,
+  Caveat_600SemiBold,
+  Caveat_700Bold,
 };

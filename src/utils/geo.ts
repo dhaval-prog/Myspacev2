@@ -20,3 +20,13 @@ export function formatDistance(meters: number): string {
   if (meters < 1000) return `${Math.max(10, Math.round(meters / 10) * 10)} m away`;
   return `${(meters / 1000).toFixed(1)} km away`;
 }
+
+/** Great-circle distance between two coordinates, in miles — for international (Throw) distances. */
+export function haversineMiles(a: LatLng, b: LatLng): number {
+  return haversineMeters(a, b) / 1609.344;
+}
+
+/** "5,923 miles" — comma-grouped, no decimal, for a long-haul distance readout. */
+export function formatMiles(miles: number): string {
+  return `${Math.round(miles).toLocaleString('en-US')} miles`;
+}

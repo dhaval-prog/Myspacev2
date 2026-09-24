@@ -27,6 +27,7 @@ import { GamesScreen } from './src/screens/games/GamesScreen';
 import { GamesDashboardScreen } from './src/screens/games/GamesDashboardScreen';
 import { CardsGameScreen } from './src/screens/games/cards/CardsGameScreen';
 import { TriviaGameScreen } from './src/screens/games/trivia/TriviaGameScreen';
+import { ThrowScreen } from './src/screens/throw/ThrowScreen';
 import { LiveLocationsScreen } from './src/screens/location/LiveLocationsScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
 import type { ViewId } from './src/data/views';
@@ -44,6 +45,7 @@ type Screen =
   | { name: 'games'; initialTab?: 'create' | 'join' }
   | { name: 'cards'; initialTab?: 'create' | 'join' }
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
+  | { name: 'throw'; openThrowId?: string }
   | { name: 'liveLocations' }
   | { name: 'account'; from: 'home' | 'expenses' | 'split' };
 
@@ -72,6 +74,8 @@ function AppNavigator() {
       if (receivedRequests.some((r) => r.connectionId === target.connectionId)) goRequests();
       else openChat(target.connectionId);
       setScreen({ name: 'friends' });
+    } else if (target.screen === 'throw') {
+      setScreen({ name: 'throw', openThrowId: target.throwId });
     } else {
       setScreen({ name: 'home' });
     }
@@ -163,6 +167,9 @@ function AppNavigator() {
       />
     );
   }
+  if (screen.name === 'throw') {
+    return <ThrowScreen onHome={() => setScreen({ name: 'home' })} initialThrowId={screen.openThrowId} />;
+  }
   if (screen.name === 'liveLocations') {
     return (
       <LiveLocationsScreen
@@ -186,6 +193,7 @@ function AppNavigator() {
       onOpenSplit={() => setScreen({ name: 'split' })}
       onOpenFriends={() => setScreen({ name: 'friends' })}
       onOpenGames={() => setScreen({ name: 'gamesHub' })}
+      onOpenThrow={() => setScreen({ name: 'throw' })}
       onOpenAccount={() => setScreen({ name: 'account', from: 'home' })}
       onOpenNotificationTarget={openNotificationTarget}
     />
