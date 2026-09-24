@@ -411,10 +411,14 @@ export function FoldingLetter({
 
         {photoUri && phase !== 'throwing' && (
           <View style={styles.photoChip} pointerEvents="box-none">
-            <Image source={{ uri: photoUri }} style={styles.photoThumb} />
-            <Pressable onPress={() => setPhotoUri(null)} hitSlop={8} style={styles.photoRemove} accessibilityRole="button" accessibilityLabel="Remove photo">
-              <Icon path={X_ICON} size={11} color={throwColor.paper} strokeWidth={2.4} />
-            </Pressable>
+            <View style={styles.photoWrap}>
+              <View style={styles.photoFrame}>
+                <Image source={{ uri: photoUri }} style={styles.photoThumb} />
+              </View>
+              <Pressable onPress={() => setPhotoUri(null)} hitSlop={8} style={styles.photoRemove} accessibilityRole="button" accessibilityLabel="Remove photo">
+                <Icon path={X_ICON} size={12} color={throwColor.paper} strokeWidth={2.6} />
+              </Pressable>
+            </View>
           </View>
         )}
       </View>
@@ -478,28 +482,34 @@ const styles = StyleSheet.create({
   fallbackPlaneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   readyHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.inkMute, textAlign: 'center', marginTop: 10 },
   error: { fontFamily: throwFont.ui400, fontSize: 12, color: '#B3413A', textAlign: 'center', marginTop: 8 },
+  // A "photo pasted onto the letter" look — a small white-bordered frame near the top of the
+  // paper, tilted slightly like something actually stuck on by hand, rather than a small corner
+  // badge that read more like a UI chip than an attachment.
   photoChip: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    width: 52,
-    height: 52,
+    top: 16,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
-  photoThumb: {
-    width: 52,
-    height: 52,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: throwColor.paper,
+  photoWrap: { width: 132, height: 132 },
+  photoFrame: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+    backgroundColor: throwColor.paper,
+    padding: 6,
+    transform: [{ rotate: '-4deg' }],
     ...throwColor.shadowSoft,
   },
+  photoThumb: { width: '100%', height: '100%', borderRadius: 4 },
   photoRemove: {
     position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    top: -8,
+    right: -8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: throwColor.ink,
     alignItems: 'center',
     justifyContent: 'center',

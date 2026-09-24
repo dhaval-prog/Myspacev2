@@ -37,6 +37,8 @@ export interface ThrowRow {
   delivered_at: string | null;
   read_at: string | null;
   replied_to_throw_id: string | null;
+  deleted_by_sender: boolean;
+  deleted_by_recipient: boolean;
 }
 
 /** Client-shaped letter, with the counterpart's display name resolved and a direction flag. */

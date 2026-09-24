@@ -9,9 +9,13 @@ import { useThrow } from '../../context/ThrowContext';
 interface ThrowLocationSetupScreenProps {
   onDone: () => void;
   onBack?: () => void;
+  /** 'setup' (default) is the first-time flow; 'edit' is reached later from Throw's settings
+   * icon to change an already-set location — same two options (GPS or manual search), just
+   * worded as a change rather than an introduction. */
+  mode?: 'setup' | 'edit';
 }
 
-export function ThrowLocationSetupScreen({ onDone, onBack }: ThrowLocationSetupScreenProps) {
+export function ThrowLocationSetupScreen({ onDone, onBack, mode = 'setup' }: ThrowLocationSetupScreenProps) {
   const insets = useSafeAreaInsets();
   const { setMyLocation } = useThrow();
   const [showManual, setShowManual] = useState(false);
@@ -66,8 +70,12 @@ export function ThrowLocationSetupScreen({ onDone, onBack }: ThrowLocationSetupS
 
       {!showManual ? (
         <View style={styles.center}>
-          <Text style={styles.title}>Let Throw know where you are</Text>
-          <Text style={styles.body}>Your location helps your letters travel from where you are to where your friends are.</Text>
+          <Text style={styles.title}>{mode === 'edit' ? 'Update your location' : 'Let Throw know where you are'}</Text>
+          <Text style={styles.body}>
+            {mode === 'edit'
+              ? "Change where your letters travel from — use your phone's current location, or pick a different city."
+              : 'Your location helps your letters travel from where you are to where your friends are.'}
+          </Text>
 
           {error && <Text style={styles.error}>{error}</Text>}
 
@@ -77,7 +85,7 @@ export function ThrowLocationSetupScreen({ onDone, onBack }: ThrowLocationSetupS
             </View>
           </Pressable>
           <Pressable onPress={() => setShowManual(true)}>
-            <Text style={styles.secondaryLabel}>Not Now — pick my city</Text>
+            <Text style={styles.secondaryLabel}>{mode === 'edit' ? 'Pick a different city instead' : 'Not Now — pick my city'}</Text>
           </Pressable>
         </View>
       ) : (

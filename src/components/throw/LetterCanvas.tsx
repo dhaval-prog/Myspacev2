@@ -6,6 +6,9 @@ import type { StrokePath } from '../../types/throw';
 const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
 
 const PEN_COLORS = [throwColor.ink, throwColor.clayDeep, '#3E5C4E', '#3A4C6E'];
+// The placeholder's own ink — a distinct blue-violet, not one of the selectable pen colors, so
+// it always reads as a prompt rather than something the user could mistake for typed text.
+const PLACEHOLDER_COLOR = '#4A55B0';
 
 interface LetterCanvasContent {
   messageText: string | null;
@@ -66,11 +69,11 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
       <TextInput
         style={[StyleSheet.absoluteFill, styles.typedInput]}
         multiline
-        placeholder="Write something..."
-        placeholderTextColor={throwColor.inkFaint}
+        placeholder="Write something for your loved one"
+        placeholderTextColor={PLACEHOLDER_COLOR}
         value={typedText}
         onChangeText={setTypedText}
-        textAlignVertical="top"
+        textAlignVertical="center"
       />
 
       <View style={styles.toolbar} pointerEvents="box-none">
@@ -94,11 +97,12 @@ const styles = StyleSheet.create({
   },
   typedInput: {
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 44,
     fontFamily: throwFont.hand500,
     fontSize: 22,
     color: throwColor.ink,
     lineHeight: 30,
+    textAlign: 'center',
   },
   toolbar: { position: 'absolute', top: 8, right: 8 },
   swatchPill: { flexDirection: 'row', gap: 6, backgroundColor: 'rgba(251,246,236,.88)', borderRadius: throwRadius.pill, paddingHorizontal: 8, paddingVertical: 6 },

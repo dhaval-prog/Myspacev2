@@ -65,6 +65,9 @@ interface ThrowContextValue {
    * photo is picked/previewed before the user actually throws. */
   uploadPhoto: (localUri: string) => Promise<{ url: string | null; error: string | null }>;
   markRead: (throwId: string) => Promise<void>;
+  /** Removes a letter from my own view (inbox or sent list, whichever it's in) — the other
+   * party's copy is untouched until they delete it too. */
+  deleteThrow: (throwId: string) => Promise<{ error: string | null }>;
   refresh: () => Promise<void>;
 }
 
@@ -102,7 +105,15 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
       const d = meRes.data as { city: string; country: string; latitude: number; longitude: number };
       setMyLocationState({ city: d.city, country: d.country, latitude: d.latitude, longitude: d.longitude });
     }
-    setRows((throwsRes.data as ThrowRow[] | null) ?? []);
+    // A letter deleted from "my" side (sender or recipient, whichever I am) stays in the shared
+    // row for the other person until they've deleted it too (see delete_throw) — so filtering it
+    // out of my own list happens here, client-side, rather than in the query itself.
+    const visibleRows = ((throwsRes.data as ThrowRow[] | null) ?? []).filter((r) => {
+      if (r.sender_id === myId && r.deleted_by_sender) return false;
+      if (r.recipient_id === myId && r.deleted_by_recipient) return false;
+      return true;
+    });
+    setRows(visibleRows);
 
     const friendIds = fsFriends.map((f) => f.userId);
     if (friendIds.length > 0) {
@@ -199,6 +210,16 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     [refresh],
   );
 
+  const deleteThrow = useCallback(
+    async (throwId: string): Promise<{ error: string | null }> => {
+      const { error } = await supabase.rpc('delete_throw', { p_throw_id: throwId });
+      if (error) return { error: error.message };
+      await refresh();
+      return { error: null };
+    },
+    [refresh],
+  );
+
   const letters = useMemo(() => rows.map((r) => toLetter(r, myId ?? '', nameFor, avatarFor)), [rows, myId, nameFor, avatarFor]);
   const inbox = useMemo(() => letters.filter((l) => l.direction === 'received'), [letters]);
   const unreadCount = useMemo(() => inbox.filter((l) => l.status === 'thrown').length, [inbox]);
@@ -208,7 +229,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     [fsFriends, friendLocations],
   );
 
-  const value: ThrowContextValue = { loading, myLocation, setMyLocation, friends, letters, inbox, unreadCount, sendThrow, uploadPhoto, markRead, refresh };
+  const value: ThrowContextValue = { loading, myLocation, setMyLocation, friends, letters, inbox, unreadCount, sendThrow, uploadPhoto, markRead, deleteThrow, refresh };
   return <ThrowContext.Provider value={value}>{children}</ThrowContext.Provider>;
 }
 
