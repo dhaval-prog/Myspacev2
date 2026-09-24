@@ -197,6 +197,13 @@ export interface PaperPlaneCallbacks {
   onProgress?: (p: { step: number; total: number; label: string; progress: number }) => void;
   /** Called right after `renderer.render(scene, camera)` each frame — e.g. native `gl.endFrameEXP()`. */
   afterRender?: () => void;
+  /**
+   * Called (at most once) if the per-frame fold deformation throws — e.g. a GL binding that
+   * doesn't propagate a dynamic vertex buffer update the way a desktop browser does, which
+   * would otherwise leave the mesh silently stuck showing its flat, unfolded vertices forever.
+   * The caller should treat this the same as a setup failure and fall back to a static visual.
+   */
+  onError?: (err: unknown) => void;
 }
 
 export interface PaperPlaneOptions extends PaperPlaneCallbacks {
@@ -208,7 +215,7 @@ export interface PaperPlaneOptions extends PaperPlaneCallbacks {
 
 /* ---------- engine ---------- */
 export function createPaperPlane(options: PaperPlaneOptions) {
-  const { renderer, texture, onPhase, onProgress, afterRender } = options;
+  const { renderer, texture, onPhase, onProgress, afterRender, onError } = options;
   const { polys, defs, creases } = buildPattern();
 
   renderer.shadowMap.enabled = true;
@@ -254,10 +261,14 @@ export function createPaperPlane(options: PaperPlaneOptions) {
       uv[j * 2 + 1] = (v[1] + B) / (2 * B);
     }),
   );
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
-  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  geo.setAttribute('aFlat', new THREE.BufferAttribute(flat, 2));
+  function buildGeometry() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.setAttribute('aFlat', new THREE.BufferAttribute(flat, 2));
+    return g;
+  }
+  let geo = buildGeometry();
 
   const NC = Math.min(creases.length, 48);
   const segU = Array.from({ length: 48 }, (_, i) => (i < NC ? new THREE.Vector4(creases[i].a[0], creases[i].a[1], creases[i].b[0], creases[i].b[1]) : new THREE.Vector4()));
@@ -444,9 +455,21 @@ export function createPaperPlane(options: PaperPlaneOptions) {
       bbMin.min(_v);
       bbMax.max(_v);
     }
-    geo.attributes.position.needsUpdate = true;
-    geo.computeVertexNormals();
-    geo.computeBoundingSphere();
+    // Replace the geometry outright (a fresh gl.bufferData upload) rather than mutating the
+    // existing one in place and setting `needsUpdate` (an incremental gl.bufferSubData upload)
+    // — some GL bindings other than a desktop browser's have been observed not propagating
+    // bufferSubData writes reliably for a buffer that's updated every frame, which otherwise
+    // leaves the mesh silently stuck showing its original flat, unfolded vertices. `uv`/`aFlat`
+    // never change, so only `position` actually needed the per-frame update; wrapping all three
+    // in a new BufferGeometry each time is the only way to force the full-upload path without
+    // reaching into three.js's internal (undocumented, unavailable on WebGLRenderer) attribute
+    // tracking.
+    const nextGeo = buildGeometry();
+    nextGeo.computeVertexNormals();
+    nextGeo.computeBoundingSphere();
+    mesh.geometry = nextGeo;
+    geo.dispose();
+    geo = nextGeo;
     for (let i = 0; i < NC; i++) strU[i] = crease[creases[i].fold];
   }
 
@@ -512,6 +535,7 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   }
 
   let dirty = true;
+  let renderErrored = false;
   function frame(now: number) {
     raf = requestAnimationFrame(frame);
     if (!last) last = now;
@@ -530,9 +554,16 @@ export function createPaperPlane(options: PaperPlaneOptions) {
         onPhase?.('ready');
       }
     }
-    if (dirty) {
-      formation = stateAt(t);
-      applyFolds();
+    if (dirty && !renderErrored) {
+      try {
+        formation = stateAt(t);
+        applyFolds();
+      } catch (err) {
+        // Don't keep retrying a deterministic failure every frame — surface it once and let
+        // the caller fall back to a static visual instead of leaving the mesh looking stuck.
+        renderErrored = true;
+        onError?.(err);
+      }
       dirty = false;
     }
     if (phase === 'idle' || phase === 'folding') {
@@ -617,11 +648,18 @@ export function createPaperPlane(options: PaperPlaneOptions) {
       if (o.trail != null) trail = o.trail;
       if (o.follow != null) follow = o.follow;
     },
-    /** Swaps the material's texture (e.g. a freshly-baked letter texture) and disposes the old one. */
+    /**
+     * Swaps the material's texture (e.g. a freshly-baked letter texture) and disposes the old
+     * one. Deliberately does NOT set `mat.needsUpdate` — that forces a full shader program
+     * recompile, which this never needs (we're swapping between two non-null textures, not
+     * toggling the map on/off, so the compiled shader's #define USE_MAP branch is unaffected),
+     * and this call happens right as a fold gesture starts, i.e. right as per-frame vertex
+     * position updates begin — recompiling the program at that exact moment is an avoidable
+     * risk on GL bindings less forgiving than a desktop browser's.
+     */
     setTexture(next: THREE.Texture) {
       const old = mat.map;
       mat.map = next;
-      mat.needsUpdate = true;
       if (old && old !== next) old.dispose();
     },
     seek(tt: number) {

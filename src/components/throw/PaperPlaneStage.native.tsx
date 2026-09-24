@@ -79,6 +79,7 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
         height: h,
         onPhase,
         onProgress,
+        onError,
         afterRender: () => gl.endFrameEXP(),
       });
     } catch (err) {

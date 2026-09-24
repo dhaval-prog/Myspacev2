@@ -71,7 +71,7 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = 8;
 
-      engine = createPaperPlane({ renderer, texture, width, height, onPhase, onProgress });
+      engine = createPaperPlane({ renderer, texture, width, height, onPhase, onProgress, onError });
       engineRef.current = engine;
     } catch (err) {
       onError?.(err);
