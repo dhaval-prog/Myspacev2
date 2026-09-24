@@ -18,13 +18,18 @@ interface ThrowHomeScreenProps {
   lockedRecipient?: { friendUserId: string; repliedToThrowId: string } | null;
 }
 
+/** How far in the map zooms once it has a location to center on — the world map is ~2:1, so this
+ * is roughly "city block" scale rather than "country" scale. */
+const FOCUS_ZOOM = 4.5;
+
 export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const { myLocation, friends, unreadCount, sendThrow } = useThrow();
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const initializedRef = useRef(false);
-  const focusAnim = useRef(new Animated.Value(0)).current;
+  const mapTranslateX = useRef(new Animated.Value(0)).current;
+  const mapTranslateY = useRef(new Animated.Value(0)).current;
 
   const friendsWithLocation = useMemo(() => friends.filter((f) => f.location), [friends]);
   const hasFriendsAtAll = friends.length > 0;
@@ -38,11 +43,6 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [friendsWithLocation]);
 
-  useEffect(() => {
-    focusAnim.setValue(0);
-    Animated.timing(focusAnim, { toValue: 1, duration: 450, useNativeDriver: false }).start();
-  }, [selectedFriendId, focusAnim]);
-
   const selectedIndex = Math.max(0, friendsWithLocation.findIndex((f) => f.userId === selectedFriendId));
   const selectedFriend = friendsWithLocation.find((f) => f.userId === selectedFriendId) ?? null;
 
@@ -51,7 +51,24 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient
     setMapSize({ width, height });
   };
 
-  const mapScale = focusAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.07] });
+  // The map is rendered at `zoomFactor`x its natural size, then translated so the focused point
+  // (the selected contact, falling back to the user's own pin) sits centered in the viewport —
+  // real zoom rather than a cosmetic scale pulse, since a flat `scale` transform only magnifies
+  // around the view's own center, not around any particular contact's location.
+  const focusTarget = selectedFriend?.location ?? myLocation ?? null;
+  const zoomFactor = focusTarget && mapSize.width > 0 ? FOCUS_ZOOM : 1;
+  const bigMapWidth = mapSize.width * zoomFactor;
+  const bigMapHeight = mapSize.height * zoomFactor;
+
+  useEffect(() => {
+    if (mapSize.width <= 0 || mapSize.height <= 0) return;
+    const focal = focusTarget ? project(focusTarget, bigMapWidth, bigMapHeight) : { x: bigMapWidth / 2, y: bigMapHeight / 2 };
+    Animated.parallel([
+      Animated.timing(mapTranslateX, { toValue: mapSize.width / 2 - focal.x, duration: 500, useNativeDriver: false }),
+      Animated.timing(mapTranslateY, { toValue: mapSize.height / 2 - focal.y, duration: 500, useNativeDriver: false }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFriendId, mapSize.width, mapSize.height, myLocation?.latitude, myLocation?.longitude]);
 
   const handleThrow = async (content: { messageText: string | null; strokes: StrokePath[] | null; penColor: string }) => {
     if (!selectedFriend) return { error: 'Pick someone to throw to first.' };
@@ -84,27 +101,17 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient
         </Pressable>
       </View>
 
-      {lockedRecipient ? (
-        selectedFriend && (
-          <Text style={styles.replyLine} numberOfLines={1}>
-            Throwing back to {selectedFriend.name}
-          </Text>
-        )
-      ) : (
-        <RecipientCarousel friends={friendsWithLocation} selectedIndex={selectedIndex} onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)} />
-      )}
-
       <View style={styles.mapArea} onLayout={onMapLayout}>
         {mapSize.width > 0 && (
-          <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: mapScale }] }]}>
-            <WorldMapBackdrop width={mapSize.width} height={mapSize.height} />
+          <Animated.View style={{ position: 'absolute', width: bigMapWidth, height: bigMapHeight, transform: [{ translateX: mapTranslateX }, { translateY: mapTranslateY }] }}>
+            <WorldMapBackdrop width={bigMapWidth} height={bigMapHeight} />
             {myLocation &&
               (() => {
-                const { x, y } = project(myLocation, mapSize.width, mapSize.height);
+                const { x, y } = project(myLocation, bigMapWidth, bigMapHeight);
                 return <LocationPin x={x} y={y} label="You" isSelf />;
               })()}
             {friendsWithLocation.map((f) => {
-              const { x, y } = project(f.location!, mapSize.width, mapSize.height);
+              const { x, y } = project(f.location!, bigMapWidth, bigMapHeight);
               const selected = f.userId === selectedFriendId;
               return (
                 <LocationPin
@@ -119,6 +126,20 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient
               );
             })}
           </Animated.View>
+        )}
+
+        {lockedRecipient ? (
+          selectedFriend && (
+            <View style={styles.recipientOverlay}>
+              <Text style={styles.replyLine} numberOfLines={1}>
+                Throwing back to {selectedFriend.name}
+              </Text>
+            </View>
+          )
+        ) : (
+          <View style={styles.recipientOverlay}>
+            <RecipientCarousel friends={friendsWithLocation} selectedIndex={selectedIndex} onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)} />
+          </View>
         )}
 
         {!hasFriendsAtAll && (
@@ -158,8 +179,21 @@ const styles = StyleSheet.create({
   inboxLabel: { fontFamily: throwFont.ui600, fontSize: 13.5, color: throwColor.clayDeep },
   badge: { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: throwColor.unread, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   badgeLabel: { fontFamily: throwFont.ui700, fontSize: 10.5, color: '#fff' },
-  replyLine: { textAlign: 'center', fontFamily: throwFont.ui700, fontSize: 15, color: throwColor.ink, paddingVertical: 12 },
-  mapArea: { flex: 1, marginHorizontal: 12, marginBottom: 12, borderRadius: 20, overflow: 'hidden' },
+  mapArea: { flex: 1, marginHorizontal: 12, marginTop: 4, marginBottom: 12, borderRadius: 20, overflow: 'hidden' },
+  recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
+  replyLine: {
+    textAlign: 'center',
+    fontFamily: throwFont.ui700,
+    fontSize: 15,
+    color: throwColor.ink,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 40,
+    marginTop: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(251,246,236,.88)',
+    overflow: 'hidden',
+  },
   emptyOverlay: {
     position: 'absolute',
     top: '38%',
