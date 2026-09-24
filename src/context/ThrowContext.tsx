@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useFriends } from './FriendsContext';
@@ -66,13 +66,17 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
   const [myLocation, setMyLocationState] = useState<ThrowLocation | null>(null);
   const [friendLocations, setFriendLocations] = useState<Record<string, ThrowLocation>>({});
   const [rows, setRows] = useState<ThrowRow[]>([]);
+  const hasLoadedRef = useRef(false);
 
   const nameFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.name ?? 'Someone', [fsFriends]);
   const avatarFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.avatarUrl ?? null, [fsFriends]);
 
   const refresh = useCallback(async () => {
     if (!myId) return;
-    setLoading(true);
+    // Only the very first load blanks the screen — a poll or realtime-triggered refresh updates
+    // data quietly in the background so it never interrupts whatever's on screen (mid-gesture
+    // composing, an in-progress flight animation, etc.).
+    if (!hasLoadedRef.current) setLoading(true);
     const [meRes, throwsRes] = await Promise.all([
       supabase.from('throw_profiles').select('city,country,latitude,longitude').eq('user_id', myId).maybeSingle(),
       supabase.from('throws').select('*').or(`sender_id.eq.${myId},recipient_id.eq.${myId}`).order('created_at', { ascending: false }),
@@ -101,6 +105,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     } else {
       setFriendLocations({});
     }
+    hasLoadedRef.current = true;
     setLoading(false);
   }, [myId, fsFriends]);
 

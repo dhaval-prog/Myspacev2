@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
@@ -14,9 +14,13 @@ interface LetterCanvasContent {
 }
 
 interface LetterCanvasProps {
-  onDone: (content: LetterCanvasContent) => void;
+  onDone?: (content: LetterCanvasContent) => void;
   doneLabel?: string;
   doneDisabledUntilContent?: boolean;
+  /** Hides the built-in commit button — for embedding inside a flow that commits some other way (e.g. the fold-and-throw gesture). */
+  hideDoneButton?: boolean;
+  /** Fires on every content edit, live — lets a parent read the current draft without waiting for a "Done" tap. */
+  onContentChange?: (content: LetterCanvasContent) => void;
 }
 
 function strokeToPathD(points: { x: number; y: number }[]): string {
@@ -29,7 +33,13 @@ function strokeToPathD(points: { x: number; y: number }[]): string {
  * optional typed fallback, styled with a handwriting font. Minimal controls; the focus stays
  * on writing, not on a toolbar.
  */
-export function LetterCanvas({ onDone, doneLabel = 'Done', doneDisabledUntilContent = true }: LetterCanvasProps) {
+export function LetterCanvas({
+  onDone,
+  doneLabel = 'Done',
+  doneDisabledUntilContent = true,
+  hideDoneButton = false,
+  onContentChange,
+}: LetterCanvasProps) {
   const [mode, setMode] = useState<'write' | 'type'>('write');
   const [strokes, setStrokes] = useState<StrokePath[]>([]);
   const [redoStack, setRedoStack] = useState<StrokePath[]>([]);
@@ -106,12 +116,21 @@ export function LetterCanvas({ onDone, doneLabel = 'Done', doneDisabledUntilCont
 
   const hasContent = mode === 'write' ? strokes.length > 0 : typedText.trim().length > 0;
 
+  const currentContent = useCallback(
+    (): LetterCanvasContent =>
+      mode === 'write'
+        ? { messageText: null, strokes: strokes.length > 0 ? strokes : null, penColor }
+        : { messageText: typedText.trim() || null, strokes: null, penColor },
+    [mode, strokes, typedText, penColor],
+  );
+
+  useEffect(() => {
+    onContentChange?.(currentContent());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, strokes, typedText, penColor]);
+
   const handleDone = () => {
-    if (mode === 'write') {
-      onDone({ messageText: null, strokes: strokes.length > 0 ? strokes : null, penColor });
-    } else {
-      onDone({ messageText: typedText.trim() || null, strokes: null, penColor });
-    }
+    onDone?.(currentContent());
   };
 
   return (
@@ -187,11 +206,13 @@ export function LetterCanvas({ onDone, doneLabel = 'Done', doneDisabledUntilCont
         </View>
       )}
 
-      <Pressable onPress={handleDone} disabled={doneDisabledUntilContent && !hasContent}>
-        <View style={[styles.doneBtn, doneDisabledUntilContent && !hasContent && styles.doneBtnDisabled]}>
-          <Text style={styles.doneLabel}>{doneLabel}</Text>
-        </View>
-      </Pressable>
+      {!hideDoneButton && (
+        <Pressable onPress={handleDone} disabled={doneDisabledUntilContent && !hasContent}>
+          <View style={[styles.doneBtn, doneDisabledUntilContent && !hasContent && styles.doneBtnDisabled]}>
+            <Text style={styles.doneLabel}>{doneLabel}</Text>
+          </View>
+        </Pressable>
+      )}
     </View>
   );
 }
