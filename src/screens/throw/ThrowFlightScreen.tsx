@@ -79,7 +79,9 @@ export function ThrowFlightScreen({ recipientName, recipientCity, recipientCount
       if (cancelled) return;
 
       setPhase('arriving');
-      await new Promise((r) => setTimeout(r, 500));
+      // Long enough for the landing pulse (a 550ms one-shot, see LandingPulse) to fully play out
+      // at the recipient's pin before the map view is torn down for the arrival card.
+      await new Promise((r) => setTimeout(r, 600));
       if (cancelled) return;
 
       setPhase('delivered');
@@ -117,7 +119,11 @@ export function ThrowFlightScreen({ recipientName, recipientCity, recipientCount
       {phase !== 'folding' && (
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: mapOpacity, transform: [{ scale: mapScale }] }]}>
           <View style={styles.mapArea}>
-            <ThrowMap pins={pins} fitPoints={fitPoints} route={{ points, progress, showPlane: phase === 'in_flight' || phase === 'arriving' }} />
+            <ThrowMap
+              pins={pins}
+              fitPoints={fitPoints}
+              route={{ points, progress, showPlane: phase === 'in_flight' || phase === 'arriving', landing: phase === 'arriving' }}
+            />
           </View>
 
           {phase === 'in_flight' && (

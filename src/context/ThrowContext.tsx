@@ -8,6 +8,15 @@ function warn(action: string, error: { message: string } | null) {
   if (error) console.warn(`[Throw] ${action} failed:`, error.message);
 }
 
+/** Same reasoning as FriendsContext's own copy: a naive "everything after the last dot" breaks on
+ * web, where expo-image-picker hands back an extension-less `blob:` URI. */
+function extFromBlob(localUri: string, mimeType: string): string {
+  const mimeExt = mimeType.split('/')[1]?.split('+')[0];
+  if (mimeExt && /^[a-z0-9]{2,5}$/i.test(mimeExt)) return mimeExt.toLowerCase() === 'jpeg' ? 'jpg' : mimeExt.toLowerCase();
+  const match = localUri.split('?')[0].match(/\.([a-z0-9]{2,5})$/i);
+  return match ? match[1].toLowerCase() : 'jpg';
+}
+
 function toLetter(row: ThrowRow, myId: string, nameFor: (userId: string) => string, avatarFor: (userId: string) => string | null): ThrowLetter {
   const direction: 'sent' | 'received' = row.sender_id === myId ? 'sent' : 'received';
   const counterpartId = direction === 'sent' ? row.recipient_id : row.sender_id;
@@ -22,6 +31,7 @@ function toLetter(row: ThrowRow, myId: string, nameFor: (userId: string) => stri
     messageText: row.message_text,
     strokes: row.strokes,
     penColor: row.pen_color,
+    photoUrl: row.photo_url,
     senderCity: row.sender_city,
     senderCountry: row.sender_country,
     senderLatitude: row.sender_latitude,
@@ -50,6 +60,10 @@ interface ThrowContextValue {
   inbox: ThrowLetter[];
   unreadCount: number;
   sendThrow: (draft: ComposeDraft) => Promise<{ error: string | null; letter?: ThrowLetter }>;
+  /** Uploads a local photo (camera or library) to this user's own throw-media folder, returning
+   * its public URL for inclusion in a ComposeDraft. Separate from sendThrow itself since the
+   * photo is picked/previewed before the user actually throws. */
+  uploadPhoto: (localUri: string) => Promise<{ url: string | null; error: string | null }>;
   markRead: (throwId: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -148,12 +162,32 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
         p_strokes: draft.strokes,
         p_pen_color: draft.penColor,
         p_replied_to_throw_id: draft.repliedToThrowId ?? null,
+        p_photo_url: draft.photoUrl,
       });
       if (error) return { error: error.message };
       await refresh();
       return { error: null, letter: toLetter(data as ThrowRow, myId ?? '', nameFor, avatarFor) };
     },
     [myId, nameFor, avatarFor, refresh],
+  );
+
+  const uploadPhoto = useCallback(
+    async (localUri: string): Promise<{ url: string | null; error: string | null }> => {
+      if (!myId) return { url: null, error: 'Not signed in.' };
+      try {
+        const response = await fetch(localUri);
+        const blob = await response.blob();
+        const ext = extFromBlob(localUri, blob.type || 'image/jpeg');
+        const path = `${myId}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('throw-media').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
+        if (upErr) return { url: null, error: upErr.message };
+        const { data: pub } = supabase.storage.from('throw-media').getPublicUrl(path);
+        return { url: pub.publicUrl, error: null };
+      } catch (e) {
+        return { url: null, error: e instanceof Error ? e.message : 'Could not upload that photo.' };
+      }
+    },
+    [myId],
   );
 
   const markRead = useCallback(
@@ -174,7 +208,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     [fsFriends, friendLocations],
   );
 
-  const value: ThrowContextValue = { loading, myLocation, setMyLocation, friends, letters, inbox, unreadCount, sendThrow, markRead, refresh };
+  const value: ThrowContextValue = { loading, myLocation, setMyLocation, friends, letters, inbox, unreadCount, sendThrow, uploadPhoto, markRead, refresh };
   return <ThrowContext.Provider value={value}>{children}</ThrowContext.Provider>;
 }
 

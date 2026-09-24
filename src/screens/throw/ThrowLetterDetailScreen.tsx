@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowButton } from '../../components/throw/ThrowButton';
@@ -78,6 +78,8 @@ export function ThrowLetterDetailScreen({ throwId, onBack, onThrowBack }: ThrowL
               <Text style={styles.typedText}>{letter.messageText}</Text>
             )}
           </View>
+
+          {letter.photoUrl && <Image source={{ uri: letter.photoUrl }} style={styles.photo} resizeMode="cover" />}
         </Animated.View>
 
         <View style={{ flex: 1, minHeight: 24 }} />
@@ -108,5 +110,12 @@ const styles = StyleSheet.create({
     ...throwColor.shadowSoft,
   },
   typedText: { fontFamily: throwFont.hand500, fontSize: 22, color: throwColor.ink, lineHeight: 30 },
+  photo: {
+    width: '100%',
+    height: 220,
+    borderRadius: throwRadius.paper,
+    marginTop: 14,
+    ...throwColor.shadowSoft,
+  },
   sentNote: { fontFamily: throwFont.ui400, fontSize: 12.5, color: throwColor.inkMute, textAlign: 'center', marginBottom: 8 },
 });

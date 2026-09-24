@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
 import { Image, StyleSheet, Pressable, Text, TextInput, View } from 'react-native';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 import type { StrokePath } from '../../types/throw';
@@ -18,6 +18,13 @@ interface LetterCanvasProps {
   onContentChange?: (content: LetterCanvasContent) => void;
 }
 
+export interface LetterCanvasHandle {
+  /** Appends a chunk of text (a finalized voice-to-text segment) onto whatever's already
+   * written, as if the user had just typed it — used by the voice input button, which lives
+   * outside this component and has no other way to reach its internal text state. */
+  appendText: (text: string) => void;
+}
+
 /**
  * The letter's actual writing surface — real paper (the same grain texture the folded plane
  * uses) with a typed message and a minimal floating ink-color picker, so the writing area fills
@@ -25,9 +32,22 @@ interface LetterCanvasProps {
  * text onto the plane's baked texture, so the writing surface and the measured surface need to be
  * the same rectangle.
  */
-export function LetterCanvas({ onContentChange }: LetterCanvasProps) {
+export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas({ onContentChange }, ref) {
   const [typedText, setTypedText] = useState('');
   const [penColor, setPenColor] = useState(PEN_COLORS[0]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      appendText: (text: string) => {
+        setTypedText((prev) => {
+          const trimmed = prev.replace(/\s+$/, '');
+          return trimmed ? `${trimmed} ${text}` : text;
+        });
+      },
+    }),
+    [],
+  );
 
   const currentContent = useCallback(
     (): LetterCanvasContent => ({ messageText: typedText.trim() || null, strokes: null, penColor }),
@@ -62,7 +82,7 @@ export function LetterCanvas({ onContentChange }: LetterCanvasProps) {
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: {

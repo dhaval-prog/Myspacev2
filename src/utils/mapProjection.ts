@@ -78,3 +78,16 @@ export function latLngAtProgress(points: LatLng[], t: number): FlightPosition {
   const bearingDeg = (Math.atan2(-deltaLat, deltaLng) * 180) / Math.PI;
   return { position: { latitude, longitude }, bearingDeg };
 }
+
+/**
+ * The flying plane's on-screen size for a given flight progress — large near departure, small on
+ * approach, eased (not linear) so the shrink reads as a gradual depth cue rather than a mechanical
+ * ramp. `points`/`t` already carry the real geography (see `latLngAtProgress`); this only adds the
+ * "further along the path = farther away = smaller" illusion on top of that real position, shared
+ * by both platforms' ThrowMap so the two don't drift apart.
+ */
+export function planeSizeForProgress(t: number, max: number, min: number): number {
+  const c = Math.max(0, Math.min(1, t));
+  const eased = c < 0.5 ? 2 * c * c : 1 - Math.pow(-2 * c + 2, 2) / 2;
+  return max + (min - max) * eased;
+}

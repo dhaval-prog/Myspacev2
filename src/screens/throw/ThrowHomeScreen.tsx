@@ -19,7 +19,7 @@ interface ThrowHomeScreenProps {
 
 export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
-  const { myLocation, friends, unreadCount, sendThrow } = useThrow();
+  const { myLocation, friends, unreadCount, sendThrow, uploadPhoto } = useThrow();
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const initializedRef = useRef(false);
 
@@ -60,13 +60,22 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient
     return list;
   }, [myLocation, friendsWithLocation, selectedFriendId, lockedRecipient]);
 
-  const handleThrow = async (content: { messageText: string | null; strokes: StrokePath[] | null; penColor: string }) => {
+  const handleThrow = async (content: { messageText: string | null; strokes: StrokePath[] | null; penColor: string; photoUri: string | null }) => {
     if (!selectedFriend) return { error: 'Pick someone to throw to first.' };
+
+    let photoUrl: string | null = null;
+    if (content.photoUri) {
+      const uploaded = await uploadPhoto(content.photoUri);
+      if (uploaded.error) return { error: uploaded.error };
+      photoUrl = uploaded.url;
+    }
+
     const { error, letter } = await sendThrow({
       recipientId: selectedFriend.userId,
       messageText: content.messageText,
       strokes: content.strokes,
       penColor: content.penColor,
+      photoUrl,
       repliedToThrowId: lockedRecipient?.repliedToThrowId,
     });
     if (error || !letter) return { error: error ?? 'Could not send — try again.' };
@@ -81,14 +90,9 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient
           <Text style={styles.headerBack}>‹ Home</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Throw</Text>
-        <Pressable onPress={onOpenInbox} hitSlop={10} style={styles.inboxBtn}>
-          <Text style={styles.inboxLabel}>Inbox</Text>
-          {unreadCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeLabel}>{unreadCount}</Text>
-            </View>
-          )}
-        </Pressable>
+        {/* Balances the back button so the title stays centered — Inbox itself now lives in
+            FoldingLetter's bottom-right control, alongside Photo and Voice. */}
+        <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.mapArea}>
@@ -122,6 +126,8 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient
               recipientCity={selectedFriend.location!.city}
               onThrow={handleThrow}
               throwLabel={lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
+              onOpenInbox={onOpenInbox}
+              unreadCount={unreadCount}
             />
           </View>
         )}
@@ -141,10 +147,7 @@ const styles = StyleSheet.create({
   },
   headerBack: { fontFamily: throwFont.ui600, fontSize: 13.5, color: throwColor.inkSoft },
   headerTitle: { fontFamily: throwFont.hand700, fontSize: 26, color: throwColor.ink },
-  inboxBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  inboxLabel: { fontFamily: throwFont.ui600, fontSize: 13.5, color: throwColor.clayDeep },
-  badge: { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: throwColor.unread, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  badgeLabel: { fontFamily: throwFont.ui700, fontSize: 10.5, color: '#fff' },
+  headerSpacer: { width: 48 },
   mapArea: { flex: 1, marginHorizontal: 12, marginTop: 4, marginBottom: 12, borderRadius: 20, overflow: 'hidden' },
   recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
   replyLine: {

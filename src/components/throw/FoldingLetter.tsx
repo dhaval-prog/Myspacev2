@@ -1,12 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutChangeEvent, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, LayoutChangeEvent, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
-import { throwColor, throwFont } from '../../theme/throwTokens';
+import { PhotoAttachSheet } from './PhotoAttachSheet';
+import { Icon } from '../Icon';
+import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useVoiceToText } from '../../hooks/useVoiceToText';
+import type { LetterCanvasHandle } from './LetterCanvas';
 import type { PaperPlaneStageHandle } from './paperPlaneTypes';
 import type { StrokePath } from '../../types/throw';
+
+const PHOTO_ICON = 'M4 8h4l1.6-2.5h4.8L16 8h4v11H4z M12 11.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z';
+const MIC_ICON = 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z M6 11a6 6 0 0 0 12 0 M12 19v3 M9.5 22h5';
+const STOP_ICON = 'M6 6h12v12H6z';
+const INBOX_ICON = 'M3 11h5l1.8 2.8h4.4L16 11h5 M3 11V5h18v6 M3 11v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7';
+const X_ICON = 'M6 6l12 12M18 6L6 18';
 
 const FOLD_DRAG_DISTANCE = 150;
 const LAUNCH_THRESHOLD = 64;
@@ -26,6 +36,9 @@ interface FoldingLetterContent {
   messageText: string | null;
   strokes: StrokePath[] | null;
   penColor: string;
+  /** A locally-picked photo (camera or library), not yet uploaded — the parent uploads it and
+   * resolves a public URL as part of actually sending the throw. */
+  photoUri: string | null;
 }
 
 interface FoldingLetterProps {
@@ -36,6 +49,10 @@ interface FoldingLetterProps {
   /** Called once the user flicks the folded plane upward. Resolve with an error to spring the plane back to 'ready' with a message; resolve with null on success (the parent then navigates away). */
   onThrow: (content: FoldingLetterContent) => Promise<{ error: string | null }>;
   throwLabel?: string;
+  /** Opens the inbox — its button lives in the bottom-controls row below the paper alongside
+   * Photo and Voice, rather than in a separate header. */
+  onOpenInbox: () => void;
+  unreadCount: number;
 }
 
 /**
@@ -56,13 +73,25 @@ interface FoldingLetterProps {
  * drag is unambiguously a downward pull (past FOLD_CAPTURE_DY, and more vertical than horizontal
  * by FOLD_CAPTURE_RATIO); anything shorter or more lateral is left alone as a stroke.
  */
-export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow, throwLabel = 'Swipe up to throw' }: FoldingLetterProps) {
+export function FoldingLetter({
+  recipientName,
+  recipientCity,
+  disabled,
+  onThrow,
+  throwLabel = 'Swipe up to throw',
+  onOpenInbox,
+  unreadCount,
+}: FoldingLetterProps) {
   const reduceMotion = useReducedMotion();
   const [phase, setPhase] = useState<Phase>('writing');
-  const [content, setContent] = useState<FoldingLetterContent>({ messageText: null, strokes: null, penColor: throwColor.ink });
+  const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUri'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paperSize, setPaperSize] = useState({ width: 0, height: 0 });
   const [stageFailed, setStageFailed] = useState(false);
+  const letterCanvasRef = useRef<LetterCanvasHandle>(null);
+  const voice = useVoiceToText({ onFinalText: (text) => letterCanvasRef.current?.appendText(text) });
 
   const progress = useRef(new Animated.Value(0)).current;
   const progressRef = useRef(0);
@@ -108,7 +137,7 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
     return () => progress.removeListener(id);
   }, [progress]);
 
-  const hasContent = content.strokes !== null || (content.messageText?.trim().length ?? 0) > 0;
+  const hasContent = content.strokes !== null || (content.messageText?.trim().length ?? 0) > 0 || photoUri !== null;
 
   const settleFold = (target: 0 | 1) => {
     Animated.spring(progress, { toValue: target, useNativeDriver: false, friction: 9, tension: 55 }).start(() => {
@@ -141,9 +170,9 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
         flyDoneRef.current = resolve;
       });
       stageRef.current!.fly();
-      [{ error: err }] = await Promise.all([onThrow(content), flyDone]);
+      [{ error: err }] = await Promise.all([onThrow({ ...content, photoUri }), flyDone]);
     } else {
-      ({ error: err } = await onThrow(content));
+      ({ error: err } = await onThrow({ ...content, photoUri }));
     }
 
     if (err) {
@@ -362,7 +391,7 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
 
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
-          <LetterCanvas onContentChange={setContent} />
+          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} />
         </Animated.View>
 
         {paperSize.width > 0 && (
@@ -379,10 +408,53 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
             )}
           </Animated.View>
         )}
+
+        {photoUri && phase !== 'throwing' && (
+          <View style={styles.photoChip} pointerEvents="box-none">
+            <Image source={{ uri: photoUri }} style={styles.photoThumb} />
+            <Pressable onPress={() => setPhotoUri(null)} hitSlop={8} style={styles.photoRemove} accessibilityRole="button" accessibilityLabel="Remove photo">
+              <Icon path={X_ICON} size={11} color={throwColor.paper} strokeWidth={2.4} />
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {phase === 'ready' && <Text style={styles.readyHint}>{throwLabel}</Text>}
-      {error && <Text style={styles.error}>{error}</Text>}
+      {voice.recording && <Text style={styles.readyHint}>{voice.interimText || 'Listening…'}</Text>}
+      {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
+
+      <View style={styles.bottomRow}>
+        <Pressable
+          onPress={() => setPhotoSheetOpen(true)}
+          disabled={disabled || phase === 'throwing'}
+          style={({ pressed }) => [styles.roundBtn, pressed && styles.roundBtnPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Add a photo"
+        >
+          <Icon path={PHOTO_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
+        </Pressable>
+
+        <Pressable
+          onPress={() => (voice.recording ? voice.stop() : voice.start())}
+          disabled={disabled || phase === 'throwing'}
+          style={({ pressed }) => [styles.micBtn, voice.recording && styles.micBtnActive, pressed && styles.roundBtnPressed]}
+          accessibilityRole="button"
+          accessibilityLabel={voice.recording ? 'Stop recording' : 'Speak your letter'}
+        >
+          <Icon path={voice.recording ? STOP_ICON : MIC_ICON} size={voice.recording ? 16 : 21} color={voice.recording ? throwColor.paper : throwColor.ink} strokeWidth={1.8} />
+        </Pressable>
+
+        <Pressable onPress={onOpenInbox} style={({ pressed }) => [styles.roundBtn, pressed && styles.roundBtnPressed]} accessibilityRole="button" accessibilityLabel="Inbox">
+          <Icon path={INBOX_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeLabel}>{unreadCount}</Text>
+            </View>
+          )}
+        </Pressable>
+      </View>
+
+      <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={setPhotoUri} />
     </View>
   );
 }
@@ -399,8 +471,77 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
     textShadowOffset: { width: 0, height: 1 },
   },
-  paperArea: { flex: 1, minHeight: 220 },
+  // Compact on purpose — the bottom-controls row below now takes a fixed slice of `wrap`'s
+  // height, and this being `flex: 1` rather than a hardcoded height means it shrinks to make
+  // room for that row automatically, no matter what height the parent hands `wrap`.
+  paperArea: { flex: 1, minHeight: 180 },
   fallbackPlaneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   readyHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.inkMute, textAlign: 'center', marginTop: 10 },
   error: { fontFamily: throwFont.ui400, fontSize: 12, color: '#B3413A', textAlign: 'center', marginTop: 8 },
+  photoChip: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    width: 52,
+    height: 52,
+  },
+  photoThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: throwColor.paper,
+    ...throwColor.shadowSoft,
+  },
+  photoRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: throwColor.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 6,
+    marginTop: 14,
+  },
+  roundBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(251,246,236,.88)',
+    ...throwColor.shadowSoft,
+  },
+  roundBtnPressed: { opacity: 0.7 },
+  micBtn: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(251,246,236,.88)',
+    ...throwColor.shadowSoft,
+  },
+  micBtnActive: { backgroundColor: throwColor.clayDeep },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: throwColor.unread,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeLabel: { fontFamily: throwFont.ui700, fontSize: 10.5, color: '#fff' },
 });
