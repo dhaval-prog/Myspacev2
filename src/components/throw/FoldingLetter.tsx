@@ -1,9 +1,11 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, LayoutChangeEvent, PanResponder, StyleSheet, Text, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
+import { PaperPlaneStage } from './PaperPlaneStage';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import type { PaperPlaneStageHandle } from './paperPlaneTypes';
 import type { StrokePath } from '../../types/throw';
 
 const FOLD_DRAG_DISTANCE = 150;
@@ -33,30 +35,46 @@ interface FoldingLetterProps {
   throwLabel?: string;
 }
 
-function strokeToPathD(points: { x: number; y: number }[]): string {
-  return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-}
-
 /**
  * The paper letter, physically foldable into a paper plane by a downward drag on its pull-handle
  * (reversible — drag back up before it settles to keep writing) and thrown by a flick upward once
  * fully folded. The handle owns the fold gesture so it never fights with LetterCanvas's own
  * freehand-stroke PanResponder on the paper itself.
+ *
+ * The fold/flight visual is a real 3D scene (PaperPlaneStage, ported from the design handoff's
+ * three.js origami-fold engine) driven directly by the drag gesture via `seek(progress)`, rather
+ * than autoplaying — reversible mid-fold exactly like the writing surface it replaces. If WebGL
+ * init fails (old/unsupported device), it falls back to a static plane glyph rather than a blank
+ * screen.
  */
 export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow, throwLabel = 'Swipe up to throw' }: FoldingLetterProps) {
+  const reduceMotion = useReducedMotion();
   const [phase, setPhase] = useState<Phase>('writing');
   const [content, setContent] = useState<FoldingLetterContent>({ messageText: null, strokes: null, penColor: throwColor.ink });
   const [error, setError] = useState<string | null>(null);
   const [paperSize, setPaperSize] = useState({ width: 0, height: 0 });
+  const [stageFailed, setStageFailed] = useState(false);
 
   const progress = useRef(new Animated.Value(0)).current;
   const progressRef = useRef(0);
   const liftY = useRef(new Animated.Value(0)).current;
   const liftOpacity = useRef(new Animated.Value(1)).current;
+  const stageRef = useRef<PaperPlaneStageHandle>(null);
+  const flyDoneRef = useRef<(() => void) | null>(null);
+
+  const handleStageError = useCallback((err: unknown) => {
+    console.warn('[Throw] paper plane 3D stage failed to initialize, falling back to a static glyph:', err);
+    setStageFailed(true);
+  }, []);
+
+  const handleStagePhase = useCallback((p: string) => {
+    if (p === 'done') flyDoneRef.current?.();
+  }, []);
 
   React.useEffect(() => {
     const id = progress.addListener(({ value }) => {
       progressRef.current = value;
+      stageRef.current?.seek(value);
     });
     return () => progress.removeListener(id);
   }, [progress]);
@@ -66,6 +84,7 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
   const settleFold = (target: 0 | 1) => {
     Animated.spring(progress, { toValue: target, useNativeDriver: false, friction: 9, tension: 55 }).start(() => {
       setPhase(target === 1 ? 'ready' : 'writing');
+      if (target === 1) stageRef.current?.holdReady();
     });
   };
 
@@ -79,14 +98,28 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
   const launch = async () => {
     setError(null);
     setPhase('throwing');
-    Animated.timing(liftY, { toValue: -260, duration: 320, useNativeDriver: false }).start();
-    Animated.timing(liftOpacity, { toValue: 0, duration: 320, useNativeDriver: false }).start();
-    const { error: err } = await onThrow(content);
+    // The pre-commit "lifting off the table" nudge is a plain 2D transform on the wrapper; the
+    // 3D engine's own fly() sequence takes the visual from here, so reset that nudge first.
+    liftY.setValue(0);
+    liftOpacity.setValue(1);
+
+    const canFly = !reduceMotion && !stageFailed && stageRef.current;
+    let err: string | null;
+    if (canFly) {
+      const flyDone = new Promise<void>((resolve) => {
+        flyDoneRef.current = resolve;
+      });
+      stageRef.current!.fly();
+      [{ error: err }] = await Promise.all([onThrow(content), flyDone]);
+    } else {
+      ({ error: err } = await onThrow(content));
+    }
+
     if (err) {
       setError(err);
       setPhase('ready');
-      liftY.setValue(0);
-      liftOpacity.setValue(1);
+      stageRef.current?.seek(1);
+      stageRef.current?.holdReady();
     }
     // On success the parent navigates away — nothing left to reset here.
   };
@@ -123,7 +156,7 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [disabled, phase, hasContent, content],
+    [disabled, phase, hasContent, content, reduceMotion, stageFailed],
   );
 
   const onPaperLayout = (e: LayoutChangeEvent) => {
@@ -132,23 +165,7 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
   };
 
   const canvasOpacity = progress.interpolate({ inputRange: [0, 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
-  const foldOpacity = progress.interpolate({ inputRange: [0, 0.2], outputRange: [0, 1], extrapolate: 'clamp' });
-
-  const rectScaleY = progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0.35, 0.35], extrapolate: 'clamp' });
-  const rectRotateX = progress.interpolate({ inputRange: [0, 0.5], outputRange: ['0deg', '-35deg'], extrapolate: 'clamp' });
-  const rectOpacity = progress.interpolate({ inputRange: [0, 0.42, 0.58], outputRange: [1, 1, 0], extrapolate: 'clamp' });
-
-  const triOpacity = progress.interpolate({ inputRange: [0.4, 0.58, 0.78, 0.92], outputRange: [0, 1, 1, 0], extrapolate: 'clamp' });
-  const triScaleX = progress.interpolate({ inputRange: [0.5, 0.9], outputRange: [1, 0.5], extrapolate: 'clamp' });
-
-  const planeOpacity = progress.interpolate({ inputRange: [0.76, 1], outputRange: [0, 1], extrapolate: 'clamp' });
-  const planeScale = progress.interpolate({ inputRange: [0.76, 1], outputRange: [0.55, 1], extrapolate: 'clamp' });
-  const planeRotate = progress.interpolate({ inputRange: [0.76, 1], outputRange: ['8deg', '-6deg'], extrapolate: 'clamp' });
-
-  const liftRotate = liftY.interpolate({ inputRange: [-260, 0], outputRange: ['-32deg', '0deg'], extrapolate: 'clamp' });
-
-  const strokesToShow = content.strokes;
-  const typedToShow = content.messageText;
+  const stageOpacity = progress.interpolate({ inputRange: [0, 0.2], outputRange: [0, 1], extrapolate: 'clamp' });
 
   return (
     <View style={styles.wrap}>
@@ -162,37 +179,17 @@ export function FoldingLetter({ recipientName, recipientCity, disabled, onThrow,
         </Animated.View>
 
         {paperSize.width > 0 && (
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: foldOpacity }]} pointerEvents="none">
-            <Animated.View
-              style={[
-                styles.foldRect,
-                { width: paperSize.width, height: paperSize.height, opacity: rectOpacity, transform: [{ perspective: 800 }, { scaleY: rectScaleY }, { rotateX: rectRotateX }] },
-              ]}
-            >
-              {strokesToShow ? (
-                <Svg width="100%" height="100%" viewBox={`0 0 ${paperSize.width} ${paperSize.height}`}>
-                  {strokesToShow.map((s, i) => (
-                    <Path key={i} d={strokeToPathD(s.points)} stroke={s.color} strokeWidth={s.width} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                  ))}
-                </Svg>
-              ) : typedToShow ? (
-                <Text style={styles.foldRectText} numberOfLines={6}>
-                  {typedToShow}
-                </Text>
-              ) : null}
-            </Animated.View>
-
-            <Animated.View style={[styles.foldTriangleWrap, { opacity: triOpacity, transform: [{ scaleX: triScaleX }] }]}>
-              <Svg width={120} height={90} viewBox="0 0 120 90">
-                <Path d="M60,6 L114,82 L6,82 Z" fill={throwColor.paper} stroke={throwColor.paperLine} strokeWidth={1.5} />
-              </Svg>
-            </Animated.View>
-
-            <Animated.View style={[styles.foldPlaneWrap, { transform: [{ translateY: liftY }, { rotate: liftRotate }], opacity: liftOpacity }]}>
-              <Animated.View style={{ opacity: planeOpacity, transform: [{ scale: planeScale }, { rotate: planeRotate }] }}>
-                <PaperPlane size={56} color={throwColor.clayDeep} />
+          <Animated.View
+            style={[StyleSheet.absoluteFill, { opacity: stageOpacity, transform: [{ translateY: liftY }] }]}
+            pointerEvents="none"
+          >
+            {stageFailed ? (
+              <Animated.View style={[styles.fallbackPlaneWrap, { opacity: liftOpacity }]}>
+                <PaperPlane size={64} color={throwColor.clayDeep} />
               </Animated.View>
-            </Animated.View>
+            ) : (
+              <PaperPlaneStage ref={stageRef} onPhase={handleStagePhase} onError={handleStageError} />
+            )}
           </Animated.View>
         )}
       </View>
@@ -224,16 +221,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...throwColor.shadowSoft,
   },
-  foldRect: {
-    backgroundColor: throwColor.paper,
-    borderRadius: throwRadius.paper,
-    padding: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  foldRectText: { fontFamily: throwFont.hand500, fontSize: 20, color: throwColor.ink, lineHeight: 27 },
-  foldTriangleWrap: { position: 'absolute', top: '50%', left: '50%', marginLeft: -60, marginTop: -45 },
-  foldPlaneWrap: { position: 'absolute', top: '50%', left: '50%', marginLeft: -28, marginTop: -28 },
+  fallbackPlaneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   error: { fontFamily: throwFont.ui400, fontSize: 12, color: '#B3413A', textAlign: 'center', marginTop: 8 },
   handleWrap: { alignItems: 'center', paddingVertical: 14, gap: 6 },
   handleGrip: { width: 44, height: 5, borderRadius: 3, backgroundColor: throwColor.paperLine },
