@@ -46,6 +46,13 @@ export const throwColor = {
   land: '#E9DEC4',
   landLine: 'rgba(80,64,40,.14)',
 
+  // Streets + buildings scattered over land once the map is zoomed in enough to read as a place
+  // (see mapStreetGrid.ts) — still muted paper tones, never map-app-saturated.
+  road: 'rgba(80,64,40,.26)',
+  roadMinor: 'rgba(80,64,40,.14)',
+  building: '#DFD1A9',
+  buildingLine: 'rgba(80,64,40,.20)',
+
   // Own pin vs. a friend's pin.
   pinSelf: '#2B231C',
   pinFriend: '#C9714F',
