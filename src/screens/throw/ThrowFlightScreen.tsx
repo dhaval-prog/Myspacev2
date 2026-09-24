@@ -1,15 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { WorldMapBackdrop } from '../../components/throw/WorldMapBackdrop';
-import { LocationPin } from '../../components/throw/LocationPin';
-import { FlightRoute } from '../../components/throw/FlightRoute';
+import { ThrowMap } from '../../components/throw/ThrowMap';
 import { PaperPlane } from '../../components/throw/PaperPlane';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 import { formatMiles } from '../../utils/geo';
-import { flightPath, project } from '../../utils/mapProjection';
+import { flightPath } from '../../utils/mapProjection';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { LatLng } from '../../utils/geo';
+import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 
 type Phase = 'folding' | 'launching' | 'in_flight' | 'arriving' | 'delivered';
 
@@ -32,7 +31,6 @@ export function ThrowFlightScreen({ recipientName, recipientCity, recipientCount
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const [phase, setPhase] = useState<Phase>('folding');
-  const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
   const [progress, setProgress] = useState(0);
 
   const foldAnim = useRef(new Animated.Value(0)).current;
@@ -41,13 +39,16 @@ export function ThrowFlightScreen({ recipientName, recipientCity, recipientCount
   const arrivalAnim = useRef(new Animated.Value(0)).current;
 
   const points = useMemo(() => flightPath(from, to), [from, to]);
+  const fitPoints = useMemo(() => [from, to], [from, to]);
+  const pins: ThrowMapPin[] = useMemo(
+    () => [
+      { id: 'from', latitude: from.latitude, longitude: from.longitude, label: 'From', isSelf: true },
+      { id: 'to', latitude: to.latitude, longitude: to.longitude, label: recipientName.split(' ')[0] },
+    ],
+    [from, to, recipientName]
+  );
   const durationMs = useMemo(() => flightDurationMs(distanceMiles), [distanceMiles]);
   const milesToGo = Math.max(0, Math.round(distanceMiles * (1 - progress)));
-
-  const onMapLayout = (e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout;
-    setMapSize({ width, height });
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -115,21 +116,8 @@ export function ThrowFlightScreen({ recipientName, recipientCity, recipientCount
 
       {phase !== 'folding' && (
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: mapOpacity, transform: [{ scale: mapScale }] }]}>
-          <View style={styles.mapArea} onLayout={onMapLayout}>
-            {mapSize.width > 0 && (
-              <>
-                <WorldMapBackdrop width={mapSize.width} height={mapSize.height} />
-                {(() => {
-                  const p = project(from, mapSize.width, mapSize.height);
-                  return <LocationPin x={p.x} y={p.y} label="From" isSelf />;
-                })()}
-                {(() => {
-                  const p = project(to, mapSize.width, mapSize.height);
-                  return <LocationPin x={p.x} y={p.y} label={recipientName.split(' ')[0]} />;
-                })()}
-                <FlightRoute points={points} width={mapSize.width} height={mapSize.height} progress={progress} showPlane={phase === 'in_flight' || phase === 'arriving'} />
-              </>
-            )}
+          <View style={styles.mapArea}>
+            <ThrowMap pins={pins} fitPoints={fitPoints} route={{ points, progress, showPlane: phase === 'in_flight' || phase === 'arriving' }} />
           </View>
 
           {phase === 'in_flight' && (
