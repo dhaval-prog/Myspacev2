@@ -1,5 +1,5 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { Renderer, TextureLoader } from 'expo-three';
 import * as THREE from 'three';
@@ -21,6 +21,9 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
   const engineRef = useRef<ReturnType<typeof createPaperPlane> | null>(null);
   const sizeRef = useRef({ width: 0, height: 0 });
   const rasterizerRef = useRef<LetterRasterizerHandle>(null);
+  // TEMPORARY diagnostic overlay — see onDebugFrame in paperPlaneEngine.ts. Remove once the
+  // native fold-not-deforming bug is confirmed fixed.
+  const [debugText, setDebugText] = useState('');
 
   useImperativeHandle(
     ref,
@@ -80,6 +83,7 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
         onPhase,
         onProgress,
         onError,
+        onDebugFrame: setDebugText,
         afterRender: () => gl.endFrameEXP(),
       });
     } catch (err) {
@@ -97,6 +101,16 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
           ExpoWebGLRenderingContext, so this cast is safe. */}
       <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate as any} />
       <LetterRasterizer ref={rasterizerRef} />
+      {!!debugText && (
+        <View style={styles.debugBar}>
+          <Text style={styles.debugText}>{debugText}</Text>
+        </View>
+      )}
     </View>
   );
+});
+
+const styles = StyleSheet.create({
+  debugBar: { position: 'absolute', top: 4, left: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.75)', borderRadius: 6, padding: 4 },
+  debugText: { color: '#0f0', fontSize: 10, fontFamily: 'monospace' },
 });
