@@ -69,6 +69,13 @@
         }
       ],
       [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "MySpace uses your microphone to turn your spoken words into a Throw letter.",
+          "speechRecognitionPermission": "MySpace uses speech recognition to turn your spoken words into a Throw letter."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
