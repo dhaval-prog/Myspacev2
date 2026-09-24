@@ -2,21 +2,20 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { throwColor, throwFont } from '../../theme/throwTokens';
 
-interface LocationPinProps {
-  x: number;
-  y: number;
+interface LocationPinGlyphProps {
   label: string;
   isSelf?: boolean;
-  onPress?: () => void;
   /** The currently-selected recipient — emphasized with a glowing ring. */
   selected?: boolean;
   /** A friend who isn't the current selection — faded so the selected one reads clearly. */
   dimmed?: boolean;
 }
 
-/** A pin absolutely positioned over the world map SVG — own location vs. a friend's read differently. */
-export function LocationPin({ x, y, label, isSelf, onPress, selected, dimmed }: LocationPinProps) {
-  const content = (
+/** The pin's visual (ring/dot/label) with no positioning of its own — used directly as a native
+ * map Marker's child (the Marker itself owns lat/lng-driven placement) and internally by
+ * `LocationPin` below (for the web map's DOM-overlay pins, positioned by pixel x/y). */
+export function LocationPinGlyph({ label, isSelf, selected, dimmed }: LocationPinGlyphProps) {
+  return (
     <View style={[styles.stack, dimmed && styles.dimmed]}>
       {selected && <View style={styles.glow} />}
       <View style={[styles.ring, isSelf && styles.ringSelf, selected && styles.ringSelected]} />
@@ -26,6 +25,18 @@ export function LocationPin({ x, y, label, isSelf, onPress, selected, dimmed }: 
       </Text>
     </View>
   );
+}
+
+interface LocationPinProps extends LocationPinGlyphProps {
+  x: number;
+  y: number;
+  onPress?: () => void;
+}
+
+/** A pin absolutely positioned over the web map by pixel x/y (from Leaflet's own projection) —
+ * own location vs. a friend's read differently. */
+export function LocationPin({ x, y, label, isSelf, onPress, selected, dimmed }: LocationPinProps) {
+  const content = <LocationPinGlyph label={label} isSelf={isSelf} selected={selected} dimmed={dimmed} />;
 
   return (
     <View style={[styles.wrap, { left: x - 34, top: y - 14 }]} pointerEvents={onPress ? 'box-none' : 'none'}>

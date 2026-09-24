@@ -1,12 +1,5 @@
 import type { LatLng } from './geo';
 
-/** Equirectangular projection — standard `width = 2 * height` world map convention. */
-export function project(point: LatLng, width: number, height: number): { x: number; y: number } {
-  const x = ((point.longitude + 180) / 360) * width;
-  const y = ((90 - point.latitude) / 180) * height;
-  return { x, y };
-}
-
 function wrapLng(lng: number): number {
   let l = lng;
   while (l > 180) l -= 360;
@@ -58,53 +51,30 @@ export function flightPath(from: LatLng, to: LatLng, options: FlightPathOptions 
   return points;
 }
 
-export interface ProjectedPoint {
-  x: number;
-  y: number;
+export interface FlightPosition {
+  position: LatLng;
+  /** Heading in degrees, 0 = due east, clockwise-positive — matches PaperPlane's own +x-at-0° orientation. */
+  bearingDeg: number;
 }
 
 /**
- * Projects a flight path into screen segments, splitting wherever the path crosses the map's
- * left/right edge (the antimeridian) so each segment can be drawn as its own continuous stroke
- * instead of a line streaking across the whole map.
+ * The interpolated position (and heading) at progress `t` (0..1) along a flight path, in real
+ * lat/lng — for driving a marker on an actual map (native `Marker.coordinate` / Leaflet
+ * `latLngToContainerPoint`) rather than a hand-projected pixel position.
  */
-export function projectPathSegments(points: LatLng[], width: number, height: number): ProjectedPoint[][] {
-  const segments: ProjectedPoint[][] = [];
-  let current: ProjectedPoint[] = [];
-  let prevX: number | null = null;
-  for (const p of points) {
-    const { x, y } = project(p, width, height);
-    if (prevX !== null && Math.abs(x - prevX) > width / 2) {
-      if (current.length > 1) segments.push(current);
-      current = [];
-    }
-    current.push({ x, y });
-    prevX = x;
-  }
-  if (current.length > 1) segments.push(current);
-  return segments;
-}
-
-export interface PathPosition extends ProjectedPoint {
-  /** Heading in degrees, 0 = pointing along +x (east), for rotating a plane glyph. */
-  angleDeg: number;
-}
-
-/** The projected screen position (and heading) at progress `t` (0..1) along a flight path. */
-export function pointAtProgress(points: LatLng[], width: number, height: number, t: number): PathPosition {
+export function latLngAtProgress(points: LatLng[], t: number): FlightPosition {
   const clampedT = Math.max(0, Math.min(1, t));
   const idxFloat = clampedT * (points.length - 1);
   const idx = Math.min(points.length - 2, Math.max(0, Math.floor(idxFloat)));
   const localT = idxFloat - idx;
-  const a = project(points[idx], width, height);
-  const b = project(points[idx + 1], width, height);
-
-  let bx = b.x;
-  if (Math.abs(bx - a.x) > width / 2) {
-    bx = bx > a.x ? bx - width : bx + width;
-  }
-  const x = a.x + (bx - a.x) * localT;
-  const y = a.y + (b.y - a.y) * localT;
-  const angleRad = Math.atan2(b.y - a.y, bx - a.x);
-  return { x: ((x % width) + width) % width, y, angleDeg: (angleRad * 180) / Math.PI };
+  const a = points[idx];
+  const b = points[idx + 1];
+  const deltaLng = shortestLngDelta(a.longitude, b.longitude);
+  const deltaLat = b.latitude - a.latitude;
+  const latitude = a.latitude + deltaLat * localT;
+  const longitude = wrapLng(a.longitude + deltaLng * localT);
+  // Mirrors the old screen-space atan2(dy, dx) convention (dy inverted since north is "up"),
+  // just computed straight from lat/lng deltas instead of via an intermediate pixel projection.
+  const bearingDeg = (Math.atan2(-deltaLat, deltaLng) * 180) / Math.PI;
+  return { position: { latitude, longitude }, bearingDeg };
 }

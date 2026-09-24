@@ -39,20 +39,6 @@ export const throwColor = {
   clayDeep: '#A85A3C',
   claySoft: 'rgba(201,113,79,.14)',
 
-  // World map surface — soft sage land on a dusty-blue ocean, both muted (this is a mood
-  // board, not a navigation chart).
-  ocean: '#D7E4E2',
-  oceanDeep: '#C3D6D3',
-  land: '#E9DEC4',
-  landLine: 'rgba(80,64,40,.14)',
-
-  // Streets + buildings scattered over land once the map is zoomed in enough to read as a place
-  // (see mapStreetGrid.ts) — still muted paper tones, never map-app-saturated.
-  road: 'rgba(80,64,40,.26)',
-  roadMinor: 'rgba(80,64,40,.14)',
-  building: '#DFD1A9',
-  buildingLine: 'rgba(80,64,40,.20)',
-
   // Own pin vs. a friend's pin.
   pinSelf: '#2B231C',
   pinFriend: '#C9714F',

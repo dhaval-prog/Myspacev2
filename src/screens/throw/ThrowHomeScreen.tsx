@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { WorldMapBackdrop } from '../../components/throw/WorldMapBackdrop';
-import { LocationPin } from '../../components/throw/LocationPin';
+import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
 import { FoldingLetter } from '../../components/throw/FoldingLetter';
-import { project } from '../../utils/mapProjection';
 import { throwColor, throwFont } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import type { StrokePath, ThrowLetter } from '../../types/throw';
+import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 
 interface ThrowHomeScreenProps {
   onHome: () => void;
@@ -18,18 +17,11 @@ interface ThrowHomeScreenProps {
   lockedRecipient?: { friendUserId: string; repliedToThrowId: string } | null;
 }
 
-/** How far in the map zooms once it has a location to center on — the world map is ~2:1, so this
- * is roughly "city block" scale rather than "country" scale. */
-const FOCUS_ZOOM = 4.5;
-
 export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const { myLocation, friends, unreadCount, sendThrow } = useThrow();
-  const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const initializedRef = useRef(false);
-  const mapTranslateX = useRef(new Animated.Value(0)).current;
-  const mapTranslateY = useRef(new Animated.Value(0)).current;
 
   const friendsWithLocation = useMemo(() => friends.filter((f) => f.location), [friends]);
   const hasFriendsAtAll = friends.length > 0;
@@ -46,29 +38,27 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient
   const selectedIndex = Math.max(0, friendsWithLocation.findIndex((f) => f.userId === selectedFriendId));
   const selectedFriend = friendsWithLocation.find((f) => f.userId === selectedFriendId) ?? null;
 
-  const onMapLayout = (e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout;
-    setMapSize({ width, height });
-  };
-
-  // The map is rendered at `zoomFactor`x its natural size, then translated so the focused point
-  // (the selected contact, falling back to the user's own pin) sits centered in the viewport —
-  // real zoom rather than a cosmetic scale pulse, since a flat `scale` transform only magnifies
-  // around the view's own center, not around any particular contact's location.
+  // Real "zoom to contact": the selected friend's own location, falling back to the user's own
+  // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
   const focusTarget = selectedFriend?.location ?? myLocation ?? null;
-  const zoomFactor = focusTarget && mapSize.width > 0 ? FOCUS_ZOOM : 1;
-  const bigMapWidth = mapSize.width * zoomFactor;
-  const bigMapHeight = mapSize.height * zoomFactor;
 
-  useEffect(() => {
-    if (mapSize.width <= 0 || mapSize.height <= 0) return;
-    const focal = focusTarget ? project(focusTarget, bigMapWidth, bigMapHeight) : { x: bigMapWidth / 2, y: bigMapHeight / 2 };
-    Animated.parallel([
-      Animated.timing(mapTranslateX, { toValue: mapSize.width / 2 - focal.x, duration: 500, useNativeDriver: false }),
-      Animated.timing(mapTranslateY, { toValue: mapSize.height / 2 - focal.y, duration: 500, useNativeDriver: false }),
-    ]).start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFriendId, mapSize.width, mapSize.height, myLocation?.latitude, myLocation?.longitude]);
+  const pins: ThrowMapPin[] = useMemo(() => {
+    const list: ThrowMapPin[] = [];
+    if (myLocation) list.push({ id: 'self', latitude: myLocation.latitude, longitude: myLocation.longitude, label: 'You', isSelf: true });
+    for (const f of friendsWithLocation) {
+      const selected = f.userId === selectedFriendId;
+      list.push({
+        id: f.userId,
+        latitude: f.location!.latitude,
+        longitude: f.location!.longitude,
+        label: f.name.split(' ')[0],
+        selected,
+        dimmed: !selected && friendsWithLocation.length > 1,
+        onPress: lockedRecipient ? undefined : () => setSelectedFriendId(f.userId),
+      });
+    }
+    return list;
+  }, [myLocation, friendsWithLocation, selectedFriendId, lockedRecipient]);
 
   const handleThrow = async (content: { messageText: string | null; strokes: StrokePath[] | null; penColor: string }) => {
     if (!selectedFriend) return { error: 'Pick someone to throw to first.' };
@@ -101,32 +91,8 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onThrown, lockedRecipient
         </Pressable>
       </View>
 
-      <View style={styles.mapArea} onLayout={onMapLayout}>
-        {mapSize.width > 0 && (
-          <Animated.View style={{ position: 'absolute', width: bigMapWidth, height: bigMapHeight, transform: [{ translateX: mapTranslateX }, { translateY: mapTranslateY }] }}>
-            <WorldMapBackdrop width={bigMapWidth} height={bigMapHeight} />
-            {myLocation &&
-              (() => {
-                const { x, y } = project(myLocation, bigMapWidth, bigMapHeight);
-                return <LocationPin x={x} y={y} label="You" isSelf />;
-              })()}
-            {friendsWithLocation.map((f) => {
-              const { x, y } = project(f.location!, bigMapWidth, bigMapHeight);
-              const selected = f.userId === selectedFriendId;
-              return (
-                <LocationPin
-                  key={f.userId}
-                  x={x}
-                  y={y}
-                  label={f.name.split(' ')[0]}
-                  selected={selected}
-                  dimmed={!selected && friendsWithLocation.length > 1}
-                  onPress={lockedRecipient ? undefined : () => setSelectedFriendId(f.userId)}
-                />
-              );
-            })}
-          </Animated.View>
-        )}
+      <View style={styles.mapArea}>
+        <ThrowMap pins={pins} focus={focusTarget} />
 
         {lockedRecipient ? (
           selectedFriend && (
