@@ -2,15 +2,21 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { throwColor } from '../../theme/throwTokens';
-import { latLngAtProgress } from '../../utils/mapProjection';
+import { latLngAtProgress, planeSizeForProgress } from '../../utils/mapProjection';
 import { LocationPinGlyph } from './LocationPin';
 import { PaperPlane } from './PaperPlane';
+import { LandingPulse } from './LandingPulse';
 import type { ThrowMapProps } from './throwMapTypes';
 
 // A whole-world-ish default before there's anything to focus on — not literally the whole globe
 // (MapView clamps oddly past ~170°), just wide enough to read as "the world" rather than a random
 // close-up.
 const WORLD_REGION: Region = { latitude: 15, longitude: 10, latitudeDelta: 140, longitudeDelta: 140 };
+// The flying plane's size range — large right after launch, small on approach (see
+// `planeSizeForProgress`). City-level data doesn't warrant a literal 3D perspective projection,
+// just a readable "it's getting farther away" cue.
+const PLANE_MAX_SIZE = 44;
+const PLANE_MIN_SIZE = 16;
 // How far a single-point focus zooms in — city scale (Throw's location data is a city-level
 // lat/lng, not live GPS, so this stays short of Live Locations' street-level 0.02). A delta of 8
 // was tried first and was wrong: that's an 8°-wide region — roughly Pune to Bhopal to Jaipur all
@@ -66,6 +72,8 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   }, [focusKey, fitKey, mapReady]);
 
   const planePos = useMemo(() => (route ? latLngAtProgress(route.points, route.progress) : null), [route]);
+  const planeSize = route ? planeSizeForProgress(route.progress, PLANE_MAX_SIZE, PLANE_MIN_SIZE) : PLANE_MIN_SIZE;
+  const landingPoint = route?.landing && route.points.length > 0 ? route.points[route.points.length - 1] : null;
 
   return (
     <MapView
@@ -109,8 +117,14 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       {route?.showPlane && planePos && (
         <Marker coordinate={planePos.position} anchor={{ x: 0.5, y: 0.5 }} zIndex={3} tracksViewChanges={true}>
           <View style={{ transform: [{ rotate: `${planePos.bearingDeg}deg` }] }}>
-            <PaperPlane size={26} color={throwColor.clayDeep} />
+            <PaperPlane size={planeSize} color={throwColor.clayDeep} />
           </View>
+        </Marker>
+      )}
+
+      {landingPoint && (
+        <Marker coordinate={landingPoint} anchor={{ x: 0.5, y: 0.5 }} zIndex={4} tracksViewChanges={true}>
+          <LandingPulse />
         </Marker>
       )}
     </MapView>
