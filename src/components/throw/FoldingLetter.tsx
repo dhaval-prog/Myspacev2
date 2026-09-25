@@ -33,12 +33,13 @@ const FOLD_CAPTURE_RATIO = 1.7;
 // width — the outer edges on either side are reserved for unfolding instead (see the 'ready'-phase
 // branches in the PanResponder below).
 const THROW_CENTER_ZONE = 0.5;
-// How far a center-zone 'ready'-phase drag has to move horizontally, while staying more
-// horizontal than vertical, before it's read as "change recipient" rather than a throw attempt.
-const SWIPE_CONTACT_DX = 60;
 // How many px of horizontal drag maps to the plane's full bank (±1 passed to setReadyBank) —
 // past this the bank is already maxed out, it just doesn't tilt any further.
 const MAX_BANK_DX = 90;
+// How many px of horizontal drag maps to one recipient step — reported live via
+// onContactDragOffset as a fractional step count, so the caller can move (and clamp) the
+// selection continuously as the drag progresses rather than waiting for release.
+const CONTACT_DRAG_SPACING = 70;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
@@ -73,10 +74,16 @@ interface FoldingLetterProps {
    * Photo and Voice, rather than in a separate header. */
   onOpenInbox: () => void;
   unreadCount: number;
-  /** Fires when the folded, ready-to-throw plane is held and dragged sideways past a threshold —
-   * cycles the selected recipient instead of throwing. Only wired once there's more than one
-   * recipient to cycle through. */
-  onSwipeContact?: (direction: 'next' | 'prev') => void;
+  /** Fires once, right when a center-zone hold-and-drag starts on the folded, ready-to-throw
+   * plane — the caller's cue to snapshot which recipient is currently selected before live
+   * offsets (below) start moving it. Only wired once there's more than one recipient to cycle
+   * through. */
+  onContactDragStart?: () => void;
+  /** Fires continuously while that same drag moves, with the horizontal offset expressed as a
+   * fractional recipient-step count (see CONTACT_DRAG_SPACING) relative to the drag's start —
+   * not capped at ±1, so a longer drag can move several recipients over. The caller rounds and
+   * clamps against its own list length. */
+  onContactDragOffset?: (steps: number) => void;
 }
 
 /**
@@ -108,7 +115,8 @@ export function FoldingLetter({
   onOpenAddFriend,
   onOpenInbox,
   unreadCount,
-  onSwipeContact,
+  onContactDragStart,
+  onContactDragOffset,
 }: FoldingLetterProps) {
   const [phase, setPhase] = useState<Phase>('writing');
   const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
@@ -212,8 +220,32 @@ export function FoldingLetter({
   // first couple of steps). This ref mirrors whatever state and closures the responder's
   // callbacks need, updated every render, so they always read fresh values without the responder
   // object itself ever changing identity while a touch is active.
-  const latest = useRef({ disabled, phase, hasContent, content, photoUris, paperSize, launch, settleFold, springLiftBack, onSwipeContact });
-  latest.current = { disabled, phase, hasContent, content, photoUris, paperSize, launch, settleFold, springLiftBack, onSwipeContact };
+  const latest = useRef({
+    disabled,
+    phase,
+    hasContent,
+    content,
+    photoUris,
+    paperSize,
+    launch,
+    settleFold,
+    springLiftBack,
+    onContactDragStart,
+    onContactDragOffset,
+  });
+  latest.current = {
+    disabled,
+    phase,
+    hasContent,
+    content,
+    photoUris,
+    paperSize,
+    launch,
+    settleFold,
+    springLiftBack,
+    onContactDragStart,
+    onContactDragOffset,
+  };
 
   const applyFoldProgress = useCallback(
     (next: number) => {
@@ -341,6 +373,9 @@ export function FoldingLetter({
             const x = e.nativeEvent.locationX;
             const margin = (1 - THROW_CENTER_ZONE) / 2;
             readyZoneRef.current = width > 0 && x / width >= margin && x / width <= 1 - margin ? 'center' : 'side';
+            if (readyZoneRef.current === 'center') {
+              latest.current.onContactDragStart?.();
+            }
           }
         },
         onPanResponderMove: (_, g) => {
@@ -357,9 +392,12 @@ export function FoldingLetter({
             } else {
               // Position stays put — only the vertical throw-prep (liftY) moves the plane on
               // screen. Horizontal drag banks it in place instead (see setReadyBank), so it reads
-              // as "tilting to pick a direction" rather than "sliding sideways".
+              // as "tilting to pick a direction" rather than "sliding sideways". The same drag
+              // also reports a live, uncapped step offset so the caller can move (and clamp) the
+              // selected recipient continuously, without waiting for release.
               liftY.setValue(Math.min(0, g.dy));
               stageRef.current?.setReadyBank(g.dx / MAX_BANK_DX);
+              latest.current.onContactDragOffset?.(g.dx / CONTACT_DRAG_SPACING);
             }
             return;
           }
@@ -382,11 +420,9 @@ export function FoldingLetter({
               latest.current.settleFold(progressRef.current >= 0.5 ? 1 : 0);
               return;
             }
-            if (latest.current.onSwipeContact && Math.abs(g.dx) >= SWIPE_CONTACT_DX && Math.abs(g.dx) > Math.abs(g.dy)) {
-              latest.current.onSwipeContact(g.dx > 0 ? 'next' : 'prev');
-              latest.current.springLiftBack();
-              return;
-            }
+            // Recipient selection already moved live during the drag (onContactDragOffset above)
+            // — a horizontal-only release just springs the plane back without launching, since it
+            // won't cross the vertical launch thresholds below.
             if (g.dy <= -LAUNCH_THRESHOLD || g.vy <= -LAUNCH_VELOCITY) {
               latest.current.launch();
             } else {
