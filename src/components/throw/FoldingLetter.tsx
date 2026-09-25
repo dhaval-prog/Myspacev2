@@ -38,7 +38,7 @@ const THROW_CENTER_ZONE = 0.5;
 const SWIPE_CONTACT_DX = 60;
 // How many px of horizontal drag maps to the plane's full bank (±1 passed to setReadyBank) —
 // past this the bank is already maxed out, it just doesn't tilt any further.
-const MAX_BANK_DX = 120;
+const MAX_BANK_DX = 90;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
