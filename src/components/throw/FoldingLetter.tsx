@@ -46,6 +46,11 @@ const CONTACT_DRAG_SPACING = 70;
 // time, overshooting past the header has no visible downside.
 const LIFTOFF_DURATION_MS = 1500;
 const liftoffDistance = () => Dimensions.get('window').height;
+// Once a center-zone 'ready'-phase drag moves at least this far, more vertically than
+// horizontally by this ratio, it's read as a committed swipe-up-to-throw rather than a
+// hold-and-tilt-to-pick-a-recipient — see the vertical-lock comment on the move handler below.
+const THROW_LOCK_MIN_DY = 20;
+const THROW_LOCK_RATIO = 1.5;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
@@ -160,6 +165,12 @@ export function FoldingLetter({
   // identifies the gesture by its own lifetime instead of by a `phase` value the gesture itself
   // changes out from under it.
   const readyGestureActiveRef = useRef(false);
+  // Set once a center-zone 'ready'-phase drag commits to being a vertical swipe-up-to-throw
+  // (see THROW_LOCK_MIN_DY/RATIO) — from that point on, for the rest of that same gesture, the
+  // plane's bank snaps back to straight and the recipient selection stops moving even if the
+  // finger keeps drifting sideways, so an upward swipe can't accidentally re-tilt the plane or
+  // change who it's about to be thrown to. Reset on every fresh grant.
+  const throwLockedRef = useRef(false);
 
   const handleStageError = useCallback((err: unknown) => {
     console.warn('[Throw] paper plane 3D stage failed to initialize, falling back to a static glyph:', err);
@@ -192,8 +203,8 @@ export function FoldingLetter({
   const springLiftBack = () => {
     stageRef.current?.setReadyBank(0);
     Animated.parallel([
-      Animated.spring(liftY, { toValue: 0, useNativeDriver: false, friction: 7, tension: 50 }),
-      Animated.spring(liftOpacity, { toValue: 1, useNativeDriver: false, friction: 7, tension: 50 }),
+      Animated.spring(liftY, { toValue: 0, useNativeDriver: true, friction: 7, tension: 50 }),
+      Animated.spring(liftOpacity, { toValue: 1, useNativeDriver: true, friction: 7, tension: 50 }),
     ]).start();
   };
 
@@ -204,13 +215,20 @@ export function FoldingLetter({
     // the screen and fades out — plays out in parallel with the actual send, both awaited below.
     // This is a flat 2D translate/opacity on the existing view, not the engine's own 3D fly()
     // sequence (which could render as a clipped, glitchy shape mid-flight on some devices, see
-    // prior history here). The map itself still owns the "flies to the recipient" visual once
-    // this finishes (see ThrowHomeScreen's runFlight) — awaiting both together means that handoff
-    // always comes right after this liftoff completes, not before it, regardless of network speed.
+    // prior history here). useNativeDriver: true hands both properties to the platform's own
+    // compositor for the whole 1.5s, so the motion stays smooth regardless of whatever the JS
+    // thread is doing at the same time (the real network call above, WebGL teardown, etc.) — this
+    // is why the wrapper below is split into two nested Animated.Views: stageOpacity (the fold-in
+    // fade, driven by `progress`, which needs a JS listener for `seek()` and so can't itself be
+    // native-driven) stays on the outer one, isolated from liftY/liftOpacity on the inner one, since
+    // a single Animated.multiply node can't mix a native-driven and a JS-driven input. The map
+    // itself still owns the "flies to the recipient" visual once this finishes (see
+    // ThrowHomeScreen's runFlight) — awaiting both together means that handoff always comes right
+    // after this liftoff completes, not before it, regardless of network speed.
     const liftOff = new Promise<void>((resolve) => {
       Animated.parallel([
-        Animated.timing(liftY, { toValue: -liftoffDistance(), duration: LIFTOFF_DURATION_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-        Animated.timing(liftOpacity, { toValue: 0, duration: LIFTOFF_DURATION_MS, easing: Easing.in(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(liftY, { toValue: -liftoffDistance(), duration: LIFTOFF_DURATION_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(liftOpacity, { toValue: 0, duration: LIFTOFF_DURATION_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
       ]).start(() => resolve());
     });
     const [{ error: err }] = await Promise.all([onThrow({ ...content, photoUris }), liftOff]);
@@ -382,6 +400,7 @@ export function FoldingLetter({
           if (latest.current.phase === 'ready') {
             liftY.setValue(0);
             readyGestureActiveRef.current = true;
+            throwLockedRef.current = false;
             // Which zone this swipe started in decides throw-vs-unfold for its whole lifetime
             // (below) — a fresh claim each touch, not the fold-drag's move-capture negotiation,
             // so gestureState is reliable here even on web.
@@ -410,10 +429,22 @@ export function FoldingLetter({
               // screen. Horizontal drag banks it in place instead (see setReadyBank), so it reads
               // as "tilting to pick a direction" rather than "sliding sideways". The same drag
               // also reports a live, uncapped step offset so the caller can move (and clamp) the
-              // selected recipient continuously, without waiting for release.
+              // selected recipient continuously, without waiting for release — but only for a
+              // drag that's actually a hold-and-tilt gesture. Once this same drag has moved far
+              // enough, more vertically than horizontally, to read as a committed swipe-up-to-
+              // throw, it locks: the plane snaps back straight and the recipient stops moving for
+              // the rest of this gesture, however much the finger drifts sideways from there —
+              // an upward flick shouldn't also reselect who it's being thrown to.
+              if (!throwLockedRef.current && Math.abs(g.dy) >= THROW_LOCK_MIN_DY && Math.abs(g.dy) > Math.abs(g.dx) * THROW_LOCK_RATIO) {
+                throwLockedRef.current = true;
+              }
               liftY.setValue(Math.min(0, g.dy));
-              stageRef.current?.setReadyBank(g.dx / MAX_BANK_DX);
-              latest.current.onContactDragOffset?.(g.dx / CONTACT_DRAG_SPACING);
+              if (throwLockedRef.current) {
+                stageRef.current?.setReadyBank(0);
+              } else {
+                stageRef.current?.setReadyBank(g.dx / MAX_BANK_DX);
+                latest.current.onContactDragOffset?.(g.dx / CONTACT_DRAG_SPACING);
+              }
             }
             return;
           }
@@ -489,24 +520,23 @@ export function FoldingLetter({
         </Animated.View>
 
         {paperSize.width > 0 && (
-          <Animated.View
-            // Position only ever moves vertically (liftY, throw-prep and the launch liftoff) —
-            // horizontal drag banks the plane in place via the 3D engine's own setReadyBank
-            // instead of translating this view, and the engine's own 'ready'-phase pose now
-            // handles the straight-ahead, nose-down resting tilt (see paperPlaneEngine.ts), so no
-            // CSS transform trickery is needed here any more. liftOpacity is folded into this
-            // wrapper's own opacity (not just the fallback glyph's) so the launch fade-out covers
-            // the real 3D canvas too.
-            style={[StyleSheet.absoluteFill, { opacity: Animated.multiply(stageOpacity, liftOpacity), transform: [{ translateY: liftY }] }]}
-            pointerEvents="none"
-          >
-            {stageFailed ? (
-              <View style={styles.fallbackPlaneWrap}>
-                <PaperPlane size={64} color={throwColor.clayDeep} />
-              </View>
-            ) : (
-              <PaperPlaneStage ref={stageRef} onPhase={handleStagePhase} onError={handleStageError} />
-            )}
+          // Split into two nested Animated.Views on purpose — see the useNativeDriver comment on
+          // launch() above for why liftY/liftOpacity (native-driven) can't share a node with
+          // stageOpacity (JS-driven, the fold-in fade). Position only ever moves vertically
+          // (liftY, throw-prep and the launch liftoff) — horizontal drag banks the plane in place
+          // via the 3D engine's own setReadyBank instead of translating this view, and the
+          // engine's own 'ready'-phase pose now handles the straight-ahead, nose-down resting tilt
+          // (see paperPlaneEngine.ts), so no CSS transform trickery is needed here any more.
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: stageOpacity }]} pointerEvents="none">
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: liftOpacity, transform: [{ translateY: liftY }] }]}>
+              {stageFailed ? (
+                <View style={styles.fallbackPlaneWrap}>
+                  <PaperPlane size={64} color={throwColor.clayDeep} />
+                </View>
+              ) : (
+                <PaperPlaneStage ref={stageRef} onPhase={handleStagePhase} onError={handleStageError} />
+              )}
+            </Animated.View>
           </Animated.View>
         )}
 
