@@ -18,14 +18,14 @@ const WORLD_REGION: Region = { latitude: 15, longitude: 10, latitudeDelta: 140, 
 // just a readable "it's getting farther away" cue.
 const PLANE_MAX_SIZE = 44;
 const PLANE_MIN_SIZE = 16;
-// How far a single-point focus zooms in, and how steeply it's pitched — matching the web
-// MapLibre version's FOCUS_ZOOM 14.6 / FOCUS_PITCH 50 (the two aren't directly comparable units —
-// this delta is a region-size approximation of that same framing, scaled from an earlier round's
-// 0.006/zoom-17 pairing by the standard "each zoom level roughly halves the visible extent" rule
-// — 2^(17-14.6) ≈ 5.3× wider — not independently retuned against a live render the way the web
-// zoom/pitch values were).
-const FOCUS_DELTA = { latitudeDelta: 0.032, longitudeDelta: 0.032 };
-const FOCUS_PITCH = 50;
+// How far a single-point focus zooms in, and how steeply it's pitched — matching the web map's
+// current FOCUS_ZOOM 17 / FOCUS_PITCH 70 (the two aren't directly comparable units — this delta is
+// a region-size approximation of that same framing, not a converted value; this map stays on
+// react-native-maps/Apple+Google Maps rather than Mapbox, which the web version switched to this
+// round — no native SDK swap requested or made here). Reverts to an earlier round's own
+// zoom-17 pairing now that the web zoom is back to 17.
+const FOCUS_DELTA = { latitudeDelta: 0.006, longitudeDelta: 0.006 };
+const FOCUS_PITCH = 70;
 
 function pointsKey(points: { latitude: number; longitude: number }[] | null | undefined): string {
   return points ? points.map((p) => `${p.latitude.toFixed(3)},${p.longitude.toFixed(3)}`).join('|') : '';
@@ -112,7 +112,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       initialRegion={focus ? { ...focus, ...FOCUS_DELTA } : WORLD_REGION}
       initialCamera={
         focus
-          ? { center: focus, pitch: FOCUS_PITCH, heading: 0, zoom: 14.6 }
+          ? { center: focus, pitch: FOCUS_PITCH, heading: 0, zoom: 17 }
           : { center: { latitude: WORLD_REGION.latitude, longitude: WORLD_REGION.longitude }, pitch: 0, heading: 0, zoom: 2 }
       }
       onMapReady={() => {
