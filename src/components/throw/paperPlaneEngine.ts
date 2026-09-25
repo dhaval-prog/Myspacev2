@@ -299,10 +299,11 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   const pivot = new THREE.Vector3(0.6, 0.03, defs[FI('wing2', defs)].pivotZ!);
   const flight = new THREE.Group(), shape = new THREE.Group();
   flight.rotation.order = 'YZX';
-  // A bit bigger than the reference's own 1:1 scale — uniform, so it doesn't disturb the crease
-  // simulation (which works in the mesh's local, unscaled space, a child of shape/flight). 2.89
-  // is the prior 1.75 scaled up another 65%, per user feedback that the plane still read small.
-  flight.scale.setScalar(2.89);
+  // Uniform scale, so it doesn't disturb the crease simulation (which works in the mesh's
+  // local, unscaled space, a child of shape/flight). Prior rounds climbed to 4.39 chasing "still
+  // reads small" feedback; 1.62 is that scaled back down to 37% of that value, per user feedback
+  // that it had overshot.
+  flight.scale.setScalar(1.62);
   shape.add(mesh);
   flight.add(shape);
   scene.add(flight);

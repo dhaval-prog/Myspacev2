@@ -13,7 +13,7 @@ interface TriviaGameScreenProps {
   initialTab?: 'create' | 'join';
 }
 
-/** Trivia Night entry point — routes on server state, same philosophy as GamesScreen/CardsGameScreen. */
+/** Trivia Night entry point — routes on server state, same philosophy as GamesScreen. */
 export function TriviaGameScreen({ onHome, onOpenExpenses, onOpenSplit, initialTab }: TriviaGameScreenProps) {
   const { game, currentQuestion } = useTriviaGame();
 

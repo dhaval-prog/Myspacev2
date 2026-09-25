@@ -10,7 +10,6 @@ import { NotificationsProvider } from './src/context/NotificationsContext';
 import { FriendsProvider, useFriends } from './src/context/FriendsContext';
 import { CallProvider } from './src/context/CallContext';
 import { GameProvider } from './src/context/GameContext';
-import { CardsGameProvider } from './src/context/CardsGameContext';
 import { TriviaGameProvider } from './src/context/TriviaGameContext';
 import { GameStatsProvider } from './src/context/GameStatsContext';
 import { CallOverlay } from './src/components/calls/CallOverlay';
@@ -25,7 +24,6 @@ import { SplitScreen } from './src/screens/split/SplitScreen';
 import { FriendsScreen } from './src/screens/friends/FriendsScreen';
 import { GamesScreen } from './src/screens/games/GamesScreen';
 import { GamesDashboardScreen } from './src/screens/games/GamesDashboardScreen';
-import { CardsGameScreen } from './src/screens/games/cards/CardsGameScreen';
 import { TriviaGameScreen } from './src/screens/games/trivia/TriviaGameScreen';
 import { ThrowScreen } from './src/screens/throw/ThrowScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
@@ -42,7 +40,6 @@ type Screen =
   | { name: 'friends' }
   | { name: 'gamesHub' }
   | { name: 'games'; initialTab?: 'create' | 'join' }
-  | { name: 'cards'; initialTab?: 'create' | 'join' }
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
   | { name: 'throw'; openThrowId?: string; openInbox?: boolean }
   | { name: 'account'; from: 'home' | 'expenses' | 'split' };
@@ -132,7 +129,6 @@ function AppNavigator() {
         onOpenSplit={() => setScreen({ name: 'split' })}
         onOpenFriends={() => setScreen({ name: 'friends' })}
         onOpenNpat={(initialTab) => setScreen({ name: 'games', initialTab })}
-        onOpenCards={(initialTab) => setScreen({ name: 'cards', initialTab })}
         onOpenTrivia={(initialTab) => setScreen({ name: 'trivia', initialTab })}
       />
     );
@@ -140,16 +136,6 @@ function AppNavigator() {
   if (screen.name === 'games') {
     return (
       <GamesScreen
-        onHome={() => setScreen({ name: 'gamesHub' })}
-        onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenSplit={() => setScreen({ name: 'split' })}
-        initialTab={screen.initialTab}
-      />
-    );
-  }
-  if (screen.name === 'cards') {
-    return (
-      <CardsGameScreen
         onHome={() => setScreen({ name: 'gamesHub' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
@@ -220,14 +206,12 @@ function RootNavigator() {
         <FriendsProvider>
           <CallProvider>
             <GameProvider>
-              <CardsGameProvider>
-                <TriviaGameProvider>
-                  <GameStatsProvider>
-                    <AppNavigator />
-                    <CallOverlay />
-                  </GameStatsProvider>
-                </TriviaGameProvider>
-              </CardsGameProvider>
+              <TriviaGameProvider>
+                <GameStatsProvider>
+                  <AppNavigator />
+                  <CallOverlay />
+                </GameStatsProvider>
+              </TriviaGameProvider>
             </GameProvider>
           </CallProvider>
         </FriendsProvider>

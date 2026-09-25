@@ -1,7 +1,7 @@
 /**
  * NPAT (Name, Place, Animal, Thing) design tokens — lifted verbatim from the
  * "MySpace Games · 1A · 1B" design handoff. Kept self-contained (like
- * spaceCardsTokens.ts) rather than folded into the shared theme: this
+ * triviaTokens.ts) rather than folded into the shared theme: this
  * feature uses Plus Jakarta Sans as its display face — every other screen
  * uses Figtree — even though it otherwise shares the app's ink/lime palette.
  */

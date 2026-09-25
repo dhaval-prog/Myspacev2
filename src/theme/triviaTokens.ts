@@ -1,8 +1,8 @@
 /**
- * Trivia Night design tokens — self-contained like npatTokens.ts and
- * spaceCardsTokens.ts. Same shared brand accent (lime/ink) and Plus Jakarta
- * Sans/DM Mono type as the other two games; a deep indigo/blue gradient is
- * Trivia's own hue, the way NPAT reads green and Space Cards reads violet.
+ * Trivia Night design tokens — self-contained like npatTokens.ts. Same
+ * shared brand accent (lime/ink) and Plus Jakarta Sans/DM Mono type as
+ * NPAT; a deep indigo/blue gradient is Trivia's own hue, the way NPAT
+ * reads green.
  */
 
 import { Easing } from 'react-native';

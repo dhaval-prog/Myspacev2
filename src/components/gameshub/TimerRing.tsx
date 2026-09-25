@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { scColor, scGeometry } from '../../theme/spaceCardsTokens';
+import { gkColor, gkGeometry } from '../../theme/gameKitTokens';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -11,17 +11,17 @@ interface TimerRingProps {
   urgent: boolean;
   reduceMotion?: boolean;
   children?: React.ReactNode;
-  /** Overrides the default Space Cards geometry — e.g. NPAT's smaller round-timer ring. */
+  /** Overrides the default geometry — e.g. NPAT's smaller round-timer ring. */
   size?: number;
   thickness?: number;
   /** Overrides the lime/urgent auto pick — e.g. NPAT's amber mid-tier before the red danger tier. */
   color?: string;
 }
 
-/** The conic countdown ring around the discard pile — react-native-svg stands in for CSS conic-gradient, which RN has no equivalent for. */
+/** A conic countdown ring, shared across the games hub's timed rounds — react-native-svg stands in for CSS conic-gradient, which RN has no equivalent for. */
 export function TimerRing({ secondsLeft, limit, urgent, reduceMotion, children, size: sizeOverride, thickness: thicknessOverride, color }: TimerRingProps) {
-  const size = sizeOverride ?? scGeometry.timerRing.size;
-  const thickness = thicknessOverride ?? scGeometry.timerRing.thickness;
+  const size = sizeOverride ?? gkGeometry.timerRing.size;
+  const thickness = thicknessOverride ?? gkGeometry.timerRing.thickness;
   const radius = (size - thickness) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = useRef(new Animated.Value(limit > 0 ? secondsLeft / limit : 1)).current;
@@ -62,7 +62,7 @@ export function TimerRing({ secondsLeft, limit, urgent, reduceMotion, children, 
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={color ?? (urgent ? scColor.urgent : scColor.lime)}
+          stroke={color ?? (urgent ? gkColor.urgent : gkColor.lime)}
           strokeWidth={thickness}
           fill="none"
           strokeDasharray={`${circumference} ${circumference}`}

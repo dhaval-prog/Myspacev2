@@ -167,7 +167,7 @@ interface TriviaGameContextValue {
 const TriviaGameContext = createContext<TriviaGameContextValue | null>(null);
 
 /**
- * Multiplayer Trivia Night. Same shape as GameContext/CardsGameContext: this
+ * Multiplayer Trivia Night. Same shape as GameContext: this
  * context only mirrors `trivia_games`/`trivia_players`/`trivia_questions`/
  * `trivia_answers` via Realtime (plus a 3s poll backstop) and calls the RPCs/
  * edge function that actually mutate them — it never computes a score or a

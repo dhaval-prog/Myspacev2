@@ -4,8 +4,8 @@
  * one accent green reserved for hero moments (CTAs, the points ring, active
  * states) — while everything else stays neutral frosted-white glass. No
  * dark/deep-space surface anywhere on this screen. Self-contained (like
- * spaceCardsTokens.ts and npatTokens.ts) and scoped to just the Games hub
- * screen and its own sheets/rows.
+ * npatTokens.ts) and scoped to just the Games hub screen and its own
+ * sheets/rows.
  */
 
 export const ghFont = {
@@ -62,7 +62,6 @@ export const ghColor = {
   rank1RowBg: 'rgba(220,235,170,.4)',
 
   npatTile: '#E8EBD9',
-  cardsTile: '#DCEBAA',
   triviaTile: '#DCE1F5',
 
   // Trivia's own brand indigo, at full strength — used for its recent-
@@ -79,8 +78,8 @@ export const ghColor = {
   glassBorder: 'rgba(32,35,31,.08)',
   npatGlassFill: 'rgba(232,235,217,.6)',
   npatGlassBorder: 'rgba(32,35,31,.08)',
-  cardsGlassFill: 'rgba(220,235,170,.55)',
-  cardsGlassBorder: 'rgba(32,35,31,.08)',
+  triviaGlassFill: 'rgba(220,235,170,.55)',
+  triviaGlassBorder: 'rgba(32,35,31,.08)',
   rowGlassFill: 'rgba(255,255,255,.55)',
   rowGlassBorder: 'rgba(32,35,31,.08)',
   rowGlassSelfFill: 'rgba(184,232,62,.22)',

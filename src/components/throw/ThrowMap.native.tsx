@@ -12,10 +12,14 @@ import type { ThrowMapProps } from './throwMapTypes';
 // close-up.
 const WORLD_REGION: Region = { latitude: 15, longitude: 10, latitudeDelta: 140, longitudeDelta: 140 };
 // The flying plane's size range — large right after launch, small on approach (see
-// `planeSizeForProgress`). City-level data doesn't warrant a literal 3D perspective projection,
-// just a readable "it's getting farther away" cue.
+// `planeSizeForProgress`).
 const PLANE_MAX_SIZE = 44;
 const PLANE_MIN_SIZE = 16;
+
+// A tilted camera, matching the web map's own 3D-scene treatment — react-native-maps supports a
+// real camera pitch (Apple Maps and Google Maps both render actual perspective, not a CSS trick,
+// so this one's genuinely 3D rather than the web map's simulated tilt).
+const CAMERA_PITCH = 55;
 // How far a single-point focus zooms in — city scale (Throw's location data is a city-level
 // lat/lng, not live GPS, so this stays short of Live Locations' street-level 0.02). A delta of 8
 // was tried first and was wrong: that's an 8°-wide region — roughly Pune to Bhopal to Jaipur all
@@ -59,6 +63,10 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       edgePadding: { top: 80, right: 60, bottom: 80, left: 60 },
       animated: false,
     });
+    // fitToCoordinates re-derives the camera from the coordinate bounds, which resets pitch back
+    // to 0 — reassert the tilt every time a positioning call could have clobbered it, same
+    // instant-no-animation reasoning as the region call itself.
+    mapRef.current?.setCamera({ pitch: CAMERA_PITCH });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey, mapReady]);
 
@@ -67,6 +75,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     if (fitPoints && fitPoints.length > 0) return;
     if (!focus) return;
     mapRef.current?.animateToRegion({ latitude: focus.latitude, longitude: focus.longitude, ...FOCUS_DELTA }, 0);
+    mapRef.current?.setCamera({ pitch: CAMERA_PITCH });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey, fitKey, mapReady]);
 
@@ -79,7 +88,17 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       ref={mapRef}
       style={StyleSheet.absoluteFill}
       initialRegion={focus ? { ...focus, ...FOCUS_DELTA } : WORLD_REGION}
-      onMapReady={() => setMapReady(true)}
+      initialCamera={{
+        center: focus ?? { latitude: WORLD_REGION.latitude, longitude: WORLD_REGION.longitude },
+        pitch: CAMERA_PITCH,
+        heading: 0,
+        zoom: focus ? 10 : 2,
+      }}
+      pitchEnabled
+      onMapReady={() => {
+        setMapReady(true);
+        mapRef.current?.setCamera({ pitch: CAMERA_PITCH });
+      }}
     >
       {route && (
         <Polyline
