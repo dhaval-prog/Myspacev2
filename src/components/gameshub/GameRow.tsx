@@ -24,24 +24,6 @@ function NpatIcon() {
   );
 }
 
-const CARD_MINIS = [
-  { left: 0, top: 1, rotate: '-14deg', suit: '#E8533B' },
-  { left: 18, top: 0, rotate: '-2deg', suit: '#2F93D8' },
-  { left: 36, top: 1, rotate: '11deg', suit: '#2F9E4F' },
-];
-
-function CardsIcon() {
-  return (
-    <View style={styles.cardsIconWrap}>
-      {CARD_MINIS.map((c, i) => (
-        <View key={i} style={[styles.cardMini, { left: c.left, top: c.top, transform: [{ rotate: c.rotate }] }]}>
-          <View style={[styles.cardMiniOval, { backgroundColor: c.suit }]} />
-        </View>
-      ))}
-    </View>
-  );
-}
-
 function TriviaIcon() {
   return (
     <View style={styles.triviaIconWrap}>
@@ -51,7 +33,7 @@ function TriviaIcon() {
 }
 
 interface GameRowProps {
-  variant: 'npat' | 'cards' | 'trivia';
+  variant: 'npat' | 'trivia';
   title: string;
   subtitle: string;
   expanded: boolean;
@@ -73,9 +55,8 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
   const bodyHeight = bodyProgress.interpolate({ inputRange: [0, 1], outputRange: [0, BODY_HEIGHT] });
   const chevRotate = chevProgress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
   const isNpat = variant === 'npat';
-  const isTrivia = variant === 'trivia';
-  const glassFill = isNpat ? ghColor.npatGlassFill : isTrivia ? ghColor.cardsGlassFill : ghColor.cardsGlassFill;
-  const glassBorder = isNpat ? ghColor.npatGlassBorder : ghColor.cardsGlassBorder;
+  const glassFill = isNpat ? ghColor.npatGlassFill : ghColor.triviaGlassFill;
+  const glassBorder = isNpat ? ghColor.npatGlassBorder : ghColor.triviaGlassBorder;
   const accent = isNpat ? ghColor.gradientA : ghColor.gradientB;
 
   return (
@@ -83,7 +64,7 @@ export function GameRow({ variant, title, subtitle, expanded, onToggle, onCreate
       <BlurView intensity={34} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: glassFill }]} pointerEvents="none" />
       <Pressable onPress={onToggle} style={styles.header} accessibilityRole="button" accessibilityLabel={title}>
-        {variant === 'npat' ? <NpatIcon /> : variant === 'cards' ? <CardsIcon /> : <TriviaIcon />}
+        {variant === 'npat' ? <NpatIcon /> : <TriviaIcon />}
         <View style={styles.headerMid}>
           <Text style={styles.headerTitle}>{title}</Text>
           <Text style={styles.headerSub}>{subtitle}</Text>
@@ -132,21 +113,6 @@ const styles = StyleSheet.create({
   npatIconRow: { flexDirection: 'row', gap: 3, flexShrink: 0 },
   npatTile: { width: 20, height: 26, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
   npatTileLabel: { fontFamily: ghFont.sans800, fontSize: 12, color: ghColor.ink },
-  cardsIconWrap: { width: 62, height: 30, flexShrink: 0 },
-  cardMini: {
-    position: 'absolute',
-    width: 22,
-    height: 30,
-    borderRadius: 6,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
-  },
-  cardMiniOval: { width: 15, height: 21, borderRadius: 999, transform: [{ rotate: '-22deg' }] },
   triviaIconWrap: { width: 46, height: 30, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
   triviaGlyph: { fontSize: 26, lineHeight: 30 },
 });

@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NpatGlassBackdrop } from '../../../components/npat/NpatGlassBackdrop';
-import { PrimaryCta } from '../../../components/spacecards/PrimaryCta';
+import { PrimaryCta } from '../../../components/gameshub/PrimaryCta';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useTriviaGame } from '../../../context/TriviaGameContext';
 import { trColor, trFont, trMotion } from '../../../theme/triviaTokens';

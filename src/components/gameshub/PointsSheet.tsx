@@ -11,8 +11,7 @@ const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 
 function badgeFor(gameType: string): { letter: string; bg: string; fg: string } {
   if (gameType === 'NPAT') return { letter: 'N', bg: ghColor.gradientA, fg: ghColor.textOnGradient };
-  if (gameType === 'TRIVIA') return { letter: 'T', bg: ghColor.triviaBadgeBg, fg: ghColor.triviaBadgeFg };
-  return { letter: 'S', bg: ghColor.gradientB, fg: ghColor.textOnGradient };
+  return { letter: 'T', bg: ghColor.triviaBadgeBg, fg: ghColor.triviaBadgeFg };
 }
 
 function dayLabel(iso: string): string {
@@ -55,7 +54,6 @@ interface PointsSheetProps {
 export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, recentActivity, weeklyDelta, onSeeLeaderboard, reduceMotion }: PointsSheetProps) {
   const total = myEntry?.stats.totalPoints ?? 0;
   const npat = breakdown.find((b) => b.gameType === 'NPAT');
-  const cards = breakdown.find((b) => b.gameType === 'CARDS');
   const trivia = breakdown.find((b) => b.gameType === 'TRIVIA');
 
   return (
@@ -85,11 +83,6 @@ export function PointsSheet({ visible, onClose, myEntry, circleSize, breakdown, 
           <Text style={styles.tileLabel}>NPAT</Text>
           <Text style={styles.tileValue}>{npat?.net ?? 0}</Text>
           <Text style={styles.tileSub}>{npat?.gamesPlayed ?? 0} rounds · {npat?.wins ?? 0} wins</Text>
-        </View>
-        <View style={[styles.tile, { backgroundColor: ghColor.cardsTile }]}>
-          <Text style={styles.tileLabel}>SPACE CARDS</Text>
-          <Text style={styles.tileValue}>{cards?.net ?? 0}</Text>
-          <Text style={styles.tileSub}>{cards?.gamesPlayed ?? 0} games · {cards?.wins ?? 0} wins</Text>
         </View>
         <View style={[styles.tile, { backgroundColor: ghColor.triviaTile }]}>
           <Text style={styles.tileLabel}>TRIVIA NIGHT</Text>

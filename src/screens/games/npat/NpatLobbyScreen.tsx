@@ -5,7 +5,7 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../../components/Icon';
 import { BottomNav } from '../../../components/BottomNav';
-import { PrimaryCta } from '../../../components/spacecards/PrimaryCta';
+import { PrimaryCta } from '../../../components/gameshub/PrimaryCta';
 import { NpatHeader } from '../../../components/npat/NpatHeader';
 import { NpatGlassBackdrop } from '../../../components/npat/NpatGlassBackdrop';
 import { RoomCodeCells } from '../../../components/npat/RoomCodeCells';

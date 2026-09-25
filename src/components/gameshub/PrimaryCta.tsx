@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { scColor, scFont, scMotion } from '../../theme/spaceCardsTokens';
+import { gkColor, gkFont, gkMotion } from '../../theme/gameKitTokens';
 
 interface PrimaryCtaProps {
   label: string;
@@ -22,8 +22,8 @@ export function PrimaryCta({ label, onPress, disabled, reduceMotion, icon }: Pri
     }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(glow, { toValue: 1, duration: scMotion.ctaGlowMs / 2, useNativeDriver: false }),
-        Animated.timing(glow, { toValue: 0, duration: scMotion.ctaGlowMs / 2, useNativeDriver: false }),
+        Animated.timing(glow, { toValue: 1, duration: gkMotion.ctaGlowMs / 2, useNativeDriver: false }),
+        Animated.timing(glow, { toValue: 0, duration: gkMotion.ctaGlowMs / 2, useNativeDriver: false }),
       ]),
     );
     loop.start();
@@ -52,14 +52,14 @@ export function PrimaryCta({ label, onPress, disabled, reduceMotion, icon }: Pri
 const styles = StyleSheet.create({
   wrap: {
     borderRadius: 999,
-    shadowColor: scColor.lime,
+    shadowColor: gkColor.lime,
     shadowOffset: { width: 0, height: 12 },
   },
   cta: {
     paddingVertical: 19,
     borderRadius: 999,
     alignItems: 'center',
-    backgroundColor: scColor.lime,
+    backgroundColor: gkColor.lime,
   },
   row: {
     flexDirection: 'row',
@@ -70,8 +70,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(195,234,79,.35)',
   },
   label: {
-    fontFamily: scFont.sans700,
+    fontFamily: gkFont.sans700,
     fontSize: 16.5,
-    color: scColor.ink,
+    color: gkColor.ink,
   },
 });

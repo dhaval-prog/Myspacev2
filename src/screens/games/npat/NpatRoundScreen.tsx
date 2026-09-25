@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../../components/Icon';
 import { FriendAvatar } from '../../../components/friends/FriendAvatar';
 import { NpatGlassBackdrop } from '../../../components/npat/NpatGlassBackdrop';
-import { TimerRing } from '../../../components/spacecards/TimerRing';
+import { TimerRing } from '../../../components/gameshub/TimerRing';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useFocusBorder } from '../../../hooks/useFocusBorder';
 import { useGame } from '../../../context/GameContext';

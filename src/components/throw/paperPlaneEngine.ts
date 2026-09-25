@@ -301,8 +301,9 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   flight.rotation.order = 'YZX';
   // A bit bigger than the reference's own 1:1 scale — uniform, so it doesn't disturb the crease
   // simulation (which works in the mesh's local, unscaled space, a child of shape/flight). 2.89
-  // is the prior 1.75 scaled up another 65%, per user feedback that the plane still read small.
-  flight.scale.setScalar(2.89);
+  // was the prior 1.75 scaled up another 65%; 4.39 is that scaled up another 52%, per user
+  // feedback that the plane still read small.
+  flight.scale.setScalar(4.39);
   shape.add(mesh);
   flight.add(shape);
   scene.add(flight);

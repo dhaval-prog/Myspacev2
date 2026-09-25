@@ -76,7 +76,6 @@ interface GamesDashboardScreenProps {
   onOpenSplit: () => void;
   onOpenFriends: () => void;
   onOpenNpat: (initialTab?: 'create' | 'join') => void;
-  onOpenCards: (initialTab?: 'create' | 'join') => void;
   onOpenTrivia: (initialTab?: 'create' | 'join') => void;
 }
 
@@ -85,14 +84,14 @@ interface GamesDashboardScreenProps {
  * Real leaderboard/points data from GameStatsContext throughout; a game row
  * expands in place into Create/Join instead of pushing a new screen.
  */
-export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenFriends, onOpenNpat, onOpenCards, onOpenTrivia }: GamesDashboardScreenProps) {
+export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenFriends, onOpenNpat, onOpenTrivia }: GamesDashboardScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { circle, leaderboard, myEntry, myRankDelta, breakdown, recentActivity, breakdownFor } = useGameStats();
 
   const [leaderboardVisible, setLeaderboardVisible] = useState(false);
   const [pointsVisible, setPointsVisible] = useState(false);
-  const [expandedRow, setExpandedRow] = useState<'npat' | 'cards' | 'trivia' | null>(null);
+  const [expandedRow, setExpandedRow] = useState<'npat' | 'trivia' | null>(null);
 
   const myTotal = myEntry?.stats.totalPoints ?? 0;
   const leader = leaderboard[0];
@@ -102,7 +101,6 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
   const gapToFirst = myEntry && myEntry.rank > 1 ? leaderPoints - myTotal : 0;
   const weeklyDelta = recentActivity.filter((tx) => Date.now() - new Date(tx.createdAt).getTime() <= WEEK_MS).reduce((sum, tx) => sum + tx.pointsChange, 0);
   const npat = breakdown.find((b) => b.gameType === 'NPAT');
-  const cards = breakdown.find((b) => b.gameType === 'CARDS');
   const trivia = breakdown.find((b) => b.gameType === 'TRIVIA');
 
   return (
@@ -178,7 +176,6 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
               </Text>
             </View>
             <BreakdownBar label="NPAT" value={npat?.net ?? 0} total={myTotal} color={ghColor.gradientA} />
-            <BreakdownBar label="CARDS" value={cards?.net ?? 0} total={myTotal} color={ghColor.gradientB} />
             <BreakdownBar label="TRIVIA" value={trivia?.net ?? 0} total={myTotal} color={ghColor.triviaBadgeBg} />
           </View>
         </Pressable>
@@ -193,15 +190,6 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
           onToggle={() => setExpandedRow((r) => (r === 'npat' ? null : 'npat'))}
           onCreate={() => onOpenNpat('create')}
           onJoin={() => onOpenNpat('join')}
-        />
-        <GameRow
-          variant="cards"
-          title="Space Cards"
-          subtitle="2–4 players · shed your hand"
-          expanded={expandedRow === 'cards'}
-          onToggle={() => setExpandedRow((r) => (r === 'cards' ? null : 'cards'))}
-          onCreate={() => onOpenCards('create')}
-          onJoin={() => onOpenCards('join')}
         />
         <GameRow
           variant="trivia"
