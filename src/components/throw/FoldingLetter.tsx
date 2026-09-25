@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, LayoutChangeEvent, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, Easing, Image, LayoutChangeEvent, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
@@ -40,6 +40,12 @@ const MAX_BANK_DX = 90;
 // onContactDragOffset as a fractional step count, so the caller can move (and clamp) the
 // selection continuously as the drag progresses rather than waiting for release.
 const CONTACT_DRAG_SPACING = 70;
+// On launch, the plane's own local flourish is a straight vertical translate-and-fade off the
+// top of the screen — the whole window height comfortably clears the compose card's position
+// and the header pill above it on any device, and since it's fading to 0 opacity at the same
+// time, overshooting past the header has no visible downside.
+const LIFTOFF_DURATION_MS = 1500;
+const liftoffDistance = () => Dimensions.get('window').height;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
@@ -194,17 +200,27 @@ export function FoldingLetter({
   const launch = async () => {
     setError(null);
     setPhase('throwing');
-    // No local 3D liftoff-and-offscreen flourish here anymore — that used the engine's own
-    // fly() sequence, which on real devices could render as a clipped, glitchy shape mid-flight
-    // ("cuts the plane"). The map itself now owns the whole flight visual (see ThrowHomeScreen's
-    // runFlight), so this just waits for the throw to actually send, then hands off immediately.
-    const { error: err } = await onThrow({ ...content, photoUris });
+    // A brief local flourish — the already-rendered plane translates straight up off the top of
+    // the screen and fades out — plays out in parallel with the actual send, both awaited below.
+    // This is a flat 2D translate/opacity on the existing view, not the engine's own 3D fly()
+    // sequence (which could render as a clipped, glitchy shape mid-flight on some devices, see
+    // prior history here). The map itself still owns the "flies to the recipient" visual once
+    // this finishes (see ThrowHomeScreen's runFlight) — awaiting both together means that handoff
+    // always comes right after this liftoff completes, not before it, regardless of network speed.
+    const liftOff = new Promise<void>((resolve) => {
+      Animated.parallel([
+        Animated.timing(liftY, { toValue: -liftoffDistance(), duration: LIFTOFF_DURATION_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(liftOpacity, { toValue: 0, duration: LIFTOFF_DURATION_MS, easing: Easing.in(Easing.cubic), useNativeDriver: false }),
+      ]).start(() => resolve());
+    });
+    const [{ error: err }] = await Promise.all([onThrow({ ...content, photoUris }), liftOff]);
 
     if (err) {
       setError(err);
       setPhase('ready');
       stageRef.current?.seek(1);
       stageRef.current?.holdReady();
+      springLiftBack();
     } else {
       onLaunched();
     }
@@ -437,7 +453,17 @@ export function FoldingLetter({
             latest.current.settleFold(progressRef.current >= 0.5 ? 1 : 0);
           }
         },
-        onPanResponderTerminationRequest: () => true,
+        // Denies any other view's mid-gesture takeover request. This used to unconditionally
+        // grant it (`() => true`), which let some other responder elsewhere in the tree hijack an
+        // already-in-progress swipe-up-to-throw drag partway through — onPanResponderRelease (and
+        // so launch()) then never fires at all, since the gesture ends via onPanResponderTerminate
+        // instead. Confirmed directly: instrumenting this handler showed a termination request
+        // landing mid-drag, at the exact point the reported "swipe up doesn't throw" symptom
+        // started. Nothing here relies on giving up responder status once granted — the writing-
+        // phase fold-drag's own handoff FROM LetterCanvas happens earlier, during move-capture
+        // (onMoveShouldSetPanResponderCapture), before a responder is even granted, so it's
+        // unaffected by this.
+        onPanResponderTerminationRequest: () => false,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -464,18 +490,20 @@ export function FoldingLetter({
 
         {paperSize.width > 0 && (
           <Animated.View
-            // Position only ever moves vertically (liftY, throw-prep) — horizontal drag banks the
-            // plane in place via the 3D engine's own setReadyBank instead of translating this
-            // view, and the engine's own 'ready'-phase pose now handles the straight-ahead,
-            // nose-down resting tilt (see paperPlaneEngine.ts), so no CSS transform trickery is
-            // needed here any more.
-            style={[StyleSheet.absoluteFill, { opacity: stageOpacity, transform: [{ translateY: liftY }] }]}
+            // Position only ever moves vertically (liftY, throw-prep and the launch liftoff) —
+            // horizontal drag banks the plane in place via the 3D engine's own setReadyBank
+            // instead of translating this view, and the engine's own 'ready'-phase pose now
+            // handles the straight-ahead, nose-down resting tilt (see paperPlaneEngine.ts), so no
+            // CSS transform trickery is needed here any more. liftOpacity is folded into this
+            // wrapper's own opacity (not just the fallback glyph's) so the launch fade-out covers
+            // the real 3D canvas too.
+            style={[StyleSheet.absoluteFill, { opacity: Animated.multiply(stageOpacity, liftOpacity), transform: [{ translateY: liftY }] }]}
             pointerEvents="none"
           >
             {stageFailed ? (
-              <Animated.View style={[styles.fallbackPlaneWrap, { opacity: liftOpacity }]}>
+              <View style={styles.fallbackPlaneWrap}>
                 <PaperPlane size={64} color={throwColor.clayDeep} />
-              </Animated.View>
+              </View>
             ) : (
               <PaperPlaneStage ref={stageRef} onPhase={handleStagePhase} onError={handleStageError} />
             )}
