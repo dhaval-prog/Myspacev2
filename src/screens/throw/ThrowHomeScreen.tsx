@@ -10,7 +10,7 @@ import { BottomNav } from '../../components/BottomNav';
 import { Icon } from '../../components/Icon';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { formatMiles } from '../../utils/geo';
-import { flightPath, latLngAtProgress } from '../../utils/mapProjection';
+import { flightPath } from '../../utils/mapProjection';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import type { StrokePath, ThrowLetter } from '../../types/throw';
@@ -23,19 +23,14 @@ const GEAR_ICON =
   'M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z';
 const BACK_ICON = 'M15 18l-6-6 6-6';
 
-// How long the map spends on its wide "here's the whole trip" overview before the camera locks
-// onto the plane itself — long enough to register, short enough not to feel like a pause.
-const ZOOM_OVERVIEW_MS = 550;
-// How long the landing pulse gets to play before the arrival card appears.
-const ARRIVING_HOLD_MS = 650;
 // How long the arrival card stays up before the map returns to normal compose mode.
-const DELIVERED_HOLD_MS = 2200;
+const DELIVERED_HOLD_MS = 1800;
 // Roughly how tall the floating BottomNav dock is (FAB + pill + its own top padding), so the
 // compose card and arrival card can keep clear of it now that it overlaps the map instead of
 // pushing content up above it.
 const BOTTOM_NAV_CLEARANCE = 92;
 
-type FlightPhase = 'zooming' | 'in_flight' | 'arriving' | 'delivered';
+type FlightPhase = 'in_flight' | 'delivered';
 interface FlightState {
   letter: ThrowLetter;
   phase: FlightPhase;
@@ -63,12 +58,13 @@ interface ThrowHomeScreenProps {
 }
 
 /**
- * The paper plane's flight — from the moment it launches to landing on the recipient's pin — now
- * plays out right here on the same map the user was just composing over, instead of handing off
- * to a separate full-screen flight/arrival screen. The map itself does the work: a brief overview
- * of the whole trip, then the camera follows the plane's real interpolated position as it travels
- * (`focus` re-centers every progress tick), then locks onto the destination for the landing pulse
- * and a small arrival card, before handing the map back to normal compose mode.
+ * The paper plane's flight — from the moment it launches to arriving at the recipient — plays out
+ * right here on the same map the user was just composing over, with the camera left exactly where
+ * it already was (no zoom-out overview, no re-centering to follow the plane) so it never reads as
+ * a different screen. The plane animates along the real route on top of that unchanged view,
+ * shrinking and fading out as it nears the destination (see `planeSizeForProgress` /
+ * `planeOpacityForProgress`) rather than landing with a separate effect, then a small arrival card
+ * appears briefly before handing the map back to normal compose mode.
  */
 export function ThrowHomeScreen({
   onHome,
@@ -82,7 +78,7 @@ export function ThrowHomeScreen({
 }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { myLocation, friends, unreadCount, sendThrow, uploadPhoto } = useThrow();
+  const { myLocation, friends, unreadCount, streak, sendThrow, uploadPhoto } = useThrow();
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const initializedRef = useRef(false);
 
@@ -137,19 +133,12 @@ export function ThrowHomeScreen({
     const runId = ++flightRunIdRef.current;
     const stillCurrent = () => flightRunIdRef.current === runId;
 
-    setFlight({ letter, phase: 'zooming' });
-    await wait(reduceMotion ? 0 : ZOOM_OVERVIEW_MS);
-    if (!stillCurrent()) return;
-
     setFlight({ letter, phase: 'in_flight' });
     flightAnim.setValue(0);
-    // Throttled rather than applied on every animation frame: each progress update re-centers
-    // the map on the plane's new position (a native `animateToRegion` bridge call on native, a
-    // Leaflet `setView` + DOM reflow on web), and neither can reliably keep up with 60 calls/sec
-    // — under that load the camera visibly falls behind the plane's real position, so by the
-    // time the map catches up the plane (and the route line ahead of it) can be well outside the
-    // zoomed-in viewport, i.e. invisible. This is plenty smooth for a slow cinematic pan while
-    // giving each platform's map enough time to actually settle before the next reposition.
+    // Throttled rather than applied on every animation frame — the map camera no longer follows
+    // the plane (see this screen's doc comment), but the plane marker itself still repaints on
+    // every update, and neither Leaflet nor react-native-maps can reliably keep up with 60
+    // calls/sec of marker churn. This is plenty smooth for the shrink/fade motion.
     let lastUpdateAt = 0;
     const listenerId = flightAnim.addListener(({ value }) => {
       const now = Date.now();
@@ -166,10 +155,6 @@ export function ThrowHomeScreen({
       }).start(() => resolve());
     });
     flightAnim.removeListener(listenerId);
-    if (!stillCurrent()) return;
-
-    setFlight({ letter, phase: 'arriving' });
-    await wait(ARRIVING_HOLD_MS);
     if (!stillCurrent()) return;
 
     setFlight({ letter, phase: 'delivered' });
@@ -218,31 +203,6 @@ export function ThrowHomeScreen({
     return flightPath(from, to);
   }, [flight]);
 
-  const flightPins: ThrowMapPin[] = useMemo(() => {
-    if (!flight) return [];
-    return [
-      { id: 'flight-from', latitude: flight.letter.senderLatitude, longitude: flight.letter.senderLongitude, label: 'You', isSelf: true },
-      { id: 'flight-to', latitude: flight.letter.recipientLatitude, longitude: flight.letter.recipientLongitude, label: flight.letter.counterpartName.split(' ')[0] },
-    ];
-  }, [flight]);
-
-  // The camera itself does the "moving map along with the plane" work: a wide fitPoints overview
-  // first, then `focus` re-centers on the plane's own real interpolated position every progress
-  // tick, then locks onto the destination for the landing beat.
-  const flightFocus: LatLng | null = useMemo(() => {
-    if (!flight || flight.phase === 'zooming') return null;
-    if (flight.phase === 'in_flight' && flightRoutePoints) return latLngAtProgress(flightRoutePoints, flightProgress).position;
-    return { latitude: flight.letter.recipientLatitude, longitude: flight.letter.recipientLongitude };
-  }, [flight, flightRoutePoints, flightProgress]);
-
-  const flightFitPoints: LatLng[] | undefined =
-    flight?.phase === 'zooming'
-      ? [
-          { latitude: flight.letter.senderLatitude, longitude: flight.letter.senderLongitude },
-          { latitude: flight.letter.recipientLatitude, longitude: flight.letter.recipientLongitude },
-        ]
-      : undefined;
-
   return (
     <View style={styles.screen}>
       <ThrowGlassBackdrop heightMultiplier={0.6} />
@@ -252,24 +212,25 @@ export function ThrowHomeScreen({
           <Icon path={BACK_ICON} size={20} color={throwColor.inkSoft} strokeWidth={2} />
         </Pressable>
         <Text style={styles.headerTitle}>Throw</Text>
-        <Pressable onPress={onOpenSettings} hitSlop={10} style={styles.headerSpacer} accessibilityRole="button" accessibilityLabel="Throw settings">
-          <Icon path={GEAR_ICON} size={19} color={throwColor.inkSoft} strokeWidth={1.8} />
-        </Pressable>
+        <View style={styles.headerRight}>
+          {streak > 0 && (
+            <View style={styles.streakChip} accessibilityLabel={`${streak} day throw streak`}>
+              <Text style={styles.streakText}>🔥{streak}</Text>
+            </View>
+          )}
+          <Pressable onPress={onOpenSettings} hitSlop={10} accessibilityRole="button" accessibilityLabel="Throw settings">
+            <Icon path={GEAR_ICON} size={19} color={throwColor.inkSoft} strokeWidth={1.8} />
+          </Pressable>
+        </View>
       </GlassSurface>
 
       <View style={styles.mapArea}>
         <ThrowMap
-          pins={inFlight ? flightPins : pins}
-          focus={inFlight ? flightFocus : focusTarget}
-          fitPoints={flightFitPoints}
+          pins={pins}
+          focus={focusTarget}
           route={
-            inFlight && flightRoutePoints
-              ? {
-                  points: flightRoutePoints,
-                  progress: flightProgress,
-                  showPlane: flight!.phase === 'in_flight' || flight!.phase === 'arriving',
-                  landing: flight!.phase === 'arriving' || flight!.phase === 'delivered',
-                }
+            flight?.phase === 'in_flight' && flightRoutePoints
+              ? { points: flightRoutePoints, progress: flightProgress, showPlane: true }
               : undefined
           }
         />
@@ -323,7 +284,7 @@ export function ThrowHomeScreen({
                   </Text>
                 </>
               ) : (
-                <Text style={styles.flightTitle}>{flight!.phase === 'arriving' ? 'Arriving…' : `Flying to ${flight!.letter.counterpartName}…`}</Text>
+                <Text style={styles.flightTitle}>{`Flying to ${flight!.letter.counterpartName}…`}</Text>
               )}
             </GlassSurface>
           </View>
@@ -361,7 +322,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontFamily: throwFont.hand700, fontSize: 26, color: throwColor.ink },
   headerBackBtn: { width: 48, alignItems: 'flex-start' },
-  headerSpacer: { width: 48, alignItems: 'flex-end' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 48, justifyContent: 'flex-end' },
+  streakChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  streakText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.clayDeep },
   // No horizontal/bottom margin or rounding — the map runs edge-to-edge on those three sides,
   // with only a sliver of top margin below the floating header pill.
   mapArea: { flex: 1, marginTop: 4 },

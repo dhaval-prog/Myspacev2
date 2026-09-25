@@ -91,3 +91,20 @@ export function planeSizeForProgress(t: number, max: number, min: number): numbe
   const eased = c < 0.5 ? 2 * c * c : 1 - Math.pow(-2 * c + 2, 2) / 2;
   return max + (min - max) * eased;
 }
+
+// How much of the flight's final stretch the plane spends dissolving — it should still read as
+// "arriving" for most of the approach, then visibly fade to nothing right at the end rather than
+// disappearing abruptly or landing with a separate effect.
+const FADE_START = 0.82;
+
+/**
+ * The flying plane's opacity for a given flight progress — fully opaque until the final stretch,
+ * then eased down to 0 by t = 1, so it shrinks (see `planeSizeForProgress`) and dissolves into
+ * the destination rather than landing on it.
+ */
+export function planeOpacityForProgress(t: number): number {
+  const c = Math.max(0, Math.min(1, t));
+  if (c < FADE_START) return 1;
+  const local = (c - FADE_START) / (1 - FADE_START);
+  return 1 - local;
+}

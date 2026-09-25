@@ -7,7 +7,6 @@ import { PhotoAttachSheet } from './PhotoAttachSheet';
 import { GlassSurface } from '../friends/GlassSurface';
 import { Icon } from '../Icon';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useVoiceToText } from '../../hooks/useVoiceToText';
 import type { LetterCanvasHandle } from './LetterCanvas';
 import type { PaperPlaneStageHandle } from './paperPlaneTypes';
@@ -100,7 +99,6 @@ export function FoldingLetter({
   onOpenInbox,
   unreadCount,
 }: FoldingLetterProps) {
-  const reduceMotion = useReducedMotion();
   const [phase, setPhase] = useState<Phase>('writing');
   const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
   const [photoUris, setPhotoUris] = useState<string[]>([]);
@@ -176,22 +174,11 @@ export function FoldingLetter({
   const launch = async () => {
     setError(null);
     setPhase('throwing');
-    // The pre-commit "lifting off the table" nudge is a plain 2D transform on the wrapper; the
-    // 3D engine's own fly() sequence takes the visual from here, so reset that nudge first.
-    liftY.setValue(0);
-    liftOpacity.setValue(1);
-
-    const canFly = !reduceMotion && !stageFailed && stageRef.current;
-    let err: string | null;
-    if (canFly) {
-      const flyDone = new Promise<void>((resolve) => {
-        flyDoneRef.current = resolve;
-      });
-      stageRef.current!.fly();
-      [{ error: err }] = await Promise.all([onThrow({ ...content, photoUris }), flyDone]);
-    } else {
-      ({ error: err } = await onThrow({ ...content, photoUris }));
-    }
+    // No local 3D liftoff-and-offscreen flourish here anymore — that used the engine's own
+    // fly() sequence, which on real devices could render as a clipped, glitchy shape mid-flight
+    // ("cuts the plane"). The map itself now owns the whole flight visual (see ThrowHomeScreen's
+    // runFlight), so this just waits for the throw to actually send, then hands off immediately.
+    const { error: err } = await onThrow({ ...content, photoUris });
 
     if (err) {
       setError(err);
