@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { throwColor } from '../../theme/throwTokens';
+import { throwMapNightGoogleStyle } from '../../theme/throwMapNativeStyle';
+import { isDaytimeAt } from '../../utils/solarTime';
 import { latLngAtProgress, planeOpacityForProgress, planeSizeForProgress } from '../../utils/mapProjection';
 import { LocationPinGlyph } from './LocationPin';
 import { PaperPlane } from './PaperPlane';
@@ -28,14 +30,38 @@ function pointsKey(points: { latitude: number; longitude: number }[] | null | un
   return points ? points.map((p) => `${p.latitude.toFixed(3)},${p.longitude.toFixed(3)}`).join('|') : '';
 }
 
+// Recheck often enough that a session left open across a day/night boundary (or a contact switch
+// into a different part of the world) still catches up, cheap enough not to matter.
+const DAYTIME_RECHECK_MS = 5 * 60 * 1000;
+
 /** The real, interactive world map behind Throw — react-native-maps (Apple Maps on iOS out of the
  * box, Google Maps on Android once a Maps API key is added to app.json), same underlying stack as
  * Live Locations' MapCanvas but with a Throw-specific props surface: a handful of city-level pins
- * plus an optional animated flight route, no GPS accuracy ring or live-share semantics. */
+ * plus an optional animated flight route, no GPS accuracy ring or live-share semantics. Day/night
+ * follows the destination's (`focus`'s) local solar time, same as the web version, though the
+ * mechanism is entirely different here — each platform's own built-in styling hook rather than a
+ * MapLibre layer repaint, since react-native-maps has no equivalent. 3D buildings are similarly
+ * platform-native rather than a layer this file adds: Apple Maps renders its own once pitched and
+ * zoomed in close, with nothing further to wire up here. */
 export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const mapRef = useRef<MapView>(null);
   const fitKey = pointsKey(fitPoints);
   const focusKey = focus ? `${focus.latitude.toFixed(3)},${focus.longitude.toFixed(3)}` : '';
+
+  // Which location's local time governs the day/night palette — the destination being viewed
+  // (`focus`), falling back to whichever fit point comes first when only `fitPoints` is set, and
+  // to "day" if there's nothing to go on yet (a briefly-wrong palette before location data
+  // resolves reads better than defaulting to night). Same reasoning and same helper as the web
+  // MapLibre version, so both platforms agree on which half of the day a contact is in.
+  const daylightLng = focus?.longitude ?? fitPoints?.[0]?.longitude ?? null;
+  const [isDay, setIsDay] = useState(() => (daylightLng === null ? true : isDaytimeAt(daylightLng)));
+  useEffect(() => {
+    if (daylightLng === null) return;
+    const recheck = () => setIsDay(isDaytimeAt(daylightLng));
+    recheck();
+    const id = setInterval(recheck, DAYTIME_RECHECK_MS);
+    return () => clearInterval(id);
+  }, [daylightLng]);
   // `onMapReady` (not just a mounted ref) is what actually gates safe imperative calls here — a
   // ref can be attached to the native view before the underlying map surface is ready, in which
   // case `animateToRegion`/`fitToCoordinates` can silently no-op or resolve into a wrong camera
@@ -80,6 +106,18 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       style={StyleSheet.absoluteFill}
       initialRegion={focus ? { ...focus, ...FOCUS_DELTA } : WORLD_REGION}
       onMapReady={() => setMapReady(true)}
+      // Lets a user who pinches/tilts in see Apple Maps' (iOS) own automatic 3D building
+      // extrusion at close zoom — no separate opt-in beyond allowing the gesture; there's no
+      // MapLibre-style custom layer to add here, this is entirely the platform map's own
+      // rendering. Google Maps on Android doesn't extrude real building geometry the way Apple
+      // Maps or the web MapLibre version do, so this mostly benefits iOS.
+      pitchEnabled
+      // Day/night, one mechanism per platform: `userInterfaceStyle` switches Apple Maps' own
+      // built-in dark rendering (iOS-only prop, silently ignored on Android); `customMapStyle`
+      // is Google Maps' JSON styling hook (ignored by Apple Maps) — see throwMapNativeStyle.ts
+      // for why its colors are the same locked palette as the web version's, not eyeballed anew.
+      userInterfaceStyle={isDay ? 'light' : 'dark'}
+      customMapStyle={isDay ? [] : throwMapNightGoogleStyle}
     >
       {route && (
         <Polyline
