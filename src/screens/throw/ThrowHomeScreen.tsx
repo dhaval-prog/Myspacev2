@@ -89,6 +89,21 @@ export function ThrowHomeScreen({
   const [flight, setFlight] = useState<FlightState | null>(null);
   const [flightProgress, setFlightProgress] = useState(0);
   const flightAnim = useRef(new Animated.Value(0)).current;
+  // Fades (and slightly slides down) BottomNav in lockstep with FoldingLetter's own fold amount —
+  // 0 (flat writing paper) keeps it fully visible, 1 (folded, ready to throw) hides it, driven by
+  // the exact same value whether the fold was triggered by dragging the paper or the scroll-wheel
+  // gesture, so the nav's visibility never disagrees with what the paper is actually doing.
+  const navOpacity = useRef(new Animated.Value(1)).current;
+  // Separate from navOpacity (an Animated.Value can't be read synchronously to gate
+  // pointerEvents) — flips once the fold crosses the halfway point, same threshold the fold
+  // itself settles toward, so the dock stops accepting touches right around when it's no longer
+  // meaningfully visible rather than only once fully transparent.
+  const [navHidden, setNavHidden] = useState(false);
+  const handleFoldProgress = (value: number) => {
+    navOpacity.setValue(1 - value);
+    const hidden = value > 0.5;
+    setNavHidden((prev) => (prev === hidden ? prev : hidden));
+  };
   // Holds the letter between a successful `sendThrow` and FoldingLetter's own local
   // fold-and-liftoff animation finishing (`onLaunched`) — the map flight only starts once that
   // local flourish is done, so the two animations play back to back rather than fighting for
@@ -282,6 +297,7 @@ export function ThrowHomeScreen({
               unreadCount={unreadCount}
               onContactDragStart={!lockedRecipient && friendsWithLocation.length > 1 ? handleContactDragStart : undefined}
               onContactDragOffset={!lockedRecipient && friendsWithLocation.length > 1 ? handleContactDragOffset : undefined}
+              onFoldProgress={handleFoldProgress}
             />
           </View>
         )}
@@ -329,7 +345,13 @@ export function ThrowHomeScreen({
         </View>
       </GlassSurface>
 
-      <View style={styles.bottomNavWrap}>
+      <Animated.View
+        style={[
+          styles.bottomNavWrap,
+          { opacity: navOpacity, transform: [{ translateY: navOpacity.interpolate({ inputRange: [0, 1], outputRange: [BOTTOM_NAV_CLEARANCE, 0] }) }] },
+        ]}
+        pointerEvents={navHidden ? 'none' : 'box-none'}
+      >
         <BottomNav
           activeId="throw"
           onSelect={(id) => {
@@ -340,7 +362,7 @@ export function ThrowHomeScreen({
           bottomInset={insets.bottom}
           reduceMotion={reduceMotion}
         />
-      </View>
+      </Animated.View>
     </View>
   );
 }

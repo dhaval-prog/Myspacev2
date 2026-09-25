@@ -51,6 +51,17 @@ const liftoffDistance = () => Dimensions.get('window').height;
 // hold-and-tilt-to-pick-a-recipient — see the vertical-lock comment on the move handler below.
 const THROW_LOCK_MIN_DY = 20;
 const THROW_LOCK_RATIO = 1.5;
+// Mirrors FOLD_DRAG_DISTANCE, but for scroll-wheel/trackpad input instead of a touch drag — a
+// vertical scroll over the compose card (anywhere except the message text itself, so a long
+// message can still scroll normally) folds or unfolds the letter the same way dragging the paper
+// does, at roughly this many cumulative px of wheel delta for the full 0→1 range. A wheel/trackpad
+// "tick" is a much coarser, less consistent unit than a touch drag's pixels, so this is deliberately
+// looser than FOLD_DRAG_DISTANCE rather than reused as the same constant.
+const WHEEL_FOLD_DISTANCE = 500;
+// How long to wait after the last wheel event before treating the scroll gesture as "over" and
+// settling to the nearer end (0 or 1), same threshold rule as a released touch drag — there's no
+// cross-browser "scroll ended" event to key off instead, so this is a debounce.
+const WHEEL_SETTLE_DEBOUNCE_MS = 180;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
@@ -95,6 +106,12 @@ interface FoldingLetterProps {
    * not capped at ±1, so a longer drag can move several recipients over. The caller rounds and
    * clamps against its own list length. */
   onContactDragOffset?: (steps: number) => void;
+  /** Fires on every change to the fold amount (0 = flat writing paper, 1 = folded-and-ready
+   * plane) regardless of what's driving it — the pointer-drag fold above or the scroll-wheel
+   * fold below both funnel through the same `progress` value. The caller uses this to fade
+   * (and slide) its own BottomNav out in lockstep with the paper folding away, and back in as
+   * it unfolds. */
+  onFoldProgress?: (value: number) => void;
 }
 
 /**
@@ -128,6 +145,7 @@ export function FoldingLetter({
   unreadCount,
   onContactDragStart,
   onContactDragOffset,
+  onFoldProgress,
 }: FoldingLetterProps) {
   const [phase, setPhase] = useState<Phase>('writing');
   const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
@@ -153,6 +171,11 @@ export function FoldingLetter({
   const rawStartRef = useRef<{ x: number; y: number } | null>(null);
   const dragAnchorRef = useRef<{ y: number; progress: number } | null>(null);
   const paperAreaRef = useRef<View>(null);
+  // The whole compose card (paper + hint + bottom-controls row) — scroll-wheel fold/unfold (see
+  // the effect below) listens here rather than on paperAreaRef, since it's meant to work whether
+  // the cursor happens to be over the paper or elsewhere on the card.
+  const wrapRef = useRef<View>(null);
+  const wheelSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Which horizontal zone a 'ready'-phase gesture started in — set on grant, read by that same
   // gesture's move/release handlers. 'center' throws on an upward swipe; 'side' unfolds instead.
   const readyZoneRef = useRef<'center' | 'side'>('center');
@@ -185,6 +208,7 @@ export function FoldingLetter({
     const id = progress.addListener(({ value }) => {
       progressRef.current = value;
       stageRef.current?.seek(value);
+      latest.current.onFoldProgress?.(value);
     });
     return () => progress.removeListener(id);
   }, [progress]);
@@ -266,6 +290,7 @@ export function FoldingLetter({
     springLiftBack,
     onContactDragStart,
     onContactDragOffset,
+    onFoldProgress,
   });
   latest.current = {
     disabled,
@@ -279,6 +304,7 @@ export function FoldingLetter({
     springLiftBack,
     onContactDragStart,
     onContactDragOffset,
+    onFoldProgress,
   };
 
   const applyFoldProgress = useCallback(
@@ -379,6 +405,50 @@ export function FoldingLetter({
       window.removeEventListener('touchmove', onMove);
       window.removeEventListener('mouseup', onUp);
       window.removeEventListener('touchend', onUp);
+    };
+  }, [applyFoldProgress]);
+
+  // Scroll-wheel/trackpad fold, independent of (and in addition to) the drag-on-the-paper gesture
+  // above — scrolling down anywhere on the compose card folds the letter into the ready-to-throw
+  // plane; scrolling back up unfolds it to keep writing. Web-only: there's no wheel-equivalent
+  // input on native. Deliberately skips events targeting the actual message TextInput so a long
+  // letter can still be scrolled to read/edit normally — only scrolling elsewhere on the card
+  // (the paper's margins, the hint text, the bottom-controls row) drives the fold.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const node = wrapRef.current as any as HTMLElement | null;
+    if (!node) return;
+    const clearSettleTimer = () => {
+      if (wheelSettleTimerRef.current !== null) {
+        clearTimeout(wheelSettleTimerRef.current);
+        wheelSettleTimerRef.current = null;
+      }
+    };
+    const onWheel = (e: WheelEvent) => {
+      const { disabled, phase, hasContent } = latest.current;
+      if (disabled || phase === 'throwing') return;
+      if ((e.target as HTMLElement | null)?.closest('textarea, input')) return;
+      // Starting a fresh fold (from a flat, untouched 'writing' state) needs something worth
+      // throwing, same rule as the drag gesture; once a fold is already underway (phase ===
+      // 'folding') or fully settled ('ready'), further wheel input — either direction — keeps
+      // controlling it regardless, since scrolling back up to unfold never required content.
+      if (phase === 'writing' && (!hasContent || e.deltaY <= 0)) return;
+      e.preventDefault();
+      const next = Math.max(0, Math.min(1, progressRef.current + e.deltaY / WHEEL_FOLD_DISTANCE));
+      applyFoldProgress(next);
+      clearSettleTimer();
+      wheelSettleTimerRef.current = setTimeout(() => {
+        wheelSettleTimerRef.current = null;
+        if (latest.current.phase === 'folding') {
+          latest.current.settleFold(progressRef.current >= 0.5 ? 1 : 0);
+        }
+      }, WHEEL_SETTLE_DEBOUNCE_MS);
+    };
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      node.removeEventListener('wheel', onWheel);
+      clearSettleTimer();
     };
   }, [applyFoldProgress]);
 
@@ -509,7 +579,7 @@ export function FoldingLetter({
   const stageOpacity = progress.interpolate({ inputRange: [0, 0.2], outputRange: [0, 1], extrapolate: 'clamp' });
 
   return (
-    <View style={styles.wrap}>
+    <View ref={wrapRef} style={styles.wrap}>
       <Text style={styles.toLine} numberOfLines={1}>
         {phase === 'ready' || phase === 'throwing' ? 'Ready to throw' : `Writing to ${recipientName}`} · {recipientCity}
       </Text>
