@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import { throwColor } from '../../theme/throwTokens';
-import { throwMapDayColor, throwMapNightColor, throwMapStyleUrl } from '../../theme/throwMapTokens';
 import { isDaytimeAt } from '../../utils/solarTime';
 import { latLngAtProgress, planeOpacityForProgress, planeSizeForProgress } from '../../utils/mapProjection';
 import { LocationPin } from './LocationPin';
@@ -11,25 +10,31 @@ import { PaperPlane } from './PaperPlane';
 import type { ThrowMapProps } from './throwMapTypes';
 import type { LatLng } from '../../utils/geo';
 
+mapboxgl.accessToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
+// A custom Mapbox Studio style ("Faded"), built on Mapbox Standard rather than from scratch — real
+// 3D buildings/landmarks and day/night are both handled by the style itself (its Standard "basemap"
+// import has `show3dFacades`/`showLandmarkIcons` on and a `lightPreset` config we drive directly,
+// see `applyLightPreset` below), not hand-rolled per-layer paint overrides the way the previous
+// OpenFreeMap/MapLibre setup needed — Mapbox's own vector tiles/style require this real Mapbox GL
+// JS SDK and an access token rather than the MapLibre fork, unlike OpenFreeMap's keyless tiles.
+const MAPBOX_STYLE_URL = process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL ?? 'mapbox://styles/mapbox/standard';
+
 // The flying plane's size range — large right after launch, small on approach (see
 // `planeSizeForProgress`).
 const PLANE_MAX_SIZE = 44;
 const PLANE_MIN_SIZE = 16;
 
 // A whole-world-ish default before there's anything to focus on.
-const WORLD_CENTER: [number, number] = [10, 15]; // MapLibre wants [lng, lat]
+const WORLD_CENTER: [number, number] = [10, 15]; // Mapbox wants [lng, lat]
 const WORLD_ZOOM = 2;
 // How far a single-point focus zooms in, and how steeply it's pitched — picked per explicit user
-// request (tried and screenshotted against several pitch/zoom combinations first). At this
-// shallower pitch than an earlier round's 75°, the camera reads as a gentle tilt over the city
-// rather than a close, steep flyover — and, empirically, shows no sky at all at any normal
-// viewport size (unlike 75°, this needed no sky-cropping treatment).
-const FOCUS_ZOOM = 14.6;
-const FOCUS_PITCH = 50;
+// request against live screenshots of this exact style. Mapbox GL JS's own default maxPitch is
+// already 85 (unlike MapLibre's 60), so no extra construction option is needed to allow it.
+const FOCUS_ZOOM = 17;
+const FOCUS_PITCH = 70;
 
 const ROUTE_SOURCE_ID = 'throw-route';
 const ROUTE_LAYER_ID = 'throw-route-line';
-const BUILDINGS_LAYER_ID = 'throw-3d-buildings';
 
 function pointsKey(points: { latitude: number; longitude: number }[] | null | undefined): string {
   return points ? points.map((p) => `${p.latitude.toFixed(3)},${p.longitude.toFixed(3)}`).join('|') : '';
@@ -45,7 +50,7 @@ type Target = { kind: 'fit'; points: LatLng[] } | { kind: 'focus'; point: LatLng
 // camera stuck wherever the animation had reached — nowhere near either the old or the new
 // target. An instant jump has no in-flight state to interrupt, so it's correct regardless of how
 // close together these calls land.
-function applyTarget(map: maplibregl.Map, target: Target) {
+function applyTarget(map: mapboxgl.Map, target: Target) {
   if (!target) return;
   if (target.kind === 'fit') {
     const lngs = target.points.map((p) => p.longitude);
@@ -62,74 +67,16 @@ function applyTarget(map: maplibregl.Map, target: Target) {
   }
 }
 
-/** Adds the day/night color overrides for whichever style just (re)loaded, plus the 3D building
- * extrusion layer — both need re-applying after every `setStyle` call, since that wipes anything
- * not baked into the style JSON itself. */
-function applyPaletteAndBuildings(map: maplibregl.Map, isDay: boolean) {
-  const setFill = (id: string, color: string) => {
-    if (map.getLayer(id)) map.setPaintProperty(id, 'fill-color', color);
-  };
-  const setLine = (id: string, color: string) => {
-    if (map.getLayer(id)) map.setPaintProperty(id, 'line-color', color);
-  };
-
-  if (isDay) {
-    const c = throwMapDayColor;
-    setFill('water', c.water);
-    setFill('park', c.park);
-    setFill('landcover_grass', c.park);
-    setFill('landcover_wood', c.park);
-    setFill('building', c.building);
-    map.setSky({
-      'sky-color': '#e9f0f6',
-      'sky-horizon-blend': 0.5,
-      'horizon-color': '#dfe9f2',
-      'horizon-fog-blend': 0.6,
-      'fog-color': '#e6eef4',
-      'fog-ground-blend': 0.7,
-    });
-  } else {
-    const c = throwMapNightColor;
-    map.setPaintProperty('background', 'background-color', c.land);
-    setFill('water', c.water);
-    setLine('waterway', c.water);
-    setFill('building', c.landuseTint);
-    ['landuse_residential', 'landcover_wood', 'landuse_park'].forEach((id) => setFill(id, c.landuseTint));
-    setLine('highway_minor', c.roadMinor);
-    setLine('highway_path', c.roadMinor);
-    setLine('highway_major_inner', c.roadMajor);
-    setLine('highway_major_subtle', c.roadMajor);
-    setLine('highway_major_casing', c.roadCasing);
-    setLine('highway_motorway_subtle', c.roadMajor);
-    setLine('highway_motorway_casing', c.roadCasing);
-  }
-
-  if (!map.getLayer(BUILDINGS_LAYER_ID)) {
-    const labelLayerId = map.getStyle().layers?.find((l) => l.type === 'symbol' && 'text-field' in (l.layout ?? {}))?.id;
-    map.addLayer(
-      {
-        id: BUILDINGS_LAYER_ID,
-        source: 'openmaptiles',
-        'source-layer': 'building',
-        type: 'fill-extrusion',
-        minzoom: 14,
-        paint: {
-          'fill-extrusion-color': isDay ? throwMapDayColor.building : throwMapNightColor.building,
-          'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 10],
-          'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-          'fill-extrusion-opacity': 0.95,
-        },
-      },
-      labelLayerId,
-    );
-  } else {
-    map.setPaintProperty(BUILDINGS_LAYER_ID, 'fill-extrusion-color', isDay ? throwMapDayColor.building : throwMapNightColor.building);
-  }
+// Drives the style's own day/night rendering — a config property on its "basemap" (Mapbox
+// Standard) import, not a style reload, so this is cheap to call on every flip rather than
+// needing the old setStyle-based approach's guard against redundant calls.
+function applyLightPreset(map: mapboxgl.Map, isDay: boolean) {
+  map.setConfigProperty('basemap', 'lightPreset', isDay ? 'day' : 'night');
 }
 
-function addOrUpdateRoute(map: maplibregl.Map, points: LatLng[] | undefined) {
+function addOrUpdateRoute(map: mapboxgl.Map, points: LatLng[] | undefined) {
   const coords = points && points.length >= 2 ? points.map((p): [number, number] => [p.longitude, p.latitude]) : null;
-  const source = map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  const source = map.getSource(ROUTE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
   if (!coords) {
     source?.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } });
     return;
@@ -154,21 +101,21 @@ function addOrUpdateRoute(map: maplibregl.Map, points: LatLng[] | undefined) {
 const DAYTIME_RECHECK_MS = 5 * 60 * 1000;
 
 /**
- * The real, interactive world map behind Throw — MapLibre GL JS (a WebGL vector-tile renderer)
- * over OpenFreeMap tiles, the same Throw-specific props surface as before: a handful of
- * city-level pins plus an optional animated flight route, no GPS accuracy ring or live-share
- * semantics. Pins and the flying plane stay our own React views, absolutely positioned over the
- * map canvas by projecting lat/lng to screen coordinates on every pan/zoom — same reasoning as
- * the previous Leaflet version (avatar/label rendering handled ourselves rather than by the map
- * library's own marker system). Two additions over the Leaflet version: real 3D building
- * extrusions, shown by default at the pitched-and-zoomed-in `FOCUS_ZOOM`/`FOCUS_PITCH` framing
- * below, and a day/night palette switch driven by the *destination's* local solar time (`focus`'s
- * longitude) rather than the viewer's own clock — replacing the map library was the only way to
- * get either, since flat raster tiles carry no building-height data and can't be recolored.
+ * The real, interactive world map behind Throw — Mapbox GL JS over a custom Mapbox Studio style,
+ * the same Throw-specific props surface as before: a handful of city-level pins plus an optional
+ * animated flight route, no GPS accuracy ring or live-share semantics. Pins and the flying plane
+ * stay our own React views, absolutely positioned over the map canvas by projecting lat/lng to
+ * screen coordinates on every pan/zoom — same reasoning as the previous Leaflet/MapLibre versions
+ * (avatar/label rendering handled ourselves rather than by the map library's own marker system).
+ * 3D buildings/landmarks and the day/night palette both come from the style itself now (its
+ * Mapbox Standard "basemap" import), switched live via `setConfigProperty` rather than the
+ * hand-rolled per-layer paint overrides + custom fill-extrusion layer the OpenFreeMap version
+ * needed — day/night still follows the *destination's* local solar time (`focus`'s longitude),
+ * not the viewer's own clock.
  */
 export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
   const [, forceRender] = useState(0);
 
   // Which location's local time governs the day/night palette — the destination being viewed
@@ -179,9 +126,6 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const [isDay, setIsDay] = useState(() => (daylightLng === null ? true : isDaytimeAt(daylightLng)));
   const isDayRef = useRef(isDay);
   isDayRef.current = isDay;
-  // What the map was actually constructed/last `setStyle`d with — lets the `[isDay]` effect
-  // below skip a redundant reload when it fires on mount with the style the map already has.
-  const styleAppliedRef = useRef<'day' | 'night'>(isDay ? 'day' : 'night');
 
   // Always holds whatever `focus`/`fitPoints` currently resolve to — mutated directly during
   // render (not in an effect) so it's never stale by the time a map event callback reads it.
@@ -193,27 +137,29 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    const map = new maplibregl.Map({
+    const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: throwMapStyleUrl[isDayRef.current ? 'day' : 'night'],
+      style: MAPBOX_STYLE_URL,
       center: WORLD_CENTER,
       zoom: WORLD_ZOOM,
-      attributionControl: { compact: true },
       pitch: 0,
-      maxPitch: 85,
+      // A plain boolean here (unlike MapLibre's `{compact: true}` object) — the compact behavior
+      // is a separate AttributionControl added manually right below instead.
+      attributionControl: false,
     });
+    map.addControl(new mapboxgl.AttributionControl({ compact: true }));
     const rerender = () => forceRender((n) => n + 1);
     map.on('move', rerender);
     map.on('zoom', rerender);
     map.on('style.load', () => {
-      // Defensive, not just tidy: this runs against a style JSON this app doesn't own
-      // (OpenFreeMap's), so a future upstream layer-id rename should degrade to "default
-      // colors" rather than take the whole map down.
+      // Defensive, not just tidy: this runs against a style this app doesn't own (edited in
+      // Mapbox Studio), so a future rename/removal of the "basemap" import should degrade to
+      // "whatever the style's own saved default is" rather than take the whole map down.
       try {
-        applyPaletteAndBuildings(map, isDayRef.current);
+        applyLightPreset(map, isDayRef.current);
         addOrUpdateRoute(map, routePointsRef.current);
       } catch (e) {
-        console.error('[ThrowMap] failed to apply palette/buildings after style load:', e);
+        console.error('[ThrowMap] failed to apply light preset/route after style load:', e);
       }
       rerender();
     });
@@ -257,8 +203,8 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey, fitKey]);
 
-  // Recompute (and, if it actually flipped, re-style) the day/night palette whenever the
-  // destination changes, and periodically thereafter so a long-open session still catches up.
+  // Recompute the day/night palette whenever the destination changes, and periodically
+  // thereafter so a long-open session still catches up.
   useEffect(() => {
     if (daylightLng === null) return;
     const recheck = () => setIsDay(isDaytimeAt(daylightLng));
@@ -269,21 +215,14 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
-    const wanted = isDay ? 'day' : 'night';
-    // The map is already constructed with the right initial style (see `new maplibregl.Map`
-    // above) — this effect still fires once on mount regardless (every effect does), and
-    // without this guard that means an immediate, redundant `setStyle` call to the *same* URL
-    // right as the real initial load is still in flight, interrupting and restarting it.
-    if (styleAppliedRef.current === wanted) return;
-    styleAppliedRef.current = wanted;
-    // `setStyle` tears down and reloads every source/layer, including this component's own
-    // route line and buildings layer — `style.load` (wired up at map creation) re-adds both, so
-    // this is safe to call any time isDay flips, not just after the map itself is ready.
-    map.setStyle(throwMapStyleUrl[wanted]);
+    // Not ready yet on the very first run (the style is still loading asynchronously) — that
+    // initial application happens via `style.load` in the mount effect above instead; this only
+    // needs to handle isDay flipping *after* the style has already loaded.
+    if (!map || !map.isStyleLoaded()) return;
+    applyLightPreset(map, isDay);
   }, [isDay]);
 
-  // The route line is a real MapLibre GeoJSON line layer (correct at every zoom without extra
+  // The route line is a real Mapbox GeoJSON line layer (correct at every zoom without extra
   // math) — only the flying plane glyph itself needs to be a projected DOM overlay, same
   // reasoning as pins.
   useEffect(() => {
