@@ -45,7 +45,7 @@ type Screen =
   | { name: 'games'; initialTab?: 'create' | 'join' }
   | { name: 'cards'; initialTab?: 'create' | 'join' }
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
-  | { name: 'throw'; openThrowId?: string }
+  | { name: 'throw'; openThrowId?: string; openInbox?: boolean }
   | { name: 'liveLocations' }
   | { name: 'account'; from: 'home' | 'expenses' | 'split' };
 
@@ -121,6 +121,8 @@ function AppNavigator() {
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
         onOpenLiveLocations={() => setScreen({ name: 'liveLocations' })}
+        onOpenThrow={() => setScreen({ name: 'throw' })}
+        onOpenThrowInbox={() => setScreen({ name: 'throw', openInbox: true })}
       />
     );
   }
@@ -182,6 +184,7 @@ function AppNavigator() {
           setScreen({ name: 'friends' });
         }}
         initialThrowId={screen.openThrowId}
+        initialScreen={screen.openInbox ? 'inbox' : undefined}
       />
     );
   }

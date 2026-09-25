@@ -37,7 +37,7 @@ export function LetterCard({ letter, onPress, onDelete }: LetterCardProps) {
   const [swiped, setSwiped] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const unread = letter.direction === 'received' && letter.status === 'thrown';
-  const preview = letter.messageText ? letter.messageText : letter.photoUrl ? 'Sent a photo' : 'A handwritten letter';
+  const preview = letter.messageText ? letter.messageText : letter.photoUrls.length > 0 ? 'Sent a photo' : 'A handwritten letter';
   const nameLabel = letter.direction === 'sent' ? `To ${letter.counterpartName}` : letter.counterpartName;
 
   // Everything — tap-to-open, swipe-to-reveal — goes through this one PanResponder attached

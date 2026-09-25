@@ -23,6 +23,7 @@ export interface ThrowRow {
   strokes: StrokePath[] | null;
   pen_color: string | null;
   photo_url: string | null;
+  photo_urls: string[] | null;
   sender_city: string;
   sender_country: string;
   sender_latitude: number;
@@ -53,7 +54,8 @@ export interface ThrowLetter {
   messageText: string | null;
   strokes: StrokePath[] | null;
   penColor: string | null;
-  photoUrl: string | null;
+  /** Every photo attached to this letter, in the order they were added — may be empty. */
+  photoUrls: string[];
   senderCity: string;
   senderCountry: string;
   senderLatitude: number;
@@ -83,5 +85,5 @@ export interface ComposeDraft {
   messageText: string | null;
   strokes: StrokePath[] | null;
   penColor: string;
-  photoUrl: string | null;
+  photoUrls: string[];
 }

@@ -14,6 +14,9 @@ interface ThrowScreenProps {
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
   initialThrowId?: string;
+  /** Opens straight to the inbox instead of the compose map — used when arriving here via the
+   * "Throw inbox" shortcut on Orbit's Chats list rather than the usual Throw entry point. */
+  initialScreen?: 'inbox';
 }
 
 type SubScreen =
@@ -29,6 +32,7 @@ function ThrowNavigator({
   onOpenChats,
   onOpenAddFriend,
   initialThrowId,
+  initialScreen,
 }: {
   onHome: () => void;
   onOpenExpenses: () => void;
@@ -36,9 +40,12 @@ function ThrowNavigator({
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
   initialThrowId?: string;
+  initialScreen?: 'inbox';
 }) {
   const { loading, myLocation } = useThrow();
-  const [screen, setScreen] = useState<SubScreen>(() => (initialThrowId ? { name: 'letter', throwId: initialThrowId } : { name: 'home' }));
+  const [screen, setScreen] = useState<SubScreen>(() =>
+    initialThrowId ? { name: 'letter', throwId: initialThrowId } : initialScreen === 'inbox' ? { name: 'inbox' } : { name: 'home' },
+  );
 
   if (loading) {
     return <View style={{ flex: 1, backgroundColor: throwColor.screenBg }} />;
@@ -84,7 +91,7 @@ function ThrowNavigator({
   return null;
 }
 
-export function ThrowScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenChats, onOpenAddFriend, initialThrowId }: ThrowScreenProps) {
+export function ThrowScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenChats, onOpenAddFriend, initialThrowId, initialScreen }: ThrowScreenProps) {
   return (
     <ThrowProvider>
       <ThrowNavigator
@@ -94,6 +101,7 @@ export function ThrowScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenChats, 
         onOpenChats={onOpenChats}
         onOpenAddFriend={onOpenAddFriend}
         initialThrowId={initialThrowId}
+        initialScreen={initialScreen}
       />
     </ThrowProvider>
   );

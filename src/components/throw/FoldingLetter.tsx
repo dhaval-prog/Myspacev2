@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, LayoutChangeEvent, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
@@ -42,9 +41,9 @@ interface FoldingLetterContent {
   messageText: string | null;
   strokes: StrokePath[] | null;
   penColor: string;
-  /** A locally-picked photo (camera or library), not yet uploaded — the parent uploads it and
-   * resolves a public URL as part of actually sending the throw. */
-  photoUri: string | null;
+  /** Every locally-picked photo (camera or library), not yet uploaded — the parent uploads each
+   * one and resolves their public URLs as part of actually sending the throw. */
+  photoUris: string[];
 }
 
 interface FoldingLetterProps {
@@ -103,8 +102,8 @@ export function FoldingLetter({
 }: FoldingLetterProps) {
   const reduceMotion = useReducedMotion();
   const [phase, setPhase] = useState<Phase>('writing');
-  const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUri'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
+  const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paperSize, setPaperSize] = useState({ width: 0, height: 0 });
@@ -156,7 +155,7 @@ export function FoldingLetter({
     return () => progress.removeListener(id);
   }, [progress]);
 
-  const hasContent = content.strokes !== null || (content.messageText?.trim().length ?? 0) > 0 || photoUri !== null;
+  const hasContent = content.strokes !== null || (content.messageText?.trim().length ?? 0) > 0 || photoUris.length > 0;
 
   const settleFold = (target: 0 | 1) => {
     Animated.spring(progress, { toValue: target, useNativeDriver: false, friction: 9, tension: 55 }).start(() => {
@@ -189,9 +188,9 @@ export function FoldingLetter({
         flyDoneRef.current = resolve;
       });
       stageRef.current!.fly();
-      [{ error: err }] = await Promise.all([onThrow({ ...content, photoUri }), flyDone]);
+      [{ error: err }] = await Promise.all([onThrow({ ...content, photoUris }), flyDone]);
     } else {
-      ({ error: err } = await onThrow({ ...content, photoUri }));
+      ({ error: err } = await onThrow({ ...content, photoUris }));
     }
 
     if (err) {
@@ -214,8 +213,8 @@ export function FoldingLetter({
   // first couple of steps). This ref mirrors whatever state and closures the responder's
   // callbacks need, updated every render, so they always read fresh values without the responder
   // object itself ever changing identity while a touch is active.
-  const latest = useRef({ disabled, phase, hasContent, content, photoUri, paperSize, launch, settleFold, springLiftBack });
-  latest.current = { disabled, phase, hasContent, content, photoUri, paperSize, launch, settleFold, springLiftBack };
+  const latest = useRef({ disabled, phase, hasContent, content, photoUris, paperSize, launch, settleFold, springLiftBack });
+  latest.current = { disabled, phase, hasContent, content, photoUris, paperSize, launch, settleFold, springLiftBack };
 
   const applyFoldProgress = useCallback(
     (next: number) => {
@@ -227,7 +226,11 @@ export function FoldingLetter({
       // than relying on Grant.
       if (!bakedRef.current && next > 0) {
         bakedRef.current = true;
-        stageRef.current?.setContent({ ...latest.current.content, photoUri: latest.current.photoUri }, latest.current.paperSize);
+        // The folded plane's baked texture only carries the first attached photo — see
+        // paperPlaneTypes.ts's PaperPlaneLetterContent, which still takes a single photoUri.
+        // Stamping every attached photo onto the fragile 3D fold/texture pipeline isn't worth
+        // the risk; the flat compose paper (below) is where all of them are visible.
+        stageRef.current?.setContent({ ...latest.current.content, photoUri: latest.current.photoUris[0] ?? null }, latest.current.paperSize);
       }
     },
     [progress],
@@ -411,7 +414,7 @@ export function FoldingLetter({
 
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
-          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={photoUri !== null} />
+          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={photoUris.length > 0} />
         </Animated.View>
 
         {paperSize.width > 0 && (
@@ -429,20 +432,30 @@ export function FoldingLetter({
           </Animated.View>
         )}
 
-        {photoUri && (
+        {photoUris.length > 0 && (
           // Fades out in lockstep with LetterCanvas (same canvasOpacity) once folding starts —
-          // the photo is baked into the plane's own texture from that point on (see
-          // paperContentTexture.web/.native's photo handling), so this flat corner sticker
-          // would otherwise float on top of the plane as a second, un-folded copy of the photo.
-          <Animated.View style={[styles.photoChip, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'box-none' : 'none'}>
-            <View style={styles.photoWrap}>
-              <View style={styles.photoFrame}>
-                <Image source={{ uri: photoUri }} style={styles.photoThumb} />
-              </View>
-              <Pressable onPress={() => setPhotoUri(null)} hitSlop={8} style={styles.photoRemove} accessibilityRole="button" accessibilityLabel="Remove photo">
-                <Icon path={X_ICON} size={12} color={throwColor.paper} strokeWidth={2.6} />
-              </Pressable>
-            </View>
+          // only the first photo is baked into the plane's own texture from that point on (see
+          // applyFoldProgress above), so this flat strip would otherwise float on top of the
+          // plane as extra, un-folded copies.
+          <Animated.View style={[styles.photoStripWrap, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'box-none' : 'none'}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoStripContent}>
+              {photoUris.map((uri, i) => (
+                <View key={`${uri}-${i}`} style={styles.photoThumbWrap}>
+                  <View style={styles.photoThumbFrame}>
+                    <Image source={{ uri }} style={styles.photoThumbImg} />
+                  </View>
+                  <Pressable
+                    onPress={() => setPhotoUris((prev) => prev.filter((_, idx) => idx !== i))}
+                    hitSlop={8}
+                    style={styles.photoThumbRemove}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove photo"
+                  >
+                    <Icon path={X_ICON} size={11} color={throwColor.paper} strokeWidth={2.6} />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
           </Animated.View>
         )}
       </View>
@@ -451,106 +464,82 @@ export function FoldingLetter({
       {voice.recording && <Text style={styles.readyHint}>{voice.interimText || 'Listening…'}</Text>}
       {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
 
-      <View style={styles.bottomRowWrap}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.bottomRowContent}
-          style={styles.bottomRowScroll}
+      <View style={styles.bottomRow}>
+        <Pressable
+          onPress={() => setPhotoSheetOpen(true)}
+          disabled={disabled || phase === 'throwing'}
+          accessibilityRole="button"
+          accessibilityLabel="Add a photo"
         >
-          <Pressable
-            onPress={() => setPhotoSheetOpen(true)}
-            disabled={disabled || phase === 'throwing'}
-            style={styles.bottomRowItem}
-            accessibilityRole="button"
-            accessibilityLabel="Add a photo"
-          >
-            {({ pressed }) => (
-              <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-                <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                  <Icon path={PHOTO_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
-                </GlassSurface>
-              </View>
-            )}
-          </Pressable>
+          {({ pressed }) => (
+            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                <Icon path={PHOTO_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
+              </GlassSurface>
+            </View>
+          )}
+        </Pressable>
 
-          <Pressable onPress={onOpenChats} style={styles.bottomRowItem} accessibilityRole="button" accessibilityLabel="Chats">
-            {({ pressed }) => (
-              <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-                <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                  <Icon path={CHAT_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
-                </GlassSurface>
-              </View>
-            )}
-          </Pressable>
+        <Pressable onPress={onOpenChats} accessibilityRole="button" accessibilityLabel="Chats">
+          {({ pressed }) => (
+            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                <Icon path={CHAT_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
+              </GlassSurface>
+            </View>
+          )}
+        </Pressable>
 
-          <Pressable
-            onPress={() => (voice.recording ? voice.stop() : voice.start())}
-            disabled={disabled || phase === 'throwing'}
-            style={styles.bottomRowItem}
-            accessibilityRole="button"
-            accessibilityLabel={voice.recording ? 'Stop recording' : 'Speak your letter'}
-          >
-            {({ pressed }) =>
-              voice.recording ? (
-                <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
-                  <View style={[styles.micBtn, styles.micBtnActive]}>
-                    <Icon path={STOP_ICON} size={22} color={throwColor.paper} strokeWidth={1.8} />
-                  </View>
+        <Pressable
+          onPress={() => (voice.recording ? voice.stop() : voice.start())}
+          disabled={disabled || phase === 'throwing'}
+          accessibilityRole="button"
+          accessibilityLabel={voice.recording ? 'Stop recording' : 'Speak your letter'}
+        >
+          {({ pressed }) =>
+            voice.recording ? (
+              <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
+                <View style={[styles.micBtn, styles.micBtnActive]}>
+                  <Icon path={STOP_ICON} size={22} color={throwColor.paper} strokeWidth={1.8} />
                 </View>
-              ) : (
-                <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
-                  <GlassSurface tint="light" tintColor={throwGlass.tintStrong} style={styles.micBtn}>
-                    <Icon path={MIC_ICON} size={27} color={throwColor.ink} strokeWidth={1.8} />
-                  </GlassSurface>
+              </View>
+            ) : (
+              <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
+                <GlassSurface tint="light" tintColor={throwGlass.tintStrong} style={styles.micBtn}>
+                  <Icon path={MIC_ICON} size={27} color={throwColor.ink} strokeWidth={1.8} />
+                </GlassSurface>
+              </View>
+            )
+          }
+        </Pressable>
+
+        <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
+          {({ pressed }) => (
+            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                <Icon path={QR_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
+              </GlassSurface>
+            </View>
+          )}
+        </Pressable>
+
+        <Pressable onPress={onOpenInbox} accessibilityRole="button" accessibilityLabel="Inbox">
+          {({ pressed }) => (
+            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                <Icon path={INBOX_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
+              </GlassSurface>
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeLabel}>{unreadCount}</Text>
                 </View>
-              )
-            }
-          </Pressable>
-
-          <Pressable onPress={onOpenAddFriend} style={styles.bottomRowItem} accessibilityRole="button" accessibilityLabel="Add a friend">
-            {({ pressed }) => (
-              <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-                <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                  <Icon path={QR_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
-                </GlassSurface>
-              </View>
-            )}
-          </Pressable>
-
-          <Pressable onPress={onOpenInbox} style={styles.bottomRowItem} accessibilityRole="button" accessibilityLabel="Inbox">
-            {({ pressed }) => (
-              <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-                <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                  <Icon path={INBOX_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
-                </GlassSurface>
-                {unreadCount > 0 && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeLabel}>{unreadCount}</Text>
-                  </View>
-                )}
-              </View>
-            )}
-          </Pressable>
-        </ScrollView>
-
-        <LinearGradient
-          colors={['rgba(251,246,236,.95)', 'rgba(251,246,236,0)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[styles.rowFade, styles.rowFadeLeft]}
-          pointerEvents="none"
-        />
-        <LinearGradient
-          colors={['rgba(251,246,236,0)', 'rgba(251,246,236,.95)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[styles.rowFade, styles.rowFadeRight]}
-          pointerEvents="none"
-        />
+              )}
+            </View>
+          )}
+        </Pressable>
       </View>
 
-      <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={setPhotoUri} />
+      <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(uris) => setPhotoUris((prev) => [...prev, ...uris])} />
     </View>
   );
 }
@@ -574,47 +563,40 @@ const styles = StyleSheet.create({
   fallbackPlaneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   readyHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.inkMute, textAlign: 'center', marginTop: 10 },
   error: { fontFamily: throwFont.ui400, fontSize: 12, color: '#B3413A', textAlign: 'center', marginTop: 8 },
-  // A "photo pasted onto the letter" look — a small white-bordered frame tucked in the top-right
-  // corner, tilted slightly like something actually stuck on by hand. Pinned to a corner rather
-  // than spanning the paper's width so it never sits over the centered writing area below it —
-  // LetterCanvas also reserves extra top padding (hasPhoto) as a second guard against overlap.
-  photoChip: {
+  // A "photos pasted onto the letter" look — a horizontal row of small white-bordered thumbnails
+  // near the top of the paper, scrollable once there are more than fit. Spans most of the paper's
+  // width rather than sitting in one corner, since there can be several now — LetterCanvas
+  // reserves extra top padding (hasPhoto) as a guard against the writing area starting underneath.
+  photoStripWrap: {
     position: 'absolute',
     top: 16,
+    left: 14,
     right: 14,
   },
-  photoWrap: { width: 100, height: 100 },
-  photoFrame: {
+  photoStripContent: { alignItems: 'center', gap: 10, paddingRight: 6 },
+  photoThumbWrap: { width: 72, height: 72 },
+  photoThumbFrame: {
     width: '100%',
     height: '100%',
     borderRadius: 8,
     backgroundColor: throwColor.paper,
-    padding: 6,
-    transform: [{ rotate: '-4deg' }],
+    padding: 5,
     ...throwColor.shadowSoft,
   },
-  photoThumb: { width: '100%', height: '100%', borderRadius: 4 },
-  photoRemove: {
+  photoThumbImg: { width: '100%', height: '100%', borderRadius: 4 },
+  photoThumbRemove: {
     position: 'absolute',
-    top: -8,
-    right: -8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    top: -7,
+    right: -7,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: throwColor.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // A horizontally scrollable strip rather than a fixed space-between row — the viewport itself
-  // is capped to roughly three icons wide (regardless of how much wider the paper card is), with
-  // a soft fade at each edge hinting there's more to scroll to.
-  bottomRowWrap: { marginTop: 14, alignItems: 'center' },
-  bottomRowScroll: { flexGrow: 0, width: 258 },
-  bottomRowContent: { alignItems: 'center', paddingHorizontal: 6 },
-  bottomRowItem: { marginRight: 18 },
-  rowFade: { position: 'absolute', top: 0, bottom: 0, width: 28 },
-  rowFadeLeft: { left: 0 },
-  rowFadeRight: { right: 0 },
+  // A plain row — every icon visible at once, no scrolling.
+  bottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 },
   // Split in two: the outer *Shadow view carries the drop shadow (which needs `overflow: visible`
   // to render), while the inner GlassSurface/View needs `overflow: hidden` so its blur/tint
   // layers respect the rounded corners — the two requirements can't share one style.

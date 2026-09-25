@@ -31,7 +31,7 @@ function toLetter(row: ThrowRow, myId: string, nameFor: (userId: string) => stri
     messageText: row.message_text,
     strokes: row.strokes,
     penColor: row.pen_color,
-    photoUrl: row.photo_url,
+    photoUrls: row.photo_urls ?? (row.photo_url ? [row.photo_url] : []),
     senderCity: row.sender_city,
     senderCountry: row.sender_country,
     senderLatitude: row.sender_latitude,
@@ -173,7 +173,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
         p_strokes: draft.strokes,
         p_pen_color: draft.penColor,
         p_replied_to_throw_id: draft.repliedToThrowId ?? null,
-        p_photo_url: draft.photoUrl,
+        p_photo_urls: draft.photoUrls.length > 0 ? draft.photoUrls : null,
       });
       if (error) return { error: error.message };
       // Surfaces the letter in Orbit's Chats too — a small system note in the sender/recipient's

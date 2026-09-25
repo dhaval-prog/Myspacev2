@@ -21,8 +21,8 @@ interface LetterCanvasContent {
 interface LetterCanvasProps {
   /** Fires on every content edit, live — lets a parent (FoldingLetter) read the current draft. */
   onContentChange?: (content: LetterCanvasContent) => void;
-  /** A photo is pasted in the top-right corner (see FoldingLetter's photoChip) — reserves extra
-   * top padding so the writing area doesn't start underneath it. */
+  /** One or more photos are pasted in a strip near the top (see FoldingLetter's photoStripWrap)
+   * — reserves extra top padding so the writing area doesn't start underneath it. */
   hasPhoto?: boolean;
 }
 
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     textAlign: 'center',
   },
-  // Reserves room under the photo sticker pasted top-right (see FoldingLetter's photoChip) so
-  // the writing area starts below it instead of running underneath.
-  typedInputWithPhoto: { paddingTop: 128 },
+  // Reserves room under the photo strip pasted near the top (see FoldingLetter's
+  // photoStripWrap) so the writing area starts below it instead of running underneath.
+  typedInputWithPhoto: { paddingTop: 100 },
 });
