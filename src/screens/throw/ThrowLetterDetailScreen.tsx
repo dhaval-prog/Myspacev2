@@ -79,7 +79,14 @@ export function ThrowLetterDetailScreen({ throwId, onBack, onThrowBack }: ThrowL
             )}
           </View>
 
-          {letter.photoUrl && <Image source={{ uri: letter.photoUrl }} style={styles.photo} resizeMode="cover" />}
+          {letter.photoUrls.length === 1 && <Image source={{ uri: letter.photoUrls[0] }} style={styles.photo} resizeMode="cover" />}
+          {letter.photoUrls.length > 1 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+              {letter.photoUrls.map((url, i) => (
+                <Image key={`${url}-${i}`} source={{ uri: url }} style={styles.photoThumb} resizeMode="cover" />
+              ))}
+            </ScrollView>
+          )}
         </Animated.View>
 
         <View style={{ flex: 1, minHeight: 24 }} />
@@ -115,6 +122,13 @@ const styles = StyleSheet.create({
     height: 220,
     borderRadius: throwRadius.paper,
     marginTop: 14,
+    ...throwColor.shadowSoft,
+  },
+  photoRow: { gap: 10, marginTop: 14 },
+  photoThumb: {
+    width: 160,
+    height: 160,
+    borderRadius: throwRadius.paper,
     ...throwColor.shadowSoft,
   },
   sentNote: { fontFamily: throwFont.ui400, fontSize: 12.5, color: throwColor.inkMute, textAlign: 'center', marginBottom: 8 },

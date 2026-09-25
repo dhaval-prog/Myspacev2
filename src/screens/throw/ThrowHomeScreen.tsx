@@ -143,7 +143,20 @@ export function ThrowHomeScreen({
 
     setFlight({ letter, phase: 'in_flight' });
     flightAnim.setValue(0);
-    const listenerId = flightAnim.addListener(({ value }) => setFlightProgress(value));
+    // Throttled rather than applied on every animation frame: each progress update re-centers
+    // the map on the plane's new position (a native `animateToRegion` bridge call on native, a
+    // Leaflet `setView` + DOM reflow on web), and neither can reliably keep up with 60 calls/sec
+    // — under that load the camera visibly falls behind the plane's real position, so by the
+    // time the map catches up the plane (and the route line ahead of it) can be well outside the
+    // zoomed-in viewport, i.e. invisible. This is plenty smooth for a slow cinematic pan while
+    // giving each platform's map enough time to actually settle before the next reposition.
+    let lastUpdateAt = 0;
+    const listenerId = flightAnim.addListener(({ value }) => {
+      const now = Date.now();
+      if (value < 1 && now - lastUpdateAt < 100) return;
+      lastUpdateAt = now;
+      setFlightProgress(value);
+    });
     await new Promise<void>((resolve) => {
       Animated.timing(flightAnim, {
         toValue: 1,
@@ -167,14 +180,14 @@ export function ThrowHomeScreen({
     setFlightProgress(0);
   };
 
-  const handleThrow = async (content: { messageText: string | null; strokes: StrokePath[] | null; penColor: string; photoUri: string | null }) => {
+  const handleThrow = async (content: { messageText: string | null; strokes: StrokePath[] | null; penColor: string; photoUris: string[] }) => {
     if (!selectedFriend) return { error: 'Pick someone to throw to first.' };
 
-    let photoUrl: string | null = null;
-    if (content.photoUri) {
-      const uploaded = await uploadPhoto(content.photoUri);
+    const photoUrls: string[] = [];
+    for (const uri of content.photoUris) {
+      const uploaded = await uploadPhoto(uri);
       if (uploaded.error) return { error: uploaded.error };
-      photoUrl = uploaded.url;
+      if (uploaded.url) photoUrls.push(uploaded.url);
     }
 
     const { error, letter } = await sendThrow({
@@ -182,7 +195,7 @@ export function ThrowHomeScreen({
       messageText: content.messageText,
       strokes: content.strokes,
       penColor: content.penColor,
-      photoUrl,
+      photoUrls,
       repliedToThrowId: lockedRecipient?.repliedToThrowId,
     });
     if (error || !letter) return { error: error ?? 'Could not send — try again.' };
@@ -349,7 +362,9 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: throwFont.hand700, fontSize: 26, color: throwColor.ink },
   headerBackBtn: { width: 48, alignItems: 'flex-start' },
   headerSpacer: { width: 48, alignItems: 'flex-end' },
-  mapArea: { flex: 1, marginHorizontal: 12, marginTop: 4, marginBottom: 12, borderRadius: 20, overflow: 'hidden' },
+  // No horizontal/bottom margin or rounding — the map runs edge-to-edge on those three sides,
+  // with only a sliver of top margin below the floating header pill.
+  mapArea: { flex: 1, marginTop: 4 },
   // The BottomNav dock floats over the map's own bottom edge instead of pushing it up — a
   // sibling of mapArea, absolutely pinned to the screen's bottom so it overlaps in front.
   bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },

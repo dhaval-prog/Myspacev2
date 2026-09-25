@@ -4,16 +4,24 @@ import * as ImagePicker from 'expo-image-picker';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 import { BottomSheet } from '../expenses/BottomSheet';
 
+// Highest number of photos the library picker lets someone select in one go — a sane ceiling
+// rather than a hard product requirement.
+const LIBRARY_SELECTION_LIMIT = 10;
+
 interface PhotoAttachSheetProps {
   visible: boolean;
   onClose: () => void;
-  onPicked: (uri: string) => void;
+  /** One or more picked photo URIs — the camera always hands back exactly one, the library may
+   * hand back several at once (multi-select). Callers append these to their own photo list. */
+  onPicked: (uris: string[]) => void;
 }
 
-/** "Take Photo" / "Photo Library" chooser for attaching a photo to a letter — same two-option
+/** "Take Photo" / "Photo Library" chooser for attaching photos to a letter — same two-option
  * shape as ChatThreadScreen's attach sheet, restyled for Throw's paper aesthetic. Each option
  * requests its own permission right before use and fails gracefully (an inline message, not a
- * crash) if denied. */
+ * crash) if denied. The library option allows picking several photos at once; cropping
+ * (`allowsEditing`) only applies to the single-photo camera capture, since multi-select is
+ * mutually exclusive with it on both platforms. */
 export function PhotoAttachSheet({ visible, onClose, onPicked }: PhotoAttachSheetProps) {
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +35,7 @@ export function PhotoAttachSheet({ visible, onClose, onPicked }: PhotoAttachShee
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: 'images', quality: 0.7, allowsEditing: true });
     if (result.canceled || !result.assets[0]) return;
     onClose();
-    onPicked(result.assets[0].uri);
+    onPicked([result.assets[0].uri]);
   };
 
   const pickFromLibrary = async () => {
@@ -37,10 +45,15 @@ export function PhotoAttachSheet({ visible, onClose, onPicked }: PhotoAttachShee
       setError('Photo library access is needed to pick a photo.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.7, allowsEditing: true });
-    if (result.canceled || !result.assets[0]) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      quality: 0.7,
+      allowsMultipleSelection: true,
+      selectionLimit: LIBRARY_SELECTION_LIMIT,
+    });
+    if (result.canceled || result.assets.length === 0) return;
     onClose();
-    onPicked(result.assets[0].uri);
+    onPicked(result.assets.map((a) => a.uri));
   };
 
   return (

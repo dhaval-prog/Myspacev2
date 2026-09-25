@@ -14,8 +14,12 @@ import { useFriends } from '../../context/FriendsContext';
 import { timeAgo } from '../../utils/relativeTime';
 
 const CHAT_PLUS_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z M12 8.5v6M9 11.5h6';
-const BACK_ICON = 'M15 5l-7 7 7 7';
 const GROUP_ICON = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
+// Same paper-plane glyph as HomeScreen's own Throw entry tile — reused here so this reads as the
+// same destination, not a Chats-specific reinterpretation.
+const THROW_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
+const ADD_FRIEND_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
+const THROW_INBOX_ICON = 'M3 11h5l1.8 2.8h4.4L16 11h5 M3 11V5h18v6 M3 11v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7';
 
 const STORY_DOT_OVERRIDE = { size: 14, ringWidth: 2.5, ringColor: colors.onlineDotRing };
 
@@ -23,13 +27,17 @@ interface ChatsListScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
+  /** Opens Throw — replaces the old "back to Friends" button in the pinned row below the list. */
+  onOpenThrow: () => void;
+  /** Opens Throw straight to its inbox — also in the pinned row. */
+  onOpenThrowInbox: () => void;
 }
 
 /** Chats (6p-6) — only accepted friends get a thread here. */
-export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit }: ChatsListScreenProps) {
+export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenThrow, onOpenThrowInbox }: ChatsListScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { friends, sentRequests, goHome, goAdd, openChat, lastMessageFor, isUnread, unreadCountFor, isOnline, isTyping, groups, goCreateGroup, openGroupChat, lastGroupMessageFor } =
+  const { friends, sentRequests, goAdd, openChat, lastMessageFor, isUnread, unreadCountFor, isOnline, isTyping, groups, goCreateGroup, openGroupChat, lastGroupMessageFor } =
     useFriends();
 
   return (
@@ -162,8 +170,14 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit }: ChatsLi
       </ScrollView>
 
       <View style={styles.pinned}>
-        <Pressable onPress={goHome} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Back to Friends">
-          <Icon path={BACK_ICON} color={colors.textPrimary} size={18} strokeWidth={2} />
+        <Pressable onPress={onOpenThrow} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Throw">
+          <Icon path={THROW_ICON} color={colors.textPrimary} size={20} strokeWidth={1.8} />
+        </Pressable>
+        <Pressable onPress={goAdd} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Add a friend">
+          <Icon path={ADD_FRIEND_ICON} color={colors.textPrimary} size={18} strokeWidth={1.8} />
+        </Pressable>
+        <Pressable onPress={onOpenThrowInbox} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Throw inbox">
+          <Icon path={THROW_INBOX_ICON} color={colors.textPrimary} size={18} strokeWidth={1.8} />
         </Pressable>
       </View>
 
@@ -193,6 +207,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.huge,
   },
   pinned: {
+    flexDirection: 'row',
+    gap: 12,
     paddingHorizontal: 26,
     paddingTop: spacing.ms,
     paddingBottom: spacing.ms,

@@ -18,10 +18,14 @@ interface FriendsScreenProps {
   onOpenSplit: () => void;
   /** Opens Radar (live locations) — surfaced from the Friends home, above the search bar. */
   onOpenLiveLocations: () => void;
+  /** Opens Throw — surfaced from the Chats list's pinned row. */
+  onOpenThrow: () => void;
+  /** Opens Throw straight to its inbox — also surfaced from the Chats list's pinned row. */
+  onOpenThrowInbox: () => void;
 }
 
 /** The Friends & chat feature: friend requests and direct messaging, and every screen it opens. */
-export function FriendsScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenLiveLocations }: FriendsScreenProps) {
+export function FriendsScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenLiveLocations, onOpenThrow, onOpenThrowInbox }: FriendsScreenProps) {
   const { page } = useFriends();
   switch (page) {
     case 'add':
@@ -33,7 +37,15 @@ export function FriendsScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenLiveL
     case 'requests':
       return <FriendRequestsScreen />;
     case 'chats':
-      return <ChatsListScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} />;
+      return (
+        <ChatsListScreen
+          onHome={onHome}
+          onOpenExpenses={onOpenExpenses}
+          onOpenSplit={onOpenSplit}
+          onOpenThrow={onOpenThrow}
+          onOpenThrowInbox={onOpenThrowInbox}
+        />
+      );
     case 'chat':
       return <ChatThreadScreen />;
     case 'locked-chat':
