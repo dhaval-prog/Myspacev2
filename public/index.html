@@ -50,5 +50,41 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
+
+    <!-- iOS Safari's keyboard-avoidance shifts the whole page up while a text input is focused
+         (there's nothing to opt out of — it's not `body`'s own scroll, which `overflow: hidden`
+         above already blocks, but the browser's outer visual-viewport offset). Once the keyboard
+         closes, that offset is supposed to unwind on its own; in practice — especially in
+         standalone/home-screen mode with `user-scalable=no` above, which removes the pinch-zoom
+         mechanism iOS otherwise reconciles this through — it can get stuck, leaving the header
+         scrolled off the top of the screen until a manual scroll or reload. Forcing the scroll
+         position back to the origin whenever the visual viewport's own size/offset settles (i.e.
+         the keyboard finished animating open or closed) is the standard fix: a no-op on every
+         normal resize, and a correction on exactly the runs that got stuck. -->
+    <script>
+      (function () {
+        var reset = function () {
+          window.scrollTo(0, 0);
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        };
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', function () {
+            setTimeout(reset, 50);
+          });
+          window.visualViewport.addEventListener('scroll', function () {
+            setTimeout(reset, 50);
+          });
+        }
+        document.addEventListener(
+          'focusout',
+          function () {
+            setTimeout(reset, 50);
+            setTimeout(reset, 350);
+          },
+          true,
+        );
+      })();
+    </script>
   </body>
 </html>
