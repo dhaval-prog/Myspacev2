@@ -27,6 +27,7 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
       fly: () => engineRef.current?.fly(),
       reset: () => engineRef.current?.reset(),
       holdReady: () => engineRef.current?.holdReady(),
+      setReadyBank: (v: number) => engineRef.current?.setReadyBank(v),
       seek: (t: number) => engineRef.current?.seek(t),
       setOptions: (o) => engineRef.current?.setOptions(o),
       setContent: (content, sourceSize) => {
