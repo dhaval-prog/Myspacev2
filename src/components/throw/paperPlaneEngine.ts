@@ -301,13 +301,26 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   flight.rotation.order = 'YZX';
   // Uniform scale, so it doesn't disturb the crease simulation (which works in the mesh's
   // local, unscaled space, a child of shape/flight). Prior rounds climbed to 4.39 chasing "still
-  // reads small" feedback; 1.62 is that scaled back down to 37% of that value, per user feedback
-  // that it had overshot.
-  flight.scale.setScalar(1.62);
+  // reads small" feedback, then 1.62 (37% of that); 1.30 is 1.62 scaled down another 20%, per
+  // user feedback that it was still a bit big.
+  flight.scale.setScalar(1.30);
   shape.add(mesh);
   flight.add(shape);
   scene.add(flight);
   mesh.position.copy(pivot).multiplyScalar(-1);
+  // A nose-tail-only stretch, taller per user feedback — the mesh's local X is the flat
+  // pattern's nose-tail axis (see `A` above), and the resting 'ready' pose stands the plane
+  // roughly upright nose-up, so stretching local X is what actually reads as "taller" on screen
+  // (confirmed empirically — local Y, the more obvious guess, barely changes the on-screen
+  // silhouette at all once the pose's rotation is applied). Deliberately on `mesh` (the
+  // innermost node, with no rotating children of its own) rather than on `shape` or `flight`,
+  // both of which get rotated live (drag-tilt bank, ready-state tilt, in-flight bearing) — a
+  // non-uniform scale sitting *above* a live rotation in the transform chain shears visibly as
+  // the rotation changes; sitting below/inside it (as here) just bakes a taller rigid shape that
+  // then rotates normally, with no shear. 1.6 here compounds with flight's 1.30 for an effective
+  // nose-tail scale of 2.08 — noticeably longer than the *old* 1.62 (uniform, pre-this-round)
+  // baseline, not just longer than the new smaller wingspan/thickness.
+  mesh.scale.set(1.6, 1, 1);
 
   // particles
   const PN = 90;
