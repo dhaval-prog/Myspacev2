@@ -479,7 +479,11 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   resize(options.width, options.height);
   function placeCamera(time: number) {
     const drift = Math.sin(time * 0.25) * 0.35;
-    const dir = new THREE.Vector3(0.12 + drift * 0.02, 0.78, 0.62).normalize();
+    // No constant x-bias here any more — it read as a persistent camera skew that made an
+    // otherwise-centered plane look off to one side; the oscillating `drift` term (and the
+    // separate camera.position.x sway below) already gives the shot its side-to-side motion,
+    // and drift's own average is zero, so removing the fixed offset doesn't flatten that out.
+    const dir = new THREE.Vector3(drift * 0.02, 0.78, 0.62).normalize();
     camera.position.copy(camTarget).addScaledVector(dir, camDist);
     camera.position.x += drift;
     camera.lookAt(camTarget);
@@ -494,7 +498,7 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   // -1..1, set by a caller's horizontal drag while holding the ready plane (see setReadyBank) —
   // banks it in place without moving it, unlike the fold timeline's own bank/yaw/pitch below.
   let readyBankExtra = 0;
-  const MAX_READY_BANK = 0.16;
+  const MAX_READY_BANK = 0.32;
   function setPose(o: Formation, extra: Partial<Formation & { x: number; y: number; z: number; bank: number; yaw: number; pitch: number }> = {}) {
     flight.position.set(pivot.x + o.x + (extra.x || 0), pivot.y + o.y + (extra.y || 0), pivot.z + o.z + (extra.z || 0));
     flight.rotation.set((o.bank || 0) + (extra.bank || 0), (o.yaw || 0) + (extra.yaw || 0), (o.pitch || 0) + (extra.pitch || 0));
@@ -586,7 +590,7 @@ export function createPaperPlane(options: PaperPlaneOptions) {
       setPose(formation, {
         y: bob,
         yaw: PI / 2 - formation.yaw,
-        bank: 0.22 - formation.pitch,
+        bank: -formation.pitch,
         pitch: idleBank - formation.bank + readyBankExtra * MAX_READY_BANK,
       });
     } else if (phase === 'flying' || phase === 'done') {
