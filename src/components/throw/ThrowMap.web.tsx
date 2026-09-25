@@ -19,28 +19,13 @@ const PLANE_MIN_SIZE = 16;
 // A whole-world-ish default before there's anything to focus on.
 const WORLD_CENTER: [number, number] = [10, 15]; // MapLibre wants [lng, lat]
 const WORLD_ZOOM = 2;
-// How far a single-point focus zooms in, and how steeply it's pitched — a close, tilted default
-// per user request, explicitly choosing the "this reads as precisely where your friend is" look
-// over the earlier city-level-only framing (FOCUS_ZOOM was 11, unpitched, so buildings — which
-// only render from zoom 14 up — never showed until someone zoomed in themselves). Both numbers
-// were picked empirically against a live render, not guessed: zoom 17 is close enough that
-// buildings clearly stand up without the view degrading into a single oversized rooftop (that
-// starts around 19), and pitch 75 needs `maxPitch` raised on map creation below, since
-// MapLibre's own default caps out at 60.
-const FOCUS_ZOOM = 17;
-const FOCUS_PITCH = 75;
-// At FOCUS_PITCH, the top ~30% of an unmodified viewport is empty sky — per user request, that
-// band gets cropped out entirely rather than left visible above the buildings. Achieved by
-// rendering the MapLibre canvas taller than the visible frame (extra height added above,
-// clipped by `overflow: hidden` on the wrapping view below) so the horizon lands off the top
-// edge — not a CSS trick applied to a screenshot, an always-on render adjustment, so pins/the
-// plane (positioned via `map.project`, which reports coordinates in the *canvas's* own frame)
-// need their Y coordinate corrected by the same crop amount to still land in the right spot in
-// the visible frame; see `cropPx` below. 35% was picked empirically (tested against 700/900/1200px
-// viewport heights, all clean with margin above the ~30% minimum that still showed a sliver) —
-// expressed as a fraction of the visible height rather than a fixed pixel count so it scales
-// correctly across device sizes, unlike a flat px crop tuned for one viewport.
-const SKY_CROP_FRACTION = 0.35;
+// How far a single-point focus zooms in, and how steeply it's pitched — picked per explicit user
+// request (tried and screenshotted against several pitch/zoom combinations first). At this
+// shallower pitch than an earlier round's 75°, the camera reads as a gentle tilt over the city
+// rather than a close, steep flyover — and, empirically, shows no sky at all at any normal
+// viewport size (unlike 75°, this needed no sky-cropping treatment).
+const FOCUS_ZOOM = 14.6;
+const FOCUS_PITCH = 50;
 
 const ROUTE_SOURCE_ID = 'throw-route';
 const ROUTE_LAYER_ID = 'throw-route-line';
@@ -182,18 +167,9 @@ const DAYTIME_RECHECK_MS = 5 * 60 * 1000;
  * get either, since flat raster tiles carry no building-height data and can't be recolored.
  */
 export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
-  const outerRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [, forceRender] = useState(0);
-
-  // Whether the current target is the single-contact, pitched-and-zoomed-in framing (as opposed
-  // to the flat, unpitched world default, or a multi-point `fitBounds`) — the sky-crop below only
-  // makes sense here, since it's the only state with anything above the horizon to hide.
-  const isPitchedFocus = !(fitPoints && fitPoints.length > 0) && !!focus;
-  // How many pixels of the visible frame's own height to crop away — measured from the *outer*
-  // (visible) box, not the (already-enlarged) map container, so it doesn't compound on itself.
-  const [cropPx, setCropPx] = useState(0);
 
   // Which location's local time governs the day/night palette — the destination being viewed
   // (`focus`), falling back to whichever fit point comes first when only `fitPoints` is set, and
@@ -271,20 +247,6 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Tracks the visible frame's own height (the outer view, never enlarged by the crop below) so
-  // `cropPx` stays correct across orientation changes/window resizes instead of being computed
-  // once and going stale — and so it never feeds back into itself the way measuring the inner,
-  // already-cropped container would.
-  useEffect(() => {
-    if (!outerRef.current || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver((entries) => {
-      const height = entries[0]?.contentRect.height ?? 0;
-      setCropPx(Math.round(height * SKY_CROP_FRACTION));
-    });
-    observer.observe(outerRef.current);
-    return () => observer.disconnect();
-  }, []);
-
   // Re-position whenever the selected contact (or the flight endpoints) actually changes.
   const fitKey = pointsKey(fitPoints);
   const focusKey = focus ? `${focus.latitude.toFixed(3)},${focus.longitude.toFixed(3)}` : '';
@@ -331,14 +293,11 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route?.points]);
 
-  // `map.project` reports coordinates in the *canvas's* own frame — when the canvas has been
-  // stretched upward to crop the sky, that frame no longer matches the visible one these pins and
-  // the plane are actually positioned in, so their Y needs the same crop subtracted back out.
   const project = (lat: number, lng: number) => {
     const map = mapRef.current;
     if (!map) return null;
     const point = map.project([lng, lat]);
-    return { x: point.x, y: point.y - (isPitchedFocus ? cropPx : 0) };
+    return { x: point.x, y: point.y };
   };
 
   const planePos = useMemo(() => (route ? latLngAtProgress(route.points, route.progress) : null), [route]);
@@ -347,15 +306,8 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const planeOpacity = route ? planeOpacityForProgress(route.progress) : 1;
 
   return (
-    <View ref={outerRef as unknown as React.Ref<View>} style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
-      <div
-        ref={containerRef}
-        style={
-          isPitchedFocus
-            ? { position: 'absolute', left: 0, right: 0, top: -cropPx, height: `calc(100% + ${cropPx}px)` }
-            : { position: 'absolute', inset: 0 }
-        }
-      />
+    <View style={StyleSheet.absoluteFill}>
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
 
       {pins.map((pin) => {
         const pos = project(pin.latitude, pin.longitude);
