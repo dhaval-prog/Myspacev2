@@ -10,20 +10,10 @@ import type { ThrowMapProps } from './throwMapTypes';
 import type { LatLng } from '../../utils/geo';
 
 // The flying plane's size range — large right after launch, small on approach (see
-// `planeSizeForProgress`).
+// `planeSizeForProgress`). City-level data doesn't warrant a literal 3D perspective projection,
+// just a readable "it's getting farther away" cue.
 const PLANE_MAX_SIZE = 44;
 const PLANE_MIN_SIZE = 16;
-
-// The map reads as a tilted 3D scene rather than a flat top-down sheet — the whole tile canvas
-// plus its pin/plane overlays sit inside one CSS 3D transform, tipped back on the X axis with a
-// real perspective vanishing point (not just a flat skew) so distance genuinely recedes into the
-// screen, then scaled back up to re-cover the viewport the rotation pulls it out of. Camera
-// position is entirely programmatic (`focus`/`fitPoints`/`route`, never user pan/zoom — see
-// `L.map()` below), so there's no direct-manipulation gesture whose direction the tilt would
-// throw off.
-const TILT_PERSPECTIVE_PX = 1000;
-const TILT_DEG = 55;
-const TILT_SCALE = 1.7;
 
 // A whole-world-ish default before there's anything to focus on.
 const WORLD_CENTER: [number, number] = [15, 10];
@@ -60,15 +50,13 @@ function applyTarget(map: L.Map, target: Target) {
 }
 
 /**
- * The real world map behind Throw — raw Leaflet + OpenStreetMap tiles, the same stack as Live
- * Locations' MapCanvas.web.tsx, but with a Throw-specific props surface: a handful of city-level
- * pins plus an optional animated flight route, no GPS accuracy ring or live-share semantics.
- * Pins and the flying plane stay our own React views, absolutely positioned over the Leaflet
- * canvas by projecting lat/lng to screen coordinates on every pan/zoom — same reasoning as
- * MapCanvas.web.tsx (avatar rendering handled ourselves rather than by Leaflet's own
- * HTML-string-based marker/icon system). Presented as a tilted 3D scene (see `TILT_DEG` etc.
- * below) rather than a flat top-down sheet; camera position is entirely programmatic, so direct
- * user pan/zoom gestures are switched off rather than left to feel mismatched against the tilt.
+ * The real, interactive world map behind Throw — raw Leaflet + OpenStreetMap tiles, the same
+ * stack as Live Locations' MapCanvas.web.tsx, but with a Throw-specific props surface: a handful
+ * of city-level pins plus an optional animated flight route, no GPS accuracy ring or live-share
+ * semantics. Pins and the flying plane stay our own React views, absolutely positioned over the
+ * Leaflet canvas by projecting lat/lng to screen coordinates on every pan/zoom — same reasoning
+ * as MapCanvas.web.tsx (avatar rendering handled ourselves rather than by Leaflet's own
+ * HTML-string-based marker/icon system).
  */
 export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -83,20 +71,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    // Every gesture handler that would let a user directly drag/scroll/pinch the camera is off —
-    // camera position here is always driven by `focus`/`fitPoints`/`route` (see `applyTarget`),
-    // never by the user, and a free-drag gesture would feel wrong against the tilted 3D scene
-    // anyway (the finger moves in flat screen space; the tiles recede in perspective).
-    const map = L.map(containerRef.current, {
-      zoomControl: false,
-      attributionControl: true,
-      dragging: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      touchZoom: false,
-      boxZoom: false,
-      keyboard: false,
-    }).setView(WORLD_CENTER, WORLD_ZOOM);
+    const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(WORLD_CENTER, WORLD_ZOOM);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -180,68 +155,39 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <div style={styles.tiltViewport}>
-        <div style={styles.tiltScene}>
-          <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
 
-          {pins.map((pin) => {
-            const pos = project(pin.latitude, pin.longitude);
-            if (!pos) return null;
-            return (
-              <LocationPin
-                key={pin.id}
-                x={pos.x}
-                y={pos.y}
-                label={pin.label}
-                isSelf={pin.isSelf}
-                selected={pin.selected}
-                dimmed={pin.dimmed}
-                onPress={pin.onPress}
-              />
-            );
-          })}
+      {pins.map((pin) => {
+        const pos = project(pin.latitude, pin.longitude);
+        if (!pos) return null;
+        return (
+          <LocationPin
+            key={pin.id}
+            x={pos.x}
+            y={pos.y}
+            label={pin.label}
+            isSelf={pin.isSelf}
+            selected={pin.selected}
+            dimmed={pin.dimmed}
+            onPress={pin.onPress}
+          />
+        );
+      })}
 
-          {planeScreen && planePos && (
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                left: planeScreen.x - planeSize / 2,
-                top: planeScreen.y - planeSize / 2,
-                opacity: planeOpacity,
-                transform: [{ rotate: `${planePos.bearingDeg}deg` }],
-              }}
-            >
-              <PaperPlane size={planeSize} color={throwColor.clayDeep} />
-            </View>
-          )}
-        </div>
-      </div>
+      {planeScreen && planePos && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: planeScreen.x - planeSize / 2,
+            top: planeScreen.y - planeSize / 2,
+            opacity: planeOpacity,
+            transform: [{ rotate: `${planePos.bearingDeg}deg` }],
+          }}
+        >
+          <PaperPlane size={planeSize} color={throwColor.clayDeep} />
+        </View>
+      )}
     </View>
   );
 }
-
-const styles: { tiltViewport: React.CSSProperties; tiltScene: React.CSSProperties } = {
-  // The perspective vanishing point lives on this outer, untransformed layer — a CSS perspective
-  // only produces real 3D depth for a transformed descendant, not for the element it's set on —
-  // and this is also what clips the scaled-up scene back down to the map's own bounds.
-  tiltViewport: {
-    position: 'absolute',
-    inset: 0,
-    overflow: 'hidden',
-    perspective: `${TILT_PERSPECTIVE_PX}px`,
-    perspectiveOrigin: '50% 20%',
-  },
-  // The tiles, pins and plane all live inside this one rotated layer, so they recede together as
-  // a single sheet rather than each getting independently (and inconsistently) tilted. Rotating
-  // back on X pulls the far (top) edge up out of view and the near (bottom) edge down past the
-  // viewport's bottom edge; scaling back up from the bottom edge re-covers the box without
-  // shifting where the near edge sits.
-  tiltScene: {
-    position: 'absolute',
-    inset: 0,
-    transform: `rotateX(${TILT_DEG}deg) scale(${TILT_SCALE})`,
-    transformOrigin: '50% 100%',
-    transformStyle: 'preserve-3d',
-  },
-};
