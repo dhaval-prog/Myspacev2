@@ -20,7 +20,6 @@ import { ContextCard } from '../components/ContextCard';
 import { BottomNav } from '../components/BottomNav';
 import { DotPairThrobber } from '../components/throbbers';
 
-const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
 const DICE_ICON = 'M4 4h16v16H4z M8 8h.01 M16 8h.01 M8 16h.01 M16 16h.01 M12 12h.01';
 const PLANE_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
 
@@ -92,17 +91,10 @@ export function HomeScreen({
     if (showAttention) {
       list.push({ id: 'attention', label: 'Needs attention', count: String(attentionEntries.length) });
     }
-    list.push({
-      id: 'friends',
-      label: 'Orbit - Find Your Circle',
-      count: receivedRequests.length ? String(receivedRequests.length) : '',
-      icon: receivedRequests.length ? undefined : CHAT_ICON,
-      glass: true,
-    });
     list.push({ id: 'games', label: 'Games', count: '', icon: DICE_ICON, glass: true });
     list.push({ id: 'throw', label: 'Throw', count: '', icon: PLANE_ICON, glass: true });
     return list;
-  }, [items.length, showAttention, attentionEntries.length, receivedRequests.length]);
+  }, [items.length, showAttention, attentionEntries.length]);
 
   // Ambient preview: while the user is just looking, the context card on
   // its own quietly cycles through every section every 3s — a tour, not
@@ -111,9 +103,9 @@ export function HomeScreen({
   // appears to change on its own. A real tap always navigates away
   // immediately. Off entirely when the OS asks for reduced motion.
   useEffect(() => {
-    // "Orbit" (friends & chat), "Games", and "Throw" each open a whole separate
-    // section, not a detail rail — none join the ambient preview rotation.
-    const ids = rows.map((r) => r.id).filter((id) => id !== 'friends' && id !== 'games' && id !== 'throw');
+    // "Games" and "Throw" each open a whole separate section, not a detail rail —
+    // neither joins the ambient preview rotation.
+    const ids = rows.map((r) => r.id).filter((id) => id !== 'games' && id !== 'throw');
     if (reduceMotion || ids.length <= 1) return;
     const timer = setInterval(() => {
       setPreviewViewId((current) => {
@@ -184,10 +176,6 @@ export function HomeScreen({
             rows={rows}
             activeId={activeViewId}
             onSelect={(id) => {
-              if (id === 'friends') {
-                onOpenFriends();
-                return;
-              }
               if (id === 'games') {
                 onOpenGames();
                 return;

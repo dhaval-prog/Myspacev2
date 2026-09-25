@@ -33,6 +33,9 @@ const FOLD_CAPTURE_RATIO = 1.7;
 // width — the outer edges on either side are reserved for unfolding instead (see the 'ready'-phase
 // branches in the PanResponder below).
 const THROW_CENTER_ZONE = 0.5;
+// How far a center-zone 'ready'-phase drag has to move horizontally, while staying more
+// horizontal than vertical, before it's read as "change recipient" rather than a throw attempt.
+const SWIPE_CONTACT_DX = 60;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
@@ -67,6 +70,10 @@ interface FoldingLetterProps {
    * Photo and Voice, rather than in a separate header. */
   onOpenInbox: () => void;
   unreadCount: number;
+  /** Fires when the folded, ready-to-throw plane is held and dragged sideways past a threshold —
+   * cycles the selected recipient instead of throwing. Only wired once there's more than one
+   * recipient to cycle through. */
+  onSwipeContact?: (direction: 'next' | 'prev') => void;
 }
 
 /**
@@ -98,6 +105,7 @@ export function FoldingLetter({
   onOpenAddFriend,
   onOpenInbox,
   unreadCount,
+  onSwipeContact,
 }: FoldingLetterProps) {
   const [phase, setPhase] = useState<Phase>('writing');
   const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
@@ -112,6 +120,10 @@ export function FoldingLetter({
   const progress = useRef(new Animated.Value(0)).current;
   const progressRef = useRef(0);
   const liftY = useRef(new Animated.Value(0)).current;
+  // Horizontal companion to liftY — only moves during a center-zone 'ready'-phase drag, so the
+  // plane visually follows the finger sideways while the user decides whether they're throwing
+  // or swiping to a different recipient.
+  const liftX = useRef(new Animated.Value(0)).current;
   const liftOpacity = useRef(new Animated.Value(1)).current;
   const stageRef = useRef<PaperPlaneStageHandle>(null);
   const flyDoneRef = useRef<(() => void) | null>(null);
@@ -167,6 +179,7 @@ export function FoldingLetter({
   const springLiftBack = () => {
     Animated.parallel([
       Animated.spring(liftY, { toValue: 0, useNativeDriver: false, friction: 7, tension: 50 }),
+      Animated.spring(liftX, { toValue: 0, useNativeDriver: false, friction: 7, tension: 50 }),
       Animated.spring(liftOpacity, { toValue: 1, useNativeDriver: false, friction: 7, tension: 50 }),
     ]).start();
   };
@@ -200,8 +213,8 @@ export function FoldingLetter({
   // first couple of steps). This ref mirrors whatever state and closures the responder's
   // callbacks need, updated every render, so they always read fresh values without the responder
   // object itself ever changing identity while a touch is active.
-  const latest = useRef({ disabled, phase, hasContent, content, photoUris, paperSize, launch, settleFold, springLiftBack });
-  latest.current = { disabled, phase, hasContent, content, photoUris, paperSize, launch, settleFold, springLiftBack };
+  const latest = useRef({ disabled, phase, hasContent, content, photoUris, paperSize, launch, settleFold, springLiftBack, onSwipeContact });
+  latest.current = { disabled, phase, hasContent, content, photoUris, paperSize, launch, settleFold, springLiftBack, onSwipeContact };
 
   const applyFoldProgress = useCallback(
     (next: number) => {
@@ -344,6 +357,7 @@ export function FoldingLetter({
               applyFoldProgress(next);
             } else {
               liftY.setValue(Math.min(0, g.dy));
+              liftX.setValue(g.dx);
             }
             return;
           }
@@ -363,6 +377,11 @@ export function FoldingLetter({
             readyGestureActiveRef.current = false;
             if (readyZoneRef.current === 'side') {
               latest.current.settleFold(progressRef.current >= 0.5 ? 1 : 0);
+              return;
+            }
+            if (latest.current.onSwipeContact && Math.abs(g.dx) >= SWIPE_CONTACT_DX && Math.abs(g.dx) > Math.abs(g.dy)) {
+              latest.current.onSwipeContact(g.dx > 0 ? 'next' : 'prev');
+              latest.current.springLiftBack();
               return;
             }
             if (g.dy <= -LAUNCH_THRESHOLD || g.vy <= -LAUNCH_VELOCITY) {
@@ -406,7 +425,13 @@ export function FoldingLetter({
 
         {paperSize.width > 0 && (
           <Animated.View
-            style={[StyleSheet.absoluteFill, { opacity: stageOpacity, transform: [{ translateY: liftY }] }]}
+            style={[
+              StyleSheet.absoluteFill,
+              // A constant, gentle nose-down tilt (on top of whatever the drag adds) — the plane
+              // reads as pointing straight ahead and angled slightly down toward the map, rather
+              // than lying flat, matching the reference's resting pose.
+              { opacity: stageOpacity, transform: [{ translateX: liftX }, { translateY: liftY }, { perspective: 800 }, { rotateX: '18deg' }] },
+            ]}
             pointerEvents="none"
           >
             {stageFailed ? (
