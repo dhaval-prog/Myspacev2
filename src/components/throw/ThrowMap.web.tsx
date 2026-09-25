@@ -19,15 +19,16 @@ const PLANE_MIN_SIZE = 16;
 // A whole-world-ish default before there's anything to focus on.
 const WORLD_CENTER: [number, number] = [10, 15]; // MapLibre wants [lng, lat]
 const WORLD_ZOOM = 2;
-// How far a single-point focus zooms in — city scale (Throw's location data is a city-level
-// lat/lng, not live GPS, so this stays short of Live Locations' street-level 15), same reasoning
-// and same value as before the MapLibre switch. 3D buildings (see `addBuildingsLayer` below)
-// only start rendering around zoom 14, so they don't show at this default framing — by design,
-// not an oversight: forcing the default view in close enough to always show buildings would read
-// as "this is precisely where your friend is," which city-level data can't actually promise.
-// They're there once someone zooms in themselves, the same way a real map reveals more detail on
-// zoom rather than a screen deciding for you how precise the data looks.
-const FOCUS_ZOOM = 11;
+// How far a single-point focus zooms in, and how steeply it's pitched — a close, tilted default
+// per user request, explicitly choosing the "this reads as precisely where your friend is" look
+// over the earlier city-level-only framing (FOCUS_ZOOM was 11, unpitched, so buildings — which
+// only render from zoom 14 up — never showed until someone zoomed in themselves). Both numbers
+// were picked empirically against a live render, not guessed: zoom 17 is close enough that
+// buildings clearly stand up without the view degrading into a single oversized rooftop (that
+// starts around 19), and pitch 75 needs `maxPitch` raised on map creation below, since
+// MapLibre's own default caps out at 60.
+const FOCUS_ZOOM = 17;
+const FOCUS_PITCH = 75;
 
 const ROUTE_SOURCE_ID = 'throw-route';
 const ROUTE_LAYER_ID = 'throw-route-line';
@@ -60,7 +61,7 @@ function applyTarget(map: maplibregl.Map, target: Target) {
       { padding: 60, duration: 0 },
     );
   } else {
-    map.jumpTo({ center: [target.point.longitude, target.point.latitude], zoom: FOCUS_ZOOM });
+    map.jumpTo({ center: [target.point.longitude, target.point.latitude], zoom: FOCUS_ZOOM, pitch: FOCUS_PITCH });
   }
 }
 
@@ -163,10 +164,10 @@ const DAYTIME_RECHECK_MS = 5 * 60 * 1000;
  * map canvas by projecting lat/lng to screen coordinates on every pan/zoom — same reasoning as
  * the previous Leaflet version (avatar/label rendering handled ourselves rather than by the map
  * library's own marker system). Two additions over the Leaflet version: real 3D building
- * extrusions once zoomed in, and a day/night palette switch driven by the *destination's* local
- * solar time (`focus`'s longitude) rather than the viewer's own clock — replacing the map
- * library was the only way to get either, since flat raster tiles carry no building-height data
- * and can't be recolored.
+ * extrusions, shown by default at the pitched-and-zoomed-in `FOCUS_ZOOM`/`FOCUS_PITCH` framing
+ * below, and a day/night palette switch driven by the *destination's* local solar time (`focus`'s
+ * longitude) rather than the viewer's own clock — replacing the map library was the only way to
+ * get either, since flat raster tiles carry no building-height data and can't be recolored.
  */
 export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -202,6 +203,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       zoom: WORLD_ZOOM,
       attributionControl: { compact: true },
       pitch: 0,
+      maxPitch: 85,
     });
     const rerender = () => forceRender((n) => n + 1);
     map.on('move', rerender);

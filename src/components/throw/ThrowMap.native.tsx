@@ -18,13 +18,14 @@ const WORLD_REGION: Region = { latitude: 15, longitude: 10, latitudeDelta: 140, 
 // just a readable "it's getting farther away" cue.
 const PLANE_MAX_SIZE = 44;
 const PLANE_MIN_SIZE = 16;
-// How far a single-point focus zooms in — city scale (Throw's location data is a city-level
-// lat/lng, not live GPS, so this stays short of Live Locations' street-level 0.02). A delta of 8
-// was tried first and was wrong: that's an 8°-wide region — roughly Pune to Bhopal to Jaipur all
-// visible at once — so the map's own place labels are dominated by whichever neighboring cities
-// happen to be biggest, and the actual focused city's name never appears at all. The pin's
-// coordinate was correct, but nothing on the map read as "this is the right place."
-const FOCUS_DELTA = { latitudeDelta: 0.4, longitudeDelta: 0.4 };
+// How far a single-point focus zooms in, and how steeply it's pitched — a close, tilted default
+// per user request, matching the web MapLibre version's FOCUS_ZOOM 17 / FOCUS_PITCH 75 (the two
+// aren't directly comparable units — this is a region-delta approximation of that same framing,
+// not a converted value). Earlier rounds kept this far wider (a 0.4 delta, city-scale) explicitly
+// to avoid implying more precision than Throw's city-level location data actually has; this
+// supersedes that per explicit user choice, now that the web version made the same tradeoff.
+const FOCUS_DELTA = { latitudeDelta: 0.006, longitudeDelta: 0.006 };
+const FOCUS_PITCH = 75;
 
 function pointsKey(points: { latitude: number; longitude: number }[] | null | undefined): string {
   return points ? points.map((p) => `${p.latitude.toFixed(3)},${p.longitude.toFixed(3)}`).join('|') : '';
@@ -85,6 +86,9 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       edgePadding: { top: 80, right: 60, bottom: 80, left: 60 },
       animated: false,
     });
+    // fitToCoordinates re-derives the camera from the coordinate bounds, which resets pitch back
+    // to 0 — reassert it every time a positioning call could have clobbered it.
+    mapRef.current?.setCamera({ pitch: FOCUS_PITCH });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey, mapReady]);
 
@@ -93,6 +97,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     if (fitPoints && fitPoints.length > 0) return;
     if (!focus) return;
     mapRef.current?.animateToRegion({ latitude: focus.latitude, longitude: focus.longitude, ...FOCUS_DELTA }, 0);
+    mapRef.current?.setCamera({ pitch: FOCUS_PITCH });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey, fitKey, mapReady]);
 
@@ -105,12 +110,20 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       ref={mapRef}
       style={StyleSheet.absoluteFill}
       initialRegion={focus ? { ...focus, ...FOCUS_DELTA } : WORLD_REGION}
-      onMapReady={() => setMapReady(true)}
-      // Lets a user who pinches/tilts in see Apple Maps' (iOS) own automatic 3D building
-      // extrusion at close zoom — no separate opt-in beyond allowing the gesture; there's no
-      // MapLibre-style custom layer to add here, this is entirely the platform map's own
-      // rendering. Google Maps on Android doesn't extrude real building geometry the way Apple
-      // Maps or the web MapLibre version do, so this mostly benefits iOS.
+      initialCamera={
+        focus
+          ? { center: focus, pitch: FOCUS_PITCH, heading: 0, zoom: 17 }
+          : { center: { latitude: WORLD_REGION.latitude, longitude: WORLD_REGION.longitude }, pitch: 0, heading: 0, zoom: 2 }
+      }
+      onMapReady={() => {
+        setMapReady(true);
+        if (focus) mapRef.current?.setCamera({ pitch: FOCUS_PITCH });
+      }}
+      // Lets Apple Maps (iOS) render its own automatic 3D building extrusion at this close,
+      // pitched-by-default framing — no separate opt-in beyond allowing the gesture/camera;
+      // there's no MapLibre-style custom layer to add here, this is entirely the platform map's
+      // own rendering. Google Maps on Android doesn't extrude real building geometry the way
+      // Apple Maps or the web MapLibre version do, so this mostly benefits iOS.
       pitchEnabled
       // Day/night, one mechanism per platform: `userInterfaceStyle` switches Apple Maps' own
       // built-in dark rendering (iOS-only prop, silently ignored on Android); `customMapStyle`
