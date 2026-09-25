@@ -18,6 +18,10 @@ const MIC_ICON = 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z M6 11a6 6
 const STOP_ICON = 'M6 6h12v12H6z';
 const INBOX_ICON = 'M3 11h5l1.8 2.8h4.4L16 11h5 M3 11V5h18v6 M3 11v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7';
 const X_ICON = 'M6 6l12 12M18 6L6 18';
+// Same glyphs as HomeScreen/FriendsHomeScreen's own Chats/QR icons — reused here so this row
+// reads as the same actions, not a Throw-specific reinterpretation.
+const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
+const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
 
 const FOLD_DRAG_DISTANCE = 150;
 const LAUNCH_THRESHOLD = 64;
@@ -50,6 +54,11 @@ interface FoldingLetterProps {
   /** Called once the user flicks the folded plane upward. Resolve with an error to spring the plane back to 'ready' with a message; resolve with null on success (the parent then navigates away). */
   onThrow: (content: FoldingLetterContent) => Promise<{ error: string | null }>;
   throwLabel?: string;
+  /** Opens Orbit's Chats list — its button lives between Photo and Voice in the bottom-controls
+   * row, rather than in a separate header. */
+  onOpenChats: () => void;
+  /** Opens the QR "Add a friend" sheet — its button lives between Voice and Inbox. */
+  onOpenAddFriend: () => void;
   /** Opens the inbox — its button lives in the bottom-controls row below the paper alongside
    * Photo and Voice, rather than in a separate header. */
   onOpenInbox: () => void;
@@ -80,6 +89,8 @@ export function FoldingLetter({
   disabled,
   onThrow,
   throwLabel = 'Swipe up to throw',
+  onOpenChats,
+  onOpenAddFriend,
   onOpenInbox,
   unreadCount,
 }: FoldingLetterProps) {
@@ -443,6 +454,16 @@ export function FoldingLetter({
           )}
         </Pressable>
 
+        <Pressable onPress={onOpenChats} accessibilityRole="button" accessibilityLabel="Chats">
+          {({ pressed }) => (
+            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                <Icon path={CHAT_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
+              </GlassSurface>
+            </View>
+          )}
+        </Pressable>
+
         <Pressable
           onPress={() => (voice.recording ? voice.stop() : voice.start())}
           disabled={disabled || phase === 'throwing'}
@@ -464,6 +485,16 @@ export function FoldingLetter({
               </View>
             )
           }
+        </Pressable>
+
+        <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
+          {({ pressed }) => (
+            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                <Icon path={QR_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
+              </GlassSurface>
+            </View>
+          )}
         </Pressable>
 
         <Pressable onPress={onOpenInbox} accessibilityRole="button" accessibilityLabel="Inbox">

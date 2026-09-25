@@ -6,7 +6,9 @@ import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
 import { FoldingLetter } from '../../components/throw/FoldingLetter';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { GlassSurface } from '../../components/friends/GlassSurface';
+import { BottomNav } from '../../components/BottomNav';
 import { Icon } from '../../components/Icon';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import type { StrokePath, ThrowLetter } from '../../types/throw';
@@ -19,6 +21,10 @@ const GEAR_ICON =
 
 interface ThrowHomeScreenProps {
   onHome: () => void;
+  onOpenExpenses: () => void;
+  onOpenSplit: () => void;
+  onOpenChats: () => void;
+  onOpenAddFriend: () => void;
   onOpenInbox: () => void;
   onOpenSettings: () => void;
   onThrown: (letter: ThrowLetter) => void;
@@ -26,8 +32,19 @@ interface ThrowHomeScreenProps {
   lockedRecipient?: { friendUserId: string; repliedToThrowId: string } | null;
 }
 
-export function ThrowHomeScreen({ onHome, onOpenInbox, onOpenSettings, onThrown, lockedRecipient }: ThrowHomeScreenProps) {
+export function ThrowHomeScreen({
+  onHome,
+  onOpenExpenses,
+  onOpenSplit,
+  onOpenChats,
+  onOpenAddFriend,
+  onOpenInbox,
+  onOpenSettings,
+  onThrown,
+  lockedRecipient,
+}: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { myLocation, friends, unreadCount, sendThrow, uploadPhoto } = useThrow();
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const initializedRef = useRef(false);
@@ -137,12 +154,25 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onOpenSettings, onThrown,
               recipientCity={selectedFriend.location!.city}
               onThrow={handleThrow}
               throwLabel={lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
+              onOpenChats={onOpenChats}
+              onOpenAddFriend={onOpenAddFriend}
               onOpenInbox={onOpenInbox}
               unreadCount={unreadCount}
             />
           </View>
         )}
       </View>
+
+      <BottomNav
+        activeId="throw"
+        onSelect={(id) => {
+          if (id === 'home') onHome();
+          if (id === 'expenses') onOpenExpenses();
+          if (id === 'split') onOpenSplit();
+        }}
+        bottomInset={insets.bottom}
+        reduceMotion={reduceMotion}
+      />
     </View>
   );
 }

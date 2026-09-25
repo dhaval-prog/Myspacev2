@@ -11,6 +11,10 @@ import type { ThrowLetter } from '../../types/throw';
 
 interface ThrowScreenProps {
   onHome: () => void;
+  onOpenExpenses: () => void;
+  onOpenSplit: () => void;
+  onOpenChats: () => void;
+  onOpenAddFriend: () => void;
   initialThrowId?: string;
 }
 
@@ -21,7 +25,21 @@ type SubScreen =
   | { name: 'letter'; throwId: string }
   | { name: 'settings' };
 
-function ThrowNavigator({ onHome, initialThrowId }: { onHome: () => void; initialThrowId?: string }) {
+function ThrowNavigator({
+  onHome,
+  onOpenExpenses,
+  onOpenSplit,
+  onOpenChats,
+  onOpenAddFriend,
+  initialThrowId,
+}: {
+  onHome: () => void;
+  onOpenExpenses: () => void;
+  onOpenSplit: () => void;
+  onOpenChats: () => void;
+  onOpenAddFriend: () => void;
+  initialThrowId?: string;
+}) {
   const { loading, myLocation } = useThrow();
   const [screen, setScreen] = useState<SubScreen>(() => (initialThrowId ? { name: 'letter', throwId: initialThrowId } : { name: 'home' }));
 
@@ -37,6 +55,10 @@ function ThrowNavigator({ onHome, initialThrowId }: { onHome: () => void; initia
     return (
       <ThrowHomeScreen
         onHome={onHome}
+        onOpenExpenses={onOpenExpenses}
+        onOpenSplit={onOpenSplit}
+        onOpenChats={onOpenChats}
+        onOpenAddFriend={onOpenAddFriend}
         onOpenInbox={() => setScreen({ name: 'inbox' })}
         onOpenSettings={() => setScreen({ name: 'settings' })}
         onThrown={(letter) => setScreen({ name: 'flight', letter })}
@@ -81,10 +103,17 @@ function ThrowNavigator({ onHome, initialThrowId }: { onHome: () => void; initia
   return null;
 }
 
-export function ThrowScreen({ onHome, initialThrowId }: ThrowScreenProps) {
+export function ThrowScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenChats, onOpenAddFriend, initialThrowId }: ThrowScreenProps) {
   return (
     <ThrowProvider>
-      <ThrowNavigator onHome={onHome} initialThrowId={initialThrowId} />
+      <ThrowNavigator
+        onHome={onHome}
+        onOpenExpenses={onOpenExpenses}
+        onOpenSplit={onOpenSplit}
+        onOpenChats={onOpenChats}
+        onOpenAddFriend={onOpenAddFriend}
+        initialThrowId={initialThrowId}
+      />
     </ThrowProvider>
   );
 }
