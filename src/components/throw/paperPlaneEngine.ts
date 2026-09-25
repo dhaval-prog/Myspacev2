@@ -301,9 +301,9 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   flight.rotation.order = 'YZX';
   // Uniform scale, so it doesn't disturb the crease simulation (which works in the mesh's
   // local, unscaled space, a child of shape/flight). Prior rounds climbed to 4.39 chasing "still
-  // reads small" feedback, then 1.62 (37% of that); 1.30 is 1.62 scaled down another 20%, per
-  // user feedback that it was still a bit big.
-  flight.scale.setScalar(1.30);
+  // reads small" feedback, then 1.62 (37% of that), then 1.30 (another 20% down); 1.17 is 1.30
+  // scaled down another 10%, per user feedback that it was still a bit big.
+  flight.scale.setScalar(1.17);
   shape.add(mesh);
   flight.add(shape);
   scene.add(flight);
@@ -317,10 +317,11 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   // both of which get rotated live (drag-tilt bank, ready-state tilt, in-flight bearing) — a
   // non-uniform scale sitting *above* a live rotation in the transform chain shears visibly as
   // the rotation changes; sitting below/inside it (as here) just bakes a taller rigid shape that
-  // then rotates normally, with no shear. 1.6 here compounds with flight's 1.30 for an effective
-  // nose-tail scale of 2.08 — noticeably longer than the *old* 1.62 (uniform, pre-this-round)
-  // baseline, not just longer than the new smaller wingspan/thickness.
-  mesh.scale.set(1.6, 1, 1);
+  // then rotates normally, with no shear. 1.4 (down from 1.6, per user feedback that it had
+  // gotten a little too tall) compounds with flight's 1.17 for an effective nose-tail scale of
+  // ~1.64 — close to the plain-uniform-scale era's 1.62, but still stretched relative to the new
+  // smaller wingspan/thickness rather than uniform.
+  mesh.scale.set(1.4, 1, 1);
 
   // particles
   const PN = 90;
