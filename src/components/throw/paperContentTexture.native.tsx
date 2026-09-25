@@ -8,9 +8,9 @@ import type { PaperPlaneLetterContent } from './paperPlaneTypes';
 const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
 const RASTER_SIZE = 1024; // matches paper-texture.jpg's own pixel dimensions (square)
 
-// Mirrors FoldingLetter's photoChip geometry (top: 44, right: 14, 100x100, -4deg) — kept in sync
+// Mirrors FoldingLetter's photoChip geometry (top: 16, right: 14, 100x100, -4deg) — kept in sync
 // by hand so the baked plane shows the photo in roughly the same spot it sat on the flat paper.
-const PHOTO_TOP = 44;
+const PHOTO_TOP = 16;
 const PHOTO_RIGHT = 14;
 const PHOTO_SIZE = 100;
 const PHOTO_PAD = 6;

@@ -4,10 +4,8 @@ import { ThrowProvider, useThrow } from '../../context/ThrowContext';
 import { throwColor } from '../../theme/throwTokens';
 import { ThrowLocationSetupScreen } from './ThrowLocationSetupScreen';
 import { ThrowHomeScreen } from './ThrowHomeScreen';
-import { ThrowFlightScreen } from './ThrowFlightScreen';
 import { ThrowInboxScreen } from './ThrowInboxScreen';
 import { ThrowLetterDetailScreen } from './ThrowLetterDetailScreen';
-import type { ThrowLetter } from '../../types/throw';
 
 interface ThrowScreenProps {
   onHome: () => void;
@@ -20,7 +18,6 @@ interface ThrowScreenProps {
 
 type SubScreen =
   | { name: 'home'; lockedRecipient?: { friendUserId: string; repliedToThrowId: string } }
-  | { name: 'flight'; letter: ThrowLetter }
   | { name: 'inbox' }
   | { name: 'letter'; throwId: string }
   | { name: 'settings' };
@@ -61,7 +58,6 @@ function ThrowNavigator({
         onOpenAddFriend={onOpenAddFriend}
         onOpenInbox={() => setScreen({ name: 'inbox' })}
         onOpenSettings={() => setScreen({ name: 'settings' })}
-        onThrown={(letter) => setScreen({ name: 'flight', letter })}
         lockedRecipient={screen.lockedRecipient}
       />
     );
@@ -69,21 +65,6 @@ function ThrowNavigator({
 
   if (screen.name === 'settings') {
     return <ThrowLocationSetupScreen mode="edit" onDone={() => setScreen({ name: 'home' })} onBack={() => setScreen({ name: 'home' })} />;
-  }
-
-  if (screen.name === 'flight') {
-    const l = screen.letter;
-    return (
-      <ThrowFlightScreen
-        recipientName={l.counterpartName}
-        recipientCity={l.recipientCity}
-        recipientCountry={l.recipientCountry}
-        distanceMiles={l.distanceMiles}
-        from={{ latitude: l.senderLatitude, longitude: l.senderLongitude }}
-        to={{ latitude: l.recipientLatitude, longitude: l.recipientLongitude }}
-        onDone={() => setScreen({ name: 'home' })}
-      />
-    );
   }
 
   if (screen.name === 'inbox') {

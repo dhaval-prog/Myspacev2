@@ -1,16 +1,15 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
-import { Image, StyleSheet, Pressable, Text, TextInput, View } from 'react-native';
+import { Image, StyleSheet, TextInput, View } from 'react-native';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 import type { StrokePath } from '../../types/throw';
 
 const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
 
-// A blue ballpoint-ink shade leads the swatches (and is the default), matching the reference
-// design's "handwritten in blue pen" look — black, clay and green stay selectable alternatives.
+// A blue ballpoint-ink shade, matching the reference design's "handwritten in blue pen" look —
+// no longer user-selectable, so this is the only pen color a letter is ever written in.
 const INK_BLUE = '#3A4C6E';
-const PEN_COLORS = [INK_BLUE, throwColor.ink, throwColor.clayDeep, '#3E5C4E'];
-// The placeholder's own ink — a distinct blue-violet, not one of the selectable pen colors, so
-// it always reads as a prompt rather than something the user could mistake for typed text.
+// The placeholder's own ink — a distinct blue-violet, so it always reads as a prompt rather than
+// something the user could mistake for typed text.
 const PLACEHOLDER_COLOR = '#4A55B0';
 
 interface LetterCanvasContent {
@@ -36,14 +35,14 @@ export interface LetterCanvasHandle {
 
 /**
  * The letter's actual writing surface — real paper (the same grain texture the folded plane
- * uses) with a typed message and a minimal floating ink-color picker, so the writing area fills
- * the whole paper. That matters beyond looks: FoldingLetter measures this same box to scale the
- * text onto the plane's baked texture, so the writing surface and the measured surface need to be
- * the same rectangle.
+ * uses) with a typed message, always in blue ballpoint ink, so the writing area fills the whole
+ * paper. That matters beyond looks: FoldingLetter measures this same box to scale the text onto
+ * the plane's baked texture, so the writing surface and the measured surface need to be the same
+ * rectangle.
  */
 export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas({ onContentChange, hasPhoto }, ref) {
   const [typedText, setTypedText] = useState('');
-  const [penColor, setPenColor] = useState(PEN_COLORS[0]);
+  const penColor = INK_BLUE;
 
   useImperativeHandle(
     ref,
@@ -81,14 +80,6 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
         onChangeText={setTypedText}
         textAlignVertical="center"
       />
-
-      <View style={styles.toolbar} pointerEvents="box-none">
-        <View style={styles.swatchPill}>
-          {PEN_COLORS.map((c) => (
-            <Pressable key={c} onPress={() => setPenColor(c)} style={[styles.swatch, { backgroundColor: c }, penColor === c && styles.swatchActive]} />
-          ))}
-        </View>
-      </View>
     </View>
   );
 });
@@ -111,9 +102,5 @@ const styles = StyleSheet.create({
   },
   // Reserves room under the photo sticker pasted top-right (see FoldingLetter's photoChip) so
   // the writing area starts below it instead of running underneath.
-  typedInputWithPhoto: { paddingTop: 156 },
-  toolbar: { position: 'absolute', top: 8, right: 8 },
-  swatchPill: { flexDirection: 'row', gap: 6, backgroundColor: 'rgba(251,246,236,.88)', borderRadius: throwRadius.pill, paddingHorizontal: 8, paddingVertical: 6 },
-  swatch: { width: 15, height: 15, borderRadius: 8, borderWidth: 2, borderColor: 'transparent' },
-  swatchActive: { borderColor: throwColor.ink },
+  typedInputWithPhoto: { paddingTop: 128 },
 });

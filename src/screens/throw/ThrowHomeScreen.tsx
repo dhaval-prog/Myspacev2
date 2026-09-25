@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
@@ -9,15 +9,46 @@ import { GlassSurface } from '../../components/friends/GlassSurface';
 import { BottomNav } from '../../components/BottomNav';
 import { Icon } from '../../components/Icon';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { formatMiles } from '../../utils/geo';
+import { flightPath, latLngAtProgress } from '../../utils/mapProjection';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import type { StrokePath, ThrowLetter } from '../../types/throw';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
+import type { LatLng } from '../../utils/geo';
 
 // Feather Icons' "settings" gear glyph (24x24 viewBox) — a known-good path rather than a
 // freehand approximation.
 const GEAR_ICON =
   'M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z';
+const BACK_ICON = 'M15 18l-6-6 6-6';
+
+// How long the map spends on its wide "here's the whole trip" overview before the camera locks
+// onto the plane itself — long enough to register, short enough not to feel like a pause.
+const ZOOM_OVERVIEW_MS = 550;
+// How long the landing pulse gets to play before the arrival card appears.
+const ARRIVING_HOLD_MS = 650;
+// How long the arrival card stays up before the map returns to normal compose mode.
+const DELIVERED_HOLD_MS = 2200;
+// Roughly how tall the floating BottomNav dock is (FAB + pill + its own top padding), so the
+// compose card and arrival card can keep clear of it now that it overlaps the map instead of
+// pushing content up above it.
+const BOTTOM_NAV_CLEARANCE = 92;
+
+type FlightPhase = 'zooming' | 'in_flight' | 'arriving' | 'delivered';
+interface FlightState {
+  letter: ThrowLetter;
+  phase: FlightPhase;
+}
+
+function flightDurationMs(miles: number): number {
+  const t = Math.min(1, miles / 10000);
+  return Math.round(3000 + t * 3500);
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface ThrowHomeScreenProps {
   onHome: () => void;
@@ -27,11 +58,18 @@ interface ThrowHomeScreenProps {
   onOpenAddFriend: () => void;
   onOpenInbox: () => void;
   onOpenSettings: () => void;
-  onThrown: (letter: ThrowLetter) => void;
   /** Set when arriving here via "Throw Back" — recipient is fixed, carousel is hidden. */
   lockedRecipient?: { friendUserId: string; repliedToThrowId: string } | null;
 }
 
+/**
+ * The paper plane's flight — from the moment it launches to landing on the recipient's pin — now
+ * plays out right here on the same map the user was just composing over, instead of handing off
+ * to a separate full-screen flight/arrival screen. The map itself does the work: a brief overview
+ * of the whole trip, then the camera follows the plane's real interpolated position as it travels
+ * (`focus` re-centers every progress tick), then locks onto the destination for the landing pulse
+ * and a small arrival card, before handing the map back to normal compose mode.
+ */
 export function ThrowHomeScreen({
   onHome,
   onOpenExpenses,
@@ -40,7 +78,6 @@ export function ThrowHomeScreen({
   onOpenAddFriend,
   onOpenInbox,
   onOpenSettings,
-  onThrown,
   lockedRecipient,
 }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
@@ -48,6 +85,16 @@ export function ThrowHomeScreen({
   const { myLocation, friends, unreadCount, sendThrow, uploadPhoto } = useThrow();
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const initializedRef = useRef(false);
+
+  const [flight, setFlight] = useState<FlightState | null>(null);
+  const [flightProgress, setFlightProgress] = useState(0);
+  const flightAnim = useRef(new Animated.Value(0)).current;
+  // Holds the letter between a successful `sendThrow` and FoldingLetter's own local
+  // fold-and-liftoff animation finishing (`onLaunched`) — the map flight only starts once that
+  // local flourish is done, so the two animations play back to back rather than fighting for
+  // attention.
+  const pendingLetterRef = useRef<ThrowLetter | null>(null);
+  const flightRunIdRef = useRef(0);
 
   const friendsWithLocation = useMemo(() => friends.filter((f) => f.location), [friends]);
   const hasFriendsAtAll = friends.length > 0;
@@ -86,6 +133,40 @@ export function ThrowHomeScreen({
     return list;
   }, [myLocation, friendsWithLocation, selectedFriendId, lockedRecipient]);
 
+  const runFlight = async (letter: ThrowLetter) => {
+    const runId = ++flightRunIdRef.current;
+    const stillCurrent = () => flightRunIdRef.current === runId;
+
+    setFlight({ letter, phase: 'zooming' });
+    await wait(reduceMotion ? 0 : ZOOM_OVERVIEW_MS);
+    if (!stillCurrent()) return;
+
+    setFlight({ letter, phase: 'in_flight' });
+    flightAnim.setValue(0);
+    const listenerId = flightAnim.addListener(({ value }) => setFlightProgress(value));
+    await new Promise<void>((resolve) => {
+      Animated.timing(flightAnim, {
+        toValue: 1,
+        duration: reduceMotion ? 1100 : flightDurationMs(letter.distanceMiles),
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => resolve());
+    });
+    flightAnim.removeListener(listenerId);
+    if (!stillCurrent()) return;
+
+    setFlight({ letter, phase: 'arriving' });
+    await wait(ARRIVING_HOLD_MS);
+    if (!stillCurrent()) return;
+
+    setFlight({ letter, phase: 'delivered' });
+    await wait(DELIVERED_HOLD_MS);
+    if (!stillCurrent()) return;
+
+    setFlight(null);
+    setFlightProgress(0);
+  };
+
   const handleThrow = async (content: { messageText: string | null; strokes: StrokePath[] | null; penColor: string; photoUri: string | null }) => {
     if (!selectedFriend) return { error: 'Pick someone to throw to first.' };
 
@@ -105,17 +186,57 @@ export function ThrowHomeScreen({
       repliedToThrowId: lockedRecipient?.repliedToThrowId,
     });
     if (error || !letter) return { error: error ?? 'Could not send — try again.' };
-    onThrown(letter);
+    pendingLetterRef.current = letter;
     return { error: null };
   };
+
+  const handleLaunched = () => {
+    const letter = pendingLetterRef.current;
+    pendingLetterRef.current = null;
+    if (letter) runFlight(letter);
+  };
+
+  const inFlight = flight !== null;
+
+  const flightRoutePoints = useMemo(() => {
+    if (!flight) return null;
+    const from: LatLng = { latitude: flight.letter.senderLatitude, longitude: flight.letter.senderLongitude };
+    const to: LatLng = { latitude: flight.letter.recipientLatitude, longitude: flight.letter.recipientLongitude };
+    return flightPath(from, to);
+  }, [flight]);
+
+  const flightPins: ThrowMapPin[] = useMemo(() => {
+    if (!flight) return [];
+    return [
+      { id: 'flight-from', latitude: flight.letter.senderLatitude, longitude: flight.letter.senderLongitude, label: 'You', isSelf: true },
+      { id: 'flight-to', latitude: flight.letter.recipientLatitude, longitude: flight.letter.recipientLongitude, label: flight.letter.counterpartName.split(' ')[0] },
+    ];
+  }, [flight]);
+
+  // The camera itself does the "moving map along with the plane" work: a wide fitPoints overview
+  // first, then `focus` re-centers on the plane's own real interpolated position every progress
+  // tick, then locks onto the destination for the landing beat.
+  const flightFocus: LatLng | null = useMemo(() => {
+    if (!flight || flight.phase === 'zooming') return null;
+    if (flight.phase === 'in_flight' && flightRoutePoints) return latLngAtProgress(flightRoutePoints, flightProgress).position;
+    return { latitude: flight.letter.recipientLatitude, longitude: flight.letter.recipientLongitude };
+  }, [flight, flightRoutePoints, flightProgress]);
+
+  const flightFitPoints: LatLng[] | undefined =
+    flight?.phase === 'zooming'
+      ? [
+          { latitude: flight.letter.senderLatitude, longitude: flight.letter.senderLongitude },
+          { latitude: flight.letter.recipientLatitude, longitude: flight.letter.recipientLongitude },
+        ]
+      : undefined;
 
   return (
     <View style={styles.screen}>
       <ThrowGlassBackdrop heightMultiplier={0.6} />
 
       <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.header, { marginTop: insets.top + 10 }]}>
-        <Pressable onPress={onHome} hitSlop={10}>
-          <Text style={styles.headerBack}>‹ Home</Text>
+        <Pressable onPress={onHome} hitSlop={10} style={styles.headerBackBtn} accessibilityRole="button" accessibilityLabel="Back to Home">
+          <Icon path={BACK_ICON} size={20} color={throwColor.inkSoft} strokeWidth={2} />
         </Pressable>
         <Text style={styles.headerTitle}>Throw</Text>
         <Pressable onPress={onOpenSettings} hitSlop={10} style={styles.headerSpacer} accessibilityRole="button" accessibilityLabel="Throw settings">
@@ -124,35 +245,51 @@ export function ThrowHomeScreen({
       </GlassSurface>
 
       <View style={styles.mapArea}>
-        <ThrowMap pins={pins} focus={focusTarget} />
+        <ThrowMap
+          pins={inFlight ? flightPins : pins}
+          focus={inFlight ? flightFocus : focusTarget}
+          fitPoints={flightFitPoints}
+          route={
+            inFlight && flightRoutePoints
+              ? {
+                  points: flightRoutePoints,
+                  progress: flightProgress,
+                  showPlane: flight!.phase === 'in_flight' || flight!.phase === 'arriving',
+                  landing: flight!.phase === 'arriving' || flight!.phase === 'delivered',
+                }
+              : undefined
+          }
+        />
 
-        {lockedRecipient ? (
-          selectedFriend && (
+        {!inFlight &&
+          (lockedRecipient ? (
+            selectedFriend && (
+              <View style={styles.recipientOverlay}>
+                <Text style={styles.replyLine} numberOfLines={1}>
+                  Throwing back to {selectedFriend.name}
+                </Text>
+              </View>
+            )
+          ) : (
             <View style={styles.recipientOverlay}>
-              <Text style={styles.replyLine} numberOfLines={1}>
-                Throwing back to {selectedFriend.name}
-              </Text>
+              <RecipientCarousel friends={friendsWithLocation} selectedIndex={selectedIndex} onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)} />
             </View>
-          )
-        ) : (
-          <View style={styles.recipientOverlay}>
-            <RecipientCarousel friends={friendsWithLocation} selectedIndex={selectedIndex} onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)} />
-          </View>
-        )}
+          ))}
 
-        {!hasFriendsAtAll && (
+        {!inFlight && !hasFriendsAtAll && (
           <View style={styles.emptyOverlay}>
             <Text style={styles.emptyTitle}>Nothing to throw yet.</Text>
             <Text style={styles.emptyBody}>Add people to your circle to start sending letters across the world.</Text>
           </View>
         )}
 
-        {hasFriendsAtAll && selectedFriend && (
-          <View style={[styles.letterCard, { bottom: insets.bottom + 16 }]}>
+        {!inFlight && hasFriendsAtAll && selectedFriend && (
+          <View style={[styles.letterCard, { bottom: insets.bottom + 16 + BOTTOM_NAV_CLEARANCE }]}>
             <FoldingLetter
               recipientName={selectedFriend.name}
               recipientCity={selectedFriend.location!.city}
               onThrow={handleThrow}
+              onLaunched={handleLaunched}
               throwLabel={lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
               onOpenChats={onOpenChats}
               onOpenAddFriend={onOpenAddFriend}
@@ -161,18 +298,37 @@ export function ThrowHomeScreen({
             />
           </View>
         )}
+
+        {inFlight && (
+          <View style={[styles.flightStatusWrap, { bottom: insets.bottom + 16 + BOTTOM_NAV_CLEARANCE }]}>
+            <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.flightStatus}>
+              {flight!.phase === 'delivered' ? (
+                <>
+                  <Text style={styles.flightTitle}>Your letter has landed</Text>
+                  <Text style={styles.flightBody}>
+                    With {flight!.letter.counterpartName} in {flight!.letter.recipientCity} · {formatMiles(flight!.letter.distanceMiles)} away
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.flightTitle}>{flight!.phase === 'arriving' ? 'Arriving…' : `Flying to ${flight!.letter.counterpartName}…`}</Text>
+              )}
+            </GlassSurface>
+          </View>
+        )}
       </View>
 
-      <BottomNav
-        activeId="throw"
-        onSelect={(id) => {
-          if (id === 'home') onHome();
-          if (id === 'expenses') onOpenExpenses();
-          if (id === 'split') onOpenSplit();
-        }}
-        bottomInset={insets.bottom}
-        reduceMotion={reduceMotion}
-      />
+      <View style={styles.bottomNavWrap}>
+        <BottomNav
+          activeId="throw"
+          onSelect={(id) => {
+            if (id === 'home') onHome();
+            if (id === 'expenses') onOpenExpenses();
+            if (id === 'split') onOpenSplit();
+          }}
+          bottomInset={insets.bottom}
+          reduceMotion={reduceMotion}
+        />
+      </View>
     </View>
   );
 }
@@ -190,10 +346,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: throwGlass.border,
   },
-  headerBack: { fontFamily: throwFont.ui600, fontSize: 13.5, color: throwColor.inkSoft },
   headerTitle: { fontFamily: throwFont.hand700, fontSize: 26, color: throwColor.ink },
+  headerBackBtn: { width: 48, alignItems: 'flex-start' },
   headerSpacer: { width: 48, alignItems: 'flex-end' },
   mapArea: { flex: 1, marginHorizontal: 12, marginTop: 4, marginBottom: 12, borderRadius: 20, overflow: 'hidden' },
+  // The BottomNav dock floats over the map's own bottom edge instead of pushing it up — a
+  // sibling of mapArea, absolutely pinned to the screen's bottom so it overlaps in front.
+  bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
   replyLine: {
     textAlign: 'center',
@@ -223,4 +382,19 @@ const styles = StyleSheet.create({
     right: 12,
     top: '32%',
   },
+  flightStatusWrap: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+  },
+  flightStatus: {
+    borderRadius: throwRadius.card,
+    borderWidth: 1,
+    borderColor: throwGlass.border,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+  },
+  flightTitle: { fontFamily: throwFont.hand700, fontSize: 20, color: throwColor.ink, textAlign: 'center' },
+  flightBody: { fontFamily: throwFont.ui400, fontSize: 12.5, color: throwColor.inkSoft, textAlign: 'center', marginTop: 4 },
 });
