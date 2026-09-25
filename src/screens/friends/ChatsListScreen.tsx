@@ -206,9 +206,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 26,
     paddingBottom: spacing.huge,
   },
+  // Three even columns spanning the row's full width, rather than a tight left-aligned cluster.
   pinned: {
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'space-between',
     paddingHorizontal: 26,
     paddingTop: spacing.ms,
     paddingBottom: spacing.ms,

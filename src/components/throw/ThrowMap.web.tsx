@@ -3,10 +3,9 @@ import { StyleSheet, View } from 'react-native';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { throwColor } from '../../theme/throwTokens';
-import { latLngAtProgress, planeSizeForProgress } from '../../utils/mapProjection';
+import { latLngAtProgress, planeOpacityForProgress, planeSizeForProgress } from '../../utils/mapProjection';
 import { LocationPin } from './LocationPin';
 import { PaperPlane } from './PaperPlane';
-import { LandingPulse } from './LandingPulse';
 import type { ThrowMapProps } from './throwMapTypes';
 import type { LatLng } from '../../utils/geo';
 
@@ -15,7 +14,6 @@ import type { LatLng } from '../../utils/geo';
 // just a readable "it's getting farther away" cue.
 const PLANE_MAX_SIZE = 44;
 const PLANE_MIN_SIZE = 16;
-const LANDING_PULSE_SIZE = 70;
 
 // A whole-world-ish default before there's anything to focus on.
 const WORLD_CENTER: [number, number] = [15, 10];
@@ -153,9 +151,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const planePos = useMemo(() => (route ? latLngAtProgress(route.points, route.progress) : null), [route]);
   const planeScreen = route?.showPlane && planePos ? project(planePos.position.latitude, planePos.position.longitude) : null;
   const planeSize = route ? planeSizeForProgress(route.progress, PLANE_MAX_SIZE, PLANE_MIN_SIZE) : PLANE_MIN_SIZE;
-
-  const landingPoint = route?.landing && route.points.length > 0 ? route.points[route.points.length - 1] : null;
-  const landingScreen = landingPoint ? project(landingPoint.latitude, landingPoint.longitude) : null;
+  const planeOpacity = route ? planeOpacityForProgress(route.progress) : 1;
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -181,18 +177,15 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       {planeScreen && planePos && (
         <View
           pointerEvents="none"
-          style={{ position: 'absolute', left: planeScreen.x - planeSize / 2, top: planeScreen.y - planeSize / 2, transform: [{ rotate: `${planePos.bearingDeg}deg` }] }}
+          style={{
+            position: 'absolute',
+            left: planeScreen.x - planeSize / 2,
+            top: planeScreen.y - planeSize / 2,
+            opacity: planeOpacity,
+            transform: [{ rotate: `${planePos.bearingDeg}deg` }],
+          }}
         >
           <PaperPlane size={planeSize} color={throwColor.clayDeep} />
-        </View>
-      )}
-
-      {landingScreen && (
-        <View
-          pointerEvents="none"
-          style={{ position: 'absolute', left: landingScreen.x - LANDING_PULSE_SIZE / 2, top: landingScreen.y - LANDING_PULSE_SIZE / 2 }}
-        >
-          <LandingPulse size={LANDING_PULSE_SIZE} />
         </View>
       )}
     </View>

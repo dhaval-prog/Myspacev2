@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { throwColor } from '../../theme/throwTokens';
-import { latLngAtProgress, planeSizeForProgress } from '../../utils/mapProjection';
+import { latLngAtProgress, planeOpacityForProgress, planeSizeForProgress } from '../../utils/mapProjection';
 import { LocationPinGlyph } from './LocationPin';
 import { PaperPlane } from './PaperPlane';
-import { LandingPulse } from './LandingPulse';
 import type { ThrowMapProps } from './throwMapTypes';
 
 // A whole-world-ish default before there's anything to focus on — not literally the whole globe
@@ -73,7 +72,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
 
   const planePos = useMemo(() => (route ? latLngAtProgress(route.points, route.progress) : null), [route]);
   const planeSize = route ? planeSizeForProgress(route.progress, PLANE_MAX_SIZE, PLANE_MIN_SIZE) : PLANE_MIN_SIZE;
-  const landingPoint = route?.landing && route.points.length > 0 ? route.points[route.points.length - 1] : null;
+  const planeOpacity = route ? planeOpacityForProgress(route.progress) : 1;
 
   return (
     <MapView
@@ -115,16 +114,10 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       ))}
 
       {route?.showPlane && planePos && (
-        <Marker coordinate={planePos.position} anchor={{ x: 0.5, y: 0.5 }} zIndex={3} tracksViewChanges={true}>
+        <Marker coordinate={planePos.position} anchor={{ x: 0.5, y: 0.5 }} zIndex={3} tracksViewChanges={true} opacity={planeOpacity}>
           <View style={{ transform: [{ rotate: `${planePos.bearingDeg}deg` }] }}>
             <PaperPlane size={planeSize} color={throwColor.clayDeep} />
           </View>
-        </Marker>
-      )}
-
-      {landingPoint && (
-        <Marker coordinate={landingPoint} anchor={{ x: 0.5, y: 0.5 }} zIndex={4} tracksViewChanges={true}>
-          <LandingPulse />
         </Marker>
       )}
     </MapView>

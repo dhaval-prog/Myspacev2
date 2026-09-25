@@ -8,6 +8,15 @@ function warn(action: string, error: { message: string } | null) {
   if (error) console.warn(`[Throw] ${action} failed:`, error.message);
 }
 
+/** UTC calendar date as YYYY-MM-DD, matching the server's `current_date` (also UTC) — the streak
+ * only cares about whole days apart, not exact instants, so this stays a plain date comparison
+ * rather than pulling in timezone handling. */
+function utcDateString(offsetDays: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Same reasoning as FriendsContext's own copy: a naive "everything after the last dot" breaks on
  * web, where expo-image-picker hands back an extension-less `blob:` URI. */
 function extFromBlob(localUri: string, mimeType: string): string {
@@ -59,6 +68,9 @@ interface ThrowContextValue {
   /** Letters I received, newest first. */
   inbox: ThrowLetter[];
   unreadCount: number;
+  /** Consecutive calendar days (UTC) with at least one thrown letter, ending today or yesterday —
+   * 0 once a day's gone by with nothing thrown. */
+  streak: number;
   sendThrow: (draft: ComposeDraft) => Promise<{ error: string | null; letter?: ThrowLetter }>;
   /** Uploads a local photo (camera or library) to this user's own throw-media folder, returning
    * its public URL for inclusion in a ComposeDraft. Separate from sendThrow itself since the
@@ -83,6 +95,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
   const [myLocation, setMyLocationState] = useState<ThrowLocation | null>(null);
   const [friendLocations, setFriendLocations] = useState<Record<string, ThrowLocation>>({});
   const [rows, setRows] = useState<ThrowRow[]>([]);
+  const [streak, setStreak] = useState(0);
   const hasLoadedRef = useRef(false);
 
   const nameFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.name ?? 'Someone', [fsFriends]);
@@ -94,17 +107,25 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     // data quietly in the background so it never interrupts whatever's on screen (mid-gesture
     // composing, an in-progress flight animation, etc.).
     if (!hasLoadedRef.current) setLoading(true);
-    const [meRes, throwsRes] = await Promise.all([
+    const [meRes, throwsRes, streakRes] = await Promise.all([
       supabase.from('throw_profiles').select('city,country,latitude,longitude').eq('user_id', myId).maybeSingle(),
       supabase.from('throws').select('*').or(`sender_id.eq.${myId},recipient_id.eq.${myId}`).order('created_at', { ascending: false }),
+      supabase.from('throw_streaks').select('current_streak,last_throw_date').eq('user_id', myId).maybeSingle(),
     ]);
     warn('load my location', meRes.error);
     warn('load throws', throwsRes.error);
+    warn('load throw streak', streakRes.error);
 
     if (meRes.data) {
       const d = meRes.data as { city: string; country: string; latitude: number; longitude: number };
       setMyLocationState({ city: d.city, country: d.country, latitude: d.latitude, longitude: d.longitude });
     }
+    // The stored streak only advances when a throw actually happens — if a whole day's gone by
+    // with nothing thrown since, it's lapsed even though the row hasn't been touched, so that's
+    // checked here at read time rather than needing a write just to notice the gap.
+    const streakRow = streakRes.data as { current_streak: number; last_throw_date: string } | null;
+    const lastThrowInStreak = streakRow && (streakRow.last_throw_date === utcDateString(0) || streakRow.last_throw_date === utcDateString(-1));
+    setStreak(lastThrowInStreak ? streakRow!.current_streak : 0);
     // A letter deleted from "my" side (sender or recipient, whichever I am) stays in the shared
     // row for the other person until they've deleted it too (see delete_throw) — so filtering it
     // out of my own list happens here, client-side, rather than in the query itself.
@@ -241,7 +262,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     [fsFriends, friendLocations],
   );
 
-  const value: ThrowContextValue = { loading, myLocation, setMyLocation, friends, letters, inbox, unreadCount, sendThrow, uploadPhoto, markRead, deleteThrow, refresh };
+  const value: ThrowContextValue = { loading, myLocation, setMyLocation, friends, letters, inbox, unreadCount, streak, sendThrow, uploadPhoto, markRead, deleteThrow, refresh };
   return <ThrowContext.Provider value={value}>{children}</ThrowContext.Provider>;
 }
 
