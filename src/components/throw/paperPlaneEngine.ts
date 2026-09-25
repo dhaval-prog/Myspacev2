@@ -499,10 +499,17 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   // banks it in place without moving it, unlike the fold timeline's own bank/yaw/pitch below.
   let readyBankExtra = 0;
   const MAX_READY_BANK = 0.32;
-  function setPose(o: Formation, extra: Partial<Formation & { x: number; y: number; z: number; bank: number; yaw: number; pitch: number }> = {}) {
+  function setPose(o: Formation, extra: Partial<Formation & { x: number; y: number; z: number; bank: number; yaw: number; pitch: number; rx: number }> = {}) {
     flight.position.set(pivot.x + o.x + (extra.x || 0), pivot.y + o.y + (extra.y || 0), pivot.z + o.z + (extra.z || 0));
     flight.rotation.set((o.bank || 0) + (extra.bank || 0), (o.yaw || 0) + (extra.yaw || 0), (o.pitch || 0) + (extra.pitch || 0));
-    shape.rotation.x = o.rx;
+    // shape.rotation.x rotates around the mesh's local x axis — the paper's own nose-tail spine
+    // (the flat pattern's long dimension, A=5.5 vs B=4.25, folded along the x-axis centerline) —
+    // and that axis is left invariant by a rotation around itself. So an extra roll here, on top
+    // of the base o.rx wing-dihedral angle, banks the wings left/right around the fuselage spine
+    // regardless of whatever yaw/pitch/bank `flight` (the parent group) currently has applied —
+    // exactly the "tilt the wings" motion a real plane does when banking, and distinct from
+    // rotating flight's own pitch/bank Euler slots (which turn the nose up/down or fore/aft).
+    shape.rotation.x = o.rx + (extra.rx || 0);
   }
   function emit(worldPos: THREE.Vector3) {
     const p = parts[pNext];
@@ -582,16 +589,15 @@ export function createPaperPlane(options: PaperPlaneOptions) {
       // from there up to PI/2 as it launches, so held as-is here the plane reads as turned off to
       // one side rather than pointing straight ahead. Canceling those three out and substituting a
       // fixed straight-ahead yaw is what makes the resting plane point where it's about to be
-      // thrown. With `flight.rotation.order` set to 'YZX' and yaw pinned to PI/2, the 'pitch' and
-      // 'bank' Euler slots end up swapped from their names once composed: it's the 'pitch' slot
-      // that now visibly rocks the plane side to side, and the 'bank' slot that visibly noses it
-      // up/down — confirmed empirically (screenshotting full-left vs full-right drag against each
-      // assignment) rather than assumed from the field names.
+      // thrown. The live drag-tilt (readyBankExtra) is applied separately via `rx`, a roll around
+      // the mesh's own nose-tail spine (see setPose) — NOT through these flight-group Euler slots,
+      // which turn the whole plane's nose up/down or fore/aft rather than banking its wings.
       setPose(formation, {
         y: bob,
         yaw: PI / 2 - formation.yaw,
         bank: -formation.pitch,
-        pitch: idleBank - formation.bank + readyBankExtra * MAX_READY_BANK,
+        pitch: idleBank - formation.bank,
+        rx: readyBankExtra * MAX_READY_BANK,
       });
     } else if (phase === 'flying' || phase === 'done') {
       flyT += dt * speed;

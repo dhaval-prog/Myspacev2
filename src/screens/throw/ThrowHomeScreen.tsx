@@ -95,6 +95,11 @@ export function ThrowHomeScreen({
   // attention.
   const pendingLetterRef = useRef<ThrowLetter | null>(null);
   const flightRunIdRef = useRef(0);
+  // Snapshot of selectedIndex taken when a contact-drag starts (see handleContactDragStart) —
+  // every live offset during that same drag is computed relative to this fixed base, not to
+  // whatever selectedFriendId has drifted to mid-drag, so the mapping from drag distance to
+  // recipient stays linear all the way through instead of compounding.
+  const dragBaseIndexRef = useRef(0);
 
   const friendsWithLocation = useMemo(() => friends.filter((f) => f.location), [friends]);
   const hasFriendsAtAll = friends.length > 0;
@@ -117,17 +122,21 @@ export function ThrowHomeScreen({
   // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
   const focusTarget = selectedFriend?.location ?? myLocation ?? null;
 
-  // Dragging the folded, ready-to-throw plane sideways (see FoldingLetter's onSwipeContact) cycles
-  // through recipients the same way tapping/swiping the carousel does — 'next' moves toward
-  // higher-index entries (rightward in the carousel), 'prev' toward lower-index ones (leftward).
+  // Dragging the folded, ready-to-throw plane sideways (see FoldingLetter's onContactDragStart /
+  // onContactDragOffset) cycles through recipients live, the same direction as swiping the
+  // carousel — dragging right moves toward higher-index entries, left toward lower-index ones —
+  // and, like RecipientCarousel's own drag, clamps at the list's ends rather than wrapping.
   // Selecting a different friend here also re-centers the map, since focusTarget above already
   // follows selectedFriend.
-  const handleSwipeContact = (direction: 'next' | 'prev') => {
+  const handleContactDragStart = () => {
+    dragBaseIndexRef.current = selectedIndex;
+  };
+  const handleContactDragOffset = (steps: number) => {
     const n = friendsWithLocation.length;
     if (n < 2) return;
-    const idx = Math.max(0, friendsWithLocation.findIndex((f) => f.userId === selectedFriendId));
-    const nextIdx = direction === 'next' ? (idx + 1) % n : (idx - 1 + n) % n;
-    setSelectedFriendId(friendsWithLocation[nextIdx].userId);
+    const nextIdx = Math.max(0, Math.min(n - 1, Math.round(dragBaseIndexRef.current + steps)));
+    const nextFriend = friendsWithLocation[nextIdx];
+    if (nextFriend && nextFriend.userId !== selectedFriendId) setSelectedFriendId(nextFriend.userId);
   };
 
   const pins: ThrowMapPin[] = useMemo(() => {
@@ -271,7 +280,8 @@ export function ThrowHomeScreen({
               onOpenAddFriend={onOpenAddFriend}
               onOpenInbox={onOpenInbox}
               unreadCount={unreadCount}
-              onSwipeContact={!lockedRecipient && friendsWithLocation.length > 1 ? handleSwipeContact : undefined}
+              onContactDragStart={!lockedRecipient && friendsWithLocation.length > 1 ? handleContactDragStart : undefined}
+              onContactDragOffset={!lockedRecipient && friendsWithLocation.length > 1 ? handleContactDragOffset : undefined}
             />
           </View>
         )}
