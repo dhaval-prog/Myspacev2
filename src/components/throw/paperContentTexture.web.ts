@@ -18,6 +18,51 @@ function loadBaseImage(): Promise<HTMLImageElement> {
   });
 }
 
+function loadPhotoImage(uri: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = uri;
+  });
+}
+
+// Mirrors FoldingLetter's photoChip geometry (top: 44, right: 14, 100x100, -4deg) — kept in sync
+// by hand so the baked plane shows the photo in roughly the same spot it sat on the flat paper.
+const PHOTO_TOP = 44;
+const PHOTO_RIGHT = 14;
+const PHOTO_SIZE = 100;
+const PHOTO_ROTATE_RAD = (-4 * Math.PI) / 180;
+
+function drawPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, sx: number, sy: number, canvasWidth: number) {
+  const scale = (sx + sy) / 2;
+  const size = PHOTO_SIZE * scale;
+  const pad = 6 * scale;
+  const x = canvasWidth - PHOTO_RIGHT * sx - size;
+  const y = PHOTO_TOP * sy;
+
+  ctx.save();
+  ctx.translate(x + size / 2, y + size / 2);
+  ctx.rotate(PHOTO_ROTATE_RAD);
+  ctx.fillStyle = '#FBF6EC';
+  ctx.fillRect(-size / 2 - pad, -size / 2 - pad, size + pad * 2, size + pad * 2);
+
+  // Cover-fit crop to a square, same as the on-paper thumbnail (Image's resizeMode="cover").
+  let sW = img.naturalWidth || img.width;
+  let sH = img.naturalHeight || img.height;
+  let sX0 = 0;
+  let sY0 = 0;
+  if (sW > sH) {
+    sX0 = (sW - sH) / 2;
+    sW = sH;
+  } else if (sH > sW) {
+    sY0 = (sH - sW) / 2;
+    sH = sW;
+  }
+  ctx.drawImage(img, sX0, sY0, sW, sH, -size / 2, -size / 2, size, size);
+  ctx.restore();
+}
+
 function drawContent(ctx: CanvasRenderingContext2D, content: PaperPlaneLetterContent, sx: number, sy: number, canvasWidth: number) {
   if (content.strokes && content.strokes.length > 0) {
     const scale = (sx + sy) / 2;
@@ -66,10 +111,11 @@ function drawContent(ctx: CanvasRenderingContext2D, content: PaperPlaneLetterCon
 }
 
 /**
- * Bakes the user's handwritten strokes or typed text onto the same paper-grain image the plane
- * uses as its base texture, so the folded/flying plane shows the actual letter rather than blank
- * paper. Web-only (Canvas2D) — the native counterpart (paperContentTexture.native.tsx) rasterizes
- * an off-screen react-native-svg tree instead, since native has no Canvas2D/document.
+ * Bakes the user's handwritten strokes or typed text — plus any attached photo — onto the same
+ * paper-grain image the plane uses as its base texture, so the folded/flying plane shows the
+ * actual letter rather than blank paper. Web-only (Canvas2D) — the native counterpart
+ * (paperContentTexture.native.tsx) rasterizes an off-screen react-native-svg tree instead, since
+ * native has no Canvas2D/document.
  *
  * `sourceSize` is the pixel box the strokes were captured in — LetterCanvas now fills its whole
  * component (no stacked toolbar pushing it down), so this is simply the writing surface's own
@@ -98,6 +144,15 @@ export async function bakeLetterTexture(content: PaperPlaneLetterContent, source
   overlay.height = canvas.height;
   const octx = overlay.getContext('2d')!;
   drawContent(octx, content, sx, sy, overlay.width);
+
+  if (content.photoUri) {
+    try {
+      const photo = await loadPhotoImage(content.photoUri);
+      drawPhoto(octx, photo, sx, sy, overlay.width);
+    } catch (err) {
+      console.warn('[Throw] failed to load attached photo for the plane texture:', err);
+    }
+  }
 
   const half = { w: canvas.width / 2, h: canvas.height / 2 };
   const quadrants = [

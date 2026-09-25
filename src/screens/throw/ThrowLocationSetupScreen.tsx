@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { throwColor, throwFont, throwRadius, throwSpace } from '../../theme/throwTokens';
+import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
+import { GlassSurface } from '../../components/friends/GlassSurface';
+import { colors } from '../../theme/colors';
+import { throwColor, throwFont, throwGlass, throwRadius, throwSpace } from '../../theme/throwTokens';
 import { nearestThrowCity, searchThrowCities, type ThrowCity } from '../../utils/throwCities';
 import { useThrow } from '../../context/ThrowContext';
 
@@ -62,6 +65,7 @@ export function ThrowLocationSetupScreen({ onDone, onBack, mode = 'setup' }: Thr
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+      <ThrowGlassBackdrop heightMultiplier={1.2} />
       {onBack && (
         <Pressable onPress={onBack} style={styles.backBtn}>
           <Text style={styles.backLabel}>Cancel</Text>
@@ -81,7 +85,7 @@ export function ThrowLocationSetupScreen({ onDone, onBack, mode = 'setup' }: Thr
 
           <Pressable onPress={requestDeviceLocation} disabled={requesting}>
             <View style={styles.primaryBtn}>
-              {requesting ? <ActivityIndicator color={throwColor.paper} /> : <Text style={styles.primaryLabel}>Allow Location</Text>}
+              {requesting ? <ActivityIndicator color={throwColor.ink} /> : <Text style={styles.primaryLabel}>Allow Location</Text>}
             </View>
           </Pressable>
           <Pressable onPress={() => setShowManual(true)}>
@@ -91,14 +95,16 @@ export function ThrowLocationSetupScreen({ onDone, onBack, mode = 'setup' }: Thr
       ) : (
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Where are you?</Text>
-          <TextInput
-            style={styles.search}
-            placeholder="Search for your city"
-            placeholderTextColor={throwColor.inkFaint}
-            value={query}
-            onChangeText={setQuery}
-            autoFocus
-          />
+          <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.searchWrap}>
+            <TextInput
+              style={styles.search}
+              placeholder="Search for your city"
+              placeholderTextColor={throwColor.inkFaint}
+              value={query}
+              onChangeText={setQuery}
+              autoFocus
+            />
+          </GlassSurface>
           {error && <Text style={styles.error}>{error}</Text>}
           <FlatList
             data={results}
@@ -130,24 +136,26 @@ const styles = StyleSheet.create({
   primaryBtn: {
     minHeight: 54,
     borderRadius: throwRadius.pill,
-    backgroundColor: throwColor.clayDeep,
+    backgroundColor: colors.lime,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
   },
-  primaryLabel: { fontFamily: throwFont.ui700, fontSize: 15, color: throwColor.paper },
+  primaryLabel: { fontFamily: throwFont.ui700, fontSize: 15, color: throwColor.ink },
   secondaryLabel: { fontFamily: throwFont.ui600, fontSize: 13.5, color: throwColor.inkSoft, textAlign: 'center' },
-  search: {
+  searchWrap: {
     minHeight: 48,
     borderRadius: throwRadius.card,
-    backgroundColor: throwColor.cardBg,
     borderWidth: 1,
-    borderColor: throwColor.cardBorder,
+    borderColor: throwGlass.border,
+    marginBottom: 14,
+  },
+  search: {
+    minHeight: 48,
     paddingHorizontal: 16,
     fontFamily: throwFont.ui400,
     fontSize: 15,
     color: throwColor.ink,
-    marginBottom: 14,
   },
   cityRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: throwColor.cardBorder },
   cityName: { fontFamily: throwFont.ui600, fontSize: 15, color: throwColor.ink },

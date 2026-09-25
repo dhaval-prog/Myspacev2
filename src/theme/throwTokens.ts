@@ -59,6 +59,23 @@ export const throwColor = {
   },
 } as const;
 
+/**
+ * Glassmorphism accents layered on top of the warm-paper palette above — reuses the main app's
+ * lime/pale identity (theme/colors.ts) rather than inventing a new hue, per the "match Home's
+ * colour" redesign ask. Only the chrome (header, buttons, cards, list rows) gets this treatment;
+ * the letter's own paper stays warm cream, since that's what makes it read as a real letter.
+ */
+export const throwGlass = {
+  // Soft radial blobs a GlassSurface's blur actually picks up — muted versions of Home's lime,
+  // same idea as gamesHubTokens' blobGreen/blobSecondary.
+  blobLime: 'rgba(195,234,79,.5)',
+  blobPale: 'rgba(237,253,255,.6)',
+  // The tint layered over BlurView on light glass chrome (header, buttons, cards).
+  tint: 'rgba(195,234,79,.16)',
+  tintStrong: 'rgba(195,234,79,.26)',
+  border: 'rgba(195,234,79,.4)',
+} as const;
+
 export const throwGradient = {
   // The primary "THROW" button — a quiet warm gradient, not a bright brand-colored CTA.
   throwBtn: { colors: ['#D9885F', '#C9714F'] as [string, string], locations: [0, 1] as [number, number] },

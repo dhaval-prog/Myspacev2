@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FriendAvatar } from '../friends/FriendAvatar';
+import { GlassSurface } from '../friends/GlassSurface';
 import { Icon } from '../Icon';
 import { ConfirmDialog } from '../ConfirmDialog';
-import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import type { ThrowLetter } from '../../types/throw';
 
 const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
@@ -80,7 +81,7 @@ export function LetterCard({ letter, onPress, onDelete }: LetterCardProps) {
 
   return (
     <>
-      <View style={[styles.row, unread && styles.rowUnread]} {...panResponder.panHandlers}>
+      <GlassSurface tint="light" tintColor={unread ? throwGlass.tintStrong : throwGlass.tint} style={[styles.row, unread && styles.rowUnread]} {...panResponder.panHandlers}>
         <FriendAvatar userId={letter.counterpartId} name={letter.counterpartName} avatarUrl={letter.counterpartAvatarUrl} size={48} initialsFontSize={16} />
         <View style={styles.rowText}>
           <View style={styles.rowNameLine}>
@@ -106,7 +107,7 @@ export function LetterCard({ letter, onPress, onDelete }: LetterCardProps) {
             <Icon path={TRASH_ICON} color="#fff" size={15} strokeWidth={1.8} />
           </Pressable>
         )}
-      </View>
+      </GlassSurface>
 
       <ConfirmDialog
         visible={confirmOpen}
@@ -129,10 +130,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 8,
-    backgroundColor: throwColor.cardBg,
     borderRadius: throwRadius.card,
     borderWidth: 1,
-    borderColor: throwColor.cardBorder,
+    borderColor: throwGlass.border,
   },
   rowUnread: { borderColor: throwColor.clay, borderWidth: 1.5 },
   rowText: { flex: 1, gap: 3, minWidth: 0 },

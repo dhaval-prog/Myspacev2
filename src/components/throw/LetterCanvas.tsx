@@ -5,7 +5,10 @@ import type { StrokePath } from '../../types/throw';
 
 const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
 
-const PEN_COLORS = [throwColor.ink, throwColor.clayDeep, '#3E5C4E', '#3A4C6E'];
+// A blue ballpoint-ink shade leads the swatches (and is the default), matching the reference
+// design's "handwritten in blue pen" look — black, clay and green stay selectable alternatives.
+const INK_BLUE = '#3A4C6E';
+const PEN_COLORS = [INK_BLUE, throwColor.ink, throwColor.clayDeep, '#3E5C4E'];
 // The placeholder's own ink — a distinct blue-violet, not one of the selectable pen colors, so
 // it always reads as a prompt rather than something the user could mistake for typed text.
 const PLACEHOLDER_COLOR = '#4A55B0';
@@ -19,6 +22,9 @@ interface LetterCanvasContent {
 interface LetterCanvasProps {
   /** Fires on every content edit, live — lets a parent (FoldingLetter) read the current draft. */
   onContentChange?: (content: LetterCanvasContent) => void;
+  /** A photo is pasted in the top-right corner (see FoldingLetter's photoChip) — reserves extra
+   * top padding so the writing area doesn't start underneath it. */
+  hasPhoto?: boolean;
 }
 
 export interface LetterCanvasHandle {
@@ -35,7 +41,7 @@ export interface LetterCanvasHandle {
  * text onto the plane's baked texture, so the writing surface and the measured surface need to be
  * the same rectangle.
  */
-export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas({ onContentChange }, ref) {
+export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas({ onContentChange, hasPhoto }, ref) {
   const [typedText, setTypedText] = useState('');
   const [penColor, setPenColor] = useState(PEN_COLORS[0]);
 
@@ -67,7 +73,7 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
       <Image source={paperTextureAsset} style={StyleSheet.absoluteFill} resizeMode="cover" />
 
       <TextInput
-        style={[StyleSheet.absoluteFill, styles.typedInput]}
+        style={[StyleSheet.absoluteFill, styles.typedInput, hasPhoto && styles.typedInputWithPhoto, { color: penColor }]}
         multiline
         placeholder="Write something for your loved one"
         placeholderTextColor={PLACEHOLDER_COLOR}
@@ -90,7 +96,7 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    minHeight: 260,
+    minHeight: 208,
     borderRadius: throwRadius.paper,
     overflow: 'hidden',
     ...throwColor.shadowSoft,
@@ -100,10 +106,12 @@ const styles = StyleSheet.create({
     paddingTop: 44,
     fontFamily: throwFont.hand500,
     fontSize: 22,
-    color: throwColor.ink,
     lineHeight: 30,
     textAlign: 'center',
   },
+  // Reserves room under the photo sticker pasted top-right (see FoldingLetter's photoChip) so
+  // the writing area starts below it instead of running underneath.
+  typedInputWithPhoto: { paddingTop: 156 },
   toolbar: { position: 'absolute', top: 8, right: 8 },
   swatchPill: { flexDirection: 'row', gap: 6, backgroundColor: 'rgba(251,246,236,.88)', borderRadius: throwRadius.pill, paddingHorizontal: 8, paddingVertical: 6 },
   swatch: { width: 15, height: 15, borderRadius: 8, borderWidth: 2, borderColor: 'transparent' },

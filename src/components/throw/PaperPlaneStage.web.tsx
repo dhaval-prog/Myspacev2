@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import * as THREE from 'three';
 import { createPaperPlane } from './paperPlaneEngine';
 import { bakeLetterTexture } from './paperContentTexture.web';
@@ -19,9 +19,6 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
   const engineRef = useRef<ReturnType<typeof createPaperPlane> | null>(null);
   const sizeRef = useRef({ width: 0, height: 0 });
   const [ready, setReady] = useState(false);
-  // TEMPORARY diagnostic overlay — see onDebugFrame in paperPlaneEngine.ts. Remove once the
-  // still-flat-plane bug on mobile Safari is confirmed fixed.
-  const [debugText, setDebugText] = useState('');
 
   useImperativeHandle(
     ref,
@@ -74,7 +71,7 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = 8;
 
-      engine = createPaperPlane({ renderer, texture, width, height, onPhase, onProgress, onError, onDebugFrame: setDebugText });
+      engine = createPaperPlane({ renderer, texture, width, height, onPhase, onProgress, onError });
       engineRef.current = engine;
     } catch (err) {
       onError?.(err);
@@ -90,16 +87,6 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
-      {!!debugText && (
-        <View style={styles.debugBar}>
-          <Text style={styles.debugText}>{debugText}</Text>
-        </View>
-      )}
     </View>
   );
-});
-
-const styles = StyleSheet.create({
-  debugBar: { position: 'absolute', top: 4, left: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.75)', borderRadius: 6, padding: 4 },
-  debugText: { color: '#0f0', fontSize: 10, fontFamily: 'monospace' },
 });

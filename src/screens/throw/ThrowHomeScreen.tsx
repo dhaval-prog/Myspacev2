@@ -4,8 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
 import { FoldingLetter } from '../../components/throw/FoldingLetter';
+import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
+import { GlassSurface } from '../../components/friends/GlassSurface';
 import { Icon } from '../../components/Icon';
-import { throwColor, throwFont } from '../../theme/throwTokens';
+import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import type { StrokePath, ThrowLetter } from '../../types/throw';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
@@ -92,7 +94,9 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onOpenSettings, onThrown,
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <ThrowGlassBackdrop heightMultiplier={0.6} />
+
+      <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.header, { marginTop: insets.top + 10 }]}>
         <Pressable onPress={onHome} hitSlop={10}>
           <Text style={styles.headerBack}>‹ Home</Text>
         </Pressable>
@@ -100,7 +104,7 @@ export function ThrowHomeScreen({ onHome, onOpenInbox, onOpenSettings, onThrown,
         <Pressable onPress={onOpenSettings} hitSlop={10} style={styles.headerSpacer} accessibilityRole="button" accessibilityLabel="Throw settings">
           <Icon path={GEAR_ICON} size={19} color={throwColor.inkSoft} strokeWidth={1.8} />
         </Pressable>
-      </View>
+      </GlassSurface>
 
       <View style={styles.mapArea}>
         <ThrowMap pins={pins} focus={focusTarget} />
@@ -149,8 +153,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 8,
+    marginHorizontal: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: throwRadius.pill,
+    borderWidth: 1,
+    borderColor: throwGlass.border,
   },
   headerBack: { fontFamily: throwFont.ui600, fontSize: 13.5, color: throwColor.inkSoft },
   headerTitle: { fontFamily: throwFont.hand700, fontSize: 26, color: throwColor.ink },
