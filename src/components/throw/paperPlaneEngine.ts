@@ -300,8 +300,9 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   const flight = new THREE.Group(), shape = new THREE.Group();
   flight.rotation.order = 'YZX';
   // A bit bigger than the reference's own 1:1 scale — uniform, so it doesn't disturb the crease
-  // simulation (which works in the mesh's local, unscaled space, a child of shape/flight).
-  flight.scale.setScalar(1.25);
+  // simulation (which works in the mesh's local, unscaled space, a child of shape/flight). 1.75
+  // is the prior 1.25 scaled up another 40%, per user feedback that the plane still read small.
+  flight.scale.setScalar(1.75);
   shape.add(mesh);
   flight.add(shape);
   scene.add(flight);
