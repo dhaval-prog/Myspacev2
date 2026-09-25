@@ -642,7 +642,13 @@ export function FoldingLetter({
       {voice.recording && <Text style={styles.readyHint}>{voice.interimText || 'Listening…'}</Text>}
       {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
 
-      <View style={styles.bottomRow}>
+      <Animated.View
+        style={[
+          styles.bottomRow,
+          { opacity: canvasOpacity, transform: [{ translateY: canvasOpacity.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] },
+        ]}
+        pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
+      >
         <Pressable
           onPress={() => setPhotoSheetOpen(true)}
           disabled={disabled || phase === 'throwing'}
@@ -715,7 +721,7 @@ export function FoldingLetter({
             </View>
           )}
         </Pressable>
-      </View>
+      </Animated.View>
 
       <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(uris) => setPhotoUris((prev) => [...prev, ...uris])} />
     </View>

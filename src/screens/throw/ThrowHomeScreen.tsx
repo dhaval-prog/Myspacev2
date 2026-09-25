@@ -89,20 +89,23 @@ export function ThrowHomeScreen({
   const [flight, setFlight] = useState<FlightState | null>(null);
   const [flightProgress, setFlightProgress] = useState(0);
   const flightAnim = useRef(new Animated.Value(0)).current;
-  // Fades (and slightly slides down) BottomNav in lockstep with FoldingLetter's own fold amount —
-  // 0 (flat writing paper) keeps it fully visible, 1 (folded, ready to throw) hides it, driven by
-  // the exact same value whether the fold was triggered by dragging the paper or the scroll-wheel
-  // gesture, so the nav's visibility never disagrees with what the paper is actually doing.
-  const navOpacity = useRef(new Animated.Value(1)).current;
-  // Separate from navOpacity (an Animated.Value can't be read synchronously to gate
+  // Fades (and slightly slides down) BottomNav *and* the top header bar in lockstep with
+  // FoldingLetter's own fold amount — 0 (flat writing paper) keeps both fully visible, 1 (folded,
+  // ready to throw) hides both, driven by the exact same value whether the fold was triggered by
+  // dragging the paper or the scroll-wheel gesture, so neither ever disagrees with what the paper
+  // is actually doing. FoldingLetter's own bottom-controls row (photo/chat/voice/add-friend/inbox)
+  // fades independently, on the same `progress` value, entirely inside that component instead —
+  // no need to route it through here since it's already local there.
+  const chromeOpacity = useRef(new Animated.Value(1)).current;
+  // Separate from chromeOpacity (an Animated.Value can't be read synchronously to gate
   // pointerEvents) — flips once the fold crosses the halfway point, same threshold the fold
-  // itself settles toward, so the dock stops accepting touches right around when it's no longer
+  // itself settles toward, so both stop accepting touches right around when they're no longer
   // meaningfully visible rather than only once fully transparent.
-  const [navHidden, setNavHidden] = useState(false);
+  const [chromeHidden, setChromeHidden] = useState(false);
   const handleFoldProgress = (value: number) => {
-    navOpacity.setValue(1 - value);
+    chromeOpacity.setValue(1 - value);
     const hidden = value > 0.5;
-    setNavHidden((prev) => (prev === hidden ? prev : hidden));
+    setChromeHidden((prev) => (prev === hidden ? prev : hidden));
   };
   // Holds the letter between a successful `sendThrow` and FoldingLetter's own local
   // fold-and-liftoff animation finishing (`onLaunched`) — the map flight only starts once that
@@ -320,37 +323,49 @@ export function ThrowHomeScreen({
         )}
       </View>
 
-      <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.header, { top: insets.top + 10 }]}>
-        <Pressable onPress={onHome} hitSlop={10} style={styles.headerBackBtn} accessibilityRole="button" accessibilityLabel="Back to Home">
-          <Icon path={BACK_ICON} size={20} color={throwColor.inkSoft} strokeWidth={2} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Throw</Text>
-        <View style={styles.headerRight}>
-          {selectedFriend && (
-            <>
-              {selectedStreak > 0 && (
-                <View style={styles.streakChip} accessibilityLabel={`${selectedStreak} day throw streak with ${selectedFriend.name}`}>
-                  <Text style={styles.streakText}>🔥{selectedStreak}</Text>
-                </View>
-              )}
-              <View style={styles.pointsChip} accessibilityLabel={`${selectedPoints} leaderboard points for ${selectedFriend.name}`}>
-                <Icon path={POINTS_ICON} size={11} color={throwColor.clayDeep} strokeWidth={2} />
-                <Text style={styles.streakText}>{selectedPoints}</Text>
-              </View>
-            </>
-          )}
-          <Pressable onPress={onOpenSettings} hitSlop={10} accessibilityRole="button" accessibilityLabel="Throw settings">
-            <Icon path={GEAR_ICON} size={19} color={throwColor.inkSoft} strokeWidth={1.8} />
+      <Animated.View
+        style={[
+          styles.headerWrap,
+          {
+            top: insets.top + 10,
+            opacity: chromeOpacity,
+            transform: [{ translateY: chromeOpacity.interpolate({ inputRange: [0, 1], outputRange: [-80, 0] }) }],
+          },
+        ]}
+        pointerEvents={chromeHidden ? 'none' : 'box-none'}
+      >
+        <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.header}>
+          <Pressable onPress={onHome} hitSlop={10} style={styles.headerBackBtn} accessibilityRole="button" accessibilityLabel="Back to Home">
+            <Icon path={BACK_ICON} size={20} color={throwColor.inkSoft} strokeWidth={2} />
           </Pressable>
-        </View>
-      </GlassSurface>
+          <Text style={styles.headerTitle}>Throw</Text>
+          <View style={styles.headerRight}>
+            {selectedFriend && (
+              <>
+                {selectedStreak > 0 && (
+                  <View style={styles.streakChip} accessibilityLabel={`${selectedStreak} day throw streak with ${selectedFriend.name}`}>
+                    <Text style={styles.streakText}>🔥{selectedStreak}</Text>
+                  </View>
+                )}
+                <View style={styles.pointsChip} accessibilityLabel={`${selectedPoints} leaderboard points for ${selectedFriend.name}`}>
+                  <Icon path={POINTS_ICON} size={11} color={throwColor.clayDeep} strokeWidth={2} />
+                  <Text style={styles.streakText}>{selectedPoints}</Text>
+                </View>
+              </>
+            )}
+            <Pressable onPress={onOpenSettings} hitSlop={10} accessibilityRole="button" accessibilityLabel="Throw settings">
+              <Icon path={GEAR_ICON} size={19} color={throwColor.inkSoft} strokeWidth={1.8} />
+            </Pressable>
+          </View>
+        </GlassSurface>
+      </Animated.View>
 
       <Animated.View
         style={[
           styles.bottomNavWrap,
-          { opacity: navOpacity, transform: [{ translateY: navOpacity.interpolate({ inputRange: [0, 1], outputRange: [BOTTOM_NAV_CLEARANCE, 0] }) }] },
+          { opacity: chromeOpacity, transform: [{ translateY: chromeOpacity.interpolate({ inputRange: [0, 1], outputRange: [BOTTOM_NAV_CLEARANCE, 0] }) }] },
         ]}
-        pointerEvents={navHidden ? 'none' : 'box-none'}
+        pointerEvents={chromeHidden ? 'none' : 'box-none'}
       >
         <BottomNav
           activeId="throw"
@@ -370,11 +385,12 @@ export function ThrowHomeScreen({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: throwColor.screenBg },
   // Absolutely positioned and rendered after mapArea in the tree, so — like bottomNavWrap below —
-  // it floats over the map's own top edge instead of pushing the map down beneath it.
+  // it floats over the map's own top edge instead of pushing the map down beneath it. The
+  // positioning lives here, on the wrapper, rather than on `header` below — same split as
+  // bottomNavWrap/BottomNav — so the fade/slide Animated.View wrapping it (see the render) has
+  // somewhere to actually apply a transform without fighting this element's own absolute layout.
+  headerWrap: { position: 'absolute', left: 16, right: 16 },
   header: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
