@@ -25,6 +25,9 @@ export interface PaperPlaneStageHandle {
   reset: () => void;
   /** Sets phase to 'ready' directly, for a caller that reached t = FOLD_END via seek() rather than fold(). */
   holdReady: () => void;
+  /** -1 (full left) .. 1 (full right) — banks the held 'ready' plane in place, without moving it,
+   * for a caller driving this from a live horizontal drag. Only takes effect during 'ready'. */
+  setReadyBank: (fraction: number) => void;
   /** 0..1 — maps directly onto the fold timeline (0 = flat sheet, 1 = fully folded plane). */
   seek: (progress: number) => void;
   setOptions: (o: { speed?: number; trail?: boolean; follow?: boolean }) => void;

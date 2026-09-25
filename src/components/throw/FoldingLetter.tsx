@@ -36,6 +36,9 @@ const THROW_CENTER_ZONE = 0.5;
 // How far a center-zone 'ready'-phase drag has to move horizontally, while staying more
 // horizontal than vertical, before it's read as "change recipient" rather than a throw attempt.
 const SWIPE_CONTACT_DX = 60;
+// How many px of horizontal drag maps to the plane's full bank (±1 passed to setReadyBank) —
+// past this the bank is already maxed out, it just doesn't tilt any further.
+const MAX_BANK_DX = 120;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
@@ -120,10 +123,6 @@ export function FoldingLetter({
   const progress = useRef(new Animated.Value(0)).current;
   const progressRef = useRef(0);
   const liftY = useRef(new Animated.Value(0)).current;
-  // Horizontal companion to liftY — only moves during a center-zone 'ready'-phase drag, so the
-  // plane visually follows the finger sideways while the user decides whether they're throwing
-  // or swiping to a different recipient.
-  const liftX = useRef(new Animated.Value(0)).current;
   const liftOpacity = useRef(new Animated.Value(1)).current;
   const stageRef = useRef<PaperPlaneStageHandle>(null);
   const flyDoneRef = useRef<(() => void) | null>(null);
@@ -177,9 +176,9 @@ export function FoldingLetter({
   };
 
   const springLiftBack = () => {
+    stageRef.current?.setReadyBank(0);
     Animated.parallel([
       Animated.spring(liftY, { toValue: 0, useNativeDriver: false, friction: 7, tension: 50 }),
-      Animated.spring(liftX, { toValue: 0, useNativeDriver: false, friction: 7, tension: 50 }),
       Animated.spring(liftOpacity, { toValue: 1, useNativeDriver: false, friction: 7, tension: 50 }),
     ]).start();
   };
@@ -356,8 +355,11 @@ export function FoldingLetter({
               const next = Math.max(0, Math.min(1, 1 + g.dy / FOLD_DRAG_DISTANCE));
               applyFoldProgress(next);
             } else {
+              // Position stays put — only the vertical throw-prep (liftY) moves the plane on
+              // screen. Horizontal drag banks it in place instead (see setReadyBank), so it reads
+              // as "tilting to pick a direction" rather than "sliding sideways".
               liftY.setValue(Math.min(0, g.dy));
-              liftX.setValue(g.dx);
+              stageRef.current?.setReadyBank(g.dx / MAX_BANK_DX);
             }
             return;
           }
@@ -375,6 +377,7 @@ export function FoldingLetter({
             // Clear before settling — same reasoning as the raw DOM tracker's onUp: closes off any
             // stray move event that might otherwise land after release and re-drive progress.
             readyGestureActiveRef.current = false;
+            stageRef.current?.setReadyBank(0);
             if (readyZoneRef.current === 'side') {
               latest.current.settleFold(progressRef.current >= 0.5 ? 1 : 0);
               return;
@@ -425,13 +428,12 @@ export function FoldingLetter({
 
         {paperSize.width > 0 && (
           <Animated.View
-            style={[
-              StyleSheet.absoluteFill,
-              // A constant, gentle nose-down tilt (on top of whatever the drag adds) — the plane
-              // reads as pointing straight ahead and angled slightly down toward the map, rather
-              // than lying flat, matching the reference's resting pose.
-              { opacity: stageOpacity, transform: [{ translateX: liftX }, { translateY: liftY }, { perspective: 800 }, { rotateX: '18deg' }] },
-            ]}
+            // Position only ever moves vertically (liftY, throw-prep) — horizontal drag banks the
+            // plane in place via the 3D engine's own setReadyBank instead of translating this
+            // view, and the engine's own 'ready'-phase pose now handles the straight-ahead,
+            // nose-down resting tilt (see paperPlaneEngine.ts), so no CSS transform trickery is
+            // needed here any more.
+            style={[StyleSheet.absoluteFill, { opacity: stageOpacity, transform: [{ translateY: liftY }] }]}
             pointerEvents="none"
           >
             {stageFailed ? (

@@ -299,6 +299,9 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   const pivot = new THREE.Vector3(0.6, 0.03, defs[FI('wing2', defs)].pivotZ!);
   const flight = new THREE.Group(), shape = new THREE.Group();
   flight.rotation.order = 'YZX';
+  // A bit bigger than the reference's own 1:1 scale — uniform, so it doesn't disturb the crease
+  // simulation (which works in the mesh's local, unscaled space, a child of shape/flight).
+  flight.scale.setScalar(1.25);
   shape.add(mesh);
   flight.add(shape);
   scene.add(flight);
@@ -488,6 +491,10 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   type Phase = 'idle' | 'folding' | 'ready' | 'flying' | 'done';
   let phase: Phase = 'idle', t = 0, speed = 1, trail = true, follow = true, flyT = 0, resetT = 1, last = 0, raf = 0, clock = 0;
   let formation = stateAt(0);
+  // -1..1, set by a caller's horizontal drag while holding the ready plane (see setReadyBank) —
+  // banks it in place without moving it, unlike the fold timeline's own bank/yaw/pitch below.
+  let readyBankExtra = 0;
+  const MAX_READY_BANK = 0.16;
   function setPose(o: Formation, extra: Partial<Formation & { x: number; y: number; z: number; bank: number; yaw: number; pitch: number }> = {}) {
     flight.position.set(pivot.x + o.x + (extra.x || 0), pivot.y + o.y + (extra.y || 0), pivot.z + o.z + (extra.z || 0));
     flight.rotation.set((o.bank || 0) + (extra.bank || 0), (o.yaw || 0) + (extra.yaw || 0), (o.pitch || 0) + (extra.pitch || 0));
@@ -565,7 +572,23 @@ export function createPaperPlane(options: PaperPlaneOptions) {
       setPose(formation, { y: drop });
     } else if (phase === 'ready') {
       const bob = Math.sin(clock * 1.6) * 0.06 * clamp01(clock * 1);
-      setPose(formation, { y: bob, bank: Math.sin(clock * 1.1) * 0.02 });
+      const idleBank = Math.sin(clock * 1.1) * 0.02;
+      // The fold timeline's own resting yaw/pitch/bank (baked into `formation` at t = FOLD_END,
+      // via stateAt's uY-driven terms) is a mid-turn pose — the flying phase keeps rotating yaw
+      // from there up to PI/2 as it launches, so held as-is here the plane reads as turned off to
+      // one side rather than pointing straight ahead. Canceling those three out and substituting a
+      // fixed straight-ahead yaw is what makes the resting plane point where it's about to be
+      // thrown. With `flight.rotation.order` set to 'YZX' and yaw pinned to PI/2, the 'pitch' and
+      // 'bank' Euler slots end up swapped from their names once composed: it's the 'pitch' slot
+      // that now visibly rocks the plane side to side, and the 'bank' slot that visibly noses it
+      // up/down — confirmed empirically (screenshotting full-left vs full-right drag against each
+      // assignment) rather than assumed from the field names.
+      setPose(formation, {
+        y: bob,
+        yaw: PI / 2 - formation.yaw,
+        bank: 0.22 - formation.pitch,
+        pitch: idleBank - formation.bank + readyBankExtra * MAX_READY_BANK,
+      });
     } else if (phase === 'flying' || phase === 'done') {
       flyT += dt * speed;
       const u = flyT;
@@ -632,6 +655,12 @@ export function createPaperPlane(options: PaperPlaneOptions) {
     holdReady() {
       phase = 'ready';
       onPhase?.('ready');
+    },
+    /** -1 (full left) .. 1 (full right) — banks the held 'ready' plane in place, without moving
+     * it, for a caller driving this from a live horizontal drag. Only has any effect while
+     * `phase === 'ready'`; harmless to call otherwise. */
+    setReadyBank(v: number) {
+      readyBankExtra = Math.max(-1, Math.min(1, v));
     },
     setOptions(o: { speed?: number; trail?: boolean; follow?: boolean }) {
       if (o.speed) speed = o.speed;
