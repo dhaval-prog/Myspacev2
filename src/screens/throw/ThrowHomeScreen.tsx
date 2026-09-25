@@ -117,6 +117,19 @@ export function ThrowHomeScreen({
   // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
   const focusTarget = selectedFriend?.location ?? myLocation ?? null;
 
+  // Dragging the folded, ready-to-throw plane sideways (see FoldingLetter's onSwipeContact) cycles
+  // through recipients the same way tapping/swiping the carousel does — 'next' moves toward
+  // higher-index entries (rightward in the carousel), 'prev' toward lower-index ones (leftward).
+  // Selecting a different friend here also re-centers the map, since focusTarget above already
+  // follows selectedFriend.
+  const handleSwipeContact = (direction: 'next' | 'prev') => {
+    const n = friendsWithLocation.length;
+    if (n < 2) return;
+    const idx = Math.max(0, friendsWithLocation.findIndex((f) => f.userId === selectedFriendId));
+    const nextIdx = direction === 'next' ? (idx + 1) % n : (idx - 1 + n) % n;
+    setSelectedFriendId(friendsWithLocation[nextIdx].userId);
+  };
+
   const pins: ThrowMapPin[] = useMemo(() => {
     const list: ThrowMapPin[] = [];
     if (myLocation) list.push({ id: 'self', latitude: myLocation.latitude, longitude: myLocation.longitude, label: 'You', isSelf: true });
@@ -258,6 +271,7 @@ export function ThrowHomeScreen({
               onOpenAddFriend={onOpenAddFriend}
               onOpenInbox={onOpenInbox}
               unreadCount={unreadCount}
+              onSwipeContact={!lockedRecipient && friendsWithLocation.length > 1 ? handleSwipeContact : undefined}
             />
           </View>
         )}
