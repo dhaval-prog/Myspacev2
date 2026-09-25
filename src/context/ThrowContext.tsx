@@ -176,10 +176,22 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
         p_photo_url: draft.photoUrl,
       });
       if (error) return { error: error.message };
+      // Surfaces the letter in Orbit's Chats too — a small system note in the sender/recipient's
+      // own DM thread, same convention as "Missed video call"/"📍 Location". Best-effort: a
+      // connection between the two might not resolve here (e.g. Throw's own friend list is
+      // slightly stale), and the throw itself has already succeeded either way, so failures here
+      // are only warned, never surfaced as an error to the user.
+      const connectionId = fsFriends.find((f) => f.userId === draft.recipientId)?.connectionId;
+      if (connectionId && myId) {
+        const { error: msgErr } = await supabase
+          .from('direct_messages')
+          .insert({ connection_id: connectionId, sender_id: myId, kind: 'system', text: '💌 A letter was thrown' });
+        warn('post throw chat message', msgErr);
+      }
       await refresh();
       return { error: null, letter: toLetter(data as ThrowRow, myId ?? '', nameFor, avatarFor) };
     },
-    [myId, nameFor, avatarFor, refresh],
+    [myId, nameFor, avatarFor, refresh, fsFriends],
   );
 
   const uploadPhoto = useCallback(

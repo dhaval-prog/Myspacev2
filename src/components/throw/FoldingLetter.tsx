@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, LayoutChangeEvent, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, LayoutChangeEvent, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
@@ -51,8 +52,13 @@ interface FoldingLetterProps {
   recipientCity: string;
   /** No recipient to write to yet — disables the fold/throw gesture. */
   disabled?: boolean;
-  /** Called once the user flicks the folded plane upward. Resolve with an error to spring the plane back to 'ready' with a message; resolve with null on success (the parent then navigates away). */
+  /** Called once the user flicks the folded plane upward. Resolve with an error to spring the plane back to 'ready' with a message; resolve with null on success. */
   onThrow: (content: FoldingLetterContent) => Promise<{ error: string | null }>;
+  /** Fires once the local fold-and-liftoff animation finishes after a successful throw — the
+   * parent uses this as its cue to start the map-level flight animation and swap this compose
+   * card out for it (the two are sequenced, not simultaneous, so they don't compete for
+   * attention). */
+  onLaunched: () => void;
   throwLabel?: string;
   /** Opens Orbit's Chats list — its button lives between Photo and Voice in the bottom-controls
    * row, rather than in a separate header. */
@@ -88,6 +94,7 @@ export function FoldingLetter({
   recipientCity,
   disabled,
   onThrow,
+  onLaunched,
   throwLabel = 'Swipe up to throw',
   onOpenChats,
   onOpenAddFriend,
@@ -192,8 +199,9 @@ export function FoldingLetter({
       setPhase('ready');
       stageRef.current?.seek(1);
       stageRef.current?.holdReady();
+    } else {
+      onLaunched();
     }
-    // On success the parent navigates away — nothing left to reset here.
   };
 
   // The PanResponder below is built exactly once (see the empty useMemo deps) and never rebuilt
@@ -443,74 +451,103 @@ export function FoldingLetter({
       {voice.recording && <Text style={styles.readyHint}>{voice.interimText || 'Listening…'}</Text>}
       {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
 
-      <View style={styles.bottomRow}>
-        <Pressable onPress={() => setPhotoSheetOpen(true)} disabled={disabled || phase === 'throwing'} accessibilityRole="button" accessibilityLabel="Add a photo">
-          {({ pressed }) => (
-            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                <Icon path={PHOTO_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
-              </GlassSurface>
-            </View>
-          )}
-        </Pressable>
-
-        <Pressable onPress={onOpenChats} accessibilityRole="button" accessibilityLabel="Chats">
-          {({ pressed }) => (
-            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                <Icon path={CHAT_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
-              </GlassSurface>
-            </View>
-          )}
-        </Pressable>
-
-        <Pressable
-          onPress={() => (voice.recording ? voice.stop() : voice.start())}
-          disabled={disabled || phase === 'throwing'}
-          accessibilityRole="button"
-          accessibilityLabel={voice.recording ? 'Stop recording' : 'Speak your letter'}
+      <View style={styles.bottomRowWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.bottomRowContent}
+          style={styles.bottomRowScroll}
         >
-          {({ pressed }) =>
-            voice.recording ? (
-              <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
-                <View style={[styles.micBtn, styles.micBtnActive]}>
-                  <Icon path={STOP_ICON} size={16} color={throwColor.paper} strokeWidth={1.8} />
-                </View>
-              </View>
-            ) : (
-              <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
-                <GlassSurface tint="light" tintColor={throwGlass.tintStrong} style={styles.micBtn}>
-                  <Icon path={MIC_ICON} size={21} color={throwColor.ink} strokeWidth={1.8} />
+          <Pressable
+            onPress={() => setPhotoSheetOpen(true)}
+            disabled={disabled || phase === 'throwing'}
+            style={styles.bottomRowItem}
+            accessibilityRole="button"
+            accessibilityLabel="Add a photo"
+          >
+            {({ pressed }) => (
+              <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+                <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                  <Icon path={PHOTO_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
                 </GlassSurface>
               </View>
-            )
-          }
-        </Pressable>
+            )}
+          </Pressable>
 
-        <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
-          {({ pressed }) => (
-            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                <Icon path={QR_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
-              </GlassSurface>
-            </View>
-          )}
-        </Pressable>
+          <Pressable onPress={onOpenChats} style={styles.bottomRowItem} accessibilityRole="button" accessibilityLabel="Chats">
+            {({ pressed }) => (
+              <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+                <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                  <Icon path={CHAT_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
+                </GlassSurface>
+              </View>
+            )}
+          </Pressable>
 
-        <Pressable onPress={onOpenInbox} accessibilityRole="button" accessibilityLabel="Inbox">
-          {({ pressed }) => (
-            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                <Icon path={INBOX_ICON} size={19} color={throwColor.ink} strokeWidth={1.8} />
-              </GlassSurface>
-              {unreadCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeLabel}>{unreadCount}</Text>
+          <Pressable
+            onPress={() => (voice.recording ? voice.stop() : voice.start())}
+            disabled={disabled || phase === 'throwing'}
+            style={styles.bottomRowItem}
+            accessibilityRole="button"
+            accessibilityLabel={voice.recording ? 'Stop recording' : 'Speak your letter'}
+          >
+            {({ pressed }) =>
+              voice.recording ? (
+                <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
+                  <View style={[styles.micBtn, styles.micBtnActive]}>
+                    <Icon path={STOP_ICON} size={22} color={throwColor.paper} strokeWidth={1.8} />
+                  </View>
                 </View>
-              )}
-            </View>
-          )}
-        </Pressable>
+              ) : (
+                <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
+                  <GlassSurface tint="light" tintColor={throwGlass.tintStrong} style={styles.micBtn}>
+                    <Icon path={MIC_ICON} size={27} color={throwColor.ink} strokeWidth={1.8} />
+                  </GlassSurface>
+                </View>
+              )
+            }
+          </Pressable>
+
+          <Pressable onPress={onOpenAddFriend} style={styles.bottomRowItem} accessibilityRole="button" accessibilityLabel="Add a friend">
+            {({ pressed }) => (
+              <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+                <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                  <Icon path={QR_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
+                </GlassSurface>
+              </View>
+            )}
+          </Pressable>
+
+          <Pressable onPress={onOpenInbox} style={styles.bottomRowItem} accessibilityRole="button" accessibilityLabel="Inbox">
+            {({ pressed }) => (
+              <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
+                <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
+                  <Icon path={INBOX_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
+                </GlassSurface>
+                {unreadCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeLabel}>{unreadCount}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </Pressable>
+        </ScrollView>
+
+        <LinearGradient
+          colors={['rgba(251,246,236,.95)', 'rgba(251,246,236,0)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.rowFade, styles.rowFadeLeft]}
+          pointerEvents="none"
+        />
+        <LinearGradient
+          colors={['rgba(251,246,236,0)', 'rgba(251,246,236,.95)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.rowFade, styles.rowFadeRight]}
+          pointerEvents="none"
+        />
       </View>
 
       <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={setPhotoUri} />
@@ -538,13 +575,12 @@ const styles = StyleSheet.create({
   readyHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.inkMute, textAlign: 'center', marginTop: 10 },
   error: { fontFamily: throwFont.ui400, fontSize: 12, color: '#B3413A', textAlign: 'center', marginTop: 8 },
   // A "photo pasted onto the letter" look — a small white-bordered frame tucked in the top-right
-  // corner (below the pen-color swatches), tilted slightly like something actually stuck on by
-  // hand. Pinned to a corner rather than spanning the paper's width so it never sits over the
-  // centered writing area below it — LetterCanvas also reserves extra top padding (hasPhoto) as
-  // a second guard against overlap.
+  // corner, tilted slightly like something actually stuck on by hand. Pinned to a corner rather
+  // than spanning the paper's width so it never sits over the centered writing area below it —
+  // LetterCanvas also reserves extra top padding (hasPhoto) as a second guard against overlap.
   photoChip: {
     position: 'absolute',
-    top: 44,
+    top: 16,
     right: 14,
   },
   photoWrap: { width: 100, height: 100 },
@@ -569,21 +605,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 6,
-    marginTop: 14,
-  },
+  // A horizontally scrollable strip rather than a fixed space-between row — the viewport itself
+  // is capped to roughly three icons wide (regardless of how much wider the paper card is), with
+  // a soft fade at each edge hinting there's more to scroll to.
+  bottomRowWrap: { marginTop: 14, alignItems: 'center' },
+  bottomRowScroll: { flexGrow: 0, width: 258 },
+  bottomRowContent: { alignItems: 'center', paddingHorizontal: 6 },
+  bottomRowItem: { marginRight: 18 },
+  rowFade: { position: 'absolute', top: 0, bottom: 0, width: 28 },
+  rowFadeLeft: { left: 0 },
+  rowFadeRight: { right: 0 },
   // Split in two: the outer *Shadow view carries the drop shadow (which needs `overflow: visible`
   // to render), while the inner GlassSurface/View needs `overflow: hidden` so its blur/tint
   // layers respect the rounded corners — the two requirements can't share one style.
-  roundBtnShadow: { width: 46, height: 46, borderRadius: 23, ...throwColor.shadowSoft },
-  roundBtn: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  roundBtnShadow: { width: 60, height: 60, borderRadius: 30, ...throwColor.shadowSoft },
+  roundBtn: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   roundBtnPressed: { opacity: 0.7 },
-  micBtnShadow: { width: 58, height: 58, borderRadius: 29, ...throwColor.shadowSoft },
-  micBtn: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
+  micBtnShadow: { width: 76, height: 76, borderRadius: 38, ...throwColor.shadowSoft },
+  micBtn: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
   micBtnActive: { backgroundColor: throwColor.clayDeep },
   badge: {
     position: 'absolute',
