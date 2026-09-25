@@ -235,6 +235,10 @@ interface FriendsContextValue {
   declineRequest: (connectionId: string) => Promise<void>;
   cancelRequest: (connectionId: string) => Promise<void>;
   removeFriend: (connectionId: string) => Promise<void>;
+  /** Blocks this connection — they're removed from the friends list immediately, like
+   * `removeFriend`, but unlike a plain removal the connection stays on record as blocked so a new
+   * request from them (or to them) is rejected server-side instead of silently re-friending. */
+  blockFriend: (connectionId: string) => Promise<void>;
   nudge: (connectionId: string) => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
   sendPhoto: (localUri: string) => Promise<{ error: string | null }>;
@@ -746,6 +750,17 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     if (!isSupabaseConfigured) return;
     const { error } = await supabase.rpc('remove_friend_connection', { p_connection_id: connectionId });
     warn('remove friend', error);
+    setConnectionRows((prev) => prev.filter((c) => c.id !== connectionId));
+    if (focusedConnectionId === connectionId) {
+      setFocusedConnectionId(null);
+      setPage('chats');
+    }
+  };
+
+  const blockFriend = async (connectionId: string) => {
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.rpc('block_friend_connection', { p_connection_id: connectionId });
+    warn('block friend', error);
     setConnectionRows((prev) => prev.filter((c) => c.id !== connectionId));
     if (focusedConnectionId === connectionId) {
       setFocusedConnectionId(null);
@@ -1377,6 +1392,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     declineRequest,
     cancelRequest,
     removeFriend,
+    blockFriend,
     nudge,
     sendMessage,
     sendPhoto,

@@ -17,7 +17,7 @@ const MIC_ICON = 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z M6 11a6 6
 const STOP_ICON = 'M6 6h12v12H6z';
 const INBOX_ICON = 'M3 11h5l1.8 2.8h4.4L16 11h5 M3 11V5h18v6 M3 11v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7';
 const X_ICON = 'M6 6l12 12M18 6L6 18';
-// Same glyphs as HomeScreen/FriendsHomeScreen's own Chats/QR icons — reused here so this row
+// Same glyphs as HomeScreen/ChatsListScreen's own Chats/QR icons — reused here so this row
 // reads as the same actions, not a Throw-specific reinterpretation.
 const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
 const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';

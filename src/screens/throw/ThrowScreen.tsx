@@ -6,6 +6,7 @@ import { ThrowLocationSetupScreen } from './ThrowLocationSetupScreen';
 import { ThrowHomeScreen } from './ThrowHomeScreen';
 import { ThrowInboxScreen } from './ThrowInboxScreen';
 import { ThrowLetterDetailScreen } from './ThrowLetterDetailScreen';
+import { ThrowSettingsScreen } from './ThrowSettingsScreen';
 
 interface ThrowScreenProps {
   onHome: () => void;
@@ -71,7 +72,7 @@ function ThrowNavigator({
   }
 
   if (screen.name === 'settings') {
-    return <ThrowLocationSetupScreen mode="edit" onDone={() => setScreen({ name: 'home' })} onBack={() => setScreen({ name: 'home' })} />;
+    return <ThrowSettingsScreen onBack={() => setScreen({ name: 'home' })} />;
   }
 
   if (screen.name === 'inbox') {

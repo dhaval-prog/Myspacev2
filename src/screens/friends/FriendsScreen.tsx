@@ -1,6 +1,5 @@
 import React from 'react';
 import { useFriends } from '../../context/FriendsContext';
-import { FriendsHomeScreen } from './FriendsHomeScreen';
 import { AddFriendScreen } from './AddFriendScreen';
 import { FriendsScannerScreen } from './FriendsScannerScreen';
 import { MatchFoundScreen } from './MatchFoundScreen';
@@ -13,19 +12,21 @@ import { GroupChatScreen } from './GroupChatScreen';
 
 interface FriendsScreenProps {
   onHome: () => void;
-  /** Threaded through to the bottom nav dock on the Friends home, Chats list, and Add-a-friend screens. */
+  /** Threaded through to the bottom nav dock on the Chats list and Add-a-friend screens. */
   onOpenExpenses: () => void;
   onOpenSplit: () => void;
-  /** Opens Radar (live locations) — surfaced from the Friends home, above the search bar. */
-  onOpenLiveLocations: () => void;
   /** Opens Throw — surfaced from the Chats list's pinned row. */
   onOpenThrow: () => void;
   /** Opens Throw straight to its inbox — also surfaced from the Chats list's pinned row. */
   onOpenThrowInbox: () => void;
+  /** Opens the Games hub — also surfaced from the Chats list's pinned row. */
+  onOpenGames: () => void;
 }
 
-/** The Friends & chat feature: friend requests and direct messaging, and every screen it opens. */
-export function FriendsScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenLiveLocations, onOpenThrow, onOpenThrowInbox }: FriendsScreenProps) {
+/** The Friends & chat feature: friend requests and direct messaging, and every screen it opens.
+ * There's no standalone "Friends home" page any more — the Chats list (with its "Add a friend"
+ * pinned icon) is the whole feature's landing point now. */
+export function FriendsScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenThrow, onOpenThrowInbox, onOpenGames }: FriendsScreenProps) {
   const { page } = useFriends();
   switch (page) {
     case 'add':
@@ -36,16 +37,6 @@ export function FriendsScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenLiveL
       return <MatchFoundScreen />;
     case 'requests':
       return <FriendRequestsScreen />;
-    case 'chats':
-      return (
-        <ChatsListScreen
-          onHome={onHome}
-          onOpenExpenses={onOpenExpenses}
-          onOpenSplit={onOpenSplit}
-          onOpenThrow={onOpenThrow}
-          onOpenThrowInbox={onOpenThrowInbox}
-        />
-      );
     case 'chat':
       return <ChatThreadScreen />;
     case 'locked-chat':
@@ -56,7 +47,14 @@ export function FriendsScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenLiveL
       return <GroupChatScreen />;
     default:
       return (
-        <FriendsHomeScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenSplit={onOpenSplit} onOpenLiveLocations={onOpenLiveLocations} />
+        <ChatsListScreen
+          onHome={onHome}
+          onOpenExpenses={onOpenExpenses}
+          onOpenSplit={onOpenSplit}
+          onOpenThrow={onOpenThrow}
+          onOpenThrowInbox={onOpenThrowInbox}
+          onOpenGames={onOpenGames}
+        />
       );
   }
 }

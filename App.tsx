@@ -28,7 +28,6 @@ import { GamesDashboardScreen } from './src/screens/games/GamesDashboardScreen';
 import { CardsGameScreen } from './src/screens/games/cards/CardsGameScreen';
 import { TriviaGameScreen } from './src/screens/games/trivia/TriviaGameScreen';
 import { ThrowScreen } from './src/screens/throw/ThrowScreen';
-import { LiveLocationsScreen } from './src/screens/location/LiveLocationsScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
 import type { ViewId } from './src/data/views';
 
@@ -46,7 +45,6 @@ type Screen =
   | { name: 'cards'; initialTab?: 'create' | 'join' }
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
   | { name: 'throw'; openThrowId?: string; openInbox?: boolean }
-  | { name: 'liveLocations' }
   | { name: 'account'; from: 'home' | 'expenses' | 'split' };
 
 function AuthNavigator() {
@@ -60,7 +58,7 @@ function AuthNavigator() {
 
 function AppNavigator() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
-  const { openChat, openChatWithUser, receivedRequests, goRequests, goChats, goAdd } = useFriends();
+  const { openChat, receivedRequests, goRequests, goChats, goAdd } = useFriends();
 
   const openNotificationTarget = (target: NotificationTarget) => {
     if (target.screen === 'expenses') setScreen({ name: 'expenses', focusCardId: target.cardId });
@@ -120,9 +118,9 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'home' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenSplit={() => setScreen({ name: 'split' })}
-        onOpenLiveLocations={() => setScreen({ name: 'liveLocations' })}
         onOpenThrow={() => setScreen({ name: 'throw' })}
         onOpenThrowInbox={() => setScreen({ name: 'throw', openInbox: true })}
+        onOpenGames={() => setScreen({ name: 'gamesHub' })}
       />
     );
   }
@@ -185,19 +183,6 @@ function AppNavigator() {
         }}
         initialThrowId={screen.openThrowId}
         initialScreen={screen.openInbox ? 'inbox' : undefined}
-      />
-    );
-  }
-  if (screen.name === 'liveLocations') {
-    return (
-      <LiveLocationsScreen
-        onBack={() => setScreen({ name: 'home' })}
-        onOpenChat={(userId) => {
-          openChatWithUser(userId);
-          setScreen({ name: 'friends' });
-        }}
-        onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenSplit={() => setScreen({ name: 'split' })}
       />
     );
   }
