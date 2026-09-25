@@ -13,6 +13,7 @@ import { formatMiles } from '../../utils/geo';
 import { flightPath } from '../../utils/mapProjection';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
+import { useGameStats } from '../../context/GameStatsContext';
 import type { StrokePath, ThrowLetter } from '../../types/throw';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 import type { LatLng } from '../../utils/geo';
@@ -22,6 +23,8 @@ import type { LatLng } from '../../utils/geo';
 const GEAR_ICON =
   'M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z';
 const BACK_ICON = 'M15 18l-6-6 6-6';
+// Feather Icons' "award" glyph (24x24 viewBox) — used for the leaderboard-points chip.
+const POINTS_ICON = 'M12 15a7 7 0 100-14 7 7 0 000 14z M8.21 13.89L7 23l5-3 5 3-1.21-9.12';
 
 // How long the arrival card stays up before the map returns to normal compose mode.
 const DELIVERED_HOLD_MS = 1800;
@@ -78,7 +81,8 @@ export function ThrowHomeScreen({
 }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { myLocation, friends, unreadCount, streak, sendThrow, uploadPhoto } = useThrow();
+  const { myLocation, friends, unreadCount, streakFor, sendThrow, uploadPhoto } = useThrow();
+  const { statsFor } = useGameStats();
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const initializedRef = useRef(false);
 
@@ -106,6 +110,8 @@ export function ThrowHomeScreen({
 
   const selectedIndex = Math.max(0, friendsWithLocation.findIndex((f) => f.userId === selectedFriendId));
   const selectedFriend = friendsWithLocation.find((f) => f.userId === selectedFriendId) ?? null;
+  const selectedStreak = selectedFriend ? streakFor(selectedFriend.userId) : 0;
+  const selectedPoints = selectedFriend ? statsFor(selectedFriend.userId).totalPoints : 0;
 
   // Real "zoom to contact": the selected friend's own location, falling back to the user's own
   // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
@@ -207,23 +213,6 @@ export function ThrowHomeScreen({
     <View style={styles.screen}>
       <ThrowGlassBackdrop heightMultiplier={0.6} />
 
-      <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.header, { marginTop: insets.top + 10 }]}>
-        <Pressable onPress={onHome} hitSlop={10} style={styles.headerBackBtn} accessibilityRole="button" accessibilityLabel="Back to Home">
-          <Icon path={BACK_ICON} size={20} color={throwColor.inkSoft} strokeWidth={2} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Throw</Text>
-        <View style={styles.headerRight}>
-          {streak > 0 && (
-            <View style={styles.streakChip} accessibilityLabel={`${streak} day throw streak`}>
-              <Text style={styles.streakText}>🔥{streak}</Text>
-            </View>
-          )}
-          <Pressable onPress={onOpenSettings} hitSlop={10} accessibilityRole="button" accessibilityLabel="Throw settings">
-            <Icon path={GEAR_ICON} size={19} color={throwColor.inkSoft} strokeWidth={1.8} />
-          </Pressable>
-        </View>
-      </GlassSurface>
-
       <View style={styles.mapArea}>
         <ThrowMap
           pins={pins}
@@ -238,14 +227,14 @@ export function ThrowHomeScreen({
         {!inFlight &&
           (lockedRecipient ? (
             selectedFriend && (
-              <View style={styles.recipientOverlay}>
+              <View style={[styles.recipientOverlay, { top: insets.top + 78 }]}>
                 <Text style={styles.replyLine} numberOfLines={1}>
                   Throwing back to {selectedFriend.name}
                 </Text>
               </View>
             )
           ) : (
-            <View style={styles.recipientOverlay}>
+            <View style={[styles.recipientOverlay, { top: insets.top + 78 }]}>
               <RecipientCarousel friends={friendsWithLocation} selectedIndex={selectedIndex} onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)} />
             </View>
           ))}
@@ -291,6 +280,31 @@ export function ThrowHomeScreen({
         )}
       </View>
 
+      <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.header, { top: insets.top + 10 }]}>
+        <Pressable onPress={onHome} hitSlop={10} style={styles.headerBackBtn} accessibilityRole="button" accessibilityLabel="Back to Home">
+          <Icon path={BACK_ICON} size={20} color={throwColor.inkSoft} strokeWidth={2} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Throw</Text>
+        <View style={styles.headerRight}>
+          {selectedFriend && (
+            <>
+              {selectedStreak > 0 && (
+                <View style={styles.streakChip} accessibilityLabel={`${selectedStreak} day throw streak with ${selectedFriend.name}`}>
+                  <Text style={styles.streakText}>🔥{selectedStreak}</Text>
+                </View>
+              )}
+              <View style={styles.pointsChip} accessibilityLabel={`${selectedPoints} leaderboard points for ${selectedFriend.name}`}>
+                <Icon path={POINTS_ICON} size={11} color={throwColor.clayDeep} strokeWidth={2} />
+                <Text style={styles.streakText}>{selectedPoints}</Text>
+              </View>
+            </>
+          )}
+          <Pressable onPress={onOpenSettings} hitSlop={10} accessibilityRole="button" accessibilityLabel="Throw settings">
+            <Icon path={GEAR_ICON} size={19} color={throwColor.inkSoft} strokeWidth={1.8} />
+          </Pressable>
+        </View>
+      </GlassSurface>
+
       <View style={styles.bottomNavWrap}>
         <BottomNav
           activeId="throw"
@@ -309,11 +323,15 @@ export function ThrowHomeScreen({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: throwColor.screenBg },
+  // Absolutely positioned and rendered after mapArea in the tree, so — like bottomNavWrap below —
+  // it floats over the map's own top edge instead of pushing the map down beneath it.
   header: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 16,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: throwRadius.pill,
@@ -322,12 +340,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontFamily: throwFont.hand700, fontSize: 26, color: throwColor.ink },
   headerBackBtn: { width: 48, alignItems: 'flex-start' },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 48, justifyContent: 'flex-end' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 48, justifyContent: 'flex-end' },
   streakChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  pointsChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   streakText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.clayDeep },
-  // No horizontal/bottom margin or rounding — the map runs edge-to-edge on those three sides,
-  // with only a sliver of top margin below the floating header pill.
-  mapArea: { flex: 1, marginTop: 4 },
+  // Fills the whole screen edge-to-edge on all four sides — the header pill and BottomNav dock
+  // both float on top of it (see their own comments) rather than the map making room for either.
+  mapArea: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   // The BottomNav dock floats over the map's own bottom edge instead of pushing it up — a
   // sibling of mapArea, absolutely pinned to the screen's bottom so it overlaps in front.
   bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },

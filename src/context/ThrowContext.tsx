@@ -68,9 +68,10 @@ interface ThrowContextValue {
   /** Letters I received, newest first. */
   inbox: ThrowLetter[];
   unreadCount: number;
-  /** Consecutive calendar days (UTC) with at least one thrown letter, ending today or yesterday —
-   * 0 once a day's gone by with nothing thrown. */
-  streak: number;
+  /** Consecutive calendar days (UTC) I've thrown at least one letter to this specific counterpart,
+   * ending today or yesterday — 0 once a day's gone by with nothing thrown to them, or if we've
+   * never thrown to them at all. */
+  streakFor: (counterpartId: string) => number;
   sendThrow: (draft: ComposeDraft) => Promise<{ error: string | null; letter?: ThrowLetter }>;
   /** Uploads a local photo (camera or library) to this user's own throw-media folder, returning
    * its public URL for inclusion in a ComposeDraft. Separate from sendThrow itself since the
@@ -95,7 +96,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
   const [myLocation, setMyLocationState] = useState<ThrowLocation | null>(null);
   const [friendLocations, setFriendLocations] = useState<Record<string, ThrowLocation>>({});
   const [rows, setRows] = useState<ThrowRow[]>([]);
-  const [streak, setStreak] = useState(0);
+  const [streaksByCounterpart, setStreaksByCounterpart] = useState<Record<string, number>>({});
   const hasLoadedRef = useRef(false);
 
   const nameFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.name ?? 'Someone', [fsFriends]);
@@ -110,22 +111,27 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     const [meRes, throwsRes, streakRes] = await Promise.all([
       supabase.from('throw_profiles').select('city,country,latitude,longitude').eq('user_id', myId).maybeSingle(),
       supabase.from('throws').select('*').or(`sender_id.eq.${myId},recipient_id.eq.${myId}`).order('created_at', { ascending: false }),
-      supabase.from('throw_streaks').select('current_streak,last_throw_date').eq('user_id', myId).maybeSingle(),
+      supabase.from('throw_streaks').select('counterpart_id,current_streak,last_throw_date').eq('user_id', myId),
     ]);
     warn('load my location', meRes.error);
     warn('load throws', throwsRes.error);
-    warn('load throw streak', streakRes.error);
+    warn('load throw streaks', streakRes.error);
 
     if (meRes.data) {
       const d = meRes.data as { city: string; country: string; latitude: number; longitude: number };
       setMyLocationState({ city: d.city, country: d.country, latitude: d.latitude, longitude: d.longitude });
     }
-    // The stored streak only advances when a throw actually happens — if a whole day's gone by
-    // with nothing thrown since, it's lapsed even though the row hasn't been touched, so that's
-    // checked here at read time rather than needing a write just to notice the gap.
-    const streakRow = streakRes.data as { current_streak: number; last_throw_date: string } | null;
-    const lastThrowInStreak = streakRow && (streakRow.last_throw_date === utcDateString(0) || streakRow.last_throw_date === utcDateString(-1));
-    setStreak(lastThrowInStreak ? streakRow!.current_streak : 0);
+    // Each row's stored streak only advances when a throw to that counterpart actually happens —
+    // if a whole day's gone by with nothing thrown to them since, it's lapsed even though the row
+    // hasn't been touched, so that's checked here at read time rather than needing a write just to
+    // notice the gap.
+    const streakRows = (streakRes.data as { counterpart_id: string; current_streak: number; last_throw_date: string }[] | null) ?? [];
+    const streakMap: Record<string, number> = {};
+    for (const r of streakRows) {
+      const inStreak = r.last_throw_date === utcDateString(0) || r.last_throw_date === utcDateString(-1);
+      streakMap[r.counterpart_id] = inStreak ? r.current_streak : 0;
+    }
+    setStreaksByCounterpart(streakMap);
     // A letter deleted from "my" side (sender or recipient, whichever I am) stays in the shared
     // row for the other person until they've deleted it too (see delete_throw) — so filtering it
     // out of my own list happens here, client-side, rather than in the query itself.
@@ -262,7 +268,9 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     [fsFriends, friendLocations],
   );
 
-  const value: ThrowContextValue = { loading, myLocation, setMyLocation, friends, letters, inbox, unreadCount, streak, sendThrow, uploadPhoto, markRead, deleteThrow, refresh };
+  const streakFor = useCallback((counterpartId: string) => streaksByCounterpart[counterpartId] ?? 0, [streaksByCounterpart]);
+
+  const value: ThrowContextValue = { loading, myLocation, setMyLocation, friends, letters, inbox, unreadCount, streakFor, sendThrow, uploadPhoto, markRead, deleteThrow, refresh };
   return <ThrowContext.Provider value={value}>{children}</ThrowContext.Provider>;
 }
 
