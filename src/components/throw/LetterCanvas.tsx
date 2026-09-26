@@ -1,6 +1,6 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
 import { Image, StyleSheet, TextInput, View } from 'react-native';
-import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwFont, throwNightColor, throwRadius } from '../../theme/throwTokens';
 import type { StrokePath } from '../../types/throw';
 
 const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
@@ -24,6 +24,9 @@ interface LetterCanvasProps {
   /** One or more photos are pasted in a strip near the top (see FoldingLetter's photoStripWrap)
    * — reserves extra top padding so the writing area doesn't start underneath it. */
   hasPhoto?: boolean;
+  /** Swaps the cream paper texture and blue ink for the dark "night" skin (see throwNightColor)
+   * — driven by the destination's local day/night, same signal ThrowMap's own palette follows. */
+  isNight?: boolean;
 }
 
 export interface LetterCanvasHandle {
@@ -44,14 +47,14 @@ export interface LetterCanvasHandle {
  * the plane's baked texture, so the writing surface and the measured surface need to be the same
  * rectangle.
  */
-export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas({ onContentChange, hasPhoto }, ref) {
+export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas({ onContentChange, hasPhoto, isNight }, ref) {
   const [typedText, setTypedText] = useState('');
   // The current phrase's not-yet-final transcript — shown live appended after typedText (see
   // displayText below) so dictated words appear on the paper as they're spoken, not only once
   // each phrase is recognized as finished. Never itself committed to typedText directly; a final
   // result replaces it via appendText, which is what actually persists the words.
   const [interimText, setInterimTextState] = useState('');
-  const penColor = INK_BLUE;
+  const penColor = isNight ? throwNightColor.ink : INK_BLUE;
 
   useImperativeHandle(
     ref,
@@ -84,14 +87,14 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
   }, [typedText, penColor]);
 
   return (
-    <View style={styles.wrap}>
-      <Image source={paperTextureAsset} style={StyleSheet.absoluteFill} resizeMode="cover" />
+    <View style={[styles.wrap, isNight && { backgroundColor: throwNightColor.paper }]}>
+      {isNight ? null : <Image source={paperTextureAsset} style={StyleSheet.absoluteFill} resizeMode="cover" />}
 
       <TextInput
         style={[StyleSheet.absoluteFill, styles.typedInput, hasPhoto && styles.typedInputWithPhoto, { color: penColor }]}
         multiline
         placeholder="Write something for your loved one"
-        placeholderTextColor={PLACEHOLDER_COLOR}
+        placeholderTextColor={isNight ? throwNightColor.placeholder : PLACEHOLDER_COLOR}
         value={displayText}
         // Ignores edits while a live interim transcript is showing — the box is displaying
         // dictated-but-not-yet-final words the user isn't meant to be typing over at that exact

@@ -10,6 +10,7 @@ import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { formatMiles } from '../../utils/geo';
 import { flightPath, spreadCoincidentPins } from '../../utils/mapProjection';
+import { isDaytimeAt } from '../../utils/solarTime';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import { useThrowAlerts } from '../../context/ThrowAlertsContext';
@@ -175,6 +176,23 @@ export function ThrowHomeScreen({
   // Real "zoom to contact": the selected friend's own location, falling back to the user's own
   // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
   const focusTarget = selectedFriend?.location ?? myLocation ?? null;
+
+  // The letter paper's own night skin (see FoldingLetter's isNight prop) follows the exact same
+  // day/night signal ThrowMap's own palette already does — the destination's local solar time,
+  // not the viewer's own clock — recomputed on the same cadence ThrowMap uses so a session left
+  // open across the boundary (or a contact switch into a different part of the world) still
+  // catches up.
+  const [isDay, setIsDay] = useState(() => (focusTarget ? isDaytimeAt(focusTarget.longitude) : true));
+  useEffect(() => {
+    if (!focusTarget) {
+      setIsDay(true);
+      return;
+    }
+    const recompute = () => setIsDay(isDaytimeAt(focusTarget.longitude));
+    recompute();
+    const interval = setInterval(recompute, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [focusTarget?.longitude]);
 
   // Dragging the folded, ready-to-throw plane sideways (see FoldingLetter's onContactDragStart /
   // onContactDragOffset) cycles through recipients live, the same direction as swiping the
@@ -402,6 +420,7 @@ export function ThrowHomeScreen({
               onAlertScheduleChange={handleAlertScheduleChange}
               hideBadges={isSelfSelected}
               onHasContentChange={isSelfSelected ? handleHasContentChange : undefined}
+              isNight={!isDay}
             />
           </Animated.View>
         )}
