@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
 import { FoldingLetter } from '../../components/throw/FoldingLetter';
+import { AlertScheduleHeader } from '../../components/throw/AlertScheduleHeader';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { GlassSurface } from '../../components/friends/GlassSurface';
 import { BottomNav } from '../../components/BottomNav';
@@ -12,8 +13,11 @@ import { formatMiles } from '../../utils/geo';
 import { flightPath, spreadCoincidentPins } from '../../utils/mapProjection';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
+import { useThrowAlerts } from '../../context/ThrowAlertsContext';
+import { useAuth } from '../../context/AuthContext';
 import { useGameStats } from '../../context/GameStatsContext';
-import type { StrokePath, ThrowLetter } from '../../types/throw';
+import { formatAlertSchedule } from '../../utils/throwAlerts';
+import type { AlertSchedule, StrokePath, ThrowLetter } from '../../types/throw';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 import type { LatLng } from '../../utils/geo';
 
@@ -33,6 +37,12 @@ type FlightPhase = 'in_flight' | 'delivered';
 interface FlightState {
   letter: ThrowLetter;
   phase: FlightPhase;
+  /** A self-reminder alert being "thrown" to yourself rather than a real letter to a friend —
+   * same fold/launch/flight visuals, different delivered-state copy. */
+  isAlert?: boolean;
+  /** Snapshot of formatAlertSchedule at the moment the alert was created — alertSchedule itself
+   * gets reset for the next reminder well before this flight finishes playing out. */
+  alertScheduleSummary?: string;
 }
 
 function flightDurationMs(miles: number): number {
@@ -43,6 +53,8 @@ function flightDurationMs(miles: number): number {
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+const DEFAULT_ALERT_SCHEDULE: AlertSchedule = { recurrence: 'once', hour: 9, minute: 0, daysOfWeek: [], dayOfMonth: 1 };
 
 interface ThrowHomeScreenProps {
   onHome: () => void;
@@ -75,9 +87,13 @@ export function ThrowHomeScreen({
 }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { myLocation, friends, unreadCount, streakFor, sendThrow, uploadPhoto } = useThrow();
+  const { user } = useAuth();
+  const myId = user?.id ?? null;
+  const { myLocation, myName, myAvatarUrl, friends, unreadCount, streakFor, sendThrow, uploadPhoto } = useThrow();
+  const { createAlert } = useThrowAlerts();
   const { statsFor } = useGameStats();
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [alertSchedule, setAlertSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
   const initializedRef = useRef(false);
 
   const [flight, setFlight] = useState<FlightState | null>(null);
@@ -101,11 +117,11 @@ export function ThrowHomeScreen({
     const hidden = value > 0.5;
     setChromeHidden((prev) => (prev === hidden ? prev : hidden));
   };
-  // Holds the letter between a successful `sendThrow` and FoldingLetter's own local
+  // Holds the letter between a successful `sendThrow`/`createAlert` and FoldingLetter's own local
   // fold-and-liftoff animation finishing (`onLaunched`) — the map flight only starts once that
   // local flourish is done, so the two animations play back to back rather than fighting for
   // attention.
-  const pendingLetterRef = useRef<ThrowLetter | null>(null);
+  const pendingLaunchRef = useRef<{ letter: ThrowLetter; isAlert: boolean; alertScheduleSummary?: string } | null>(null);
   const flightRunIdRef = useRef(0);
   // Snapshot of selectedIndex taken when a contact-drag starts (see handleContactDragStart) —
   // every live offset during that same drag is computed relative to this fixed base, not to
@@ -113,8 +129,17 @@ export function ThrowHomeScreen({
   // recipient stays linear all the way through instead of compounding.
   const dragBaseIndexRef = useRef(0);
 
-  const friendsWithLocation = useMemo(() => friends.filter((f) => f.location), [friends]);
-  const hasFriendsAtAll = friends.length > 0;
+  // "Myself" is always the first contact — opening Throw defaults straight to your own location
+  // and the alert-schedule paper, rather than requiring at least one friend to have anything to
+  // throw to.
+  const selfEntry = useMemo(
+    () => (myId && myLocation ? { userId: myId, name: myName, avatarUrl: myAvatarUrl, location: myLocation } : null),
+    [myId, myName, myAvatarUrl, myLocation],
+  );
+  const friendsWithLocation = useMemo(() => {
+    const withLoc = friends.filter((f) => f.location);
+    return selfEntry ? [selfEntry, ...withLoc] : withLoc;
+  }, [friends, selfEntry]);
 
   useEffect(() => {
     if (initializedRef.current || friendsWithLocation.length === 0) return;
@@ -127,8 +152,9 @@ export function ThrowHomeScreen({
 
   const selectedIndex = Math.max(0, friendsWithLocation.findIndex((f) => f.userId === selectedFriendId));
   const selectedFriend = friendsWithLocation.find((f) => f.userId === selectedFriendId) ?? null;
-  const selectedStreak = selectedFriend ? streakFor(selectedFriend.userId) : 0;
-  const selectedPoints = selectedFriend ? statsFor(selectedFriend.userId).totalPoints : 0;
+  const isSelfSelected = !!selectedFriend && selectedFriend.userId === myId;
+  const selectedStreak = selectedFriend && !isSelfSelected ? streakFor(selectedFriend.userId) : 0;
+  const selectedPoints = selectedFriend && !isSelfSelected ? statsFor(selectedFriend.userId).totalPoints : 0;
 
   // Real "zoom to contact": the selected friend's own location, falling back to the user's own
   // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
@@ -153,14 +179,15 @@ export function ThrowHomeScreen({
 
   const pins: ThrowMapPin[] = useMemo(() => {
     const list: ThrowMapPin[] = [];
-    if (myLocation) list.push({ id: 'self', latitude: myLocation.latitude, longitude: myLocation.longitude, label: 'You', isSelf: true });
     for (const f of friendsWithLocation) {
+      const isSelf = f.userId === myId;
       const selected = f.userId === selectedFriendId;
       list.push({
         id: f.userId,
         latitude: f.location!.latitude,
         longitude: f.location!.longitude,
-        label: f.name.split(' ')[0],
+        label: isSelf ? 'You' : f.name.split(' ')[0],
+        isSelf,
         selected,
         dimmed: !selected && friendsWithLocation.length > 1,
         onPress: lockedRecipient ? undefined : () => setSelectedFriendId(f.userId),
@@ -171,13 +198,13 @@ export function ThrowHomeScreen({
     // entirely hidden behind the other — this fans coincident pins out into a small, still
     // visibly "same place" cluster so both are visible and tappable.
     return spreadCoincidentPins(list);
-  }, [myLocation, friendsWithLocation, selectedFriendId, lockedRecipient]);
+  }, [friendsWithLocation, selectedFriendId, lockedRecipient, myId]);
 
-  const runFlight = async (letter: ThrowLetter) => {
+  const runFlight = async (letter: ThrowLetter, isAlert: boolean, alertScheduleSummary?: string) => {
     const runId = ++flightRunIdRef.current;
     const stillCurrent = () => flightRunIdRef.current === runId;
 
-    setFlight({ letter, phase: 'in_flight' });
+    setFlight({ letter, phase: 'in_flight', isAlert, alertScheduleSummary });
     flightAnim.setValue(0);
     // Throttled rather than applied on every animation frame — the map camera no longer follows
     // the plane (see this screen's doc comment), but the plane marker itself still repaints on
@@ -201,7 +228,7 @@ export function ThrowHomeScreen({
     flightAnim.removeListener(listenerId);
     if (!stillCurrent()) return;
 
-    setFlight({ letter, phase: 'delivered' });
+    setFlight({ letter, phase: 'delivered', isAlert, alertScheduleSummary });
     await wait(DELIVERED_HOLD_MS);
     if (!stillCurrent()) return;
 
@@ -211,6 +238,50 @@ export function ThrowHomeScreen({
 
   const handleThrow = async (content: { messageText: string | null; strokes: StrokePath[] | null; penColor: string; photoUris: string[] }) => {
     if (!selectedFriend) return { error: 'Pick someone to throw to first.' };
+
+    if (isSelfSelected) {
+      if (!content.messageText?.trim()) return { error: 'Write your reminder first.' };
+      const { error } = await createAlert(alertSchedule, {
+        messageText: content.messageText,
+        strokes: content.strokes,
+        penColor: content.penColor,
+      });
+      if (error) return { error };
+      // A same-location "flight" purely for the existing fold/launch/land visual lifecycle
+      // (see runFlight/DELIVERED_HOLD_MS) — the delivered-state copy below reads this as an
+      // alert instead of a letter to a friend.
+      const scheduleSummary = formatAlertSchedule(alertSchedule);
+      const now = new Date().toISOString();
+      const alertLetter: ThrowLetter = {
+        id: `alert-${Date.now()}`,
+        senderId: myId ?? '',
+        recipientId: myId ?? '',
+        counterpartId: myId ?? '',
+        counterpartName: myName,
+        counterpartAvatarUrl: myAvatarUrl,
+        direction: 'sent',
+        messageText: content.messageText,
+        strokes: content.strokes,
+        penColor: content.penColor,
+        photoUrls: [],
+        senderCity: myLocation?.city ?? '',
+        senderCountry: myLocation?.country ?? '',
+        senderLatitude: myLocation?.latitude ?? 0,
+        senderLongitude: myLocation?.longitude ?? 0,
+        recipientCity: myLocation?.city ?? '',
+        recipientCountry: myLocation?.country ?? '',
+        recipientLatitude: myLocation?.latitude ?? 0,
+        recipientLongitude: myLocation?.longitude ?? 0,
+        distanceMiles: 0,
+        status: 'thrown',
+        createdAt: now,
+        readAt: null,
+        repliedToThrowId: null,
+      };
+      pendingLaunchRef.current = { letter: alertLetter, isAlert: true, alertScheduleSummary: scheduleSummary };
+      setAlertSchedule(DEFAULT_ALERT_SCHEDULE);
+      return { error: null };
+    }
 
     const photoUrls: string[] = [];
     for (const uri of content.photoUris) {
@@ -228,14 +299,14 @@ export function ThrowHomeScreen({
       repliedToThrowId: lockedRecipient?.repliedToThrowId,
     });
     if (error || !letter) return { error: error ?? 'Could not send — try again.' };
-    pendingLetterRef.current = letter;
+    pendingLaunchRef.current = { letter, isAlert: false };
     return { error: null };
   };
 
   const handleLaunched = () => {
-    const letter = pendingLetterRef.current;
-    pendingLetterRef.current = null;
-    if (letter) runFlight(letter);
+    const pending = pendingLaunchRef.current;
+    pendingLaunchRef.current = null;
+    if (pending) runFlight(pending.letter, pending.isAlert, pending.alertScheduleSummary);
   };
 
   const inFlight = flight !== null;
@@ -277,14 +348,7 @@ export function ThrowHomeScreen({
             </View>
           ))}
 
-        {!inFlight && !hasFriendsAtAll && (
-          <View style={styles.emptyOverlay}>
-            <Text style={styles.emptyTitle}>Nothing to throw yet.</Text>
-            <Text style={styles.emptyBody}>Add people to your circle to start sending letters across the world.</Text>
-          </View>
-        )}
-
-        {!inFlight && hasFriendsAtAll && selectedFriend && (
+        {!inFlight && selectedFriend && (
           // `bottom` shrinks from its normal BOTTOM_NAV_CLEARANCE-reserved position down to just
           // the safe-area inset as the letter folds, on the same chromeOpacity value that already
           // fades BottomNav out — that reserved clearance exists so the card clears the *visible*
@@ -304,7 +368,7 @@ export function ThrowHomeScreen({
               points={selectedPoints}
               onThrow={handleThrow}
               onLaunched={handleLaunched}
-              throwLabel={lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
+              throwLabel={isSelfSelected ? 'Swipe up to set alert' : lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
               onOpenChats={onOpenChats}
               onOpenAddFriend={onOpenAddFriend}
               onOpenInbox={onOpenInbox}
@@ -312,6 +376,8 @@ export function ThrowHomeScreen({
               onContactDragStart={!lockedRecipient && friendsWithLocation.length > 1 ? handleContactDragStart : undefined}
               onContactDragOffset={!lockedRecipient && friendsWithLocation.length > 1 ? handleContactDragOffset : undefined}
               onFoldProgress={handleFoldProgress}
+              scheduleHeader={isSelfSelected ? <AlertScheduleHeader schedule={alertSchedule} onChange={setAlertSchedule} /> : undefined}
+              hideBadges={isSelfSelected}
             />
           </Animated.View>
         )}
@@ -320,14 +386,21 @@ export function ThrowHomeScreen({
           <View style={[styles.flightStatusWrap, { bottom: insets.bottom + 16 + BOTTOM_NAV_CLEARANCE }]}>
             <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.flightStatus}>
               {flight!.phase === 'delivered' ? (
-                <>
-                  <Text style={styles.flightTitle}>Your letter has landed</Text>
-                  <Text style={styles.flightBody}>
-                    With {flight!.letter.counterpartName} in {flight!.letter.recipientCity} · {formatMiles(flight!.letter.distanceMiles)} away
-                  </Text>
-                </>
+                flight!.isAlert ? (
+                  <>
+                    <Text style={styles.flightTitle}>Alert set</Text>
+                    <Text style={styles.flightBody}>{flight!.alertScheduleSummary}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.flightTitle}>Your letter has landed</Text>
+                    <Text style={styles.flightBody}>
+                      With {flight!.letter.counterpartName} in {flight!.letter.recipientCity} · {formatMiles(flight!.letter.distanceMiles)} away
+                    </Text>
+                  </>
+                )
               ) : (
-                <Text style={styles.flightTitle}>{`Flying to ${flight!.letter.counterpartName}…`}</Text>
+                <Text style={styles.flightTitle}>{flight!.isAlert ? 'Sealing your reminder…' : `Flying to ${flight!.letter.counterpartName}…`}</Text>
               )}
             </GlassSurface>
           </View>
@@ -381,15 +454,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(251,246,236,.88)',
     overflow: 'hidden',
   },
-  emptyOverlay: {
-    position: 'absolute',
-    top: '38%',
-    left: 24,
-    right: 24,
-    alignItems: 'center',
-  },
-  emptyTitle: { fontFamily: throwFont.ui700, fontSize: 16, color: throwColor.ink, marginBottom: 6, textAlign: 'center' },
-  emptyBody: { fontFamily: throwFont.ui400, fontSize: 13, color: throwColor.inkSoft, textAlign: 'center', lineHeight: 19 },
   letterCard: {
     position: 'absolute',
     left: 28,
