@@ -7,7 +7,10 @@ const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
 
 // A light-blue ballpoint-ink shade, matching the reference design's "handwritten in blue pen"
 // look — no longer user-selectable, so this is the only pen color a letter is ever written in.
-const INK_BLUE = '#4A90D9';
+// Exported so FoldingLetter's own plane re-bake (see its rebakeContent) can derive the correct
+// ink colour directly from isNight, rather than trusting this component's own (potentially one
+// render behind) reported penColor.
+export const INK_BLUE = '#4A90D9';
 // The placeholder's own ink — a distinct blue-violet, so it always reads as a prompt rather than
 // something the user could mistake for typed text.
 const PLACEHOLDER_COLOR = '#4A55B0';

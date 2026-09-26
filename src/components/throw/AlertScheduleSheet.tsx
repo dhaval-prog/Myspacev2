@@ -10,10 +10,10 @@ interface AlertScheduleSheetProps {
   onClose: () => void;
   schedule: AlertSchedule;
   onChange: (schedule: AlertSchedule) => void;
-  /** Swaps the picker's clay/brown accents (Done button, wheel highlight, selected chips) for a
-   * black-and-white glow treatment, matching FoldingLetter's own night skin — same signal, not a
-   * whole-app dark mode. The sheet itself stays on its normal light chrome; only the accents
-   * that were brown switch. */
+  /** Inverts the whole sheet to a black background with white/light chrome — a literal black↔white
+   * swap of the normal light sheet, per explicit request, driven by the same signal as
+   * FoldingLetter's own night skin (not a whole-app dark mode: every other sheet in the app is
+   * unaffected). */
   isNight?: boolean;
 }
 
@@ -27,7 +27,12 @@ interface AlertScheduleSheetProps {
  */
 export function AlertScheduleSheet({ visible, onClose, schedule, onChange, isNight }: AlertScheduleSheetProps) {
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      backgroundColor={isNight ? '#000000' : undefined}
+      handleColor={isNight ? 'rgba(255,255,255,.3)' : undefined}
+    >
       <AlertScheduleHeader schedule={schedule} onChange={onChange} isNight={isNight} />
       <Pressable
         onPress={onClose}
@@ -35,7 +40,7 @@ export function AlertScheduleSheet({ visible, onClose, schedule, onChange, isNig
         accessibilityRole="button"
         accessibilityLabel="Done"
       >
-        <Text style={styles.doneLabel}>Done</Text>
+        <Text style={[styles.doneLabel, isNight && styles.doneLabelNight]}>Done</Text>
       </Pressable>
     </BottomSheet>
   );
@@ -49,15 +54,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
   },
-  // Night skin — a black fill with a soft white glow instead of the day skin's clay-brown fill,
-  // matching the same black-and-white glow treatment as FoldingLetter's active mic button.
-  doneButtonNight: {
-    backgroundColor: '#000000',
-    shadowColor: '#FFFFFF',
-    shadowOpacity: 0.5,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
-  },
+  // A literal black↔white invert of the day button: white fill instead of clay-brown, black
+  // label instead of white — the sheet itself is now black (see BottomSheet's backgroundColor
+  // above), so a black button would disappear into it.
+  doneButtonNight: { backgroundColor: '#FFFFFF' },
   doneLabel: { fontFamily: throwFont.ui700, fontSize: 15, color: '#fff' },
+  doneLabelNight: { color: '#000000' },
 });

@@ -11,10 +11,16 @@ interface BottomSheetProps {
   children: React.ReactNode;
   /** Cap the sheet's height (e.g. History, which needs to scroll a long list). */
   maxHeightRatio?: number;
+  /** Overrides the sheet's own background colour — every caller but Throw's night-skin alert
+   * sheet leaves this unset and keeps the normal white chrome. */
+  backgroundColor?: string;
+  /** Overrides the drag handle's colour — pairs with `backgroundColor` so the handle stays
+   * visible against a colour other than the default white. */
+  handleColor?: string;
 }
 
 /** Scrim + white sheet that slides up from the bottom — shared by every Expenses modal. */
-export function BottomSheet({ visible, onClose, children, maxHeightRatio }: BottomSheetProps) {
+export function BottomSheet({ visible, onClose, children, maxHeightRatio, backgroundColor, handleColor }: BottomSheetProps) {
   const reduceMotion = useReducedMotion();
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const [mounted, setMounted] = React.useState(visible);
@@ -52,10 +58,11 @@ export function BottomSheet({ visible, onClose, children, maxHeightRatio }: Bott
           style={[
             styles.sheet,
             maxHeightRatio ? { maxHeight: SCREEN_HEIGHT * maxHeightRatio } : null,
+            backgroundColor ? { backgroundColor } : null,
             { transform: [{ translateY }] },
           ]}
         >
-          <View style={styles.handle} />
+          <View style={[styles.handle, handleColor ? { backgroundColor: handleColor } : null]} />
           {children}
         </Animated.View>
       </View>
