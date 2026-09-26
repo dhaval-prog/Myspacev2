@@ -121,7 +121,7 @@ export function RecipientCarousel({ friends, selectedIndex, onChangeIndex, disab
           const isSelected = i === selectedIndex;
           return (
             <Animated.View key={f.userId} style={[styles.item, { transform: [{ translateX }, { scale }], opacity }]}>
-              <Pressable onPress={() => snapTo(i)} hitSlop={8} style={styles.pressableContent}>
+              <Pressable onPress={() => snapTo(i)} disabled={disabled} hitSlop={8} style={styles.pressableContent}>
                 <View style={styles.avatarWrap}>
                   {isSelected && <SelectedPulseRing />}
                   <FriendAvatar userId={f.userId} name={f.name} avatarUrl={f.avatarUrl} size={AVATAR_SIZE} style={isSelected && styles.avatarSelected} />

@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
 import { FoldingLetter } from '../../components/throw/FoldingLetter';
-import { AlertScheduleHeader } from '../../components/throw/AlertScheduleHeader';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { GlassSurface } from '../../components/friends/GlassSurface';
 import { BottomNav } from '../../components/BottomNav';
@@ -94,6 +93,11 @@ export function ThrowHomeScreen({
   const { statsFor } = useGameStats();
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [alertSchedule, setAlertSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
+  // Once the user has touched the alert schedule or started writing a self-reminder, switching
+  // to a different contact is locked (see selfLocked below) — otherwise a stray sideways swipe
+  // could yank them away from a reminder they're mid-thought on. Reset once the reminder is
+  // actually created (see handleThrow's self branch).
+  const [selfComposeLocked, setSelfComposeLocked] = useState(false);
   const initializedRef = useRef(false);
 
   const [flight, setFlight] = useState<FlightState | null>(null);
@@ -153,8 +157,20 @@ export function ThrowHomeScreen({
   const selectedIndex = Math.max(0, friendsWithLocation.findIndex((f) => f.userId === selectedFriendId));
   const selectedFriend = friendsWithLocation.find((f) => f.userId === selectedFriendId) ?? null;
   const isSelfSelected = !!selectedFriend && selectedFriend.userId === myId;
+  // Only meaningful while self is actually selected — switching to a friend first (before ever
+  // touching the schedule/text) is always allowed; this only blocks switching *away* once a
+  // reminder is actually in progress.
+  const selfLocked = isSelfSelected && selfComposeLocked;
   const selectedStreak = selectedFriend && !isSelfSelected ? streakFor(selectedFriend.userId) : 0;
   const selectedPoints = selectedFriend && !isSelfSelected ? statsFor(selectedFriend.userId).totalPoints : 0;
+
+  const handleAlertScheduleChange = (next: AlertSchedule) => {
+    setAlertSchedule(next);
+    setSelfComposeLocked(true);
+  };
+  const handleHasContentChange = (hasContent: boolean) => {
+    if (hasContent) setSelfComposeLocked(true);
+  };
 
   // Real "zoom to contact": the selected friend's own location, falling back to the user's own
   // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
@@ -190,7 +206,7 @@ export function ThrowHomeScreen({
         isSelf,
         selected,
         dimmed: !selected && friendsWithLocation.length > 1,
-        onPress: lockedRecipient ? undefined : () => setSelectedFriendId(f.userId),
+        onPress: lockedRecipient || selfLocked ? undefined : () => setSelectedFriendId(f.userId),
       });
     }
     // Two people at the same real-world location would otherwise project to the exact same
@@ -198,7 +214,7 @@ export function ThrowHomeScreen({
     // entirely hidden behind the other — this fans coincident pins out into a small, still
     // visibly "same place" cluster so both are visible and tappable.
     return spreadCoincidentPins(list);
-  }, [friendsWithLocation, selectedFriendId, lockedRecipient, myId]);
+  }, [friendsWithLocation, selectedFriendId, lockedRecipient, selfLocked, myId]);
 
   const runFlight = async (letter: ThrowLetter, isAlert: boolean, alertScheduleSummary?: string) => {
     const runId = ++flightRunIdRef.current;
@@ -280,6 +296,7 @@ export function ThrowHomeScreen({
       };
       pendingLaunchRef.current = { letter: alertLetter, isAlert: true, alertScheduleSummary: scheduleSummary };
       setAlertSchedule(DEFAULT_ALERT_SCHEDULE);
+      setSelfComposeLocked(false);
       return { error: null };
     }
 
@@ -344,7 +361,12 @@ export function ThrowHomeScreen({
             )
           ) : (
             <View style={[styles.recipientOverlay, { top: insets.top + 16 }]}>
-              <RecipientCarousel friends={friendsWithLocation} selectedIndex={selectedIndex} onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)} />
+              <RecipientCarousel
+                friends={friendsWithLocation}
+                selectedIndex={selectedIndex}
+                onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)}
+                disabled={selfLocked}
+              />
             </View>
           ))}
 
@@ -373,11 +395,13 @@ export function ThrowHomeScreen({
               onOpenAddFriend={onOpenAddFriend}
               onOpenInbox={onOpenInbox}
               unreadCount={unreadCount}
-              onContactDragStart={!lockedRecipient && friendsWithLocation.length > 1 ? handleContactDragStart : undefined}
-              onContactDragOffset={!lockedRecipient && friendsWithLocation.length > 1 ? handleContactDragOffset : undefined}
+              onContactDragStart={!lockedRecipient && !selfLocked && friendsWithLocation.length > 1 ? handleContactDragStart : undefined}
+              onContactDragOffset={!lockedRecipient && !selfLocked && friendsWithLocation.length > 1 ? handleContactDragOffset : undefined}
               onFoldProgress={handleFoldProgress}
-              scheduleHeader={isSelfSelected ? <AlertScheduleHeader schedule={alertSchedule} onChange={setAlertSchedule} /> : undefined}
+              alertSchedule={isSelfSelected ? alertSchedule : undefined}
+              onAlertScheduleChange={handleAlertScheduleChange}
               hideBadges={isSelfSelected}
+              onHasContentChange={isSelfSelected ? handleHasContentChange : undefined}
             />
           </Animated.View>
         )}

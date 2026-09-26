@@ -6,13 +6,15 @@ import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
 import { PhotoAttachSheet } from './PhotoAttachSheet';
 import type { PickedMedia } from './PhotoAttachSheet';
+import { AlertScheduleSheet } from './AlertScheduleSheet';
 import { GlassSurface } from '../friends/GlassSurface';
 import { Icon } from '../Icon';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useVoiceToText } from '../../hooks/useVoiceToText';
+import { formatAlertSchedule } from '../../utils/throwAlerts';
 import type { LetterCanvasHandle } from './LetterCanvas';
 import type { PaperPlaneStageHandle } from './paperPlaneTypes';
-import type { StrokePath } from '../../types/throw';
+import type { AlertSchedule, StrokePath } from '../../types/throw';
 
 const PHOTO_ICON = 'M4 8h4l1.6-2.5h4.8L16 8h4v11H4z M12 11.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z';
 const MIC_ICON = 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z M6 11a6 6 0 0 0 12 0 M12 19v3 M9.5 22h5';
@@ -138,12 +140,19 @@ interface FoldingLetterProps {
    * (and slide) its own BottomNav out in lockstep with the paper folding away, and back in as
    * it unfolds. */
   onFoldProgress?: (value: number) => void;
-  /** Rendered on the paper itself, above the writing area — used for the self-reminder alert's
-   * time/day picker (AlertScheduleHeader). Its measured height is fed to LetterCanvas as extra
-   * top padding so typed text starts below it. Absent for an ordinary letter to a friend. */
-  scheduleHeader?: React.ReactNode;
+  /** Present only for a self-reminder alert (writing to yourself), never an ordinary letter to a
+   * friend — renders a "Set Time" button on the paper that opens the alert's time/day picker in
+   * its own bottom sheet (see AlertScheduleSheet) rather than inline on the paper, since the
+   * wheel picker's own scroll and the paper's scroll-to-fold gesture fought over the same touches
+   * when it lived there directly. */
+  alertSchedule?: AlertSchedule;
+  onAlertScheduleChange?: (schedule: AlertSchedule) => void;
   /** Hides the streak/points badges — they don't mean anything for a self-reminder. */
   hideBadges?: boolean;
+  /** Fires on every change to whether the letter currently has any content (typed text, a
+   * stroke, or a picked photo) — the caller uses this for a self-reminder to lock the recipient
+   * selection once the user has started writing, so switching away mid-thought isn't possible. */
+  onHasContentChange?: (hasContent: boolean) => void;
 }
 
 /**
@@ -179,8 +188,10 @@ export function FoldingLetter({
   onContactDragStart,
   onContactDragOffset,
   onFoldProgress,
-  scheduleHeader,
+  alertSchedule,
+  onAlertScheduleChange,
   hideBadges,
+  onHasContentChange,
 }: FoldingLetterProps) {
   const [phase, setPhase] = useState<Phase>('writing');
   const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
@@ -196,9 +207,7 @@ export function FoldingLetter({
   // of pinned to it — reported directly against a real iPhone. Anchoring off two independently
   // *measured* (not CSS-resolved) heights sidesteps that mismatch entirely.
   const [bottomRowHeight, setBottomRowHeight] = useState(0);
-  // Measured height of the optional scheduleHeader (see its own prop doc comment) — fed to
-  // LetterCanvas as extra top padding, same measured-not-CSS-resolved reasoning as bottomRowHeight.
-  const [scheduleHeaderHeight, setScheduleHeaderHeight] = useState(0);
+  const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false);
   const [stageFailed, setStageFailed] = useState(false);
   const letterCanvasRef = useRef<LetterCanvasHandle>(null);
   const voice = useVoiceToText({ onFinalText: (text) => letterCanvasRef.current?.appendText(text) });
@@ -268,6 +277,11 @@ export function FoldingLetter({
   }, [progress]);
 
   const hasContent = content.strokes !== null || (content.messageText?.trim().length ?? 0) > 0 || mediaItems.length > 0;
+
+  useEffect(() => {
+    onHasContentChange?.(hasContent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasContent]);
 
   const settleFold = (target: 0 | 1) => {
     Animated.spring(progress, { toValue: target, useNativeDriver: false, friction: 9, tension: 55 }).start(() => {
@@ -680,21 +694,22 @@ export function FoldingLetter({
     <View ref={wrapRef} style={styles.wrap}>
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
-          <LetterCanvas
-            ref={letterCanvasRef}
-            onContentChange={setContent}
-            hasPhoto={mediaItems.length > 0}
-            extraTopPadding={scheduleHeaderHeight > 0 ? scheduleHeaderHeight + 16 : 0}
-          />
+          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={mediaItems.length > 0} />
         </Animated.View>
 
-        {scheduleHeader && (
+        {alertSchedule && onAlertScheduleChange && (
           <Animated.View
-            onLayout={(e) => setScheduleHeaderHeight(e.nativeEvent.layout.height)}
-            style={[styles.scheduleHeaderWrap, { opacity: canvasOpacity }]}
+            style={[
+              styles.setTimeWrap,
+              bottomRowHeight > 0 ? { bottom: bottomRowHeight + 14 } : { bottom: 90 },
+              { opacity: canvasOpacity },
+            ]}
             pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
           >
-            {scheduleHeader}
+            <Pressable onPress={() => setScheduleSheetOpen(true)} style={styles.setTimeBtn} accessibilityRole="button" accessibilityLabel="Set time">
+              <Text style={styles.setTimeLabel}>Set Time</Text>
+              <Text style={styles.setTimeSummary}>{formatAlertSchedule(alertSchedule)}</Text>
+            </Pressable>
           </Animated.View>
         )}
 
@@ -869,6 +884,9 @@ export function FoldingLetter({
       {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
 
       <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(items) => setMediaItems((prev) => [...prev, ...items])} />
+      {alertSchedule && onAlertScheduleChange && (
+        <AlertScheduleSheet visible={scheduleSheetOpen} onClose={() => setScheduleSheetOpen(false)} schedule={alertSchedule} onChange={onAlertScheduleChange} />
+      )}
     </View>
   );
 }
@@ -883,9 +901,18 @@ const styles = StyleSheet.create({
   // The streak/leaderboard badges' new home, in the paper's own top-right corner instead of a
   // separate header chip.
   paperBadges: { position: 'absolute', top: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  // The optional self-reminder schedule picker, spanning the paper's top edge above the writing
-  // area — see the scheduleHeader prop and scheduleHeaderHeight state.
-  scheduleHeaderWrap: { position: 'absolute', top: 16, left: 14, right: 14 },
+  // The self-reminder alert's "Set Time" button — positioned above the bottom-controls row (see
+  // alertSchedule prop), opening AlertScheduleSheet rather than showing the picker inline.
+  setTimeWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  setTimeBtn: {
+    borderRadius: throwRadius.pill,
+    backgroundColor: throwColor.claySoft,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  setTimeLabel: { fontFamily: throwFont.ui700, fontSize: 13.5, color: throwColor.clayDeep },
+  setTimeSummary: { fontFamily: throwFont.ui500, fontSize: 11.5, color: throwColor.clayDeep, marginTop: 1 },
   streakChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   pointsChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   streakText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.clayDeep },
