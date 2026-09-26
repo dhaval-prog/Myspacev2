@@ -515,6 +515,8 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   // banks it in place without moving it, unlike the fold timeline's own bank/yaw/pitch below.
   let readyBankExtra = 0;
   const MAX_READY_BANK = 0.32;
+  // World-Y nudge to the 'ready'-phase camera's look-at target — see the camGoal assignment below.
+  const READY_FRAME_LIFT = 6;
   function setPose(o: Formation, extra: Partial<Formation & { x: number; y: number; z: number; bank: number; yaw: number; pitch: number; rx: number }> = {}) {
     flight.position.set(pivot.x + o.x + (extra.x || 0), pivot.y + o.y + (extra.y || 0), pivot.z + o.z + (extra.z || 0));
     flight.rotation.set((o.bank || 0) + (extra.bank || 0), (o.yaw || 0) + (extra.yaw || 0), (o.pitch || 0) + (extra.pitch || 0));
@@ -646,7 +648,14 @@ export function createPaperPlane(options: PaperPlaneOptions) {
     if (follow && phase !== 'flying' && phase !== 'done') {
       flight.updateWorldMatrix(true, true);
       const c = new THREE.Vector3().addVectors(bbMin, bbMax).multiplyScalar(0.5).applyMatrix4(mesh.matrixWorld);
-      camGoal.set(c.x * 0.5, Math.min(c.y, 3) * 0.55, c.z * 0.75 + 2.1);
+      // The 'ready' pose's own box (FoldingLetter's paperArea) grew taller once the bottom-controls
+      // row moved inside it — this camera still looks straight at the plane's own center regardless
+      // of that, which used to read as "near the bottom of a shorter card" and now reads as
+      // "centered in a taller one". READY_FRAME_LIFT nudges the look-at target up (world Y), which
+      // pushes the plane itself down the frame without changing anything about how idle/folding
+      // frame the plane mid-animation.
+      const readyLift = phase === 'ready' ? READY_FRAME_LIFT : 0;
+      camGoal.set(c.x * 0.5, Math.min(c.y, 3) * 0.55 + readyLift, c.z * 0.75 + 2.1);
     } else if (!follow) camGoal.set(0, 0, 1.4);
     camTarget.lerp(camGoal, 1 - Math.exp(-dt * 2.2));
     placeCamera(clock);
