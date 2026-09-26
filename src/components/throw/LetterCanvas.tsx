@@ -95,6 +95,10 @@ const styles = StyleSheet.create({
   typedInput: {
     padding: 20,
     paddingTop: 44,
+    // Reserves room above FoldingLetter's bottom-controls row (photo/chat/voice/add-friend/
+    // inbox), which now sits pinned to this same paper's bottom edge — without this, typed text
+    // can run underneath those buttons instead of stopping short of them.
+    paddingBottom: 110,
     fontFamily: throwFont.hand500,
     fontSize: 22,
     lineHeight: 30,

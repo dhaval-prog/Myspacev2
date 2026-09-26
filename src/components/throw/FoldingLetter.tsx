@@ -21,6 +21,9 @@ const X_ICON = 'M6 6l12 12M18 6L6 18';
 // reads as the same actions, not a Throw-specific reinterpretation.
 const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
 const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
+// Feather Icons' "award" glyph — the leaderboard-points badge, moved here from ThrowHomeScreen's
+// header now that the badge itself lives in the paper's top-right corner instead.
+const POINTS_ICON = 'M12 15a7 7 0 100-14 7 7 0 000 14z M8.21 13.89L7 23l5-3 5 3-1.21-9.12';
 
 const FOLD_DRAG_DISTANCE = 150;
 const LAUNCH_THRESHOLD = 64;
@@ -77,6 +80,13 @@ interface FoldingLetterContent {
 interface FoldingLetterProps {
   recipientName: string;
   recipientCity: string;
+  /** The current throw streak with this recipient — rendered as a small badge in the paper's
+   * top-right corner (0 hides it), moved here from a separate header chip so it reads as part
+   * of the letter rather than app chrome. */
+  streak: number;
+  /** Leaderboard points with this recipient — same top-right badge row as `streak`, always
+   * shown regardless of sign (a negative points chip is meaningful, not an empty state). */
+  points: number;
   /** No recipient to write to yet — disables the fold/throw gesture. */
   disabled?: boolean;
   /** Called once the user flicks the folded plane upward. Resolve with an error to spring the plane back to 'ready' with a message; resolve with null on success. */
@@ -135,6 +145,8 @@ interface FoldingLetterProps {
 export function FoldingLetter({
   recipientName,
   recipientCity,
+  streak,
+  points,
   disabled,
   onThrow,
   onLaunched,
@@ -589,6 +601,21 @@ export function FoldingLetter({
           <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={photoUris.length > 0} />
         </Animated.View>
 
+        {/* Streak/leaderboard badges — moved here from a separate header chip so they read as
+            part of the letter itself; fades with the same canvasOpacity as the writing surface
+            so it's never left floating over the folded plane underneath. */}
+        <Animated.View style={[styles.paperBadges, { opacity: canvasOpacity }]} pointerEvents="none">
+          {streak > 0 && (
+            <View style={styles.streakChip} accessibilityLabel={`${streak} day throw streak with ${recipientName}`}>
+              <Text style={styles.streakText}>🔥{streak}</Text>
+            </View>
+          )}
+          <View style={styles.pointsChip} accessibilityLabel={`${points} leaderboard points with ${recipientName}`}>
+            <Icon path={POINTS_ICON} size={11} color={throwColor.clayDeep} strokeWidth={2} />
+            <Text style={styles.streakText}>{points}</Text>
+          </View>
+        </Animated.View>
+
         {paperSize.width > 0 && (
           // Split into two nested Animated.Views on purpose — see the useNativeDriver comment on
           // launch() above for why liftY/liftOpacity (native-driven) can't share a node with
@@ -636,19 +663,19 @@ export function FoldingLetter({
             </ScrollView>
           </Animated.View>
         )}
-      </View>
 
-      {phase === 'ready' && <Text style={styles.readyHint}>{throwLabel}</Text>}
-      {voice.recording && <Text style={styles.readyHint}>{voice.interimText || 'Listening…'}</Text>}
-      {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
-
-      <Animated.View
-        style={[
-          styles.bottomRow,
-          { opacity: canvasOpacity, transform: [{ translateY: canvasOpacity.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] },
-        ]}
-        pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
-      >
+        {/* The bottom-controls row now lives inside the paper itself, absolutely pinned to its
+            bottom edge, instead of floating separately below it — LetterCanvas's own
+            typedInputBottomReserve keeps written text clear of this area. Fades with the same
+            canvasOpacity as the writing surface, so it disappears the moment folding starts and
+            reappears once unfolded, matching the paper's own visible state exactly. */}
+        <Animated.View
+          style={[
+            styles.bottomRow,
+            { opacity: canvasOpacity, transform: [{ translateY: canvasOpacity.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] },
+          ]}
+          pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
+        >
         <Pressable
           onPress={() => setPhotoSheetOpen(true)}
           disabled={disabled || phase === 'throwing'}
@@ -721,7 +748,12 @@ export function FoldingLetter({
             </View>
           )}
         </Pressable>
-      </Animated.View>
+        </Animated.View>
+      </View>
+
+      {phase === 'ready' && <Text style={styles.readyHint}>{throwLabel}</Text>}
+      {voice.recording && <Text style={styles.readyHint}>{voice.interimText || 'Listening…'}</Text>}
+      {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
 
       <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(uris) => setPhotoUris((prev) => [...prev, ...uris])} />
     </View>
@@ -745,6 +777,12 @@ const styles = StyleSheet.create({
   // room for that row automatically, no matter what height the parent hands `wrap`.
   paperArea: { flex: 1, minHeight: 150 },
   fallbackPlaneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  // The streak/leaderboard badges' new home, in the paper's own top-right corner instead of a
+  // separate header chip.
+  paperBadges: { position: 'absolute', top: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  streakChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  pointsChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  streakText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.clayDeep },
   readyHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.inkMute, textAlign: 'center', marginTop: 10 },
   error: { fontFamily: throwFont.ui400, fontSize: 12, color: '#B3413A', textAlign: 'center', marginTop: 8 },
   // A "photos pasted onto the letter" look — a horizontal row of small white-bordered thumbnails
@@ -779,8 +817,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // A plain row — every icon visible at once, no scrolling.
-  bottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 },
+  // Pinned to the paper's own bottom edge (see the render) rather than floating as a separate
+  // row below it — every icon visible at once, no scrolling. LetterCanvas's typedInput reserves
+  // matching bottom padding so written text never runs underneath it.
+  bottomRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 18,
+  },
   // Split in two: the outer *Shadow view carries the drop shadow (which needs `overflow: visible`
   // to render), while the inner GlassSurface/View needs `overflow: hidden` so its blur/tint
   // layers respect the rounded corners — the two requirements can't share one style.
