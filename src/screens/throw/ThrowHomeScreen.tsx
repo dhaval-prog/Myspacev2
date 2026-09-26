@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
@@ -7,7 +7,6 @@ import { FoldingLetter } from '../../components/throw/FoldingLetter';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { GlassSurface } from '../../components/friends/GlassSurface';
 import { BottomNav } from '../../components/BottomNav';
-import { Icon } from '../../components/Icon';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { formatMiles } from '../../utils/geo';
 import { flightPath } from '../../utils/mapProjection';
@@ -22,7 +21,6 @@ import type { LatLng } from '../../utils/geo';
 // freehand approximation.
 const GEAR_ICON =
   'M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z';
-const BACK_ICON = 'M15 18l-6-6 6-6';
 
 // How long the arrival card stays up before the map returns to normal compose mode.
 const DELIVERED_HOLD_MS = 1800;
@@ -265,14 +263,14 @@ export function ThrowHomeScreen({
         {!inFlight &&
           (lockedRecipient ? (
             selectedFriend && (
-              <View style={[styles.recipientOverlay, { top: insets.top + 78 }]}>
+              <View style={[styles.recipientOverlay, { top: insets.top + 16 }]}>
                 <Text style={styles.replyLine} numberOfLines={1}>
                   Throwing back to {selectedFriend.name}
                 </Text>
               </View>
             )
           ) : (
-            <View style={[styles.recipientOverlay, { top: insets.top + 78 }]}>
+            <View style={[styles.recipientOverlay, { top: insets.top + 16 }]}>
               <RecipientCarousel friends={friendsWithLocation} selectedIndex={selectedIndex} onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)} />
             </View>
           ))}
@@ -337,29 +335,6 @@ export function ThrowHomeScreen({
 
       <Animated.View
         style={[
-          styles.headerWrap,
-          {
-            top: insets.top + 10,
-            opacity: chromeOpacity,
-            transform: [{ translateY: chromeOpacity.interpolate({ inputRange: [0, 1], outputRange: [-80, 0] }) }],
-          },
-        ]}
-        pointerEvents={chromeHidden ? 'none' : 'box-none'}
-      >
-        <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.header}>
-          <Pressable onPress={onHome} hitSlop={10} style={styles.headerBackBtn} accessibilityRole="button" accessibilityLabel="Back to Home">
-            <Icon path={BACK_ICON} size={20} color={throwColor.inkSoft} strokeWidth={2} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Throw</Text>
-          {/* Empty on purpose — streak/points moved into the paper's own top-right corner, and
-              settings moved onto BottomNav's FAB below (see its fabIconPath). Kept as a plain
-              placeholder matching headerBackBtn's width so the title above still sits centered. */}
-          <View style={styles.headerRight} />
-        </GlassSurface>
-      </Animated.View>
-
-      <Animated.View
-        style={[
           styles.bottomNavWrap,
           { opacity: chromeOpacity, transform: [{ translateY: chromeOpacity.interpolate({ inputRange: [0, 1], outputRange: [BOTTOM_NAV_CLEARANCE, 0] }) }] },
         ]}
@@ -385,27 +360,8 @@ export function ThrowHomeScreen({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: throwColor.screenBg },
-  // Absolutely positioned and rendered after mapArea in the tree, so — like bottomNavWrap below —
-  // it floats over the map's own top edge instead of pushing the map down beneath it. The
-  // positioning lives here, on the wrapper, rather than on `header` below — same split as
-  // bottomNavWrap/BottomNav — so the fade/slide Animated.View wrapping it (see the render) has
-  // somewhere to actually apply a transform without fighting this element's own absolute layout.
-  headerWrap: { position: 'absolute', left: 16, right: 16 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: throwRadius.pill,
-    borderWidth: 1,
-    borderColor: throwGlass.border,
-  },
-  headerTitle: { fontFamily: throwFont.hand700, fontSize: 26, color: throwColor.ink },
-  headerBackBtn: { width: 48, alignItems: 'flex-start' },
-  headerRight: { minWidth: 48 },
-  // Fills the whole screen edge-to-edge on all four sides — the header pill and BottomNav dock
-  // both float on top of it (see their own comments) rather than the map making room for either.
+  // Fills the whole screen edge-to-edge on all four sides — the BottomNav dock floats on top of
+  // it (see its own comment) rather than the map making room for it.
   mapArea: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   // The BottomNav dock floats over the map's own bottom edge instead of pushing it up — a
   // sibling of mapArea, absolutely pinned to the screen's bottom so it overlaps in front.
@@ -435,8 +391,8 @@ const styles = StyleSheet.create({
   emptyBody: { fontFamily: throwFont.ui400, fontSize: 13, color: throwColor.inkSoft, textAlign: 'center', lineHeight: 19 },
   letterCard: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    left: 28,
+    right: 28,
     top: '32%',
   },
   flightStatusWrap: {

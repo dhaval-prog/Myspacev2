@@ -301,9 +301,10 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   flight.rotation.order = 'YZX';
   // Uniform scale, so it doesn't disturb the crease simulation (which works in the mesh's
   // local, unscaled space, a child of shape/flight). Prior rounds climbed to 4.39 chasing "still
-  // reads small" feedback, then 1.62 (37% of that), then 1.30 (another 20% down); 1.17 is 1.30
-  // scaled down another 10%, per user feedback that it was still a bit big.
-  flight.scale.setScalar(1.17);
+  // reads small" feedback, then 1.62 (37% of that), then 1.30 (another 20% down), then 1.17
+  // (another 10% down, per user feedback that it was still a bit big); 1.287 is 1.17 scaled back
+  // up 10%, per subsequent user feedback in the other direction.
+  flight.scale.setScalar(1.287);
   shape.add(mesh);
   flight.add(shape);
   scene.add(flight);
@@ -517,6 +518,9 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   const MAX_READY_BANK = 0.32;
   // World-Y nudge to the 'ready'-phase camera's look-at target — see the camGoal assignment below.
   const READY_FRAME_LIFT = 6;
+  // How far the resting plane's nose dips forward/down, in radians — see the 'ready' phase pose
+  // below.
+  const READY_PITCH_FORWARD = -0.15;
   function setPose(o: Formation, extra: Partial<Formation & { x: number; y: number; z: number; bank: number; yaw: number; pitch: number; rx: number }> = {}) {
     flight.position.set(pivot.x + o.x + (extra.x || 0), pivot.y + o.y + (extra.y || 0), pivot.z + o.z + (extra.z || 0));
     flight.rotation.set((o.bank || 0) + (extra.bank || 0), (o.yaw || 0) + (extra.yaw || 0), (o.pitch || 0) + (extra.pitch || 0));
@@ -614,7 +618,10 @@ export function createPaperPlane(options: PaperPlaneOptions) {
         y: bob,
         yaw: PI / 2 - formation.yaw,
         bank: -formation.pitch,
-        pitch: idleBank - formation.bank,
+        // READY_PITCH_FORWARD noses the resting plane down slightly rather than dead level — per
+        // user request, reads as "about to land" rather than "parked", the same negative-pitch
+        // direction as the flying phase's own nose-up climb-out uses positive pitch for.
+        pitch: idleBank - formation.bank + READY_PITCH_FORWARD,
         rx: readyBankExtra * MAX_READY_BANK,
       });
     } else if (phase === 'flying' || phase === 'done') {
