@@ -31,18 +31,6 @@ const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6
 // header now that the badge itself lives in the paper's top-right corner instead.
 const POINTS_ICON = 'M12 15a7 7 0 100-14 7 7 0 000 14z M8.21 13.89L7 23l5-3 5 3-1.21-9.12';
 
-// Speech recognizers pick one language per session — they don't detect/mix several at once — so
-// dictation offers a small cycling chip next to the mic button instead of silently guessing.
-// BCP-47 locales; the Indian-English variant (not en-US) since the other three are Indian
-// languages and this app's audience is already Indian-English by default elsewhere (Bollywood
-// trivia, etc.).
-const VOICE_LANGUAGES = [
-  { code: 'en-IN', label: 'EN' },
-  { code: 'hi-IN', label: 'HI' },
-  { code: 'mr-IN', label: 'MR' },
-  { code: 'gu-IN', label: 'GU' },
-] as const;
-
 const FOLD_DRAG_DISTANCE = 150;
 const LAUNCH_THRESHOLD = 64;
 const LAUNCH_VELOCITY = 0.5;
@@ -97,7 +85,6 @@ interface FoldingLetterContent {
 
 interface FoldingLetterProps {
   recipientName: string;
-  recipientCity: string;
   /** The current throw streak with this recipient — rendered as a small badge in the paper's
    * top-right corner (0 hides it), moved here from a separate header chip so it reads as part
    * of the letter rather than app chrome. */
@@ -162,7 +149,6 @@ interface FoldingLetterProps {
  */
 export function FoldingLetter({
   recipientName,
-  recipientCity,
   streak,
   points,
   disabled,
@@ -183,8 +169,15 @@ export function FoldingLetter({
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paperSize, setPaperSize] = useState({ width: 0, height: 0 });
+  // The bottom-controls row's own measured height (via onLayout, below) — used to position it
+  // via an explicit `top: paperSize.height - bottomRowHeight` instead of `bottom: 0`. On some real
+  // devices, an absolutely-positioned `bottom: 0` child several layers under an ancestor whose own
+  // `bottom` is itself animated (see ThrowHomeScreen's letterCard) resolved against a taller box
+  // than the paper actually rendered at, leaving the row floating below the visible letter instead
+  // of pinned to it — reported directly against a real iPhone. Anchoring off two independently
+  // *measured* (not CSS-resolved) heights sidesteps that mismatch entirely.
+  const [bottomRowHeight, setBottomRowHeight] = useState(0);
   const [stageFailed, setStageFailed] = useState(false);
-  const [voiceLangIndex, setVoiceLangIndex] = useState(0);
   const letterCanvasRef = useRef<LetterCanvasHandle>(null);
   const voice = useVoiceToText({ onFinalText: (text) => letterCanvasRef.current?.appendText(text) });
 
@@ -632,15 +625,6 @@ export function FoldingLetter({
 
   return (
     <View ref={wrapRef} style={styles.wrap}>
-      {/* Only shown while actively writing/folding — once folded and ready to throw, the
-          recipient's own avatar/name/city in the carousel above already says who this is for,
-          so a redundant "Ready to throw · city" line here was removed. */}
-      {(phase === 'writing' || phase === 'folding') && (
-        <Text style={styles.toLine} numberOfLines={1}>
-          Writing to {recipientName} · {recipientCity}
-        </Text>
-      )}
-
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
           <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={mediaItems.length > 0} />
@@ -725,8 +709,10 @@ export function FoldingLetter({
             canvasOpacity as the writing surface, so it disappears the moment folding starts and
             reappears once unfolded, matching the paper's own visible state exactly. */}
         <Animated.View
+          onLayout={(e) => setBottomRowHeight(e.nativeEvent.layout.height)}
           style={[
             styles.bottomRow,
+            paperSize.height > 0 && bottomRowHeight > 0 ? { top: paperSize.height - bottomRowHeight } : { bottom: 0 },
             { opacity: canvasOpacity, transform: [{ translateY: canvasOpacity.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] },
           ]}
           pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
@@ -756,40 +742,28 @@ export function FoldingLetter({
           )}
         </Pressable>
 
-        <View style={styles.micColumn}>
-          <Pressable
-            onPress={() => setVoiceLangIndex((i) => (i + 1) % VOICE_LANGUAGES.length)}
-            disabled={disabled || phase === 'throwing' || voice.recording}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel={`Voice language: ${VOICE_LANGUAGES[voiceLangIndex].label}. Tap to change.`}
-            style={({ pressed }) => [styles.voiceLangChip, pressed && styles.roundBtnPressed]}
-          >
-            <Text style={styles.voiceLangChipLabel}>{VOICE_LANGUAGES[voiceLangIndex].label}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => (voice.recording ? voice.stop() : voice.start(VOICE_LANGUAGES[voiceLangIndex].code))}
-            disabled={disabled || phase === 'throwing'}
-            accessibilityRole="button"
-            accessibilityLabel={voice.recording ? 'Stop recording' : `Speak your letter in ${VOICE_LANGUAGES[voiceLangIndex].label}`}
-          >
-            {({ pressed }) =>
-              voice.recording ? (
-                <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
-                  <View style={[styles.micBtn, styles.micBtnActive]}>
-                    <Icon path={STOP_ICON} size={22} color={throwColor.paper} strokeWidth={1.8} />
-                  </View>
+        <Pressable
+          onPress={() => (voice.recording ? voice.stop() : voice.start())}
+          disabled={disabled || phase === 'throwing'}
+          accessibilityRole="button"
+          accessibilityLabel={voice.recording ? 'Stop recording' : 'Speak your letter'}
+        >
+          {({ pressed }) =>
+            voice.recording ? (
+              <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
+                <View style={[styles.micBtn, styles.micBtnActive]}>
+                  <Icon path={STOP_ICON} size={22} color={throwColor.paper} strokeWidth={1.8} />
                 </View>
-              ) : (
-                <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
-                  <GlassSurface tint="light" tintColor={throwGlass.tintStrong} style={styles.micBtn}>
-                    <Icon path={MIC_ICON} size={27} color={throwColor.ink} strokeWidth={1.8} />
-                  </GlassSurface>
-                </View>
-              )
-            }
-          </Pressable>
-        </View>
+              </View>
+            ) : (
+              <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
+                <GlassSurface tint="light" tintColor={throwGlass.tintStrong} style={styles.micBtn}>
+                  <Icon path={MIC_ICON} size={27} color={throwColor.ink} strokeWidth={1.8} />
+                </GlassSurface>
+              </View>
+            )
+          }
+        </Pressable>
 
         <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
           {({ pressed }) => (
@@ -829,16 +803,6 @@ export function FoldingLetter({
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  toLine: {
-    fontFamily: throwFont.ui600,
-    fontSize: 12.5,
-    color: throwColor.inkSoft,
-    textAlign: 'center',
-    marginBottom: 8,
-    textShadowColor: 'rgba(255,255,255,.65)',
-    textShadowRadius: 4,
-    textShadowOffset: { width: 0, height: 1 },
-  },
   // Compact on purpose — the bottom-controls row below now takes a fixed slice of `wrap`'s
   // height, and this being `flex: 1` rather than a hardcoded height means it shrinks to make
   // room for that row automatically, no matter what height the parent hands `wrap`.
@@ -896,10 +860,11 @@ const styles = StyleSheet.create({
   // row below it — every icon visible at once, no scrolling. LetterCanvas's typedInput reserves
   // matching bottom padding so written text never runs underneath it.
   bottomRow: {
+    // `top`/`bottom` are applied inline (see the render) once both this row's own height and the
+    // paper's are measured — see the `bottomRowHeight` state's comment for why.
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 0,
     flexDirection: 'row',
     // Centered as one compact cluster with even gaps, not stretched edge-to-edge via
     // `space-between` — on a real device (confirmed on iPhone 13) that stretch put the outer
@@ -917,14 +882,6 @@ const styles = StyleSheet.create({
   roundBtnShadow: { width: 60, height: 60, borderRadius: 30, ...throwColor.shadowSoft },
   roundBtn: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   roundBtnPressed: { opacity: 0.7 },
-  micColumn: { alignItems: 'center', gap: 4 },
-  voiceLangChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: throwColor.claySoft,
-  },
-  voiceLangChipLabel: { fontFamily: throwFont.ui700, fontSize: 9.5, letterSpacing: 0.5, color: throwColor.clayDeep },
   micBtnShadow: { width: 76, height: 76, borderRadius: 38, ...throwColor.shadowSoft },
   micBtn: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
   micBtnActive: { backgroundColor: throwColor.clayDeep },

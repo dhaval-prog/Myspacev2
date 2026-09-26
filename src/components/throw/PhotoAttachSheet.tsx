@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
-import { GlassSurface } from '../friends/GlassSurface';
+import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 import { Icon } from '../Icon';
 import { BottomSheet } from '../expenses/BottomSheet';
 
@@ -29,13 +28,14 @@ interface PhotoAttachSheetProps {
   onPicked: (items: PickedMedia[]) => void;
 }
 
-/** "Photos" / "Camera" chooser for attaching media to a letter — two icon buttons side by side
- * (matching the OS's own native photo/camera picker pattern) rather than a vertical options list.
- * "Photos" opens the library (multi-select, photos and videos both, in one picker); "Camera"
- * opens the device camera with both capture modes available at once — the OS's own camera UI
- * supplies the still/video toggle once both media types are permitted, rather than this sheet
- * offering two separate camera actions. Each requests its own permission right before use and
- * fails gracefully (an inline message, not a crash) if denied. */
+/** "Photos" / "Camera" chooser for attaching media to a letter — two plain icon buttons side by
+ * side (matching the OS's own native photo/camera picker pattern), no title text and no
+ * glassmorphism, just a flat icon on a plain circle. "Photos" opens the library (multi-select,
+ * photos and videos both, in one picker); "Camera" opens the device camera with both capture
+ * modes available at once — the OS's own camera UI supplies the still/video toggle once both
+ * media types are permitted, rather than this sheet offering two separate camera actions. Each
+ * requests its own permission right before use and fails gracefully (an inline message, not a
+ * crash) if denied. */
 export function PhotoAttachSheet({ visible, onClose, onPicked }: PhotoAttachSheetProps) {
   const [error, setError] = useState<string | null>(null);
 
@@ -76,43 +76,46 @@ export function PhotoAttachSheet({ visible, onClose, onPicked }: PhotoAttachShee
 
   return (
     <BottomSheet visible={visible} onClose={onClose}>
-      <Text style={styles.title}>Add a photo or video</Text>
       <View style={styles.row}>
         <Pressable onPress={openLibrary} style={({ pressed }) => [styles.item, pressed && styles.itemPressed]} accessibilityRole="button" accessibilityLabel="Choose from Photos">
-          <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.iconCircle}>
+          <View style={styles.iconCircle}>
             <Icon path={GALLERY_ICON} size={26} color={throwColor.ink} strokeWidth={1.8} />
-          </GlassSurface>
+          </View>
           <Text style={styles.itemLabel}>Photos</Text>
         </Pressable>
         <Pressable onPress={openCamera} style={({ pressed }) => [styles.item, pressed && styles.itemPressed]} accessibilityRole="button" accessibilityLabel="Take a photo or video">
-          <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.iconCircle}>
+          <View style={styles.iconCircle}>
             <Icon path={CAMERA_ICON} size={26} color={throwColor.ink} strokeWidth={1.8} />
-          </GlassSurface>
+          </View>
           <Text style={styles.itemLabel}>Camera</Text>
         </Pressable>
       </View>
       {error && <Text style={styles.error}>{error}</Text>}
-      <Pressable onPress={onClose} style={({ pressed }) => [pressed && styles.itemPressed]}>
-        <GlassSurface tint="light" tintColor={throwGlass.tintStrong} style={styles.cancelButton}>
-          <Text style={styles.cancelLabel}>Cancel</Text>
-        </GlassSurface>
+      <Pressable onPress={onClose} style={({ pressed }) => [styles.cancelButton, pressed && styles.itemPressed]}>
+        <Text style={styles.cancelLabel}>Cancel</Text>
       </Pressable>
     </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontFamily: throwFont.hand700, fontSize: 22, color: throwColor.ink, marginBottom: 18, textAlign: 'center' },
-  row: { flexDirection: 'row', justifyContent: 'center', gap: 40, marginBottom: 8 },
+  row: { flexDirection: 'row', justifyContent: 'center', gap: 40, marginTop: 6, marginBottom: 8 },
   item: { alignItems: 'center', gap: 8 },
   itemPressed: { opacity: 0.7 },
-  iconCircle: { width: 68, height: 68, borderRadius: 34, borderWidth: 1, borderColor: throwGlass.border, alignItems: 'center', justifyContent: 'center' },
+  iconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: throwColor.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...throwColor.shadowSoft,
+  },
   itemLabel: { fontFamily: throwFont.ui600, fontSize: 13, color: throwColor.ink },
   error: { fontFamily: throwFont.ui400, fontSize: 12.5, color: '#B3413A', textAlign: 'center', marginTop: 8 },
   cancelButton: {
     borderRadius: throwRadius.pill,
-    borderWidth: 1,
-    borderColor: throwGlass.border,
+    backgroundColor: throwColor.claySoft,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 16,
