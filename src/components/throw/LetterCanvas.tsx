@@ -24,10 +24,6 @@ interface LetterCanvasProps {
   /** One or more photos are pasted in a strip near the top (see FoldingLetter's photoStripWrap)
    * — reserves extra top padding so the writing area doesn't start underneath it. */
   hasPhoto?: boolean;
-  /** Extra top padding (px), on top of whatever `hasPhoto` already reserves — for a schedule
-   * header rendered on the paper above the writing area (see FoldingLetter's scheduleHeader
-   * prop), measured by the caller rather than hardcoded here since its content varies. */
-  extraTopPadding?: number;
 }
 
 export interface LetterCanvasHandle {
@@ -48,7 +44,7 @@ export interface LetterCanvasHandle {
  * the plane's baked texture, so the writing surface and the measured surface need to be the same
  * rectangle.
  */
-export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas({ onContentChange, hasPhoto, extraTopPadding }, ref) {
+export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas({ onContentChange, hasPhoto }, ref) {
   const [typedText, setTypedText] = useState('');
   // The current phrase's not-yet-final transcript — shown live appended after typedText (see
   // displayText below) so dictated words appear on the paper as they're spoken, not only once
@@ -92,13 +88,7 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
       <Image source={paperTextureAsset} style={StyleSheet.absoluteFill} resizeMode="cover" />
 
       <TextInput
-        style={[
-          StyleSheet.absoluteFill,
-          styles.typedInput,
-          hasPhoto && styles.typedInputWithPhoto,
-          extraTopPadding ? { paddingTop: (hasPhoto ? 100 : 66) + extraTopPadding } : null,
-          { color: penColor },
-        ]}
+        style={[StyleSheet.absoluteFill, styles.typedInput, hasPhoto && styles.typedInputWithPhoto, { color: penColor }]}
         multiline
         placeholder="Write something for your loved one"
         placeholderTextColor={PLACEHOLDER_COLOR}
