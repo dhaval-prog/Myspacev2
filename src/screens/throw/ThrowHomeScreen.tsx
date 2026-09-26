@@ -9,7 +9,7 @@ import { GlassSurface } from '../../components/friends/GlassSurface';
 import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { formatMiles } from '../../utils/geo';
-import { flightPath } from '../../utils/mapProjection';
+import { flightPath, spreadCoincidentPins } from '../../utils/mapProjection';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import { useGameStats } from '../../context/GameStatsContext';
@@ -168,7 +168,11 @@ export function ThrowHomeScreen({
         onPress: lockedRecipient ? undefined : () => setSelectedFriendId(f.userId),
       });
     }
-    return list;
+    // Two people at the same real-world location would otherwise project to the exact same
+    // screen position (web) or the exact same Marker coordinate (native), leaving one pin
+    // entirely hidden behind the other — this fans coincident pins out into a small, still
+    // visibly "same place" cluster so both are visible and tappable.
+    return spreadCoincidentPins(list);
   }, [myLocation, friendsWithLocation, selectedFriendId, lockedRecipient]);
 
   const runFlight = async (letter: ThrowLetter) => {
