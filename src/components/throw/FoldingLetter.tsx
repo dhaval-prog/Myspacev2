@@ -934,7 +934,7 @@ export function FoldingLetter({
 
       <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(items) => setMediaItems((prev) => [...prev, ...items])} />
       {alertSchedule && onAlertScheduleChange && (
-        <AlertScheduleSheet visible={scheduleSheetOpen} onClose={() => setScheduleSheetOpen(false)} schedule={alertSchedule} onChange={onAlertScheduleChange} />
+        <AlertScheduleSheet visible={scheduleSheetOpen} onClose={() => setScheduleSheetOpen(false)} schedule={alertSchedule} onChange={onAlertScheduleChange} isNight={isNight} />
       )}
     </View>
   );

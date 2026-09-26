@@ -10,6 +10,11 @@ interface AlertScheduleSheetProps {
   onClose: () => void;
   schedule: AlertSchedule;
   onChange: (schedule: AlertSchedule) => void;
+  /** Swaps the picker's clay/brown accents (Done button, wheel highlight, selected chips) for a
+   * black-and-white glow treatment, matching FoldingLetter's own night skin — same signal, not a
+   * whole-app dark mode. The sheet itself stays on its normal light chrome; only the accents
+   * that were brown switch. */
+  isNight?: boolean;
 }
 
 /**
@@ -20,11 +25,16 @@ interface AlertScheduleSheetProps {
  * it. A sheet removes that conflict entirely: it's a real Modal, outside the paper's own
  * gesture-capturing view, so nothing it receives ever reaches FoldingLetter's fold handlers.
  */
-export function AlertScheduleSheet({ visible, onClose, schedule, onChange }: AlertScheduleSheetProps) {
+export function AlertScheduleSheet({ visible, onClose, schedule, onChange, isNight }: AlertScheduleSheetProps) {
   return (
     <BottomSheet visible={visible} onClose={onClose}>
-      <AlertScheduleHeader schedule={schedule} onChange={onChange} />
-      <Pressable onPress={onClose} style={styles.doneButton} accessibilityRole="button" accessibilityLabel="Done">
+      <AlertScheduleHeader schedule={schedule} onChange={onChange} isNight={isNight} />
+      <Pressable
+        onPress={onClose}
+        style={[styles.doneButton, isNight && styles.doneButtonNight]}
+        accessibilityRole="button"
+        accessibilityLabel="Done"
+      >
         <Text style={styles.doneLabel}>Done</Text>
       </Pressable>
     </BottomSheet>
@@ -38,6 +48,16 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 16,
+  },
+  // Night skin — a black fill with a soft white glow instead of the day skin's clay-brown fill,
+  // matching the same black-and-white glow treatment as FoldingLetter's active mic button.
+  doneButtonNight: {
+    backgroundColor: '#000000',
+    shadowColor: '#FFFFFF',
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
   },
   doneLabel: { fontFamily: throwFont.ui700, fontSize: 15, color: '#fff' },
 });

@@ -138,11 +138,18 @@ export function RecipientCarousel({ friends, selectedIndex, onChangeIndex, disab
                     style={isSelected && (isNight ? styles.avatarSelectedNight : styles.avatarSelected)}
                   />
                 </View>
-                <Text style={[styles.name, isSelected && styles.nameSelected]} numberOfLines={1}>
+                <Text
+                  style={[
+                    styles.name,
+                    isNight && styles.nameNight,
+                    isSelected && (isNight ? styles.nameSelectedNight : styles.nameSelected),
+                  ]}
+                  numberOfLines={1}
+                >
                   {f.name.split(' ')[0]}
                 </Text>
                 {f.location && (
-                  <Text style={styles.city} numberOfLines={1}>
+                  <Text style={[styles.city, isNight && styles.cityNight]} numberOfLines={1}>
                     {f.location.city}
                   </Text>
                 )}
@@ -180,5 +187,11 @@ const styles = StyleSheet.create({
   avatarSelectedNight: { borderWidth: 2, borderColor: throwNightColor.ink },
   name: { marginTop: 6, fontFamily: throwFont.ui600, fontSize: 12.5, color: throwColor.inkMute, textAlign: 'center' },
   nameSelected: { color: throwColor.ink, fontFamily: throwFont.ui700 },
+  // Night skin — white instead of Throw's warm-ink day text, both for the selected contact and
+  // the rest of the strip, per explicit request (the ink colours read almost invisibly dark
+  // against the night map/paper).
+  nameNight: { color: 'rgba(255,255,255,.7)' },
+  nameSelectedNight: { color: '#FFFFFF', fontFamily: throwFont.ui700 },
   city: { fontFamily: throwFont.ui400, fontSize: 10.5, color: throwColor.inkFaint, marginTop: 1, textAlign: 'center' },
+  cityNight: { color: 'rgba(255,255,255,.55)' },
 });

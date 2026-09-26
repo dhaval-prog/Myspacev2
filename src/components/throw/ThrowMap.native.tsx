@@ -159,7 +159,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
           anchor={{ x: 0.5, y: 0.18 }}
         >
           <View style={styles.pinWrap}>
-            <LocationPinGlyph label={pin.label} isSelf={pin.isSelf} selected={pin.selected} dimmed={pin.dimmed} />
+            <LocationPinGlyph label={pin.label} isSelf={pin.isSelf} selected={pin.selected} dimmed={pin.dimmed} isNight={!isDay} />
           </View>
         </Marker>
       ))}
