@@ -7,7 +7,6 @@ import { Icon } from '../../components/Icon';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { ActionButton, Card, InlineError, InlineNote, Row, SectionLabel, TextField } from '../../components/account/rows';
 import { useAuth } from '../../context/AuthContext';
-import { useSpace } from '../../context/SpaceContext';
 import { supabase } from '../../lib/supabase';
 import { downloadCsv, downloadJson } from '../../utils/accountExport';
 
@@ -67,8 +66,6 @@ interface ProfileRow {
 type NotificationPrefs = Record<string, { push: boolean; email: boolean; inApp: boolean }>;
 
 const NOTIFICATION_CATEGORIES: { key: string; label: string }[] = [
-  { key: 'expiring_items', label: 'Expiring items' },
-  { key: 'item_reminders', label: 'Item reminders' },
   { key: 'budget_alerts', label: 'Budget alerts' },
   { key: 'budget_reset', label: 'Budget reset reminders' },
   { key: 'payment_activity', label: 'UPI payment activity' },
@@ -132,13 +129,12 @@ interface AccountSettingsScreenProps {
 /**
  * Full account settings: profile, security, notifications, shared spaces,
  * data & privacy, and a visually-separated danger zone at the bottom.
- * Reachable from Home and Expenses alike, so it uses a neutral
- * (lime/pale/ink) treatment rather than any one section's own theme.
+ * Reachable from Expenses, so it uses a neutral (lime/pale/ink) treatment
+ * rather than Expenses' own theme.
  */
 export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
   const insets = useSafeAreaInsets();
   const { user, signOut, updatePassword, updateProfileName } = useAuth();
-  const { items } = useSpace();
   const userId = user?.id ?? null;
 
   const [loading, setLoading] = useState(true);
@@ -432,12 +428,6 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       });
   };
 
-  const exportInventory = () => {
-    setExportingKey('inventory');
-    downloadCsv('myspace-inventory.csv', items.map((it) => ({ name: it.name, category: it.category, room: it.room, expiry: it.expiry || '' })));
-    setExportingKey(null);
-  };
-
   const exportBudgets = async () => {
     setExportingKey('budgets');
     try {
@@ -464,7 +454,6 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
         exportedAt: new Date().toISOString(),
         profile,
         email: user?.email,
-        items,
         budgetCards: sharedCards,
         cardExpenses: cardExpensesRes.data ?? [],
       });
@@ -702,9 +691,8 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
         <SectionLabel>Data & privacy</SectionLabel>
         <Card>
           <Row label="Download my data" sublabel="Everything below, as one JSON file" value={exportingKey === 'all' ? 'Preparing…' : undefined} onPress={downloadAllData} />
-          <Row label="Export inventory" sublabel="Items, CSV" value={exportingKey === 'inventory' ? 'Preparing…' : undefined} onPress={exportInventory} />
           <Row label="Export budgets" sublabel="Budget card spending, CSV" value={exportingKey === 'budgets' ? 'Preparing…' : undefined} onPress={exportBudgets} />
-          <Row label="Data usage" value={`${items.length} items · ${sharedCards.length} cards`} last />
+          <Row label="Data usage" value={`${sharedCards.length} cards`} last />
         </Card>
         <Card style={styles.cardSpaced}>
           <Text style={styles.subHeading}>Profile visibility</Text>
@@ -734,7 +722,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
         <SectionLabel>Danger zone</SectionLabel>
         <Card style={styles.dangerCard}>
           <Row label="Log out" onPress={() => setLogoutConfirm(true)} />
-          <Row label="Delete all my data" sublabel="Items, budgets — keeps your account" destructive onPress={() => setDeleteDataModal(true)} />
+          <Row label="Delete all my data" sublabel="Budgets — keeps your account" destructive onPress={() => setDeleteDataModal(true)} />
           <Row label="Delete MySpace account" sublabel="Permanently removes everything" destructive onPress={() => setDeleteAccountModal(true)} last />
         </Card>
       </ScrollView>
@@ -812,8 +800,8 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       <BottomSheet visible={deleteDataModal} onClose={() => setDeleteDataModal(false)}>
         <Text style={sheetStyles.title}>Delete all my data</Text>
         <Text style={sheetStyles.body}>
-          This permanently deletes every item and budget card you own — for everyone they're shared with. Your
-          account itself stays active. This can't be undone.
+          This permanently deletes every budget card you own — for everyone they're shared with. Your account
+          itself stays active. This can't be undone.
         </Text>
         <TextField label="Password" value={deleteDataPassword} onChangeText={setDeleteDataPassword} secureTextEntry placeholder="Confirm your password" />
         <TextField label='Type "DELETE" to confirm' value={deleteDataPhrase} onChangeText={setDeleteDataPhrase} placeholder="DELETE" autoCapitalize="none" />
@@ -838,7 +826,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       <BottomSheet visible={deleteAccountModal} onClose={() => setDeleteAccountModal(false)}>
         <Text style={sheetStyles.title}>Delete MySpace account</Text>
         <Text style={sheetStyles.body}>
-          This will permanently remove your spaces, items, budgets, and associated data, and delete your account. This can't be
+          This will permanently remove your spaces, budgets, and associated data, and delete your account. This can't be
           undone.
         </Text>
         <TextField label="Password" value={deleteAccountPassword} onChangeText={setDeleteAccountPassword} secureTextEntry placeholder="Confirm your password" />

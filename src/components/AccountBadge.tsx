@@ -25,7 +25,7 @@ interface AccountBadgeProps {
   tint?: string;
 }
 
-/** Rounded-square badge — the account entry point on Home and Expenses. Shows the profile photo once one is set, else initials. */
+/** Rounded-square badge — the account entry point on Expenses. Shows the profile photo once one is set, else initials. */
 export function AccountBadge({ onPress, style, bg, tint }: AccountBadgeProps) {
   const { user } = useAuth();
   const initials = initialsFor(user?.user_metadata?.full_name as string | undefined, user?.email);

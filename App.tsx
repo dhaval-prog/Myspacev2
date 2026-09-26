@@ -5,7 +5,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { colors, fontsToLoad } from './src/theme';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { SpaceProvider } from './src/context/SpaceContext';
 import { NotificationsProvider } from './src/context/NotificationsContext';
 import { FriendsProvider, useFriends } from './src/context/FriendsContext';
 import { CallProvider } from './src/context/CallContext';
@@ -18,8 +17,6 @@ import type { NotificationTarget } from './src/utils/notify';
 import { LaunchIntro } from './src/components/LaunchIntro';
 import { SignUpScreen } from './src/screens/SignUpScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
-import { HomeScreen } from './src/screens/HomeScreen';
-import { DetailScreen } from './src/screens/DetailScreen';
 import { ExpensesScreen } from './src/screens/expenses/ExpensesScreen';
 import { FriendsScreen } from './src/screens/friends/FriendsScreen';
 import { GamesScreen } from './src/screens/games/GamesScreen';
@@ -27,21 +24,18 @@ import { GamesDashboardScreen } from './src/screens/games/GamesDashboardScreen';
 import { TriviaGameScreen } from './src/screens/games/trivia/TriviaGameScreen';
 import { ThrowScreen } from './src/screens/throw/ThrowScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
-import type { ViewId } from './src/data/views';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 type AuthScreen = 'login' | 'signup';
 type Screen =
-  | { name: 'home' }
-  | { name: 'detail'; viewId: ViewId; initialIndex?: number }
   | { name: 'expenses'; focusCardId?: string }
   | { name: 'friends' }
   | { name: 'gamesHub' }
   | { name: 'games'; initialTab?: 'create' | 'join' }
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
   | { name: 'throw'; openThrowId?: string; openInbox?: boolean }
-  | { name: 'account'; from: 'home' | 'expenses' };
+  | { name: 'account' };
 
 function AuthNavigator() {
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
@@ -53,7 +47,9 @@ function AuthNavigator() {
 }
 
 function AppNavigator() {
-  const [screen, setScreen] = useState<Screen>({ name: 'home' });
+  // Chats is the app's landing point now — no standalone Home screen any more (see FriendsScreen's
+  // own doc comment, which already treats Chats as "the whole feature's landing point").
+  const [screen, setScreen] = useState<Screen>({ name: 'friends' });
   const { openChat, receivedRequests, goRequests, goChats, goAdd } = useFriends();
 
   const openNotificationTarget = (target: NotificationTarget) => {
@@ -70,47 +66,25 @@ function AppNavigator() {
     } else if (target.screen === 'throw') {
       setScreen({ name: 'throw', openThrowId: target.throwId });
     } else {
-      setScreen({ name: 'home' });
+      setScreen({ name: 'friends' });
     }
   };
 
-  if (screen.name === 'detail') {
-    return (
-      <DetailScreen
-        viewId={screen.viewId}
-        initialIndex={screen.initialIndex}
-        onBack={() => setScreen({ name: 'home' })}
-        onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenThrow={() => setScreen({ name: 'throw' })}
-      />
-    );
-  }
   if (screen.name === 'expenses') {
     return (
       <ExpensesScreen
-        onHome={() => setScreen({ name: 'home' })}
+        onHome={() => setScreen({ name: 'friends' })}
         onOpenThrow={() => setScreen({ name: 'throw' })}
-        onOpenAccount={() => setScreen({ name: 'account', from: 'expenses' })}
+        onOpenAccount={() => setScreen({ name: 'account' })}
         focusCardId={screen.focusCardId}
         onOpenNotificationTarget={openNotificationTarget}
-      />
-    );
-  }
-  if (screen.name === 'friends') {
-    return (
-      <FriendsScreen
-        onHome={() => setScreen({ name: 'home' })}
-        onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenThrow={() => setScreen({ name: 'throw' })}
-        onOpenThrowInbox={() => setScreen({ name: 'throw', openInbox: true })}
-        onOpenGames={() => setScreen({ name: 'gamesHub' })}
       />
     );
   }
   if (screen.name === 'gamesHub') {
     return (
       <GamesDashboardScreen
-        onHome={() => setScreen({ name: 'home' })}
+        onHome={() => setScreen({ name: 'friends' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenThrow={() => setScreen({ name: 'throw' })}
         onOpenFriends={() => setScreen({ name: 'friends' })}
@@ -142,7 +116,7 @@ function AppNavigator() {
   if (screen.name === 'throw') {
     return (
       <ThrowScreen
-        onHome={() => setScreen({ name: 'home' })}
+        onHome={() => setScreen({ name: 'friends' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenChats={() => {
           goChats();
@@ -158,17 +132,15 @@ function AppNavigator() {
     );
   }
   if (screen.name === 'account') {
-    return <AccountSettingsScreen onBack={() => setScreen({ name: screen.from } as Screen)} />;
+    return <AccountSettingsScreen onBack={() => setScreen({ name: 'expenses' })} />;
   }
   return (
-    <HomeScreen
-      onOpenDetail={(viewId, initialIndex) => setScreen({ name: 'detail', viewId, initialIndex })}
+    <FriendsScreen
+      onHome={() => setScreen({ name: 'friends' })}
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
-      onOpenFriends={() => setScreen({ name: 'friends' })}
-      onOpenGames={() => setScreen({ name: 'gamesHub' })}
       onOpenThrow={() => setScreen({ name: 'throw' })}
-      onOpenAccount={() => setScreen({ name: 'account', from: 'home' })}
-      onOpenNotificationTarget={openNotificationTarget}
+      onOpenThrowInbox={() => setScreen({ name: 'throw', openInbox: true })}
+      onOpenGames={() => setScreen({ name: 'gamesHub' })}
     />
   );
 }
@@ -185,25 +157,23 @@ function RootNavigator() {
   }
 
   return (
-    <SpaceProvider>
-      <NotificationsProvider>
-        <FriendsProvider>
-          <CallProvider>
-            <GameProvider>
-              <TriviaGameProvider>
-                <GameStatsProvider>
-                  <ThrowAlertsProvider>
-                    <AppNavigator />
-                    <CallOverlay />
-                    <ThrowAlertsOverlay />
-                  </ThrowAlertsProvider>
-                </GameStatsProvider>
-              </TriviaGameProvider>
-            </GameProvider>
-          </CallProvider>
-        </FriendsProvider>
-      </NotificationsProvider>
-    </SpaceProvider>
+    <NotificationsProvider>
+      <FriendsProvider>
+        <CallProvider>
+          <GameProvider>
+            <TriviaGameProvider>
+              <GameStatsProvider>
+                <ThrowAlertsProvider>
+                  <AppNavigator />
+                  <CallOverlay />
+                  <ThrowAlertsOverlay />
+                </ThrowAlertsProvider>
+              </GameStatsProvider>
+            </TriviaGameProvider>
+          </GameProvider>
+        </CallProvider>
+      </FriendsProvider>
+    </NotificationsProvider>
   );
 }
 

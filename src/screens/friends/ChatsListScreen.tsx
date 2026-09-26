@@ -15,13 +15,14 @@ import { timeAgo } from '../../utils/relativeTime';
 
 const CHAT_PLUS_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z M12 8.5v6M9 11.5h6';
 const GROUP_ICON = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
-// Same paper-plane glyph as HomeScreen's own Throw entry tile — reused here so this reads as the
-// same destination, not a Chats-specific reinterpretation.
+// Same paper-plane glyph used everywhere else Throw is a destination (BottomNav's own tab
+// included) — reused here so this reads as the same destination, not a Chats-specific
+// reinterpretation.
 const THROW_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
 const ADD_FRIEND_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
 const THROW_INBOX_ICON = 'M3 11h5l1.8 2.8h4.4L16 11h5 M3 11V5h18v6 M3 11v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7';
-// Same dice glyph as HomeScreen's own Games entry tile — reused here so this reads as the same
-// destination, not a Chats-specific reinterpretation.
+// Same dice glyph used everywhere else Games is a destination — reused here so this reads as the
+// same destination, not a Chats-specific reinterpretation.
 const GAMES_ICON = 'M4 4h16v16H4z M8 8h.01 M16 8h.01 M8 16h.01 M16 16h.01 M12 12h.01';
 
 const STORY_DOT_OVERRIDE = { size: 14, ringWidth: 2.5, ringColor: colors.onlineDotRing };
@@ -190,9 +191,9 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenThr
       </View>
 
       <BottomNav
-        activeId="friends"
+        activeId="chat"
         onSelect={(id) => {
-          if (id === 'home') onHome();
+          if (id === 'chat') onHome();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}

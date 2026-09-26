@@ -65,7 +65,7 @@ export function PickScreen({ onHome, onOpenThrow, onOpenAccount, onOpenNotificat
       <BottomNav
         activeId="expenses"
         onSelect={(id) => {
-          if (id === 'home') onHome();
+          if (id === 'chat') onHome();
           if (id === 'throw') onOpenThrow();
         }}
         onAdd={openNewCard}

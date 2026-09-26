@@ -21,12 +21,11 @@ import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
 import { PhotoAttachSheet } from './PhotoAttachSheet';
 import type { PickedMedia } from './PhotoAttachSheet';
-import { AlertScheduleSheet } from './AlertScheduleSheet';
+import { AlertScheduleHeader } from './AlertScheduleHeader';
 import { GlassSurface } from '../friends/GlassSurface';
 import { Icon } from '../Icon';
-import { throwColor, throwFont, throwGlass, throwNightColor, throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwFont, throwGlass, throwNightColor } from '../../theme/throwTokens';
 import { useVoiceToText } from '../../hooks/useVoiceToText';
-import { formatAlertSchedule } from '../../utils/throwAlerts';
 import type { LetterCanvasHandle } from './LetterCanvas';
 import type { PaperPlaneStageHandle } from './paperPlaneTypes';
 import type { AlertSchedule, StrokePath } from '../../types/throw';
@@ -99,6 +98,10 @@ const BOTTOM_ROW_HPAD = 12;
 // paper's own rounded edge even at the smallest scale.
 const BOTTOM_ROW_SAFETY = 8;
 const BOTTOM_ROW_CONTENT_WIDTH = BOTTOM_ROW_ICON * 4 + BOTTOM_ROW_MIC + BOTTOM_ROW_GAP * 4;
+// The embedded schedule picker's own `top` offset (see styles.scheduleHeaderWrap) — shared with
+// the fold-drag gesture's own carve-out math (onMoveShouldSetPanResponderCapture) so the two
+// can't drift apart.
+const SCHEDULE_HEADER_TOP = 16;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
@@ -156,10 +159,11 @@ interface FoldingLetterProps {
    * it unfolds. */
   onFoldProgress?: (value: number) => void;
   /** Present only for a self-reminder alert (writing to yourself), never an ordinary letter to a
-   * friend — renders a "Set Time" button on the paper that opens the alert's time/day picker in
-   * its own bottom sheet (see AlertScheduleSheet) rather than inline on the paper, since the
-   * wheel picker's own scroll and the paper's scroll-to-fold gesture fought over the same touches
-   * when it lived there directly. */
+   * friend — renders the alert's time/day picker (AlertScheduleHeader) directly on the paper,
+   * above the writing area, always (day and night alike; only its own chrome follows isNight).
+   * The picker's own wheel-scroll gesture is carved out of the paper's fold-drag PanResponder
+   * (see scheduleHeaderBoundsRef below) so scrolling it doesn't fold the letter out from under
+   * it — the exact conflict an earlier round moved this into a bottom sheet to avoid. */
   alertSchedule?: AlertSchedule;
   onAlertScheduleChange?: (schedule: AlertSchedule) => void;
   /** Hides the streak/points badges — they don't mean anything for a self-reminder. */
@@ -249,7 +253,11 @@ export function FoldingLetter({
   // of pinned to it — reported directly against a real iPhone. Anchoring off two independently
   // *measured* (not CSS-resolved) heights sidesteps that mismatch entirely.
   const [bottomRowHeight, setBottomRowHeight] = useState(0);
-  const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false);
+  // Measured height of the embedded self-reminder schedule picker (see alertSchedule prop) — fed
+  // to LetterCanvas as extra top padding (same measured-not-CSS-resolved reasoning as
+  // bottomRowHeight) and to scheduleHeaderBoundsRef below, which the fold-drag gesture carves
+  // itself out of.
+  const [scheduleHeaderHeight, setScheduleHeaderHeight] = useState(0);
   const [stageFailed, setStageFailed] = useState(false);
   const letterCanvasRef = useRef<LetterCanvasHandle>(null);
   const voice = useVoiceToText({ onFinalText: (text) => letterCanvasRef.current?.appendText(text) });
@@ -276,6 +284,9 @@ export function FoldingLetter({
   const rawStartRef = useRef<{ x: number; y: number } | null>(null);
   const dragAnchorRef = useRef<{ y: number; progress: number } | null>(null);
   const paperAreaRef = useRef<View>(null);
+  // The embedded schedule picker's own DOM node (web only) — used to carve its bounds out of the
+  // raw pointer-based fold-drag tracker below, same reasoning as scheduleHeaderHeight.
+  const scheduleHeaderRef = useRef<View>(null);
   // The whole compose card (paper + hint + bottom-controls row) — scroll-wheel fold/unfold (see
   // the effect below) listens here rather than on paperAreaRef, since it's meant to work whether
   // the cursor happens to be over the paper or elsewhere on the card.
@@ -403,6 +414,7 @@ export function FoldingLetter({
     onContactDragOffset,
     onFoldProgress,
     isNight,
+    scheduleHeaderHeight,
   });
   latest.current = {
     disabled,
@@ -418,6 +430,7 @@ export function FoldingLetter({
     onContactDragOffset,
     onFoldProgress,
     isNight,
+    scheduleHeaderHeight,
   };
 
   // The folded plane's baked texture only carries the first attached *photo* — see
@@ -501,7 +514,17 @@ export function FoldingLetter({
       // plane (see the throw-lock in onPanResponderRelease below, which is what actually stops an
       // empty letter from being sent).
       if (disabled || phase !== 'writing') return;
-      rawStartRef.current = getPoint(e);
+      const p = getPoint(e);
+      // Refuses to even start tracking a touch that lands on the embedded schedule picker (see
+      // alertSchedule prop) — its own wheel/repeat controls need first refusal on these same
+      // touches, same carve-out reasoning as onMoveShouldSetPanResponderCapture below for native.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const headerEl = scheduleHeaderRef.current as any as HTMLElement | null;
+      if (p && headerEl) {
+        const rect = headerEl.getBoundingClientRect();
+        if (p.x >= rect.left && p.x <= rect.right && p.y >= rect.top && p.y <= rect.bottom) return;
+      }
+      rawStartRef.current = p;
     };
     const onMove = (e: MouseEvent | TouchEvent) => {
       const p = getPoint(e);
@@ -601,10 +624,17 @@ export function FoldingLetter({
         // LetterCanvas's own stroke responder needs first refusal on short/lateral touches.
         onStartShouldSetPanResponder: () => !latest.current.disabled && latest.current.phase === 'ready',
         onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponderCapture: (_, g) => {
-          const { disabled, phase } = latest.current;
+        onMoveShouldSetPanResponderCapture: (e, g) => {
+          const { disabled, phase, scheduleHeaderHeight } = latest.current;
           if (disabled || phase === 'throwing') return false;
           if (phase === 'ready' || phase === 'folding') return true;
+          // Refuses to steal a touch currently over the embedded schedule picker (see
+          // alertSchedule prop) — its own wheel/repeat controls need first refusal there, the
+          // same reasoning LetterCanvas's stroke gesture already gets below FOLD_CAPTURE_DY/
+          // RATIO. locationY is relative to this same paperArea view (confirmed already relied on
+          // by onPanResponderGrant's own locationX use just below); SCHEDULE_HEADER_TOP mirrors
+          // the picker's own `top` offset in styles.scheduleHeaderWrap.
+          if (scheduleHeaderHeight > 0 && e.nativeEvent.locationY < SCHEDULE_HEADER_TOP + scheduleHeaderHeight) return false;
           // No `hasContent` gate — an empty paper can still be dragged into a fold; the actual
           // throw itself is what gets locked (see onPanResponderRelease below).
           return g.dy > FOLD_CAPTURE_DY && g.dy > Math.abs(g.dx) * FOLD_CAPTURE_RATIO;
@@ -760,27 +790,23 @@ export function FoldingLetter({
     <View ref={wrapRef} style={styles.wrap}>
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
-          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={mediaItems.length > 0} isNight={isNight} />
+          <LetterCanvas
+            ref={letterCanvasRef}
+            onContentChange={setContent}
+            hasPhoto={mediaItems.length > 0}
+            isNight={isNight}
+            extraTopPadding={alertSchedule && onAlertScheduleChange && scheduleHeaderHeight > 0 ? scheduleHeaderHeight + 16 : 0}
+          />
         </Animated.View>
 
         {alertSchedule && onAlertScheduleChange && (
           <Animated.View
-            style={[
-              styles.setTimeWrap,
-              bottomRowHeight > 0 ? { bottom: bottomRowHeight + 14 } : { bottom: 90 },
-              { opacity: canvasOpacity },
-            ]}
+            ref={scheduleHeaderRef}
+            onLayout={(e) => setScheduleHeaderHeight(e.nativeEvent.layout.height)}
+            style={[styles.scheduleHeaderWrap, { opacity: canvasOpacity }]}
             pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
           >
-            <Pressable
-              onPress={() => setScheduleSheetOpen(true)}
-              style={[styles.setTimeBtn, isNight && styles.setTimeBtnNight]}
-              accessibilityRole="button"
-              accessibilityLabel="Set time"
-            >
-              <Text style={[styles.setTimeLabel, isNight && styles.setTimeLabelNight]}>Set Time</Text>
-              <Text style={[styles.setTimeSummary, isNight && styles.setTimeLabelNight]}>{formatAlertSchedule(alertSchedule)}</Text>
-            </Pressable>
+            <AlertScheduleHeader schedule={alertSchedule} onChange={onAlertScheduleChange} isNight={isNight} />
           </Animated.View>
         )}
 
@@ -955,9 +981,6 @@ export function FoldingLetter({
       {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
 
       <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(items) => setMediaItems((prev) => [...prev, ...items])} />
-      {alertSchedule && onAlertScheduleChange && (
-        <AlertScheduleSheet visible={scheduleSheetOpen} onClose={() => setScheduleSheetOpen(false)} schedule={alertSchedule} onChange={onAlertScheduleChange} isNight={isNight} />
-      )}
     </View>
   );
 }
@@ -972,20 +995,9 @@ const styles = StyleSheet.create({
   // The streak/leaderboard badges' new home, in the paper's own top-right corner instead of a
   // separate header chip.
   paperBadges: { position: 'absolute', top: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  // The self-reminder alert's "Set Time" button — positioned above the bottom-controls row (see
-  // alertSchedule prop), opening AlertScheduleSheet rather than showing the picker inline.
-  setTimeWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  setTimeBtn: {
-    borderRadius: throwRadius.pill,
-    backgroundColor: throwColor.claySoft,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  setTimeLabel: { fontFamily: throwFont.ui700, fontSize: 13.5, color: throwColor.clayDeep },
-  setTimeSummary: { fontFamily: throwFont.ui500, fontSize: 11.5, color: throwColor.clayDeep, marginTop: 1 },
-  setTimeBtnNight: { backgroundColor: throwNightColor.badgeBg },
-  setTimeLabelNight: { color: throwNightColor.ink },
+  // The self-reminder alert's schedule picker — pinned to the paper's own top edge, above the
+  // writing area (see alertSchedule prop and SCHEDULE_HEADER_TOP, which mirrors this `top`).
+  scheduleHeaderWrap: { position: 'absolute', top: SCHEDULE_HEADER_TOP, left: 14, right: 14 },
   streakChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   pointsChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   streakText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.clayDeep },

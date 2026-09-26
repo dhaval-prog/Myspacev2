@@ -197,9 +197,9 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenThrow }: AddFrie
       </View>
 
       <BottomNav
-        activeId="friends"
+        activeId="chat"
         onSelect={(id) => {
-          if (id === 'home') onHome();
+          if (id === 'chat') onHome();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}

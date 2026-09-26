@@ -9,8 +9,8 @@ import type { AppNotification } from '../context/NotificationsContext';
  * is never duplicated, including across app restarts. Once the user reads
  * (and deletes) it, the same key is free again for a future occurrence.
  * `entity` identifies what the notification is about, so tapping it can jump
- * straight there — omit it when there's nothing to focus (e.g. a Home item
- * reminder, which just opens Home).
+ * straight there — omit it when there's nothing specific to focus (falls
+ * back to Chats, see `targetForNotification`).
  */
 export async function notifySelf(
   userId: string,
@@ -37,12 +37,13 @@ export type NotificationTarget =
   | { screen: 'expenses'; cardId: string }
   | { screen: 'friends'; connectionId: string }
   | { screen: 'throw'; throwId: string }
-  | { screen: 'home' };
+  | { screen: 'default' };
 
-/** Where tapping a notification should take you — falls back to Home when it has nothing to focus. */
+/** Where tapping a notification should take you — falls back to Chats (the app's landing point)
+ * when it has nothing specific to focus. */
 export function targetForNotification(n: AppNotification): NotificationTarget {
   if (n.entityType === 'card' && n.entityId) return { screen: 'expenses', cardId: n.entityId };
   if (n.entityType === 'connection' && n.entityId) return { screen: 'friends', connectionId: n.entityId };
   if (n.entityType === 'throw' && n.entityId) return { screen: 'throw', throwId: n.entityId };
-  return { screen: 'home' };
+  return { screen: 'default' };
 }
