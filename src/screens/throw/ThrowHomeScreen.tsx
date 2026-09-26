@@ -285,7 +285,19 @@ export function ThrowHomeScreen({
         )}
 
         {!inFlight && hasFriendsAtAll && selectedFriend && (
-          <View style={[styles.letterCard, { bottom: insets.bottom + 16 + BOTTOM_NAV_CLEARANCE }]}>
+          // `bottom` shrinks from its normal BOTTOM_NAV_CLEARANCE-reserved position down to just
+          // the safe-area inset as the letter folds, on the same chromeOpacity value that already
+          // fades BottomNav out — that reserved clearance exists so the card clears the *visible*
+          // dock, and once folded the dock is invisible, so holding the card up above empty space
+          // just to clear a control that isn't there read as the ready-to-throw plane floating
+          // above the bottom instead of anchored to it. Animated.View (not View) is what lets
+          // `bottom` interpolate at all here.
+          <Animated.View
+            style={[
+              styles.letterCard,
+              { bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) },
+            ]}
+          >
             <FoldingLetter
               recipientName={selectedFriend.name}
               recipientCity={selectedFriend.location!.city}
@@ -302,7 +314,7 @@ export function ThrowHomeScreen({
               onContactDragOffset={!lockedRecipient && friendsWithLocation.length > 1 ? handleContactDragOffset : undefined}
               onFoldProgress={handleFoldProgress}
             />
-          </View>
+          </Animated.View>
         )}
 
         {inFlight && (
