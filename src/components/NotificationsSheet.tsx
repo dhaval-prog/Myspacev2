@@ -21,7 +21,7 @@ function timeAgo(iso: string): string {
 interface NotificationsSheetProps {
   visible: boolean;
   onClose: () => void;
-  /** Jumps to whatever this notification is about (a card, split, or chat) — omit to just acknowledge in place. */
+  /** Jumps to whatever this notification is about (a card or chat) — omit to just acknowledge in place. */
   onNavigate?: (target: NotificationTarget) => void;
 }
 

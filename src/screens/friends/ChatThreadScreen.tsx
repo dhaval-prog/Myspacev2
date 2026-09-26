@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sheetOptionIconDestructive: {
-    backgroundColor: colors.splitDangerBg,
+    backgroundColor: colors.dangerBg,
   },
   sheetOptionLabel: {
     fontFamily: fontFamily.sans600,

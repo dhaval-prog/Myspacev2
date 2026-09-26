@@ -769,7 +769,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   sheetOptionIconDestructive: {
-    backgroundColor: colors.splitDangerBg,
+    backgroundColor: colors.dangerBg,
   },
   sheetOptionLabelDestructive: {
     color: colors.danger,

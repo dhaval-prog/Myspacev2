@@ -30,10 +30,10 @@ interface DetailScreenProps {
   initialIndex?: number;
   onBack: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
 }
 
-export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onOpenSplit }: DetailScreenProps) {
+export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onOpenThrow }: DetailScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { items, addItem, editItem, removeItem } = useSpace();
@@ -159,7 +159,7 @@ export function DetailScreen({ viewId, initialIndex, onBack, onOpenExpenses, onO
             onSelect={(id) => {
               if (id === 'home') onBack();
               if (id === 'expenses') onOpenExpenses();
-              if (id === 'split') onOpenSplit();
+              if (id === 'throw') onOpenThrow();
             }}
             bottomInset={insets.bottom}
             reduceMotion={reduceMotion}

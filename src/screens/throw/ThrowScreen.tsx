@@ -11,7 +11,6 @@ import { ThrowSettingsScreen } from './ThrowSettingsScreen';
 interface ThrowScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
   initialThrowId?: string;
@@ -29,7 +28,6 @@ type SubScreen =
 function ThrowNavigator({
   onHome,
   onOpenExpenses,
-  onOpenSplit,
   onOpenChats,
   onOpenAddFriend,
   initialThrowId,
@@ -37,7 +35,6 @@ function ThrowNavigator({
 }: {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
   initialThrowId?: string;
@@ -61,7 +58,6 @@ function ThrowNavigator({
       <ThrowHomeScreen
         onHome={onHome}
         onOpenExpenses={onOpenExpenses}
-        onOpenSplit={onOpenSplit}
         onOpenChats={onOpenChats}
         onOpenAddFriend={onOpenAddFriend}
         onOpenInbox={() => setScreen({ name: 'inbox' })}
@@ -92,13 +88,12 @@ function ThrowNavigator({
   return null;
 }
 
-export function ThrowScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenChats, onOpenAddFriend, initialThrowId, initialScreen }: ThrowScreenProps) {
+export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFriend, initialThrowId, initialScreen }: ThrowScreenProps) {
   return (
     <ThrowProvider>
       <ThrowNavigator
         onHome={onHome}
         onOpenExpenses={onOpenExpenses}
-        onOpenSplit={onOpenSplit}
         onOpenChats={onOpenChats}
         onOpenAddFriend={onOpenAddFriend}
         initialThrowId={initialThrowId}

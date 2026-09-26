@@ -16,21 +16,21 @@ import type { NotificationTarget } from '../../utils/notify';
 
 interface ExpensesScreenProps {
   onHome: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
   onOpenAccount: () => void;
   /** Opens straight into this card's wallet — set when arriving from a notification about it. */
   focusCardId?: string;
   onOpenNotificationTarget?: (target: NotificationTarget) => void;
 }
 
-function ExpensesRoot({ onHome, onOpenSplit, onOpenAccount, onOpenNotificationTarget }: ExpensesScreenProps) {
+function ExpensesRoot({ onHome, onOpenThrow, onOpenAccount, onOpenNotificationTarget }: ExpensesScreenProps) {
   const { page } = useExpenses();
   return (
     <>
       {page === 'wallet' ? (
         <WalletScreen onHome={onHome} />
       ) : (
-        <PickScreen onHome={onHome} onOpenSplit={onOpenSplit} onOpenAccount={onOpenAccount} onOpenNotificationTarget={onOpenNotificationTarget} />
+        <PickScreen onHome={onHome} onOpenThrow={onOpenThrow} onOpenAccount={onOpenAccount} onOpenNotificationTarget={onOpenNotificationTarget} />
       )}
       <AddSpendSheet />
       <AddMoneySheet />
@@ -47,10 +47,10 @@ function ExpensesRoot({ onHome, onOpenSplit, onOpenAccount, onOpenNotificationTa
 }
 
 /** Card-stack picker + per-card wallet, plus every modal it can open. */
-export function ExpensesScreen({ onHome, onOpenSplit, onOpenAccount, focusCardId, onOpenNotificationTarget }: ExpensesScreenProps) {
+export function ExpensesScreen({ onHome, onOpenThrow, onOpenAccount, focusCardId, onOpenNotificationTarget }: ExpensesScreenProps) {
   return (
     <ExpensesProvider initialCardId={focusCardId}>
-      <ExpensesRoot onHome={onHome} onOpenSplit={onOpenSplit} onOpenAccount={onOpenAccount} onOpenNotificationTarget={onOpenNotificationTarget} />
+      <ExpensesRoot onHome={onHome} onOpenThrow={onOpenThrow} onOpenAccount={onOpenAccount} onOpenNotificationTarget={onOpenNotificationTarget} />
     </ExpensesProvider>
   );
 }

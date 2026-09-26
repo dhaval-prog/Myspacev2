@@ -27,7 +27,11 @@ interface UseVoiceToTextResult {
   /** The current not-yet-final transcript, for a live "as you speak" preview. */
   interimText: string;
   error: string | null;
-  start: () => Promise<void>;
+  /** `lang` is a BCP-47 locale (e.g. 'hi-IN', 'mr-IN', 'gu-IN') — the on-device/browser
+   * recognizer picks one language per session, it doesn't detect/mix several at once, so the
+   * caller is expected to ask the user which language they're about to speak (see FoldingLetter's
+   * language chip next to the mic button) rather than this hook guessing. Defaults to English. */
+  start: (lang?: string) => Promise<void>;
   stop: () => void;
 }
 
@@ -70,7 +74,7 @@ export function useVoiceToText({ onFinalText }: UseVoiceToTextOptions): UseVoice
     setInterimText('');
   });
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (lang = 'en-IN') => {
     setError(null);
     const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     if (!permission.granted) {
@@ -78,7 +82,7 @@ export function useVoiceToText({ onFinalText }: UseVoiceToTextOptions): UseVoice
       return;
     }
     setRecording(true);
-    ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: true, addsPunctuation: true });
+    ExpoSpeechRecognitionModule.start({ lang, interimResults: true, continuous: true, addsPunctuation: true });
   }, []);
 
   const stop = useCallback(() => {

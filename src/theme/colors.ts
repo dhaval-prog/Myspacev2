@@ -67,6 +67,8 @@ export const colors = {
 
   // Destructive / alert accent (forgot-password link)
   danger: '#D33243',
+  // Same accent, softened for an icon/badge background rather than text/borders.
+  dangerBg: 'rgba(211,50,67,0.12)',
 
   // --- Auth screens (Sign Up / Log In) ---
   // Soft welcoming gradient, distinct from the flat lime of the main app
@@ -94,32 +96,9 @@ export const colors = {
   walletAccentBlueSoftBg: 'rgba(22,104,232,0.12)',
   walletAccentRed: '#E8352A',
 
-  // --- Split screens ---
-  // Warm coral-to-magenta gradient over a soft lavender-white surface,
-  // distinct from both the lime home and the dark wallet.
-  splitBg: '#F7F7FB',
-  splitSurface: '#FFFFFF',
-  splitInk: '#1B2A63',
-  splitInkFaint30: 'rgba(27,42,99,0.3)',
-  splitInkFaint42: 'rgba(27,42,99,0.42)',
-  splitInkFaint45: 'rgba(27,42,99,0.45)',
-  splitInkFaint5: 'rgba(27,42,99,0.5)',
-  splitInkFaint55: 'rgba(27,42,99,0.55)',
-  splitInkFaint6: 'rgba(27,42,99,0.6)',
-  splitInkFaint07: 'rgba(27,42,99,0.07)',
-  splitInkFaint08: 'rgba(27,42,99,0.08)',
-  splitInkFaint09: 'rgba(27,42,99,0.09)',
-  splitGradient: ['#FF6A5A', '#FA2E6E', '#F0186B'] as string[],
-  splitAccent: '#FA2E6E',
-  splitAccentSoftBg: '#FDE8EE',
-  splitPositiveBg: '#E6F6EC',
-  splitPositiveFg: '#1F9254',
-  splitDangerBg: 'rgba(211,50,67,0.12)',
-  splitDangerFg: '#D33243',
-
   // --- Friends / chat screens ---
   // Reuses the core lime/ink/pale identity (not a separate feature color,
-  // unlike Split/Expenses) — Friends & chat is a continuation of Home.
+  // unlike Expenses) — Friends & chat is a continuation of Home.
   nearBlack: '#111111',
   coral: '#FF8A6B',
   onlineDot: '#3FBF6A',

@@ -27,7 +27,6 @@ interface HomeScreenProps {
   onOpenNotificationTarget?: (target: NotificationTarget) => void;
   onOpenDetail: (viewId: ViewId, initialIndex?: number) => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
   onOpenFriends: () => void;
   onOpenGames: () => void;
   onOpenThrow: () => void;
@@ -45,7 +44,6 @@ export function HomeScreen({
   onOpenNotificationTarget,
   onOpenDetail,
   onOpenExpenses,
-  onOpenSplit,
   onOpenFriends,
   onOpenGames,
   onOpenThrow,
@@ -203,7 +201,7 @@ export function HomeScreen({
           onSelect={(id) => {
             setActiveNavId(id);
             if (id === 'expenses') onOpenExpenses();
-            if (id === 'split') onOpenSplit();
+            if (id === 'throw') onOpenThrow();
           }}
           onAdd={() => onOpenDetail('add')}
           bottomInset={insets.bottom}
@@ -218,7 +216,6 @@ export function HomeScreen({
         onOpenHome={() => onOpenDetail('add')}
         onOpenDetail={onOpenDetail}
         onOpenExpenses={onOpenExpenses}
-        onOpenSplit={onOpenSplit}
         reduceMotion={reduceMotion}
       />
 

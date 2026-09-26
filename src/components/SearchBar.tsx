@@ -9,7 +9,7 @@ interface SearchBarProps {
 /**
  * Search integrated into the header composition — a hairline field, not a
  * generic Material search bar. Tapping it doesn't focus an inline input;
- * it launches the full search popup (spanning Home, Expenses, and Split),
+ * it launches the full search popup (spanning Home and Expenses),
  * so this is a static trigger rather than a live TextInput.
  */
 export function SearchBar({ onPress }: SearchBarProps) {
@@ -18,13 +18,13 @@ export function SearchBar({ onPress }: SearchBarProps) {
       onPress={onPress}
       style={({ pressed }) => [styles.field, pressed && styles.fieldPressed]}
       accessibilityRole="button"
-      accessibilityLabel="Search Home, Expenses, and Split"
+      accessibilityLabel="Search Home and Expenses"
     >
       <Text style={styles.icon} accessibilityElementsHidden importantForAccessibility="no">
         ⌕
       </Text>
       <Text style={styles.placeholder} numberOfLines={1}>
-        Things, spends, splits…
+        Things, spends…
       </Text>
     </Pressable>
   );
