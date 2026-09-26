@@ -73,7 +73,7 @@ function ProgressRing({ pct, reduceMotion, children }: { pct: number; reduceMoti
 interface GamesDashboardScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
   onOpenFriends: () => void;
   onOpenNpat: (initialTab?: 'create' | 'join') => void;
   onOpenTrivia: (initialTab?: 'create' | 'join') => void;
@@ -84,7 +84,7 @@ interface GamesDashboardScreenProps {
  * Real leaderboard/points data from GameStatsContext throughout; a game row
  * expands in place into Create/Join instead of pushing a new screen.
  */
-export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenFriends, onOpenNpat, onOpenTrivia }: GamesDashboardScreenProps) {
+export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenFriends, onOpenNpat, onOpenTrivia }: GamesDashboardScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { circle, leaderboard, myEntry, myRankDelta, breakdown, recentActivity, breakdownFor } = useGameStats();
@@ -207,7 +207,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenSplit, onOp
         onSelect={(id) => {
           if (id === 'home') onHome();
           if (id === 'expenses') onOpenExpenses();
-          if (id === 'split') onOpenSplit();
+          if (id === 'throw') onOpenThrow();
         }}
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}

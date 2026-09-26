@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import type { Item } from '../types/space';
 
-export type SearchSection = 'home' | 'expenses' | 'split';
+export type SearchSection = 'home' | 'expenses';
 
 export interface SearchResult {
   id: string;
@@ -16,32 +16,24 @@ interface CardRow {
   label: string;
 }
 
-interface GroupRow {
-  id: string;
-  name: string;
-}
-
 const DEBOUNCE_MS = 300;
 const LIMIT = 6;
 
-/** Matches Home's items locally, and searches Expenses' budget cards + Split's groups via Supabase (RLS already scopes results to what the signed-in account can see). */
+/** Matches Home's items locally, and searches Expenses' budget cards via Supabase (RLS already scopes results to what the signed-in account can see). */
 export function useGlobalSearch(query: string, items: Item[]) {
-  const [remote, setRemote] = useState<{ expenses: SearchResult[]; split: SearchResult[] }>({ expenses: [], split: [] });
+  const [remote, setRemote] = useState<{ expenses: SearchResult[] }>({ expenses: [] });
   const seqRef = useRef(0);
 
   useEffect(() => {
     const q = query.trim();
     if (!q || !isSupabaseConfigured) {
-      setRemote({ expenses: [], split: [] });
+      setRemote({ expenses: [] });
       return;
     }
 
     const mySeq = ++seqRef.current;
     const timer = setTimeout(async () => {
-      const [cardsRes, groupsRes] = await Promise.all([
-        supabase.from('budget_cards').select('id,label').ilike('label', `%${q}%`).limit(LIMIT),
-        supabase.from('split_groups').select('id,name').ilike('name', `%${q}%`).limit(LIMIT),
-      ]);
+      const cardsRes = await supabase.from('budget_cards').select('id,label').ilike('label', `%${q}%`).limit(LIMIT);
       if (mySeq !== seqRef.current) return; // a newer query superseded this one
 
       setRemote({
@@ -50,12 +42,6 @@ export function useGlobalSearch(query: string, items: Item[]) {
           section: 'expenses',
           title: c.label,
           subtitle: 'Budget card',
-        })),
-        split: ((groupsRes.data as GroupRow[] | null) ?? []).map((g) => ({
-          id: g.id,
-          section: 'split',
-          title: g.name,
-          subtitle: 'Split',
         })),
       });
     }, DEBOUNCE_MS);
@@ -76,5 +62,5 @@ export function useGlobalSearch(query: string, items: Item[]) {
           subtitle: it.room ? `In ${it.room}` : 'Item',
         }));
 
-  return { home, expenses: remote.expenses, split: remote.split };
+  return { home, expenses: remote.expenses };
 }

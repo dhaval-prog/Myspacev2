@@ -48,7 +48,7 @@ function NavButton({
 const FAB_ICON_DEFAULT = '#C3EA4F';
 const FAB_ICON_BY_TAB: Record<string, string> = {
   expenses: '#fff',
-  split: '#DE3769',
+  throw: '#DE3769',
 };
 
 function Fab({
@@ -96,8 +96,8 @@ interface BottomNavProps {
 }
 
 /**
- * Floating nav dock shared by every screen (Home, Expenses, Split): a dark
- * pill grouping Home/Expenses/Split on the left, and a separate circular
+ * Floating nav dock shared by every screen (Home, Expenses, Throw): a dark
+ * pill grouping Home/Expenses/Throw on the left, and a separate circular
  * "+" action to its right — two distinct floating shapes, not one bar.
  */
 export function BottomNav({ activeId, onSelect, onAdd, fabIconPath, fabAccessibilityLabel, bottomInset, reduceMotion }: BottomNavProps) {

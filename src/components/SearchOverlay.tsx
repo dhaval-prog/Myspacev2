@@ -13,7 +13,6 @@ interface SearchOverlayProps {
   onOpenHome: () => void;
   onOpenDetail: (viewId: ViewId) => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
   reduceMotion?: boolean;
 }
 
@@ -25,11 +24,10 @@ interface Shortcut {
 const SECTION_LABEL: Record<SearchSection, string> = {
   home: 'Home',
   expenses: 'Expenses',
-  split: 'Split',
 };
 
-/** Full-screen animated search popup — spans Home's own items plus Expenses' budget cards and Split's groups. */
-export function SearchOverlay({ visible, onClose, items, onOpenHome, onOpenDetail, onOpenExpenses, onOpenSplit, reduceMotion }: SearchOverlayProps) {
+/** Full-screen animated search popup — spans Home's own items plus Expenses' budget cards. */
+export function SearchOverlay({ visible, onClose, items, onOpenHome, onOpenDetail, onOpenExpenses, reduceMotion }: SearchOverlayProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [mounted, setMounted] = useState(visible);
@@ -40,7 +38,6 @@ export function SearchOverlay({ visible, onClose, items, onOpenHome, onOpenDetai
     { label: 'Add item', onPress: () => onOpenDetail('add') },
     { label: 'Needs attention', onPress: () => onOpenDetail('attention') },
     { label: 'Add budget card', onPress: onOpenExpenses },
-    { label: 'Add split', onPress: onOpenSplit },
   ];
 
   useEffect(() => {
@@ -65,10 +62,9 @@ export function SearchOverlay({ visible, onClose, items, onOpenHome, onOpenDetai
   const sections: { key: SearchSection; label: string; results: SearchResult[]; onPress: () => void }[] = [
     { key: 'home', label: SECTION_LABEL.home, results: results.home, onPress: onOpenHome },
     { key: 'expenses', label: SECTION_LABEL.expenses, results: results.expenses, onPress: onOpenExpenses },
-    { key: 'split', label: SECTION_LABEL.split, results: results.split, onPress: onOpenSplit },
   ];
   const hasQuery = query.trim().length > 0;
-  const totalResults = results.home.length + results.expenses.length + results.split.length;
+  const totalResults = results.home.length + results.expenses.length;
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
@@ -91,11 +87,11 @@ export function SearchOverlay({ visible, onClose, items, onOpenHome, onOpenDetai
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search things, spends, splits…"
+            placeholder="Search things, spends…"
             placeholderTextColor={colors.placeholder}
             autoFocus
             style={[styles.field, noOutline]}
-            accessibilityLabel="Search across Home, Expenses, and Split"
+            accessibilityLabel="Search across Home and Expenses"
             returnKeyType="search"
           />
           <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close search" style={styles.closeButton} hitSlop={6}>
@@ -106,7 +102,7 @@ export function SearchOverlay({ visible, onClose, items, onOpenHome, onOpenDetai
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.results}>
           {!hasQuery ? (
             <View style={styles.shortcutsWrap}>
-              <Text style={styles.hint}>Search items in Home, budget cards in Expenses, and splits in Split.</Text>
+              <Text style={styles.hint}>Search items in Home and budget cards in Expenses.</Text>
               <View style={styles.chipRow}>
                 {shortcuts.map((s) => (
                   <Pressable

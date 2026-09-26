@@ -33,11 +33,11 @@ function formatDisplayCode(code: string): string {
 interface AddFriendScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
 }
 
 /** Add a friend (6p-2): show your own code/QR, or enter theirs cell by cell. */
-export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFriendScreenProps) {
+export function AddFriendScreen({ onHome, onOpenExpenses, onOpenThrow }: AddFriendScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friendCode, goHome, goScan, lookupCode } = useFriends();
@@ -201,7 +201,7 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenSplit }: AddFrie
         onSelect={(id) => {
           if (id === 'home') onHome();
           if (id === 'expenses') onOpenExpenses();
-          if (id === 'split') onOpenSplit();
+          if (id === 'throw') onOpenThrow();
         }}
         onAdd={goHome}
         fabIconPath={BACK_ICON}

@@ -229,7 +229,7 @@ interface FriendsContextValue {
   /** Looks up a code and populates matchProfile/matchCode. Navigates straight to the match screen unless `navigate: false` (the scanner shows its own "Code found" card first). */
   lookupCode: (code: string, opts?: { navigate?: boolean }) => Promise<{ error: string | null }>;
   sendRequest: (introMessage: string) => Promise<{ error: string | null }>;
-  /** Sends a friend request straight to a known userId (no code lookup) — used from a shared card/split's Members list. */
+  /** Sends a friend request straight to a known userId (no code lookup) — used from a shared card's Members list. */
   sendRequestToUser: (targetUserId: string, introMessage?: string) => Promise<{ error: string | null }>;
   acceptRequest: (connectionId: string) => Promise<void>;
   declineRequest: (connectionId: string) => Promise<void>;

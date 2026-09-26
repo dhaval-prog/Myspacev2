@@ -34,13 +34,13 @@ function DieIcon() {
 interface NpatLobbyScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
   /** Which tab the create/join hub opens on — e.g. the Games hub's "Join with code" row button jumps straight to Join. */
   initialTab?: 'create' | 'join';
 }
 
 /** Create-or-join hub when there's no game yet; ready-up room once one exists — restyled to the "MySpace Games · 1A · 1B" handoff. */
-export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initialTab }: NpatLobbyScreenProps) {
+export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenThrow, initialTab }: NpatLobbyScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
@@ -51,7 +51,7 @@ export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initialTa
       <NpatReadyRoom
         onHome={onHome}
         onOpenExpenses={onOpenExpenses}
-        onOpenSplit={onOpenSplit}
+        onOpenThrow={onOpenThrow}
         game={game}
         players={players}
         myPlayerId={myPlayerId}
@@ -68,7 +68,7 @@ export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initialTa
     <NpatHub
       onHome={onHome}
       onOpenExpenses={onOpenExpenses}
-      onOpenSplit={onOpenSplit}
+      onOpenThrow={onOpenThrow}
       loading={loading}
       createGame={createGame}
       joinGame={joinGame}
@@ -83,7 +83,7 @@ export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initialTa
 function NpatHub({
   onHome,
   onOpenExpenses,
-  onOpenSplit,
+  onOpenThrow,
   loading,
   createGame,
   joinGame,
@@ -94,7 +94,7 @@ function NpatHub({
 }: {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
   loading: boolean;
   createGame: (rounds: number, timerSeconds: number, name: string) => Promise<{ error: string | null; roomCode?: string }>;
   joinGame: (roomCode: string, name: string) => Promise<{ error: string | null }>;
@@ -221,7 +221,7 @@ function NpatHub({
         onSelect={(id) => {
           if (id === 'home') onHome();
           if (id === 'expenses') onOpenExpenses();
-          if (id === 'split') onOpenSplit();
+          if (id === 'throw') onOpenThrow();
         }}
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
@@ -233,7 +233,7 @@ function NpatHub({
 function NpatReadyRoom({
   onHome,
   onOpenExpenses,
-  onOpenSplit,
+  onOpenThrow,
   game,
   players,
   myPlayerId,
@@ -245,7 +245,7 @@ function NpatReadyRoom({
 }: {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
   game: NonNullable<ReturnType<typeof useGame>['game']>;
   players: ReturnType<typeof useGame>['players'];
   myPlayerId: string | null;
@@ -349,7 +349,7 @@ function NpatReadyRoom({
             onHome();
           }
           if (id === 'expenses') onOpenExpenses();
-          if (id === 'split') onOpenSplit();
+          if (id === 'throw') onOpenThrow();
         }}
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}

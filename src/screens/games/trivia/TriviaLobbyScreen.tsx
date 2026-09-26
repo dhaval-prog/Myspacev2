@@ -82,13 +82,13 @@ function CodeCells({ value, onChangeText }: { value: string; onChangeText?: (t: 
 interface TriviaLobbyScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
   /** Which tab the create/join hub opens on — the Games hub's "Join with code" row jumps straight to Join. */
   initialTab?: 'create' | 'join';
 }
 
 /** Create-or-join hub when there's no game yet; the lobby once one exists. */
-export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initialTab }: TriviaLobbyScreenProps) {
+export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenThrow, initialTab }: TriviaLobbyScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
@@ -99,7 +99,7 @@ export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initial
       <TriviaReadyRoom
         onHome={onHome}
         onOpenExpenses={onOpenExpenses}
-        onOpenSplit={onOpenSplit}
+        onOpenThrow={onOpenThrow}
         game={game}
         players={players}
         myPlayerId={myPlayerId}
@@ -117,7 +117,7 @@ export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initial
     <TriviaHub
       onHome={onHome}
       onOpenExpenses={onOpenExpenses}
-      onOpenSplit={onOpenSplit}
+      onOpenThrow={onOpenThrow}
       loading={loading}
       createGame={createGame}
       joinGame={joinGame}
@@ -132,7 +132,7 @@ export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenSplit, initial
 function TriviaHub({
   onHome,
   onOpenExpenses,
-  onOpenSplit,
+  onOpenThrow,
   loading,
   createGame,
   joinGame,
@@ -143,7 +143,7 @@ function TriviaHub({
 }: {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
   loading: boolean;
   createGame: ReturnType<typeof useTriviaGame>['createGame'];
   joinGame: ReturnType<typeof useTriviaGame>['joinGame'];
@@ -297,7 +297,7 @@ function TriviaHub({
         onSelect={(id) => {
           if (id === 'home') onHome();
           if (id === 'expenses') onOpenExpenses();
-          if (id === 'split') onOpenSplit();
+          if (id === 'throw') onOpenThrow();
         }}
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
@@ -312,7 +312,7 @@ const STALE_MS = 15000;
 function TriviaReadyRoom({
   onHome,
   onOpenExpenses,
-  onOpenSplit,
+  onOpenThrow,
   game,
   players,
   myPlayerId,
@@ -325,7 +325,7 @@ function TriviaReadyRoom({
 }: {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
   game: NonNullable<ReturnType<typeof useTriviaGame>['game']>;
   players: ReturnType<typeof useTriviaGame>['players'];
   myPlayerId: string | null;
@@ -445,7 +445,7 @@ function TriviaReadyRoom({
             onHome();
           }
           if (id === 'expenses') onOpenExpenses();
-          if (id === 'split') onOpenSplit();
+          if (id === 'throw') onOpenThrow();
         }}
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}

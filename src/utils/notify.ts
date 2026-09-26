@@ -18,7 +18,7 @@ export async function notifySelf(
   dedupeKey: string,
   title: string,
   body: string,
-  entity?: { type: 'card' | 'group' | 'connection' | 'throw'; id: string },
+  entity?: { type: 'card' | 'connection' | 'throw'; id: string },
 ): Promise<void> {
   const { data } = await supabase.from('user_settings').select('notification_prefs').eq('user_id', userId).maybeSingle();
   const prefs = (data?.notification_prefs ?? null) as Record<string, { inApp?: boolean }> | null;
@@ -35,7 +35,6 @@ export async function notifySelf(
 
 export type NotificationTarget =
   | { screen: 'expenses'; cardId: string }
-  | { screen: 'split'; groupId: string }
   | { screen: 'friends'; connectionId: string }
   | { screen: 'throw'; throwId: string }
   | { screen: 'home' };
@@ -43,7 +42,6 @@ export type NotificationTarget =
 /** Where tapping a notification should take you — falls back to Home when it has nothing to focus. */
 export function targetForNotification(n: AppNotification): NotificationTarget {
   if (n.entityType === 'card' && n.entityId) return { screen: 'expenses', cardId: n.entityId };
-  if (n.entityType === 'group' && n.entityId) return { screen: 'split', groupId: n.entityId };
   if (n.entityType === 'connection' && n.entityId) return { screen: 'friends', connectionId: n.entityId };
   if (n.entityType === 'throw' && n.entityId) return { screen: 'throw', throwId: n.entityId };
   return { screen: 'home' };

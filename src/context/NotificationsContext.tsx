@@ -9,7 +9,7 @@ export interface AppNotification {
   body: string;
   createdAt: string;
   /** What this notification is about — set server-side so a tap can jump straight to it. */
-  entityType: 'card' | 'group' | 'connection' | 'throw' | null;
+  entityType: 'card' | 'connection' | 'throw' | null;
   entityId: string | null;
 }
 
@@ -51,8 +51,8 @@ const MAX_NOTIFICATIONS = 50;
 /**
  * Real in-app notification inbox: loads the signed-in user's rows from
  * `public.notifications` and keeps them live via Supabase Realtime, so a
- * notification inserted by another member (a split-expense activity ping,
- * say) shows up without a refresh. Each notification appears only once —
+ * notification inserted by another member (a shared budget card's activity
+ * ping, say) shows up without a refresh. Each notification appears only once —
  * reading it deletes it (see `acknowledge`) rather than just flagging it
  * read, so the inbox is always exactly "what still needs your attention."
  */

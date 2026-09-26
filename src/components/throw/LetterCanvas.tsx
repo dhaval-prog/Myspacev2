@@ -117,7 +117,10 @@ const styles = StyleSheet.create({
   },
   typedInput: {
     padding: 20,
-    paddingTop: 44,
+    // More clearance above the streak/points badges (FoldingLetter's paperBadges, absolutely
+    // positioned in this same paper's top-right corner) — 44 left typed text starting almost
+    // directly under them.
+    paddingTop: 66,
     // Reserves room above FoldingLetter's bottom-controls row (photo/chat/voice/add-friend/
     // inbox), which now sits pinned to this same paper's bottom edge — without this, typed text
     // can run underneath those buttons instead of stopping short of them.

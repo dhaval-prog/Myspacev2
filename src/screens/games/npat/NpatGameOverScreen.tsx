@@ -11,11 +11,11 @@ import { useGame } from '../../../context/GameContext';
 interface NpatGameOverScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
 }
 
 /** Final standings once every round has resolved. No rematch RPC yet — "New game" just clears this session's game and drops back to the create/join hub. */
-export function NpatGameOverScreen({ onHome, onOpenExpenses: _onOpenExpenses, onOpenSplit: _onOpenSplit }: NpatGameOverScreenProps) {
+export function NpatGameOverScreen({ onHome, onOpenExpenses: _onOpenExpenses, onOpenThrow: _onOpenThrow }: NpatGameOverScreenProps) {
   const insets = useSafeAreaInsets();
   const { players, myPlayerId, leaveGame } = useGame();
 

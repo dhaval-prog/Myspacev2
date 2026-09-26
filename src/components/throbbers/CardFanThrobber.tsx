@@ -11,8 +11,8 @@ interface CardFanThrobberProps {
 }
 
 /**
- * 1B · Card fan — full-surface cold-load throbber for Pocket (Expenses) and
- * Split. Three deck cards cycling through the shipped 1.35s loop, on its own
+ * 1B · Card fan — full-surface cold-load throbber for Pocket (Expenses).
+ * Three deck cards cycling through the shipped 1.35s loop, on its own
  * #060606 canvas regardless of the host screen's own background.
  */
 export function CardFanThrobber({ size = 120, label = 'One sec' }: CardFanThrobberProps) {

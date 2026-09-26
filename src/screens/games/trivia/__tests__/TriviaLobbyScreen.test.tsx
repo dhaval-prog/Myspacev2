@@ -72,7 +72,7 @@ describe('TriviaLobbyScreen — ready room', () => {
   it('shows the host a disabled Start Game button with fewer than 2 active players', async () => {
     mockUseAuth.mockReturnValue({ user: { id: 'u-host' } });
     mockUseTriviaGame.mockReturnValue(baseContext({ players: [player({ id: 'p-host', userId: 'u-host', name: 'Priya' })] }));
-    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenSplit={() => {}} />);
+    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenThrow={() => {}} />);
 
     expect(screen.getByText('Need 2+ players')).toBeTruthy();
   });
@@ -81,7 +81,7 @@ describe('TriviaLobbyScreen — ready room', () => {
     const startGame = jest.fn(async () => ({ error: null }));
     mockUseAuth.mockReturnValue({ user: { id: 'u-host' } });
     mockUseTriviaGame.mockReturnValue(baseContext({ startGame }));
-    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenSplit={() => {}} />);
+    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenThrow={() => {}} />);
 
     fireEvent.press(screen.getByText('Start Game'));
     expect(startGame).toHaveBeenCalled();
@@ -90,7 +90,7 @@ describe('TriviaLobbyScreen — ready room', () => {
   it('shows a non-host a waiting hint naming the host', async () => {
     mockUseAuth.mockReturnValue({ user: { id: 'u-me' } });
     mockUseTriviaGame.mockReturnValue(baseContext());
-    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenSplit={() => {}} />);
+    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenThrow={() => {}} />);
 
     expect(screen.getByText('Waiting for Priya to start…')).toBeTruthy();
     expect(screen.queryByText('Start Game')).toBeNull();
@@ -107,7 +107,7 @@ describe('TriviaLobbyScreen — ready room', () => {
         ],
       }),
     );
-    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenSplit={() => {}} />);
+    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenThrow={() => {}} />);
 
     expect(screen.getAllByText('DISCONNECTED')).toHaveLength(1);
   });
@@ -115,7 +115,7 @@ describe('TriviaLobbyScreen — ready room', () => {
   it('does not badge a recently active player', async () => {
     mockUseAuth.mockReturnValue({ user: { id: 'u-me' } });
     mockUseTriviaGame.mockReturnValue(baseContext());
-    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenSplit={() => {}} />);
+    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenThrow={() => {}} />);
 
     expect(screen.queryByText('DISCONNECTED')).toBeNull();
   });
@@ -124,7 +124,7 @@ describe('TriviaLobbyScreen — ready room', () => {
     const dismissHostChanged = jest.fn();
     mockUseAuth.mockReturnValue({ user: { id: 'u-me' } });
     mockUseTriviaGame.mockReturnValue(baseContext({ hostChangedTo: 'Priya', dismissHostChanged }));
-    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenSplit={() => {}} />);
+    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenThrow={() => {}} />);
 
     const banner = screen.getByText('👑 Priya is now the host');
     expect(banner).toBeTruthy();
@@ -135,7 +135,7 @@ describe('TriviaLobbyScreen — ready room', () => {
   it('renders no banner when there is no pending host change', async () => {
     mockUseAuth.mockReturnValue({ user: { id: 'u-me' } });
     mockUseTriviaGame.mockReturnValue(baseContext());
-    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenSplit={() => {}} />);
+    await renderWithSafeArea(<TriviaLobbyScreen onHome={() => {}} onOpenExpenses={() => {}} onOpenThrow={() => {}} />);
 
     expect(screen.queryByText(/is now the host/)).toBeNull();
   });

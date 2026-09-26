@@ -20,7 +20,6 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { DetailScreen } from './src/screens/DetailScreen';
 import { ExpensesScreen } from './src/screens/expenses/ExpensesScreen';
-import { SplitScreen } from './src/screens/split/SplitScreen';
 import { FriendsScreen } from './src/screens/friends/FriendsScreen';
 import { GamesScreen } from './src/screens/games/GamesScreen';
 import { GamesDashboardScreen } from './src/screens/games/GamesDashboardScreen';
@@ -36,13 +35,12 @@ type Screen =
   | { name: 'home' }
   | { name: 'detail'; viewId: ViewId; initialIndex?: number }
   | { name: 'expenses'; focusCardId?: string }
-  | { name: 'split'; focusGroupId?: string }
   | { name: 'friends' }
   | { name: 'gamesHub' }
   | { name: 'games'; initialTab?: 'create' | 'join' }
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
   | { name: 'throw'; openThrowId?: string; openInbox?: boolean }
-  | { name: 'account'; from: 'home' | 'expenses' | 'split' };
+  | { name: 'account'; from: 'home' | 'expenses' };
 
 function AuthNavigator() {
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
@@ -59,7 +57,6 @@ function AppNavigator() {
 
   const openNotificationTarget = (target: NotificationTarget) => {
     if (target.screen === 'expenses') setScreen({ name: 'expenses', focusCardId: target.cardId });
-    else if (target.screen === 'split') setScreen({ name: 'split', focusGroupId: target.groupId });
     else if (target.screen === 'friends') {
       // FriendsProvider wraps this whole navigator, so its own state can be
       // pre-positioned directly — no focus prop needs threading through.
@@ -83,7 +80,7 @@ function AppNavigator() {
         initialIndex={screen.initialIndex}
         onBack={() => setScreen({ name: 'home' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenSplit={() => setScreen({ name: 'split' })}
+        onOpenThrow={() => setScreen({ name: 'throw' })}
       />
     );
   }
@@ -91,20 +88,9 @@ function AppNavigator() {
     return (
       <ExpensesScreen
         onHome={() => setScreen({ name: 'home' })}
-        onOpenSplit={() => setScreen({ name: 'split' })}
+        onOpenThrow={() => setScreen({ name: 'throw' })}
         onOpenAccount={() => setScreen({ name: 'account', from: 'expenses' })}
         focusCardId={screen.focusCardId}
-        onOpenNotificationTarget={openNotificationTarget}
-      />
-    );
-  }
-  if (screen.name === 'split') {
-    return (
-      <SplitScreen
-        onHome={() => setScreen({ name: 'home' })}
-        onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenAccount={() => setScreen({ name: 'account', from: 'split' })}
-        focusGroupId={screen.focusGroupId}
         onOpenNotificationTarget={openNotificationTarget}
       />
     );
@@ -114,7 +100,6 @@ function AppNavigator() {
       <FriendsScreen
         onHome={() => setScreen({ name: 'home' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenSplit={() => setScreen({ name: 'split' })}
         onOpenThrow={() => setScreen({ name: 'throw' })}
         onOpenThrowInbox={() => setScreen({ name: 'throw', openInbox: true })}
         onOpenGames={() => setScreen({ name: 'gamesHub' })}
@@ -126,7 +111,7 @@ function AppNavigator() {
       <GamesDashboardScreen
         onHome={() => setScreen({ name: 'home' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenSplit={() => setScreen({ name: 'split' })}
+        onOpenThrow={() => setScreen({ name: 'throw' })}
         onOpenFriends={() => setScreen({ name: 'friends' })}
         onOpenNpat={(initialTab) => setScreen({ name: 'games', initialTab })}
         onOpenTrivia={(initialTab) => setScreen({ name: 'trivia', initialTab })}
@@ -138,7 +123,7 @@ function AppNavigator() {
       <GamesScreen
         onHome={() => setScreen({ name: 'gamesHub' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenSplit={() => setScreen({ name: 'split' })}
+        onOpenThrow={() => setScreen({ name: 'throw' })}
         initialTab={screen.initialTab}
       />
     );
@@ -148,7 +133,7 @@ function AppNavigator() {
       <TriviaGameScreen
         onHome={() => setScreen({ name: 'gamesHub' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenSplit={() => setScreen({ name: 'split' })}
+        onOpenThrow={() => setScreen({ name: 'throw' })}
         initialTab={screen.initialTab}
       />
     );
@@ -158,7 +143,6 @@ function AppNavigator() {
       <ThrowScreen
         onHome={() => setScreen({ name: 'home' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenSplit={() => setScreen({ name: 'split' })}
         onOpenChats={() => {
           goChats();
           setScreen({ name: 'friends' });
@@ -179,7 +163,6 @@ function AppNavigator() {
     <HomeScreen
       onOpenDetail={(viewId, initialIndex) => setScreen({ name: 'detail', viewId, initialIndex })}
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
-      onOpenSplit={() => setScreen({ name: 'split' })}
       onOpenFriends={() => setScreen({ name: 'friends' })}
       onOpenGames={() => setScreen({ name: 'gamesHub' })}
       onOpenThrow={() => setScreen({ name: 'throw' })}

@@ -15,13 +15,13 @@ import type { NotificationTarget } from '../../utils/notify';
 
 interface PickScreenProps {
   onHome: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
   onOpenAccount: () => void;
   onOpenNotificationTarget?: (target: NotificationTarget) => void;
 }
 
 /** Scroll through your cards, pull one up (or tap it) to open its wallet. */
-export function PickScreen({ onHome, onOpenSplit, onOpenAccount, onOpenNotificationTarget }: PickScreenProps) {
+export function PickScreen({ onHome, onOpenThrow, onOpenAccount, onOpenNotificationTarget }: PickScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { loading, refreshing, refresh, openNewCard, openJoin } = useExpenses();
@@ -66,7 +66,7 @@ export function PickScreen({ onHome, onOpenSplit, onOpenAccount, onOpenNotificat
         activeId="expenses"
         onSelect={(id) => {
           if (id === 'home') onHome();
-          if (id === 'split') onOpenSplit();
+          if (id === 'throw') onOpenThrow();
         }}
         onAdd={openNewCard}
         bottomInset={insets.bottom}

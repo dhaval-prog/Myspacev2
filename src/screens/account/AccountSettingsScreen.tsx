@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, fontFamily, radius, spacing, typography } from '../../theme';
@@ -71,7 +71,6 @@ const NOTIFICATION_CATEGORIES: { key: string; label: string }[] = [
   { key: 'item_reminders', label: 'Item reminders' },
   { key: 'budget_alerts', label: 'Budget alerts' },
   { key: 'budget_reset', label: 'Budget reset reminders' },
-  { key: 'split_activity', label: 'Split expense activity' },
   { key: 'payment_activity', label: 'UPI payment activity' },
   { key: 'invitations', label: 'New invitations' },
   { key: 'shared_space_activity', label: 'Shared space activity' },
@@ -98,15 +97,6 @@ function mergePrefs(stored: Partial<NotificationPrefs> | null | undefined): Noti
     if (s) base[c.key] = { push: s.push ?? true, email: s.email ?? true, inApp: s.inApp ?? true };
   }
   return base;
-}
-
-interface SharedGroup {
-  id: string;
-  name: string;
-  rid: string;
-  isOwner: boolean;
-  whoCanAdd: 'anyone' | 'owner';
-  memberCount: number;
 }
 
 interface SharedCard {
@@ -142,7 +132,7 @@ interface AccountSettingsScreenProps {
 /**
  * Full account settings: profile, security, notifications, shared spaces,
  * data & privacy, and a visually-separated danger zone at the bottom.
- * Reachable from Home, Expenses, and Split alike, so it uses a neutral
+ * Reachable from Home and Expenses alike, so it uses a neutral
  * (lime/pale/ink) treatment rather than any one section's own theme.
  */
 export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
@@ -188,7 +178,6 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
   const [prefs, setPrefs] = useState<NotificationPrefs>(defaultPrefs());
 
   // --- Shared spaces ---
-  const [sharedGroups, setSharedGroups] = useState<SharedGroup[]>([]);
   const [sharedCards, setSharedCards] = useState<SharedCard[]>([]);
 
   // --- Data & privacy ---
@@ -216,10 +205,9 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       return;
     }
     (async () => {
-      const [profileRes, settingsRes, groupsRes, cardsRes, paymentProfileRes] = await Promise.all([
+      const [profileRes, settingsRes, cardsRes, paymentProfileRes] = await Promise.all([
         supabase.from('profiles').select('full_name,username,phone,date_of_birth,avatar_url,profile_visibility').eq('id', userId).maybeSingle(),
         supabase.from('user_settings').select('notification_prefs').eq('user_id', userId).maybeSingle(),
-        supabase.from('split_groups').select('id,name,rid,owner_id,who_can_add'),
         supabase.from('budget_cards').select('id,label,rid,owner_id'),
         supabase.from('user_payment_profiles').select('upi_id,upi_verified').eq('user_id', userId).maybeSingle(),
       ]);
@@ -242,29 +230,15 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       }
       setPrefs(mergePrefs((settingsRes.data?.notification_prefs as Partial<NotificationPrefs>) ?? null));
 
-      const groups = (groupsRes.data as { id: string; name: string; rid: string; owner_id: string; who_can_add: 'anyone' | 'owner' }[] | null) ?? [];
       const cards = (cardsRes.data as { id: string; label: string; rid: string; owner_id: string }[] | null) ?? [];
 
-      const [membersRes, cardMembersRes] = await Promise.all([
-        groups.length ? supabase.from('split_members').select('group_id').in('group_id', groups.map((g) => g.id)) : Promise.resolve({ data: [] as { group_id: string }[] }),
-        cards.length ? supabase.from('card_members').select('card_id').in('card_id', cards.map((c) => c.id)) : Promise.resolve({ data: [] as { card_id: string }[] }),
-      ]);
+      const cardMembersRes = cards.length
+        ? await supabase.from('card_members').select('card_id').in('card_id', cards.map((c) => c.id))
+        : { data: [] as { card_id: string }[] };
       if (cancelled) return;
 
-      const memberRows = (membersRes.data as { group_id: string }[] | null) ?? [];
       const cardMemberRows = (cardMembersRes.data as { card_id: string }[] | null) ?? [];
 
-      setSharedGroups(
-        groups.map((g) => ({
-          id: g.id,
-          name: g.name,
-          rid: g.rid,
-          isOwner: g.owner_id === userId,
-          whoCanAdd: g.who_can_add,
-          // +1 for the owner, who isn't a row in split_members.
-          memberCount: memberRows.filter((m) => m.group_id === g.id).length + 1,
-        })),
-      );
       setSharedCards(
         cards.map((c) => ({
           id: c.id,
@@ -444,18 +418,6 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
     });
   };
 
-  const toggleWhoCanAdd = (groupId: string, anyoneCanAdd: boolean) => {
-    const next: 'anyone' | 'owner' = anyoneCanAdd ? 'anyone' : 'owner';
-    setSharedGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, whoCanAdd: next } : g)));
-    supabase
-      .from('split_groups')
-      .update({ who_can_add: next })
-      .eq('id', groupId)
-      .then(({ error }) => {
-        if (error) console.warn('[account] failed to update who_can_add:', error.message);
-      });
-  };
-
   const saveVisibility = (next: 'only_me' | 'space_members') => {
     if (!userId || next === visibility) return;
     setVisibility(next);
@@ -491,31 +453,13 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
     }
   };
 
-  const exportExpenseHistory = async () => {
-    setExportingKey('expenses');
-    try {
-      const groupIds = sharedGroups.map((g) => g.id);
-      const rows = groupIds.length ? ((await supabase.from('split_expenses').select('group_id,title,amount,category,paid_by,created_at').in('group_id', groupIds)).data as Record<string, unknown>[] | null) ?? [] : [];
-      const groupById = new Map(sharedGroups.map((g) => [g.id, g.name]));
-      downloadCsv(
-        'myspace-split-expenses.csv',
-        rows.map((e) => ({ split: groupById.get(e.group_id as string) ?? '', title: e.title, amount: e.amount, category: e.category, paidBy: e.paid_by, date: e.created_at })),
-      );
-    } finally {
-      setExportingKey(null);
-    }
-  };
-
   const downloadAllData = async () => {
     setExportingKey('all');
     try {
       const cardIds = sharedCards.map((c) => c.id);
-      const groupIds = sharedGroups.map((g) => g.id);
-      const [cardExpensesRes, splitExpensesRes, settlementsRes] = await Promise.all([
-        cardIds.length ? supabase.from('card_expenses').select('*').in('card_id', cardIds) : Promise.resolve({ data: [] as unknown[] }),
-        groupIds.length ? supabase.from('split_expenses').select('*').in('group_id', groupIds) : Promise.resolve({ data: [] as unknown[] }),
-        groupIds.length ? supabase.from('split_settlements').select('*').in('group_id', groupIds) : Promise.resolve({ data: [] as unknown[] }),
-      ]);
+      const cardExpensesRes = cardIds.length
+        ? await supabase.from('card_expenses').select('*').in('card_id', cardIds)
+        : { data: [] as unknown[] };
       downloadJson('myspace-my-data.json', {
         exportedAt: new Date().toISOString(),
         profile,
@@ -523,9 +467,6 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
         items,
         budgetCards: sharedCards,
         cardExpenses: cardExpensesRes.data ?? [],
-        splitGroups: sharedGroups,
-        splitExpenses: splitExpensesRes.data ?? [],
-        splitSettlements: settlementsRes.data ?? [],
       });
     } finally {
       setExportingKey(null);
@@ -667,7 +608,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
               </View>
             ) : null}
           </View>
-          <Text style={styles.emptyText}>Save your UPI ID so split members can pay you directly.</Text>
+          <Text style={styles.emptyText}>Save your UPI ID so others can pay you directly.</Text>
           <TextField
             label="UPI ID"
             value={upiId}
@@ -732,39 +673,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
         {/* Shared Spaces & Invitations */}
         <SectionLabel>Shared spaces & invitations</SectionLabel>
         <Card>
-          <Text style={styles.subHeading}>Split groups</Text>
-          {sharedGroups.length === 0 ? (
-            <Text style={styles.emptyText}>No splits yet.</Text>
-          ) : (
-            sharedGroups.map((g) => (
-              <View key={g.id} style={styles.spaceItem}>
-                <View style={styles.spaceItemHeader}>
-                  <Text style={styles.spaceItemTitle} numberOfLines={1}>
-                    {g.name}
-                  </Text>
-                  <View style={[styles.rolePill, g.isOwner && styles.rolePillOwner]}>
-                    <Text style={[styles.rolePillText, g.isOwner && styles.rolePillTextOwner]}>{g.isOwner ? 'Owner' : 'Member'}</Text>
-                  </View>
-                </View>
-                <Text style={styles.spaceItemMeta}>
-                  {g.memberCount} {g.memberCount === 1 ? 'member' : 'members'} · Invite code {g.rid}
-                </Text>
-                {g.isOwner ? (
-                  <View style={styles.spacePermRow}>
-                    <Text style={styles.spacePermLabel}>Anyone can add expenses</Text>
-                    <Switch
-                      value={g.whoCanAdd === 'anyone'}
-                      onValueChange={(v) => toggleWhoCanAdd(g.id, v)}
-                      trackColor={{ false: colors.badgeInactiveBg, true: colors.ink }}
-                      thumbColor={colors.white}
-                    />
-                  </View>
-                ) : null}
-              </View>
-            ))
-          )}
-
-          <Text style={[styles.subHeading, styles.subHeadingSpaced]}>Budget cards</Text>
+          <Text style={styles.subHeading}>Budget cards</Text>
           {sharedCards.length === 0 ? (
             <Text style={styles.emptyText}>No budget cards yet.</Text>
           ) : (
@@ -795,12 +704,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
           <Row label="Download my data" sublabel="Everything below, as one JSON file" value={exportingKey === 'all' ? 'Preparing…' : undefined} onPress={downloadAllData} />
           <Row label="Export inventory" sublabel="Items, CSV" value={exportingKey === 'inventory' ? 'Preparing…' : undefined} onPress={exportInventory} />
           <Row label="Export budgets" sublabel="Budget card spending, CSV" value={exportingKey === 'budgets' ? 'Preparing…' : undefined} onPress={exportBudgets} />
-          <Row label="Export expense history" sublabel="Split expenses, CSV" value={exportingKey === 'expenses' ? 'Preparing…' : undefined} onPress={exportExpenseHistory} />
-          <Row
-            label="Data usage"
-            value={`${items.length} items · ${sharedCards.length} cards · ${sharedGroups.length} splits`}
-            last
-          />
+          <Row label="Data usage" value={`${items.length} items · ${sharedCards.length} cards`} last />
         </Card>
         <Card style={styles.cardSpaced}>
           <Text style={styles.subHeading}>Profile visibility</Text>
@@ -830,7 +734,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
         <SectionLabel>Danger zone</SectionLabel>
         <Card style={styles.dangerCard}>
           <Row label="Log out" onPress={() => setLogoutConfirm(true)} />
-          <Row label="Delete all my data" sublabel="Items, budgets, splits — keeps your account" destructive onPress={() => setDeleteDataModal(true)} />
+          <Row label="Delete all my data" sublabel="Items, budgets — keeps your account" destructive onPress={() => setDeleteDataModal(true)} />
           <Row label="Delete MySpace account" sublabel="Permanently removes everything" destructive onPress={() => setDeleteAccountModal(true)} last />
         </Card>
       </ScrollView>
@@ -908,7 +812,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       <BottomSheet visible={deleteDataModal} onClose={() => setDeleteDataModal(false)}>
         <Text style={sheetStyles.title}>Delete all my data</Text>
         <Text style={sheetStyles.body}>
-          This permanently deletes every item, budget card, and split you own — for everyone they're shared with. Your
+          This permanently deletes every item and budget card you own — for everyone they're shared with. Your
           account itself stays active. This can't be undone.
         </Text>
         <TextField label="Password" value={deleteDataPassword} onChangeText={setDeleteDataPassword} secureTextEntry placeholder="Confirm your password" />
@@ -1176,12 +1080,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     marginBottom: spacing.sm,
   },
-  subHeadingSpaced: {
-    marginTop: spacing.ms,
-    paddingTop: spacing.ms,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
-  },
   emptyText: {
     fontFamily: fontFamily.sans400,
     fontSize: 12.5,
@@ -1226,17 +1124,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans400,
     fontSize: 12,
     color: colors.textFaint,
-  },
-  spacePermRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 2,
-  },
-  spacePermLabel: {
-    fontFamily: fontFamily.sans500,
-    fontSize: 12.5,
-    color: colors.textSecondary,
   },
   segmented: {
     flexDirection: 'row',

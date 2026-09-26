@@ -29,8 +29,8 @@ const STORY_DOT_OVERRIDE = { size: 14, ringWidth: 2.5, ringColor: colors.onlineD
 interface ChatsListScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
-  /** Opens Throw — replaces the old "back to Friends" button in the pinned row below the list. */
+  /** Opens Throw — both the bottom nav dock's Throw tab and the pinned row below the list
+   * (which replaces the old "back to Friends" button there). */
   onOpenThrow: () => void;
   /** Opens Throw straight to its inbox — also in the pinned row. */
   onOpenThrowInbox: () => void;
@@ -39,7 +39,7 @@ interface ChatsListScreenProps {
 }
 
 /** Chats (6p-6) — only accepted friends get a thread here. */
-export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenThrow, onOpenThrowInbox, onOpenGames }: ChatsListScreenProps) {
+export function ChatsListScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenThrowInbox, onOpenGames }: ChatsListScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friends, sentRequests, goAdd, openChat, lastMessageFor, isUnread, unreadCountFor, isOnline, isTyping, groups, goCreateGroup, openGroupChat, lastGroupMessageFor } =
@@ -194,7 +194,7 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenSplit, onOpenThr
         onSelect={(id) => {
           if (id === 'home') onHome();
           if (id === 'expenses') onOpenExpenses();
-          if (id === 'split') onOpenSplit();
+          if (id === 'throw') onOpenThrow();
         }}
         onAdd={goAdd}
         fabIconPath={CHAT_PLUS_ICON}

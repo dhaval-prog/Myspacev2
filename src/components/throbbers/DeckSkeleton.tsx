@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { colors } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
-/** The real expense/split card's own geometry (see CardStack.tsx) — every skeleton card is proportioned from this, never re-derived. */
+/** The real budget card's own geometry (see CardStack.tsx) — every skeleton card is proportioned from this, never re-derived. */
 const CARD_WIDTH = 326;
 const CARD_HEIGHT = 206;
 const CARD_RADIUS = 26;

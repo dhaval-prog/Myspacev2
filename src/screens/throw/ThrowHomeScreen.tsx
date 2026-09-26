@@ -47,7 +47,6 @@ function wait(ms: number): Promise<void> {
 interface ThrowHomeScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
   onOpenInbox: () => void;
@@ -68,7 +67,6 @@ interface ThrowHomeScreenProps {
 export function ThrowHomeScreen({
   onHome,
   onOpenExpenses,
-  onOpenSplit,
   onOpenChats,
   onOpenAddFriend,
   onOpenInbox,
@@ -349,7 +347,7 @@ export function ThrowHomeScreen({
           onSelect={(id) => {
             if (id === 'home') onHome();
             if (id === 'expenses') onOpenExpenses();
-            if (id === 'split') onOpenSplit();
+            // 'throw' is a no-op here — this screen already is Throw.
           }}
           onAdd={onOpenSettings}
           fabIconPath={GEAR_ICON}

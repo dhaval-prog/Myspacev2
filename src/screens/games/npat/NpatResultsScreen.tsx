@@ -32,10 +32,10 @@ function reasonFor(status: AnswerValidationStatus, isDuplicate: boolean, categor
 interface NpatResultsScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
-  onOpenSplit: () => void;
+  onOpenThrow: () => void;
 }
 
-export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatResultsScreenProps) {
+export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenThrow }: NpatResultsScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
@@ -164,7 +164,7 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenSplit }: NpatR
         onSelect={(id) => {
           if (id === 'home') onHome();
           if (id === 'expenses') onOpenExpenses();
-          if (id === 'split') onOpenSplit();
+          if (id === 'throw') onOpenThrow();
         }}
         bottomInset={insets.bottom}
         reduceMotion={reduceMotion}
