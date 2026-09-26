@@ -2,7 +2,7 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import { StyleSheet, View } from 'react-native';
 import Svg, { G, Image as SvgImage, Path, Rect, Text as SvgText, TSpan } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
-import { throwFont } from '../../theme/throwTokens';
+import { throwFont, throwNightColor } from '../../theme/throwTokens';
 import type { PaperPlaneLetterContent } from './paperPlaneTypes';
 
 const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
@@ -173,6 +173,13 @@ export const LetterRasterizer = forwardRef<LetterRasterizerHandle>(function Lett
             imageReady.current = true;
           }}
         />
+        {draft?.content.isNight && (
+          // Covers the cream paper-grain texture above with the night skin's own solid colour —
+          // only ever set when the destination currently reads as nighttime (see isNight's own
+          // doc comment on PaperPlaneLetterContent). Drawn after (not instead of) the texture so
+          // its onLoad above still fires normally.
+          <Rect x={0} y={0} width={RASTER_SIZE} height={RASTER_SIZE} fill={throwNightColor.planePaper} />
+        )}
         <G>{contentNodes('full')}</G>
         <G transform={`translate(${half}, 0) scale(0.5)`}>{contentNodes('q2')}</G>
         <G transform={`translate(0, ${half}) scale(0.5)`}>{contentNodes('q3')}</G>

@@ -47,9 +47,6 @@ const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6
 // Feather Icons' "award" glyph — the leaderboard-points badge, moved here from ThrowHomeScreen's
 // header now that the badge itself lives in the paper's top-right corner instead.
 const POINTS_ICON = 'M12 15a7 7 0 100-14 7 7 0 000 14z M8.21 13.89L7 23l5-3 5 3-1.21-9.12';
-// Feather Icons' "edit-2" pencil glyph — the night skin's decorative Aa/pen mode toggle (see
-// isNight prop doc comment; purely presentational, no drawing mode actually exists yet).
-const PEN_ICON = 'M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z';
 
 const FOLD_DRAG_DISTANCE = 150;
 const LAUNCH_THRESHOLD = 64;
@@ -173,9 +170,7 @@ interface FoldingLetterProps {
   onHasContentChange?: (hasContent: boolean) => void;
   /** Swaps the paper's cream/light chrome for a dark "night" skin — driven by whether the
    * destination currently reads as nighttime (see ThrowHomeScreen, same signal ThrowMap's own
-   * day/night palette follows), not a whole-app dark mode. Also adds a decorative Aa/pen toggle
-   * and a "Pull down to fold" hint, matching the night reference screenshot — the toggle is
-   * presentational only (typed text is still the only way to write; no drawing mode exists). */
+   * day/night palette follows), not a whole-app dark mode. */
   isNight?: boolean;
 }
 
@@ -255,11 +250,6 @@ export function FoldingLetter({
   // *measured* (not CSS-resolved) heights sidesteps that mismatch entirely.
   const [bottomRowHeight, setBottomRowHeight] = useState(0);
   const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false);
-  // Measured height of the night skin's Aa/pen + fold-hint toolbar (see isNight) — same
-  // measured-not-CSS-resolved reasoning as bottomRowHeight, used to stack the "Set Time" button
-  // above it rather than overlapping when both happen to be showing at once (a self-reminder
-  // composed at night).
-  const [nightToolbarHeight, setNightToolbarHeight] = useState(0);
   const [stageFailed, setStageFailed] = useState(false);
   const letterCanvasRef = useRef<LetterCanvasHandle>(null);
   const voice = useVoiceToText({ onFinalText: (text) => letterCanvasRef.current?.appendText(text) });
@@ -412,6 +402,7 @@ export function FoldingLetter({
     onContactDragStart,
     onContactDragOffset,
     onFoldProgress,
+    isNight,
   });
   latest.current = {
     disabled,
@@ -426,6 +417,7 @@ export function FoldingLetter({
     onContactDragStart,
     onContactDragOffset,
     onFoldProgress,
+    isNight,
   };
 
   const applyFoldProgress = useCallback(
@@ -444,7 +436,7 @@ export function FoldingLetter({
         // Stamping every attachment onto the fragile 3D fold/texture pipeline isn't worth the
         // risk either way; the flat compose paper (below) is where all of them are visible.
         const firstPhoto = latest.current.mediaItems.find((m) => !m.isVideo)?.uri ?? null;
-        stageRef.current?.setContent({ ...latest.current.content, photoUri: firstPhoto }, latest.current.paperSize);
+        stageRef.current?.setContent({ ...latest.current.content, photoUri: firstPhoto, isNight: latest.current.isNight }, latest.current.paperSize);
       }
     },
     [progress],
@@ -749,36 +741,11 @@ export function FoldingLetter({
           <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={mediaItems.length > 0} isNight={isNight} />
         </Animated.View>
 
-        {isNight && (
-          // The night skin's decorative Aa/pen toggle + fold hint, matching the reference
-          // screenshot — purely presentational (see isNight's own doc comment); typed text is
-          // still the only way to write. Sits in the same "toolbar" slot the Set Time button
-          // uses below, which stacks itself above this one (via nightToolbarHeight) rather than
-          // overlapping it when both happen to be showing (a self-reminder composed at night).
-          <Animated.View
-            onLayout={(e) => setNightToolbarHeight(e.nativeEvent.layout.height)}
-            style={[styles.nightToolbar, bottomRowHeight > 0 ? { bottom: bottomRowHeight + 14 } : { bottom: 90 }, { opacity: canvasOpacity }]}
-            pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
-          >
-            <View style={styles.nightModeToggle}>
-              <View style={styles.nightModeToggleActive}>
-                <Text style={styles.nightModeToggleActiveLabel}>Aa</Text>
-              </View>
-              <View style={styles.nightModeTogglePen}>
-                <Icon path={PEN_ICON} size={14} color={throwNightColor.iconColor} strokeWidth={2} />
-              </View>
-            </View>
-            <Text style={styles.nightFoldHint}>Pull down to fold</Text>
-          </Animated.View>
-        )}
-
         {alertSchedule && onAlertScheduleChange && (
           <Animated.View
             style={[
               styles.setTimeWrap,
-              bottomRowHeight > 0
-                ? { bottom: bottomRowHeight + 14 + (isNight && nightToolbarHeight > 0 ? nightToolbarHeight + 8 : 0) }
-                : { bottom: 90 },
+              bottomRowHeight > 0 ? { bottom: bottomRowHeight + 14 } : { bottom: 90 },
               { opacity: canvasOpacity },
             ]}
             pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
@@ -919,9 +886,9 @@ export function FoldingLetter({
         >
           {({ pressed }) =>
             voice.recording ? (
-              <View style={[styles.micBtnShadow, micBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-                <View style={[styles.micBtn, micBtnDynamicStyle, styles.micBtnActive]}>
-                  <Icon path={STOP_ICON} size={22 * bottomRowScale} color={throwColor.paper} strokeWidth={1.8} />
+              <View style={[styles.micBtnShadow, micBtnDynamicStyle, isNight && styles.micBtnShadowNight, pressed && styles.roundBtnPressed]}>
+                <View style={[styles.micBtn, micBtnDynamicStyle, isNight ? styles.micBtnActiveNight : styles.micBtnActive]}>
+                  <Icon path={STOP_ICON} size={22 * bottomRowScale} color={isNight ? '#000000' : throwColor.paper} strokeWidth={1.8} />
                 </View>
               </View>
             ) : (
@@ -1009,13 +976,6 @@ const styles = StyleSheet.create({
   // BottomIconSurface). Layered on top of whatever size style (roundBtn/micBtn) is already
   // passed in, so it only ever overrides backgroundColor.
   iconSurfaceNight: { backgroundColor: throwNightColor.iconBg, alignItems: 'center', justifyContent: 'center' },
-  // The night skin's decorative Aa/pen toggle + fold hint (see isNight's own doc comment).
-  nightToolbar: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
-  nightModeToggle: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,.35)', borderRadius: 999, padding: 3, gap: 3 },
-  nightModeToggleActive: { backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
-  nightModeToggleActiveLabel: { fontFamily: throwFont.ui700, fontSize: 13, color: '#000' },
-  nightModeTogglePen: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: throwNightColor.iconBg },
-  nightFoldHint: { fontFamily: throwFont.mono500, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', color: throwNightColor.inkSoft },
   // A "photos pasted onto the letter" look — a horizontal row of small white-bordered thumbnails
   // near the top of the paper, scrollable once there are more than fit. Spans most of the paper's
   // width rather than sitting in one corner, since there can be several now — LetterCanvas
@@ -1087,6 +1047,10 @@ const styles = StyleSheet.create({
   micBtnShadow: { width: 76, height: 76, borderRadius: 38, ...throwColor.shadowSoft },
   micBtn: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
   micBtnActive: { backgroundColor: throwColor.clayDeep },
+  // Night skin's "active" mic glow — a bright white circle with a soft white halo and a black
+  // glyph, in place of the day skin's solid clay-orange fill, per the reference screenshot.
+  micBtnShadowNight: { shadowColor: '#FFFFFF', shadowOpacity: 0.9, shadowRadius: 20, shadowOffset: { width: 0, height: 0 }, elevation: 12 },
+  micBtnActiveNight: { backgroundColor: '#FFFFFF' },
   badge: {
     position: 'absolute',
     top: -2,

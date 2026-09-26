@@ -15,6 +15,10 @@ export interface PaperPlaneLetterContent {
    * texture alongside the text/strokes so the folded/flying plane carries it too, instead of it
    * only showing while the letter is still flat (see FoldingLetter's photoChip). */
   photoUri: string | null;
+  /** Bakes the plane's own solid dark colour (throwNightColor.planePaper) in place of the cream
+   * paper-grain texture, matching FoldingLetter's isNight skin — only ever set when the
+   * destination currently reads as nighttime, never a whole-app dark mode. */
+  isNight?: boolean;
 }
 
 export interface PaperPlaneStageHandle {

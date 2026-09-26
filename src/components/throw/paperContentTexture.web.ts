@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { throwFont } from '../../theme/throwTokens';
+import { throwFont, throwNightColor } from '../../theme/throwTokens';
 import type { PaperPlaneLetterContent } from './paperPlaneTypes';
 
 const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
@@ -135,6 +135,12 @@ export async function bakeLetterTexture(content: PaperPlaneLetterContent, source
   canvas.height = base.naturalHeight || base.height || 1024;
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(base, 0, 0, canvas.width, canvas.height);
+  if (content.isNight) {
+    // Covers the cream paper-grain texture with the night skin's own solid colour — only ever
+    // set when the destination currently reads as nighttime (see isNight's own doc comment).
+    ctx.fillStyle = throwNightColor.planePaper;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
   const sx = sourceSize.width > 0 ? canvas.width / sourceSize.width : 1;
   const sy = sourceSize.height > 0 ? canvas.height / sourceSize.height : 1;

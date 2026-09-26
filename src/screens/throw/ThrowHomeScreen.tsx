@@ -384,6 +384,7 @@ export function ThrowHomeScreen({
                 selectedIndex={selectedIndex}
                 onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)}
                 disabled={selfLocked}
+                isNight={!isDay}
               />
             </View>
           ))}
