@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { throwColor } from '../../theme/throwTokens';
-import { isDaytimeAt } from '../../utils/solarTime';
+import { isDaytimeNow } from '../../utils/solarTime';
 import { latLngAtProgress, planeOpacityForProgress, planeSizeForProgress } from '../../utils/mapProjection';
 import { LocationPin } from './LocationPin';
 import { PaperPlane } from './PaperPlane';
@@ -145,20 +145,17 @@ const DAYTIME_RECHECK_MS = 5 * 60 * 1000;
  * 3D buildings/landmarks and the day/night palette both come from the style itself now (its
  * Mapbox Standard "basemap" import), switched live via `setConfigProperty` rather than the
  * hand-rolled per-layer paint overrides + custom fill-extrusion layer the OpenFreeMap version
- * needed — day/night still follows the *destination's* local solar time (`focus`'s longitude),
- * not the viewer's own clock.
+ * needed — day/night follows the *viewer's own* device clock, not any contact's destination, per
+ * explicit request (every map and every contact reads the same day or night at once).
  */
 export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [, forceRender] = useState(0);
 
-  // Which location's local time governs the day/night palette — the destination being viewed
-  // (`focus`), falling back to whichever fit point comes first when only `fitPoints` is set, and
-  // to "day" if there's nothing to go on yet (a briefly-wrong palette before location data
-  // resolves reads better than defaulting to night).
-  const daylightLng = focus?.longitude ?? fitPoints?.[0]?.longitude ?? null;
-  const [isDay, setIsDay] = useState(() => (daylightLng === null ? true : isDaytimeAt(daylightLng)));
+  // The viewer's own device clock governs the day/night palette — not any contact's destination,
+  // so every map and every contact reads the same day or night at once, per explicit request.
+  const [isDay, setIsDay] = useState(() => isDaytimeNow());
   const isDayRef = useRef(isDay);
   isDayRef.current = isDay;
 
@@ -239,15 +236,14 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey, fitKey]);
 
-  // Recompute the day/night palette whenever the destination changes, and periodically
-  // thereafter so a long-open session still catches up.
+  // Recompute the day/night palette periodically so a long-open session still catches up with
+  // the viewer's own clock crossing the boundary.
   useEffect(() => {
-    if (daylightLng === null) return;
-    const recheck = () => setIsDay(isDaytimeAt(daylightLng));
+    const recheck = () => setIsDay(isDaytimeNow());
     recheck();
     const id = setInterval(recheck, DAYTIME_RECHECK_MS);
     return () => clearInterval(id);
-  }, [daylightLng]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;

@@ -90,10 +90,11 @@ export const throwGradient = {
 
 /**
  * The letter paper's own "night" skin — swapped in for `throwColor`'s warm-cream chrome whenever
- * the destination currently reads as nighttime (same `isDaytimeAt` signal ThrowMap's own day/
- * night palette already follows, see ThrowHomeScreen), per an explicit reference screenshot. Only
- * the paper/badges/bottom-controls read this; the rest of Throw (map, inbox, settings) is
- * untouched — this is a per-letter skin, not a whole-app dark mode.
+ * the *viewer's own* device clock currently reads as nighttime (same `isDaytimeNow` signal every
+ * Throw map's own day/night palette already follows, see ThrowHomeScreen — not any contact's own
+ * destination, so every letter/map reads the same day or night at once), per an explicit
+ * reference screenshot. Only the paper/badges/bottom-controls read this; the rest of Throw (map,
+ * inbox, settings) is untouched — this is a per-letter skin, not a whole-app dark mode.
  */
 export const throwNightColor = {
   paper: '#3A3A3C',

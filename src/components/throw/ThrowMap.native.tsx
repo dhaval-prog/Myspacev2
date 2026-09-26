@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { throwColor } from '../../theme/throwTokens';
 import { throwMapNightGoogleStyle } from '../../theme/throwMapNativeStyle';
-import { isDaytimeAt } from '../../utils/solarTime';
+import { isDaytimeNow } from '../../utils/solarTime';
 import { latLngAtProgress, planeOpacityForProgress, planeSizeForProgress } from '../../utils/mapProjection';
 import { LocationPinGlyph } from './LocationPin';
 import { PaperPlane } from './PaperPlane';
@@ -39,9 +39,9 @@ const DAYTIME_RECHECK_MS = 5 * 60 * 1000;
  * box, Google Maps on Android once a Maps API key is added to app.json), same underlying stack as
  * Live Locations' MapCanvas but with a Throw-specific props surface: a handful of city-level pins
  * plus an optional animated flight route, no GPS accuracy ring or live-share semantics. Day/night
- * follows the destination's (`focus`'s) local solar time, same as the web version, though the
- * mechanism is entirely different here — each platform's own built-in styling hook rather than a
- * MapLibre layer repaint, since react-native-maps has no equivalent. 3D buildings are similarly
+ * follows the viewer's own device clock, same as the web version, though the mechanism is
+ * entirely different here — each platform's own built-in styling hook rather than a MapLibre
+ * layer repaint, since react-native-maps has no equivalent. 3D buildings are similarly
  * platform-native rather than a layer this file adds: Apple Maps renders its own once pitched and
  * zoomed in close, with nothing further to wire up here. */
 export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
@@ -49,20 +49,16 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const fitKey = pointsKey(fitPoints);
   const focusKey = focus ? `${focus.latitude.toFixed(3)},${focus.longitude.toFixed(3)}` : '';
 
-  // Which location's local time governs the day/night palette — the destination being viewed
-  // (`focus`), falling back to whichever fit point comes first when only `fitPoints` is set, and
-  // to "day" if there's nothing to go on yet (a briefly-wrong palette before location data
-  // resolves reads better than defaulting to night). Same reasoning and same helper as the web
-  // MapLibre version, so both platforms agree on which half of the day a contact is in.
-  const daylightLng = focus?.longitude ?? fitPoints?.[0]?.longitude ?? null;
-  const [isDay, setIsDay] = useState(() => (daylightLng === null ? true : isDaytimeAt(daylightLng)));
+  // The viewer's own device clock governs the day/night palette — not any contact's destination,
+  // so every map and every contact reads the same day or night at once, per explicit request.
+  // Same reasoning and same helper as the web version, so both platforms agree.
+  const [isDay, setIsDay] = useState(() => isDaytimeNow());
   useEffect(() => {
-    if (daylightLng === null) return;
-    const recheck = () => setIsDay(isDaytimeAt(daylightLng));
+    const recheck = () => setIsDay(isDaytimeNow());
     recheck();
     const id = setInterval(recheck, DAYTIME_RECHECK_MS);
     return () => clearInterval(id);
-  }, [daylightLng]);
+  }, []);
   // `onMapReady` (not just a mounted ref) is what actually gates safe imperative calls here — a
   // ref can be attached to the native view before the underlying map surface is ready, in which
   // case `animateToRegion`/`fitToCoordinates` can silently no-op or resolve into a wrong camera
