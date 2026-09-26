@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FriendAvatar } from '../friends/FriendAvatar';
-import { throwColor, throwFont } from '../../theme/throwTokens';
+import { throwColor, throwFont, throwNightColor } from '../../theme/throwTokens';
 import type { ThrowFriend } from '../../types/throw';
 
 const ITEM_SPACING = 92;
@@ -11,10 +11,12 @@ const AVATAR_SIZE = 64;
 const PULSE_RING_SIZE = AVATAR_SIZE + 16;
 const PULSE_DURATION_MS = 1400;
 
-/** A soft, looping blue ring that expands and fades behind the selected contact's avatar — an
+/** A soft, looping ring that expands and fades behind the selected contact's avatar — an
  * "active" indicator, distinct from the rest of Throw's warm-paper/clay palette on purpose (the
- * one place a cool blue accent belongs), per explicit request with a reference screenshot. */
-function SelectedPulseRing() {
+ * one place a cool blue accent belongs), per explicit request with a reference screenshot. At
+ * night it switches to a white "beeping" ring instead of the day skin's blue, matching the
+ * night reference screenshot (same destination day/night signal as FoldingLetter's isNight). */
+function SelectedPulseRing({ isNight }: { isNight?: boolean }) {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -31,7 +33,7 @@ function SelectedPulseRing() {
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.pulseRing, { transform: [{ scale }], opacity }]}
+      style={[styles.pulseRing, isNight && styles.pulseRingNight, { transform: [{ scale }], opacity }]}
     />
   );
 }
@@ -41,6 +43,10 @@ interface RecipientCarouselProps {
   selectedIndex: number;
   onChangeIndex: (index: number) => void;
   disabled?: boolean;
+  /** Switches the selected contact's pulse ring from Throw's day-skin blue to a white "beeping"
+   * ring, matching the night reference screenshot — same day/night signal as FoldingLetter's own
+   * isNight prop. */
+  isNight?: boolean;
 }
 
 /**
@@ -49,7 +55,7 @@ interface RecipientCarouselProps {
  * distance. Clamped at the ends rather than a true infinite loop (simpler, and every real
  * friends list here is short enough that the clamp is never felt as a limitation).
  */
-export function RecipientCarousel({ friends, selectedIndex, onChangeIndex, disabled }: RecipientCarouselProps) {
+export function RecipientCarousel({ friends, selectedIndex, onChangeIndex, disabled, isNight }: RecipientCarouselProps) {
   const n = friends.length;
   const maxIndex = Math.max(0, n - 1);
   const offset = useRef(new Animated.Value(Math.min(selectedIndex, maxIndex))).current;
@@ -123,8 +129,14 @@ export function RecipientCarousel({ friends, selectedIndex, onChangeIndex, disab
             <Animated.View key={f.userId} style={[styles.item, { transform: [{ translateX }, { scale }], opacity }]}>
               <Pressable onPress={() => snapTo(i)} disabled={disabled} hitSlop={8} style={styles.pressableContent}>
                 <View style={styles.avatarWrap}>
-                  {isSelected && <SelectedPulseRing />}
-                  <FriendAvatar userId={f.userId} name={f.name} avatarUrl={f.avatarUrl} size={AVATAR_SIZE} style={isSelected && styles.avatarSelected} />
+                  {isSelected && <SelectedPulseRing isNight={isNight} />}
+                  <FriendAvatar
+                    userId={f.userId}
+                    name={f.name}
+                    avatarUrl={f.avatarUrl}
+                    size={AVATAR_SIZE}
+                    style={isSelected && (isNight ? styles.avatarSelectedNight : styles.avatarSelected)}
+                  />
                 </View>
                 <Text style={[styles.name, isSelected && styles.nameSelected]} numberOfLines={1}>
                   {f.name.split(' ')[0]}
@@ -163,7 +175,9 @@ const styles = StyleSheet.create({
     borderColor: throwColor.activeBlue,
     backgroundColor: throwColor.activeBlueSoft,
   },
+  pulseRingNight: { borderColor: throwNightColor.ink, backgroundColor: 'rgba(255,255,255,.18)' },
   avatarSelected: { borderWidth: 2, borderColor: throwColor.activeBlue },
+  avatarSelectedNight: { borderWidth: 2, borderColor: throwNightColor.ink },
   name: { marginTop: 6, fontFamily: throwFont.ui600, fontSize: 12.5, color: throwColor.inkMute, textAlign: 'center' },
   nameSelected: { color: throwColor.ink, fontFamily: throwFont.ui700 },
   city: { fontFamily: throwFont.ui400, fontSize: 10.5, color: throwColor.inkFaint, marginTop: 1, textAlign: 'center' },

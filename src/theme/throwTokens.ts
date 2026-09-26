@@ -103,6 +103,9 @@ export const throwNightColor = {
   iconBg: '#1C1C1E',
   iconColor: '#F2F0EA',
   badgeBg: 'rgba(0,0,0,.55)',
+  // The folded/flying paper plane's own night colour — a distinct, explicitly-specified hex
+  // (not the same as `paper` above), per explicit request.
+  planePaper: '#3D3D3D',
 } as const;
 
 export const throwRadius = {
