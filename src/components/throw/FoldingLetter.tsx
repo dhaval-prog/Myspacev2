@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Image, LayoutChangeEvent, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
 import { PhotoAttachSheet } from './PhotoAttachSheet';
+import type { PickedMedia } from './PhotoAttachSheet';
 import { GlassSurface } from '../friends/GlassSurface';
 import { Icon } from '../Icon';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
@@ -17,6 +19,10 @@ const MIC_ICON = 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z M6 11a6 6
 const STOP_ICON = 'M6 6h12v12H6z';
 const INBOX_ICON = 'M3 11h5l1.8 2.8h4.4L16 11h5 M3 11V5h18v6 M3 11v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7';
 const X_ICON = 'M6 6l12 12M18 6L6 18';
+// A plain filled play-triangle, used as the placeholder for an attached video thumbnail — there's
+// no on-device video-frame decoding here, so this (not a broken <Image>) is what a video chip
+// shows instead of an actual preview frame.
+const PLAY_ICON = 'M8 5v14l11-7z';
 // Same glyphs as HomeScreen/ChatsListScreen's own Chats/QR icons — reused here so this row
 // reads as the same actions, not a Throw-specific reinterpretation.
 const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
@@ -161,13 +167,21 @@ export function FoldingLetter({
 }: FoldingLetterProps) {
   const [phase, setPhase] = useState<Phase>('writing');
   const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
-  const [photoUris, setPhotoUris] = useState<string[]>([]);
+  const [mediaItems, setMediaItems] = useState<PickedMedia[]>([]);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paperSize, setPaperSize] = useState({ width: 0, height: 0 });
   const [stageFailed, setStageFailed] = useState(false);
   const letterCanvasRef = useRef<LetterCanvasHandle>(null);
   const voice = useVoiceToText({ onFinalText: (text) => letterCanvasRef.current?.appendText(text) });
+
+  // Mirrors the live not-yet-final transcript onto the paper itself, in real time, as it's being
+  // spoken — not just into the small "Listening…" hint below. Clears itself for free whenever
+  // voice.interimText resets (each phrase finalizing, an error, or recognition ending), since this
+  // effect just always reflects its current value.
+  useEffect(() => {
+    letterCanvasRef.current?.setInterimText(voice.interimText);
+  }, [voice.interimText]);
 
   const progress = useRef(new Animated.Value(0)).current;
   const progressRef = useRef(0);
@@ -225,7 +239,7 @@ export function FoldingLetter({
     return () => progress.removeListener(id);
   }, [progress]);
 
-  const hasContent = content.strokes !== null || (content.messageText?.trim().length ?? 0) > 0 || photoUris.length > 0;
+  const hasContent = content.strokes !== null || (content.messageText?.trim().length ?? 0) > 0 || mediaItems.length > 0;
 
   const settleFold = (target: 0 | 1) => {
     Animated.spring(progress, { toValue: target, useNativeDriver: false, friction: 9, tension: 55 }).start(() => {
@@ -267,6 +281,7 @@ export function FoldingLetter({
         Animated.timing(liftOpacity, { toValue: 0, duration: LIFTOFF_DURATION_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
       ]).start(() => resolve());
     });
+    const photoUris = mediaItems.map((m) => m.uri);
     const [{ error: err }] = await Promise.all([onThrow({ ...content, photoUris }), liftOff]);
 
     if (err) {
@@ -295,7 +310,7 @@ export function FoldingLetter({
     phase,
     hasContent,
     content,
-    photoUris,
+    mediaItems,
     paperSize,
     launch,
     settleFold,
@@ -309,7 +324,7 @@ export function FoldingLetter({
     phase,
     hasContent,
     content,
-    photoUris,
+    mediaItems,
     paperSize,
     launch,
     settleFold,
@@ -329,11 +344,13 @@ export function FoldingLetter({
       // than relying on Grant.
       if (!bakedRef.current && next > 0) {
         bakedRef.current = true;
-        // The folded plane's baked texture only carries the first attached photo — see
-        // paperPlaneTypes.ts's PaperPlaneLetterContent, which still takes a single photoUri.
-        // Stamping every attached photo onto the fragile 3D fold/texture pipeline isn't worth
-        // the risk; the flat compose paper (below) is where all of them are visible.
-        stageRef.current?.setContent({ ...latest.current.content, photoUri: latest.current.photoUris[0] ?? null }, latest.current.paperSize);
+        // The folded plane's baked texture only carries the first attached *photo* — see
+        // paperPlaneTypes.ts's PaperPlaneLetterContent, which still takes a single photoUri and
+        // (being a Canvas2D/SVG rasterizer) can only ever draw an actual image, not a video frame.
+        // Stamping every attachment onto the fragile 3D fold/texture pipeline isn't worth the
+        // risk either way; the flat compose paper (below) is where all of them are visible.
+        const firstPhoto = latest.current.mediaItems.find((m) => !m.isVideo)?.uri ?? null;
+        stageRef.current?.setContent({ ...latest.current.content, photoUri: firstPhoto }, latest.current.paperSize);
       }
     },
     [progress],
@@ -371,8 +388,11 @@ export function FoldingLetter({
       return { x: e.clientX, y: e.clientY };
     };
     const onDown = (e: MouseEvent | TouchEvent) => {
-      const { disabled, phase, hasContent } = latest.current;
-      if (disabled || phase !== 'writing' || !hasContent) return;
+      const { disabled, phase } = latest.current;
+      // No `hasContent` gate here any more — an empty paper can still be folded into the ready
+      // plane (see the throw-lock in onPanResponderRelease below, which is what actually stops an
+      // empty letter from being sent).
+      if (disabled || phase !== 'writing') return;
       rawStartRef.current = getPoint(e);
     };
     const onMove = (e: MouseEvent | TouchEvent) => {
@@ -438,14 +458,15 @@ export function FoldingLetter({
       }
     };
     const onWheel = (e: WheelEvent) => {
-      const { disabled, phase, hasContent } = latest.current;
+      const { disabled, phase } = latest.current;
       if (disabled || phase === 'throwing') return;
       if ((e.target as HTMLElement | null)?.closest('textarea, input')) return;
-      // Starting a fresh fold (from a flat, untouched 'writing' state) needs something worth
-      // throwing, same rule as the drag gesture; once a fold is already underway (phase ===
-      // 'folding') or fully settled ('ready'), further wheel input — either direction — keeps
-      // controlling it regardless, since scrolling back up to unfold never required content.
-      if (phase === 'writing' && (!hasContent || e.deltaY <= 0)) return;
+      // Starting a fresh fold (from a flat, untouched 'writing' state) only needs a downward
+      // scroll — an empty paper can still fold into the ready plane (see the throw-lock in
+      // onPanResponderRelease, which is what actually stops an empty letter from being thrown);
+      // once a fold is already underway (phase === 'folding') or fully settled ('ready'), further
+      // wheel input — either direction — keeps controlling it regardless.
+      if (phase === 'writing' && e.deltaY <= 0) return;
       e.preventDefault();
       const next = Math.max(0, Math.min(1, progressRef.current + e.deltaY / WHEEL_FOLD_DISTANCE));
       applyFoldProgress(next);
@@ -473,10 +494,12 @@ export function FoldingLetter({
         onStartShouldSetPanResponder: () => !latest.current.disabled && latest.current.phase === 'ready',
         onStartShouldSetPanResponderCapture: () => false,
         onMoveShouldSetPanResponderCapture: (_, g) => {
-          const { disabled, phase, hasContent } = latest.current;
+          const { disabled, phase } = latest.current;
           if (disabled || phase === 'throwing') return false;
           if (phase === 'ready' || phase === 'folding') return true;
-          return hasContent && g.dy > FOLD_CAPTURE_DY && g.dy > Math.abs(g.dx) * FOLD_CAPTURE_RATIO;
+          // No `hasContent` gate — an empty paper can still be dragged into a fold; the actual
+          // throw itself is what gets locked (see onPanResponderRelease below).
+          return g.dy > FOLD_CAPTURE_DY && g.dy > Math.abs(g.dx) * FOLD_CAPTURE_RATIO;
         },
         onPanResponderGrant: (e) => {
           if (latest.current.phase === 'ready') {
@@ -552,7 +575,11 @@ export function FoldingLetter({
             // Recipient selection already moved live during the drag (onContactDragOffset above)
             // — a horizontal-only release just springs the plane back without launching, since it
             // won't cross the vertical launch thresholds below.
-            if (g.dy <= -LAUNCH_THRESHOLD || g.vy <= -LAUNCH_VELOCITY) {
+            const swipedUp = g.dy <= -LAUNCH_THRESHOLD || g.vy <= -LAUNCH_VELOCITY;
+            // An empty letter can still fold into the ready plane (see the removed `hasContent`
+            // gates above), but swiping it up is a no-op instead of an actual throw — it just
+            // springs back, same as any other release that doesn't clear the launch thresholds.
+            if (swipedUp && latest.current.hasContent) {
               latest.current.launch();
             } else {
               latest.current.springLiftBack();
@@ -592,13 +619,18 @@ export function FoldingLetter({
 
   return (
     <View ref={wrapRef} style={styles.wrap}>
-      <Text style={styles.toLine} numberOfLines={1}>
-        {phase === 'ready' || phase === 'throwing' ? 'Ready to throw' : `Writing to ${recipientName}`} · {recipientCity}
-      </Text>
+      {/* Only shown while actively writing/folding — once folded and ready to throw, the
+          recipient's own avatar/name/city in the carousel above already says who this is for,
+          so a redundant "Ready to throw · city" line here was removed. */}
+      {(phase === 'writing' || phase === 'folding') && (
+        <Text style={styles.toLine} numberOfLines={1}>
+          Writing to {recipientName} · {recipientCity}
+        </Text>
+      )}
 
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
-          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={photoUris.length > 0} />
+          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={mediaItems.length > 0} />
         </Animated.View>
 
         {/* Streak/leaderboard badges — moved here from a separate header chip so they read as
@@ -637,24 +669,34 @@ export function FoldingLetter({
           </Animated.View>
         )}
 
-        {photoUris.length > 0 && (
+        {mediaItems.length > 0 && (
           // Fades out in lockstep with LetterCanvas (same canvasOpacity) once folding starts —
           // only the first photo is baked into the plane's own texture from that point on (see
           // applyFoldProgress above), so this flat strip would otherwise float on top of the
           // plane as extra, un-folded copies.
           <Animated.View style={[styles.photoStripWrap, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'box-none' : 'none'}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoStripContent}>
-              {photoUris.map((uri, i) => (
-                <View key={`${uri}-${i}`} style={styles.photoThumbWrap}>
+              {mediaItems.map((item, i) => (
+                <View key={`${item.uri}-${i}`} style={styles.photoThumbWrap}>
                   <View style={styles.photoThumbFrame}>
-                    <Image source={{ uri }} style={styles.photoThumbImg} />
+                    {item.isVideo ? (
+                      // No on-device video-frame decoding here — a plain dark tile with a play
+                      // glyph stands in for a preview frame, rather than a broken <Image>.
+                      <View style={styles.videoThumbPlaceholder}>
+                        <Svg width={22} height={22} viewBox="0 0 24 24">
+                          <Path d={PLAY_ICON} fill={throwColor.paper} />
+                        </Svg>
+                      </View>
+                    ) : (
+                      <Image source={{ uri: item.uri }} style={styles.photoThumbImg} />
+                    )}
                   </View>
                   <Pressable
-                    onPress={() => setPhotoUris((prev) => prev.filter((_, idx) => idx !== i))}
+                    onPress={() => setMediaItems((prev) => prev.filter((_, idx) => idx !== i))}
                     hitSlop={8}
                     style={styles.photoThumbRemove}
                     accessibilityRole="button"
-                    accessibilityLabel="Remove photo"
+                    accessibilityLabel={item.isVideo ? 'Remove video' : 'Remove photo'}
                   >
                     <Icon path={X_ICON} size={11} color={throwColor.paper} strokeWidth={2.6} />
                   </Pressable>
@@ -751,11 +793,11 @@ export function FoldingLetter({
         </Animated.View>
       </View>
 
-      {phase === 'ready' && <Text style={styles.readyHint}>{throwLabel}</Text>}
-      {voice.recording && <Text style={styles.readyHint}>{voice.interimText || 'Listening…'}</Text>}
+      {phase === 'ready' && <Text style={styles.readyHint}>{hasContent ? throwLabel : 'Write something first'}</Text>}
+      {voice.recording && <Text style={styles.readyHint}>Listening…</Text>}
       {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
 
-      <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(uris) => setPhotoUris((prev) => [...prev, ...uris])} />
+      <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(items) => setMediaItems((prev) => [...prev, ...items])} />
     </View>
   );
 }
@@ -783,7 +825,7 @@ const styles = StyleSheet.create({
   streakChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   pointsChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   streakText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.clayDeep },
-  readyHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.inkMute, textAlign: 'center', marginTop: 10 },
+  readyHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.ink, textAlign: 'center', marginTop: 10 },
   error: { fontFamily: throwFont.ui400, fontSize: 12, color: '#B3413A', textAlign: 'center', marginTop: 8 },
   // A "photos pasted onto the letter" look — a horizontal row of small white-bordered thumbnails
   // near the top of the paper, scrollable once there are more than fit. Spans most of the paper's
@@ -806,6 +848,14 @@ const styles = StyleSheet.create({
     ...throwColor.shadowSoft,
   },
   photoThumbImg: { width: '100%', height: '100%', borderRadius: 4 },
+  videoThumbPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: throwColor.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   photoThumbRemove: {
     position: 'absolute',
     top: -7,

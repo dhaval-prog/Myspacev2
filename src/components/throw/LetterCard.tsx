@@ -5,6 +5,7 @@ import { GlassSurface } from '../friends/GlassSurface';
 import { Icon } from '../Icon';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
+import { isVideoUri } from '../../utils/media';
 import type { ThrowLetter } from '../../types/throw';
 
 const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
@@ -37,7 +38,13 @@ export function LetterCard({ letter, onPress, onDelete }: LetterCardProps) {
   const [swiped, setSwiped] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const unread = letter.direction === 'received' && letter.status === 'thrown';
-  const preview = letter.messageText ? letter.messageText : letter.photoUrls.length > 0 ? 'Sent a photo' : 'A handwritten letter';
+  const preview = letter.messageText
+    ? letter.messageText
+    : letter.photoUrls.length > 0
+      ? letter.photoUrls.every(isVideoUri)
+        ? 'Sent a video'
+        : 'Sent a photo'
+      : 'A handwritten letter';
   const nameLabel = letter.direction === 'sent' ? `To ${letter.counterpartName}` : letter.counterpartName;
 
   // Everything — tap-to-open, swipe-to-reveal — goes through this one PanResponder attached

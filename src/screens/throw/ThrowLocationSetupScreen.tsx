@@ -43,19 +43,26 @@ export function ThrowLocationSetupScreen({ onDone, onBack, mode = 'setup' }: Thr
         setShowManual(true);
         return;
       }
-      const pos = await Location.getCurrentPositionAsync({});
-      let city: ThrowCity | null = null;
+      // Highest available accuracy — this is meant to place a pin at the user's real position,
+      // not the default `Balanced` (~100m) tier getCurrentPositionAsync({}) used to fall back to.
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
+      const exact = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      // The city name is always best-effort (reverse geocoding, or else the nearest entry in our
+      // own curated list) — but the *coordinates* stored below are always the real GPS fix, on
+      // every path. `nearestThrowCity` used to also supply its own preset city's coordinates
+      // whenever reverse geocoding wasn't available (e.g. on web), which silently snapped the
+      // pin onto a fixed list entry instead of the user's actual position — city is only ever
+      // used here for the label now, never for `latitude`/`longitude`.
+      let cityLabel: { city: string; country: string } | null = null;
       try {
-        const geocoded = await Location.reverseGeocodeAsync({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        const geocoded = await Location.reverseGeocodeAsync(exact);
         const first = geocoded[0];
-        if (first?.city && first?.country) {
-          city = { city: first.city, country: first.country, latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-        }
+        if (first?.city && first?.country) cityLabel = { city: first.city, country: first.country };
       } catch {
         // Reverse geocoding isn't available on this platform (e.g. web) — fall back below.
       }
-      if (!city) city = nearestThrowCity(pos.coords.latitude, pos.coords.longitude);
-      await chooseCity(city);
+      if (!cityLabel) cityLabel = nearestThrowCity(exact.latitude, exact.longitude);
+      await chooseCity({ ...cityLabel, ...exact });
     } catch {
       setShowManual(true);
     } finally {

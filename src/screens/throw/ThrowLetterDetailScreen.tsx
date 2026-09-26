@@ -1,12 +1,29 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowButton } from '../../components/throw/ThrowButton';
 import { throwColor, throwFont, throwRadius, throwSpace } from '../../theme/throwTokens';
 import { formatMiles } from '../../utils/geo';
+import { isVideoUri } from '../../utils/media';
 import { useThrow } from '../../context/ThrowContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+
+const PLAY_ICON = 'M8 5v14l11-7z';
+
+/** A video attachment has no on-device frame preview here — a tappable dark tile with a play
+ * glyph stands in for it, opening the file in the device's own player rather than rendering a
+ * broken <Image>. */
+function MediaTile({ url, style }: { url: string; style: object }) {
+  if (!isVideoUri(url)) return <Image source={{ uri: url }} style={style} resizeMode="cover" />;
+  return (
+    <Pressable onPress={() => Linking.openURL(url)} style={[style, styles.videoTile]} accessibilityRole="button" accessibilityLabel="Play video">
+      <Svg width={34} height={34} viewBox="0 0 24 24">
+        <Path d={PLAY_ICON} fill={throwColor.paper} />
+      </Svg>
+    </Pressable>
+  );
+}
 
 interface ThrowLetterDetailScreenProps {
   throwId: string;
@@ -79,11 +96,11 @@ export function ThrowLetterDetailScreen({ throwId, onBack, onThrowBack }: ThrowL
             )}
           </View>
 
-          {letter.photoUrls.length === 1 && <Image source={{ uri: letter.photoUrls[0] }} style={styles.photo} resizeMode="cover" />}
+          {letter.photoUrls.length === 1 && <MediaTile url={letter.photoUrls[0]} style={styles.photo} />}
           {letter.photoUrls.length > 1 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
               {letter.photoUrls.map((url, i) => (
-                <Image key={`${url}-${i}`} source={{ uri: url }} style={styles.photoThumb} resizeMode="cover" />
+                <MediaTile key={`${url}-${i}`} url={url} style={styles.photoThumb} />
               ))}
             </ScrollView>
           )}
@@ -132,4 +149,5 @@ const styles = StyleSheet.create({
     ...throwColor.shadowSoft,
   },
   sentNote: { fontFamily: throwFont.ui400, fontSize: 12.5, color: throwColor.inkMute, textAlign: 'center', marginBottom: 8 },
+  videoTile: { backgroundColor: throwColor.ink, alignItems: 'center', justifyContent: 'center' },
 });

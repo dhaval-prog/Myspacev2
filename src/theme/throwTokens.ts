@@ -47,6 +47,12 @@ export const throwColor = {
   // Unread / "new letter" indicator.
   unread: '#C9714F',
 
+  // The recipient carousel's "currently selected" indicator — a deliberate cool blue, the one
+  // place that breaks from the rest of Throw's warm palette, per explicit request with a
+  // reference screenshot (an animated pulse ring, not the warm clay accent used elsewhere).
+  activeBlue: '#3D7BFF',
+  activeBlueSoft: 'rgba(61,123,255,.16)',
+
   screenBg: '#F6F1E4',
   cardBg: '#FFFFFF',
   cardBorder: 'rgba(80,64,40,.1)',

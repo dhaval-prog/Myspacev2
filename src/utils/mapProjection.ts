@@ -108,3 +108,48 @@ export function planeOpacityForProgress(t: number): number {
   const local = (c - FADE_START) / (1 - FADE_START);
   return 1 - local;
 }
+
+// ~0.0002° is roughly 20m at the equator — close enough to call "the same location" for grouping
+// purposes (city-level Throw data, not survey-grade GPS).
+const COINCIDENT_PIN_EPSILON_DEG = 0.0002;
+// How far apart (in degrees) coincident pins fan out once spread — small enough to still read as
+// "the same place", large enough that two map markers at typical city-zoom levels don't overlap.
+const COINCIDENT_PIN_OFFSET_DEG = 0.00035;
+
+/**
+ * Nudges pins that share (near-enough) the same coordinates into a small fan-out pattern, so two
+ * people at the same real-world location both render as visible, separately-tappable map markers
+ * instead of one exactly covering the other. Pins that don't share a location with anything else
+ * pass through unchanged. Generic over any pin shape with a latitude/longitude, so both the web
+ * (screen-projected) and native (geo `Marker`) maps benefit from the same fix without either
+ * needing pixel-space logic of its own — geo-space offsets here become the right screen-space
+ * offsets once each map projects/renders them.
+ */
+export function spreadCoincidentPins<T extends { latitude: number; longitude: number }>(pins: T[]): T[] {
+  const groups = new Map<string, T[]>();
+  for (const p of pins) {
+    const key = `${Math.round(p.latitude / COINCIDENT_PIN_EPSILON_DEG)},${Math.round(p.longitude / COINCIDENT_PIN_EPSILON_DEG)}`;
+    const existing = groups.get(key);
+    if (existing) existing.push(p);
+    else groups.set(key, [p]);
+  }
+  const result: T[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      result.push(group[0]);
+      continue;
+    }
+    // Keeps the fan-out visually circular regardless of latitude — a degree of longitude covers
+    // less real (and screen) distance the further from the equator you go.
+    const lngScale = Math.max(0.15, Math.cos((group[0].latitude * Math.PI) / 180));
+    group.forEach((pin, i) => {
+      const angle = (2 * Math.PI * i) / group.length - Math.PI / 2;
+      result.push({
+        ...pin,
+        latitude: pin.latitude + COINCIDENT_PIN_OFFSET_DEG * Math.sin(angle),
+        longitude: pin.longitude + (COINCIDENT_PIN_OFFSET_DEG * Math.cos(angle)) / lngScale,
+      });
+    });
+  }
+  return result;
+}
