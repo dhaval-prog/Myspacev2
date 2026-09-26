@@ -13,8 +13,8 @@ interface WheelPickerProps {
   onChange: (index: number) => void;
   width?: number;
   accessibilityLabel: string;
-  /** White digits instead of Throw's warm-ink day colour — the highlight band behind them
-   * switches to black at night (see AlertScheduleHeader), which would otherwise leave the ink
+  /** Black digits instead of Throw's warm-ink day colour — the highlight band behind them
+   * switches to white at night (see AlertScheduleHeader), which would otherwise leave the ink
    * text unreadable against it. */
   isNight?: boolean;
 }
@@ -117,5 +117,7 @@ const styles = StyleSheet.create({
   wrap: { height: WHEEL_HEIGHT },
   item: { height: WHEEL_ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' },
   itemLabel: { fontFamily: throwFont.ui700, fontSize: 20, color: throwColor.ink },
-  itemLabelNight: { color: '#FFFFFF' },
+  // A literal invert: black digits instead of the day skin's ink, since the wheel's own
+  // highlight band is now white at night (see AlertScheduleHeader's highlightBandNight).
+  itemLabelNight: { color: '#000000' },
 });

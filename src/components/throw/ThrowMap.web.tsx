@@ -93,6 +93,22 @@ function applyLightPreset(map: mapboxgl.Map, isDay: boolean) {
   map.setConfigProperty('basemap', 'lightPreset', isDay ? 'day' : 'night');
 }
 
+// Mapbox Standard's own lightPreset switch isn't instant by default — the style ships with a
+// multi-second cross-fade transition (a deliberate "time-lapse" showcase for the Standard style),
+// which read as the map "not loading fast" whenever a contact switch also flips day/night.
+// `Style#setTransition` (undocumented on the public `Map` type but real at runtime — Mapbox's own
+// examples use exactly this to zero out the default transition) overrides that default duration
+// to 0 so the flip is instant instead, without touching per-layer paint transitions elsewhere.
+// Accessed via `map.style` (not on the public `mapboxgl.Map` TS surface) rather than `setStyle`,
+// which would trigger a full style reload — same "don't own this internal, degrade quietly"
+// defensiveness as applyLightPreset's own try/catch below.
+function disableStyleTransitions(map: mapboxgl.Map) {
+  (map as unknown as { style?: { setTransition?: (t: { duration: number; delay: number }) => void } }).style?.setTransition?.({
+    duration: 0,
+    delay: 0,
+  });
+}
+
 function addOrUpdateRoute(map: mapboxgl.Map, points: LatLng[] | undefined) {
   const coords = points && points.length >= 2 ? points.map((p): [number, number] => [p.longitude, p.latitude]) : null;
   const source = map.getSource(ROUTE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
@@ -175,6 +191,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       // Mapbox Studio), so a future rename/removal of the "basemap" import should degrade to
       // "whatever the style's own saved default is" rather than take the whole map down.
       try {
+        disableStyleTransitions(map);
         applyLightPreset(map, isDayRef.current);
         addOrUpdateRoute(map, routePointsRef.current);
       } catch (e) {

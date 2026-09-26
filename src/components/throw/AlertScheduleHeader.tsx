@@ -56,7 +56,7 @@ function Stepper({
       >
         <Text style={[styles.stepperBtnLabel, isNight && styles.stepperBtnLabelNight]}>−</Text>
       </Pressable>
-      <Text style={styles.stepperValue} accessibilityLabel={`${accessibilityLabel}: ${value}`}>
+      <Text style={[styles.stepperValue, isNight && styles.stepperValueNight]} accessibilityLabel={`${accessibilityLabel}: ${value}`}>
         {value}
       </Text>
       <Pressable
@@ -75,8 +75,9 @@ function Stepper({
 interface AlertScheduleHeaderProps {
   schedule: AlertSchedule;
   onChange: (schedule: AlertSchedule) => void;
-  /** Swaps the wheel highlight, selected repeat option, and selected weekday chip from Throw's
-   * clay/brown day accent to a black-and-white glow, matching FoldingLetter's own isNight skin. */
+  /** Inverts the whole picker to a black background with white/light chrome — a literal
+   * black↔white swap of the normal light day picker, per explicit request (the sheet itself
+   * turns black too — see AlertScheduleSheet). */
   isNight?: boolean;
 }
 
@@ -127,16 +128,27 @@ export function AlertScheduleHeader({ schedule, onChange, isNight }: AlertSchedu
         <WheelPicker items={PERIOD_LABELS} selectedIndex={periodIndex} onChange={setPeriodIndex} width={50} accessibilityLabel="Period" isNight={isNight} />
       </View>
 
-      <Pressable onPress={() => setRepeatOpen((o) => !o)} style={styles.repeatRow} accessibilityRole="button" accessibilityLabel="Repeat">
-        <Text style={styles.repeatLabel}>Repeat</Text>
+      <Pressable
+        onPress={() => setRepeatOpen((o) => !o)}
+        style={[styles.repeatRow, isNight && styles.repeatRowNight]}
+        accessibilityRole="button"
+        accessibilityLabel="Repeat"
+      >
+        <Text style={[styles.repeatLabel, isNight && styles.repeatLabelNight]}>Repeat</Text>
         <View style={styles.repeatRight}>
-          <Text style={styles.repeatValue}>{RECURRENCE_LABEL[schedule.recurrence]}</Text>
-          <Icon path={CHEVRON_ICON} size={13} color={throwColor.inkMute} strokeWidth={2} style={repeatOpen ? styles.chevronOpen : undefined} />
+          <Text style={[styles.repeatValue, isNight && styles.repeatValueNight]}>{RECURRENCE_LABEL[schedule.recurrence]}</Text>
+          <Icon
+            path={CHEVRON_ICON}
+            size={13}
+            color={isNight ? 'rgba(255,255,255,.6)' : throwColor.inkMute}
+            strokeWidth={2}
+            style={repeatOpen ? styles.chevronOpen : undefined}
+          />
         </View>
       </Pressable>
 
       {repeatOpen && (
-        <View style={styles.repeatOptions}>
+        <View style={[styles.repeatOptions, isNight && styles.repeatOptionsNight]}>
           {RECURRENCE_OPTIONS.map((opt) => {
             const selected = schedule.recurrence === opt.id;
             return (
@@ -148,7 +160,11 @@ export function AlertScheduleHeader({ schedule, onChange, isNight }: AlertSchedu
                 accessibilityLabel={opt.label}
               >
                 <Text
-                  style={[styles.repeatOptionLabel, selected && (isNight ? styles.repeatOptionLabelSelectedNight : styles.repeatOptionLabelSelected)]}
+                  style={[
+                    styles.repeatOptionLabel,
+                    isNight && styles.repeatOptionLabelNight,
+                    selected && (isNight ? styles.repeatOptionLabelSelectedNight : styles.repeatOptionLabelSelected),
+                  ]}
                 >
                   {opt.label}
                 </Text>
@@ -167,11 +183,23 @@ export function AlertScheduleHeader({ schedule, onChange, isNight }: AlertSchedu
               <Pressable
                 key={label}
                 onPress={() => toggleWeekday(i)}
-                style={[styles.weekdayChip, selected && (isNight ? styles.weekdayChipSelectedNight : styles.weekdayChipSelected)]}
+                style={[
+                  styles.weekdayChip,
+                  isNight && styles.weekdayChipNight,
+                  selected && (isNight ? styles.weekdayChipSelectedNight : styles.weekdayChipSelected),
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel={label}
               >
-                <Text style={[styles.weekdayLabel, selected && styles.weekdayLabelSelected]}>{label[0]}</Text>
+                <Text
+                  style={[
+                    styles.weekdayLabel,
+                    isNight && styles.weekdayLabelNight,
+                    selected && (isNight ? styles.weekdayLabelSelectedNight : styles.weekdayLabelSelected),
+                  ]}
+                >
+                  {label[0]}
+                </Text>
               </Pressable>
             );
           })}
@@ -180,7 +208,7 @@ export function AlertScheduleHeader({ schedule, onChange, isNight }: AlertSchedu
 
       {schedule.recurrence === 'monthly' && (
         <View style={styles.monthlyRow}>
-          <Text style={styles.monthlyLabel}>Day of month</Text>
+          <Text style={[styles.monthlyLabel, isNight && styles.monthlyLabelNight]}>Day of month</Text>
           <Stepper
             value={String(schedule.dayOfMonth)}
             onDec={() => setDayOfMonth(schedule.dayOfMonth - 1)}
@@ -208,18 +236,12 @@ const styles = StyleSheet.create({
     borderRadius: throwRadius.card,
     backgroundColor: throwColor.claySoft,
   },
-  // Night skin — a black band with a soft white glow instead of the day skin's clay-brown fill;
-  // the wheel digits themselves switch to white too (see WheelPicker's own isNight).
-  highlightBandNight: {
-    backgroundColor: '#000000',
-    shadowColor: '#FFFFFF',
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
-  },
+  // Night skin — a literal invert of the day fill: white band instead of clay-brown/black, so it
+  // reads clearly against the sheet's own now-black background (see AlertScheduleSheet). The
+  // wheel digits invert to black to stay legible on top of it (see WheelPicker's own isNight).
+  highlightBandNight: { backgroundColor: '#FFFFFF' },
   colon: { fontFamily: throwFont.ui700, fontSize: 20, color: throwColor.ink },
-  colonNight: { color: '#FFFFFF' },
+  colonNight: { color: '#000000' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   stepperBtn: {
     width: 22,
@@ -229,10 +251,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperBtnNight: { backgroundColor: '#000000' },
+  stepperBtnNight: { backgroundColor: '#FFFFFF' },
   stepperBtnLabel: { fontFamily: throwFont.ui700, fontSize: 15, color: throwColor.clayDeep, lineHeight: 16 },
-  stepperBtnLabelNight: { color: '#FFFFFF' },
+  stepperBtnLabelNight: { color: '#000000' },
   stepperValue: { fontFamily: throwFont.ui700, fontSize: 18, color: throwColor.ink, minWidth: 26, textAlign: 'center' },
+  stepperValueNight: { color: '#FFFFFF' },
   repeatRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -243,9 +266,14 @@ const styles = StyleSheet.create({
     borderRadius: throwRadius.card,
     backgroundColor: 'rgba(43,35,28,.05)',
   },
+  // Night skin — a light-on-black tint instead of the day skin's dark-on-light one (a literal
+  // invert), so the row still reads as a subtle surface against the sheet's black background.
+  repeatRowNight: { backgroundColor: 'rgba(255,255,255,.08)' },
   repeatLabel: { fontFamily: throwFont.ui600, fontSize: 13, color: throwColor.ink },
+  repeatLabelNight: { color: '#FFFFFF' },
   repeatRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   repeatValue: { fontFamily: throwFont.ui500, fontSize: 12.5, color: throwColor.inkSoft },
+  repeatValueNight: { color: 'rgba(255,255,255,.7)' },
   chevronOpen: { transform: [{ rotate: '90deg' }] },
   repeatOptions: {
     width: '100%',
@@ -255,6 +283,9 @@ const styles = StyleSheet.create({
     borderColor: throwColor.cardBorder,
     overflow: 'hidden',
   },
+  // Night skin — a literal invert: black dropdown instead of cream, with a light (rather than
+  // dark) border so its edge still reads against the sheet's own black background.
+  repeatOptionsNight: { backgroundColor: '#000000', borderColor: 'rgba(255,255,255,.15)' },
   repeatOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -263,12 +294,12 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   repeatOptionLabel: { fontFamily: throwFont.ui500, fontSize: 13, color: throwColor.inkSoft },
+  repeatOptionLabelNight: { color: 'rgba(255,255,255,.7)' },
   repeatOptionLabelSelected: { fontFamily: throwFont.ui700, color: throwColor.clayDeep },
-  // Night skin — plain black instead of clay-brown; the dropdown itself stays on its normal
-  // light chrome, so black keeps full contrast without needing a glow.
-  repeatOptionLabelSelectedNight: { fontFamily: throwFont.ui700, color: '#000000' },
+  // Night skin — white instead of clay-brown/black, since the dropdown itself is now black.
+  repeatOptionLabelSelectedNight: { fontFamily: throwFont.ui700, color: '#FFFFFF' },
   checkmark: { fontFamily: throwFont.ui700, fontSize: 13, color: throwColor.clayDeep },
-  checkmarkNight: { color: '#000000' },
+  checkmarkNight: { color: '#FFFFFF' },
   weekdayRow: { flexDirection: 'row', gap: 5 },
   weekdayChip: {
     width: 24,
@@ -278,18 +309,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(43,35,28,.06)',
   },
+  // Night skin — a light-on-black tint instead of the day skin's dark-on-light one.
+  weekdayChipNight: { backgroundColor: 'rgba(255,255,255,.08)' },
   weekdayChipSelected: { backgroundColor: throwColor.clayDeep },
-  // Night skin — a black fill with a soft white glow instead of the day skin's clay-brown fill.
-  weekdayChipSelectedNight: {
-    backgroundColor: '#000000',
-    shadowColor: '#FFFFFF',
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
-  },
+  // Night skin — a literal invert: white fill instead of clay-brown/black.
+  weekdayChipSelectedNight: { backgroundColor: '#FFFFFF' },
   weekdayLabel: { fontFamily: throwFont.ui700, fontSize: 11, color: throwColor.inkSoft },
+  weekdayLabelNight: { color: 'rgba(255,255,255,.7)' },
   weekdayLabelSelected: { color: '#fff' },
+  weekdayLabelSelectedNight: { color: '#000000' },
   monthlyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   monthlyLabel: { fontFamily: throwFont.ui600, fontSize: 11.5, color: throwColor.inkSoft },
+  monthlyLabelNight: { color: 'rgba(255,255,255,.7)' },
 });

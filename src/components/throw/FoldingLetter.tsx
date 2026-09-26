@@ -16,7 +16,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { LetterCanvas } from './LetterCanvas';
+import { INK_BLUE, LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
 import { PhotoAttachSheet } from './PhotoAttachSheet';
@@ -420,6 +420,23 @@ export function FoldingLetter({
     isNight,
   };
 
+  // The folded plane's baked texture only carries the first attached *photo* — see
+  // paperPlaneTypes.ts's PaperPlaneLetterContent, which still takes a single photoUri and (being
+  // a Canvas2D/SVG rasterizer) can only ever draw an actual image, not a video frame. Stamping
+  // every attachment onto the fragile 3D fold/texture pipeline isn't worth the risk either way;
+  // the flat compose paper (below) is where all of them are visible.
+  const rebakeContent = useCallback(() => {
+    const firstPhoto = latest.current.mediaItems.find((m) => !m.isVideo)?.uri ?? null;
+    const isNight = latest.current.isNight;
+    // Derives the ink colour directly from isNight rather than trusting the content's own
+    // reported penColor — LetterCanvas reports penColor asynchronously via onContentChange, which
+    // can still be a render behind FoldingLetter's own isNight prop right when it flips (this
+    // effect firing off isNight is what triggers a rebake in the first place), so trusting it here
+    // could bake the *previous* ink colour a beat before it catches up.
+    const penColor = isNight ? throwNightColor.ink : INK_BLUE;
+    stageRef.current?.setContent({ ...latest.current.content, photoUri: firstPhoto, penColor, isNight }, latest.current.paperSize);
+  }, []);
+
   const applyFoldProgress = useCallback(
     (next: number) => {
       progress.setValue(next);
@@ -430,17 +447,22 @@ export function FoldingLetter({
       // than relying on Grant.
       if (!bakedRef.current && next > 0) {
         bakedRef.current = true;
-        // The folded plane's baked texture only carries the first attached *photo* — see
-        // paperPlaneTypes.ts's PaperPlaneLetterContent, which still takes a single photoUri and
-        // (being a Canvas2D/SVG rasterizer) can only ever draw an actual image, not a video frame.
-        // Stamping every attachment onto the fragile 3D fold/texture pipeline isn't worth the
-        // risk either way; the flat compose paper (below) is where all of them are visible.
-        const firstPhoto = latest.current.mediaItems.find((m) => !m.isVideo)?.uri ?? null;
-        stageRef.current?.setContent({ ...latest.current.content, photoUri: firstPhoto, isNight: latest.current.isNight }, latest.current.paperSize);
+        rebakeContent();
       }
     },
-    [progress],
+    [progress, rebakeContent],
   );
+
+  // Re-bakes the plane's texture whenever `isNight` itself flips while the plane has already been
+  // baked this fold (see bakedRef) — switching to a recipient in a different day/night part of the
+  // world (or a session left open across the destination's own day/night boundary) while already
+  // folded otherwise left the plane showing its *previous* colour until the next full
+  // unfold/refold, out of sync with the paper and map, which both pick up the new isNight
+  // immediately since they're plain style props rather than a cached bake.
+  useEffect(() => {
+    if (bakedRef.current) rebakeContent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNight]);
 
   // react-native-web's PanResponder polyfill dedupes move dispatch against
   // `touchHistory.mostRecentTimeStamp`, and once `onMoveShouldSetPanResponderCapture` below steals
