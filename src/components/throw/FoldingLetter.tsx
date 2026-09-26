@@ -1,5 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, Image, LayoutChangeEvent, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  Dimensions,
+  Easing,
+  Image,
+  LayoutChangeEvent,
+  PanResponder,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleProp,
+  StyleSheet,
+  Text,
+  View,
+  ViewStyle,
+} from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
@@ -9,7 +24,7 @@ import type { PickedMedia } from './PhotoAttachSheet';
 import { AlertScheduleSheet } from './AlertScheduleSheet';
 import { GlassSurface } from '../friends/GlassSurface';
 import { Icon } from '../Icon';
-import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwFont, throwGlass, throwNightColor, throwRadius } from '../../theme/throwTokens';
 import { useVoiceToText } from '../../hooks/useVoiceToText';
 import { formatAlertSchedule } from '../../utils/throwAlerts';
 import type { LetterCanvasHandle } from './LetterCanvas';
@@ -32,6 +47,9 @@ const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6
 // Feather Icons' "award" glyph — the leaderboard-points badge, moved here from ThrowHomeScreen's
 // header now that the badge itself lives in the paper's top-right corner instead.
 const POINTS_ICON = 'M12 15a7 7 0 100-14 7 7 0 000 14z M8.21 13.89L7 23l5-3 5 3-1.21-9.12';
+// Feather Icons' "edit-2" pencil glyph — the night skin's decorative Aa/pen mode toggle (see
+// isNight prop doc comment; purely presentational, no drawing mode actually exists yet).
+const PEN_ICON = 'M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z';
 
 const FOLD_DRAG_DISTANCE = 150;
 const LAUNCH_THRESHOLD = 64;
@@ -153,6 +171,12 @@ interface FoldingLetterProps {
    * stroke, or a picked photo) — the caller uses this for a self-reminder to lock the recipient
    * selection once the user has started writing, so switching away mid-thought isn't possible. */
   onHasContentChange?: (hasContent: boolean) => void;
+  /** Swaps the paper's cream/light chrome for a dark "night" skin — driven by whether the
+   * destination currently reads as nighttime (see ThrowHomeScreen, same signal ThrowMap's own
+   * day/night palette follows), not a whole-app dark mode. Also adds a decorative Aa/pen toggle
+   * and a "Pull down to fold" hint, matching the night reference screenshot — the toggle is
+   * presentational only (typed text is still the only way to write; no drawing mode exists). */
+  isNight?: boolean;
 }
 
 /**
@@ -173,6 +197,28 @@ interface FoldingLetterProps {
  * drag is unambiguously a downward pull (past FOLD_CAPTURE_DY, and more vertical than horizontal
  * by FOLD_CAPTURE_RATIO); anything shorter or more lateral is left alone as a stroke.
  */
+
+/** One bottom-controls icon's own chrome — the usual light glass circle, or (isNight) a plain
+ * solid dark circle instead, matching the night reference screenshot. Kept as one component
+ * rather than an if/else at each of the five call sites below. */
+function BottomIconSurface({
+  isNight,
+  tintColor,
+  style,
+  children,
+}: {
+  isNight?: boolean;
+  tintColor: string;
+  style: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  if (isNight) return <View style={[style, styles.iconSurfaceNight]}>{children}</View>;
+  return (
+    <GlassSurface tint="light" tintColor={tintColor} style={style}>
+      {children}
+    </GlassSurface>
+  );
+}
 export function FoldingLetter({
   recipientName,
   streak,
@@ -192,6 +238,7 @@ export function FoldingLetter({
   onAlertScheduleChange,
   hideBadges,
   onHasContentChange,
+  isNight,
 }: FoldingLetterProps) {
   const [phase, setPhase] = useState<Phase>('writing');
   const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
@@ -208,6 +255,11 @@ export function FoldingLetter({
   // *measured* (not CSS-resolved) heights sidesteps that mismatch entirely.
   const [bottomRowHeight, setBottomRowHeight] = useState(0);
   const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false);
+  // Measured height of the night skin's Aa/pen + fold-hint toolbar (see isNight) — same
+  // measured-not-CSS-resolved reasoning as bottomRowHeight, used to stack the "Set Time" button
+  // above it rather than overlapping when both happen to be showing at once (a self-reminder
+  // composed at night).
+  const [nightToolbarHeight, setNightToolbarHeight] = useState(0);
   const [stageFailed, setStageFailed] = useState(false);
   const letterCanvasRef = useRef<LetterCanvasHandle>(null);
   const voice = useVoiceToText({ onFinalText: (text) => letterCanvasRef.current?.appendText(text) });
@@ -694,21 +746,51 @@ export function FoldingLetter({
     <View ref={wrapRef} style={styles.wrap}>
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
-          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={mediaItems.length > 0} />
+          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={mediaItems.length > 0} isNight={isNight} />
         </Animated.View>
+
+        {isNight && (
+          // The night skin's decorative Aa/pen toggle + fold hint, matching the reference
+          // screenshot — purely presentational (see isNight's own doc comment); typed text is
+          // still the only way to write. Sits in the same "toolbar" slot the Set Time button
+          // uses below, which stacks itself above this one (via nightToolbarHeight) rather than
+          // overlapping it when both happen to be showing (a self-reminder composed at night).
+          <Animated.View
+            onLayout={(e) => setNightToolbarHeight(e.nativeEvent.layout.height)}
+            style={[styles.nightToolbar, bottomRowHeight > 0 ? { bottom: bottomRowHeight + 14 } : { bottom: 90 }, { opacity: canvasOpacity }]}
+            pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
+          >
+            <View style={styles.nightModeToggle}>
+              <View style={styles.nightModeToggleActive}>
+                <Text style={styles.nightModeToggleActiveLabel}>Aa</Text>
+              </View>
+              <View style={styles.nightModeTogglePen}>
+                <Icon path={PEN_ICON} size={14} color={throwNightColor.iconColor} strokeWidth={2} />
+              </View>
+            </View>
+            <Text style={styles.nightFoldHint}>Pull down to fold</Text>
+          </Animated.View>
+        )}
 
         {alertSchedule && onAlertScheduleChange && (
           <Animated.View
             style={[
               styles.setTimeWrap,
-              bottomRowHeight > 0 ? { bottom: bottomRowHeight + 14 } : { bottom: 90 },
+              bottomRowHeight > 0
+                ? { bottom: bottomRowHeight + 14 + (isNight && nightToolbarHeight > 0 ? nightToolbarHeight + 8 : 0) }
+                : { bottom: 90 },
               { opacity: canvasOpacity },
             ]}
             pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
           >
-            <Pressable onPress={() => setScheduleSheetOpen(true)} style={styles.setTimeBtn} accessibilityRole="button" accessibilityLabel="Set time">
-              <Text style={styles.setTimeLabel}>Set Time</Text>
-              <Text style={styles.setTimeSummary}>{formatAlertSchedule(alertSchedule)}</Text>
+            <Pressable
+              onPress={() => setScheduleSheetOpen(true)}
+              style={[styles.setTimeBtn, isNight && styles.setTimeBtnNight]}
+              accessibilityRole="button"
+              accessibilityLabel="Set time"
+            >
+              <Text style={[styles.setTimeLabel, isNight && styles.setTimeLabelNight]}>Set Time</Text>
+              <Text style={[styles.setTimeSummary, isNight && styles.setTimeLabelNight]}>{formatAlertSchedule(alertSchedule)}</Text>
             </Pressable>
           </Animated.View>
         )}
@@ -720,13 +802,13 @@ export function FoldingLetter({
         {!hideBadges && (
           <Animated.View style={[styles.paperBadges, { opacity: canvasOpacity }]} pointerEvents="none">
             {streak > 0 && (
-              <View style={styles.streakChip} accessibilityLabel={`${streak} day throw streak with ${recipientName}`}>
-                <Text style={styles.streakText}>🔥{streak}</Text>
+              <View style={[styles.streakChip, isNight && styles.chipNight]} accessibilityLabel={`${streak} day throw streak with ${recipientName}`}>
+                <Text style={[styles.streakText, isNight && styles.streakTextNight]}>🔥{streak}</Text>
               </View>
             )}
-            <View style={styles.pointsChip} accessibilityLabel={`${points} leaderboard points with ${recipientName}`}>
-              <Icon path={POINTS_ICON} size={11} color={throwColor.clayDeep} strokeWidth={2} />
-              <Text style={styles.streakText}>{points}</Text>
+            <View style={[styles.pointsChip, isNight && styles.chipNight]} accessibilityLabel={`${points} leaderboard points with ${recipientName}`}>
+              <Icon path={POINTS_ICON} size={11} color={isNight ? throwNightColor.ink : throwColor.clayDeep} strokeWidth={2} />
+              <Text style={[styles.streakText, isNight && styles.streakTextNight]}>{points}</Text>
             </View>
           </Animated.View>
         )}
@@ -812,9 +894,9 @@ export function FoldingLetter({
         >
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
-                <Icon path={PHOTO_ICON} size={25 * bottomRowScale} color={throwColor.ink} strokeWidth={1.8} />
-              </GlassSurface>
+              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+                <Icon path={PHOTO_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
+              </BottomIconSurface>
             </View>
           )}
         </Pressable>
@@ -822,9 +904,9 @@ export function FoldingLetter({
         <Pressable onPress={onOpenChats} accessibilityRole="button" accessibilityLabel="Chats">
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
-                <Icon path={CHAT_ICON} size={25 * bottomRowScale} color={throwColor.ink} strokeWidth={1.8} />
-              </GlassSurface>
+              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+                <Icon path={CHAT_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
+              </BottomIconSurface>
             </View>
           )}
         </Pressable>
@@ -844,9 +926,9 @@ export function FoldingLetter({
               </View>
             ) : (
               <View style={[styles.micBtnShadow, micBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-                <GlassSurface tint="light" tintColor={throwGlass.tintStrong} style={[styles.micBtn, micBtnDynamicStyle]}>
-                  <Icon path={MIC_ICON} size={27 * bottomRowScale} color={throwColor.ink} strokeWidth={1.8} />
-                </GlassSurface>
+                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintStrong} style={[styles.micBtn, micBtnDynamicStyle]}>
+                  <Icon path={MIC_ICON} size={27 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
+                </BottomIconSurface>
               </View>
             )
           }
@@ -855,9 +937,9 @@ export function FoldingLetter({
         <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
-                <Icon path={QR_ICON} size={25 * bottomRowScale} color={throwColor.ink} strokeWidth={1.8} />
-              </GlassSurface>
+              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+                <Icon path={QR_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
+              </BottomIconSurface>
             </View>
           )}
         </Pressable>
@@ -865,9 +947,9 @@ export function FoldingLetter({
         <Pressable onPress={onOpenInbox} accessibilityRole="button" accessibilityLabel="Inbox">
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
-                <Icon path={INBOX_ICON} size={25 * bottomRowScale} color={throwColor.ink} strokeWidth={1.8} />
-              </GlassSurface>
+              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+                <Icon path={INBOX_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
+              </BottomIconSurface>
               {unreadCount > 0 && (
                 <View style={[styles.badge, badgeDynamicStyle]}>
                   <Text style={[styles.badgeLabel, { fontSize: 10.5 * bottomRowScale }]}>{unreadCount}</Text>
@@ -913,11 +995,27 @@ const styles = StyleSheet.create({
   },
   setTimeLabel: { fontFamily: throwFont.ui700, fontSize: 13.5, color: throwColor.clayDeep },
   setTimeSummary: { fontFamily: throwFont.ui500, fontSize: 11.5, color: throwColor.clayDeep, marginTop: 1 },
+  setTimeBtnNight: { backgroundColor: throwNightColor.badgeBg },
+  setTimeLabelNight: { color: throwNightColor.ink },
   streakChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   pointsChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   streakText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.clayDeep },
+  // Night-skin overrides for the two badges above — solid dark pill instead of the warm-clay tint.
+  chipNight: { backgroundColor: throwNightColor.badgeBg },
+  streakTextNight: { color: throwNightColor.ink },
   readyHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.ink, textAlign: 'center', marginTop: 10 },
   error: { fontFamily: throwFont.ui400, fontSize: 12, color: '#B3413A', textAlign: 'center', marginTop: 8 },
+  // The night skin's bottom-icon chrome — a solid dark circle instead of light glass (see
+  // BottomIconSurface). Layered on top of whatever size style (roundBtn/micBtn) is already
+  // passed in, so it only ever overrides backgroundColor.
+  iconSurfaceNight: { backgroundColor: throwNightColor.iconBg, alignItems: 'center', justifyContent: 'center' },
+  // The night skin's decorative Aa/pen toggle + fold hint (see isNight's own doc comment).
+  nightToolbar: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
+  nightModeToggle: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,.35)', borderRadius: 999, padding: 3, gap: 3 },
+  nightModeToggleActive: { backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
+  nightModeToggleActiveLabel: { fontFamily: throwFont.ui700, fontSize: 13, color: '#000' },
+  nightModeTogglePen: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: throwNightColor.iconBg },
+  nightFoldHint: { fontFamily: throwFont.mono500, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', color: throwNightColor.inkSoft },
   // A "photos pasted onto the letter" look — a horizontal row of small white-bordered thumbnails
   // near the top of the paper, scrollable once there are more than fit. Spans most of the paper's
   // width rather than sitting in one corner, since there can be several now — LetterCanvas

@@ -88,6 +88,23 @@ export const throwGradient = {
   skyDawn: { colors: ['#F6F1E4', '#EDE3CE'] as [string, string], locations: [0, 1] as [number, number] },
 } as const;
 
+/**
+ * The letter paper's own "night" skin — swapped in for `throwColor`'s warm-cream chrome whenever
+ * the destination currently reads as nighttime (same `isDaytimeAt` signal ThrowMap's own day/
+ * night palette already follows, see ThrowHomeScreen), per an explicit reference screenshot. Only
+ * the paper/badges/bottom-controls read this; the rest of Throw (map, inbox, settings) is
+ * untouched — this is a per-letter skin, not a whole-app dark mode.
+ */
+export const throwNightColor = {
+  paper: '#3A3A3C',
+  ink: '#F2F0EA',
+  inkSoft: 'rgba(242,240,234,.6)',
+  placeholder: 'rgba(242,240,234,.4)',
+  iconBg: '#1C1C1E',
+  iconColor: '#F2F0EA',
+  badgeBg: 'rgba(0,0,0,.55)',
+} as const;
+
 export const throwRadius = {
   paper: 18,
   card: 20,
