@@ -48,7 +48,7 @@ function NavButton({
 const FAB_ICON_DEFAULT = '#C3EA4F';
 const FAB_ICON_BY_TAB: Record<string, string> = {
   expenses: '#fff',
-  throw: '#DE3769',
+  throw: '#fff',
 };
 
 function Fab({

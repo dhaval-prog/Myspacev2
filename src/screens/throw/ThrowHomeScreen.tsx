@@ -300,7 +300,6 @@ export function ThrowHomeScreen({
           >
             <FoldingLetter
               recipientName={selectedFriend.name}
-              recipientCity={selectedFriend.location!.city}
               streak={selectedStreak}
               points={selectedPoints}
               onThrow={handleThrow}

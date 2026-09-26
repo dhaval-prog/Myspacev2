@@ -10,12 +10,31 @@ import { ExpoSpeechRecognitionModule as RawSpeechRecognitionModule, useSpeechRec
 // sidesteps the mismatched declaration rather than fighting the whole project's module
 // resolution over one dependency.
 interface SpeechRecognitionModule {
-  start(options: { lang?: string; interimResults?: boolean; continuous?: boolean; addsPunctuation?: boolean }): void;
+  start(options: {
+    lang?: string;
+    interimResults?: boolean;
+    continuous?: boolean;
+    addsPunctuation?: boolean;
+    androidIntentOptions?: { EXTRA_ENABLE_LANGUAGE_DETECTION?: boolean; EXTRA_ENABLE_LANGUAGE_SWITCH?: string };
+  }): void;
   stop(): void;
   requestPermissionsAsync(): Promise<{ granted: boolean }>;
 }
 
 const ExpoSpeechRecognitionModule = RawSpeechRecognitionModule as unknown as SpeechRecognitionModule;
+
+// No language picker — the recognizer starts from the device's own configured language (the best
+// available proxy for "whatever the user is about to speak" without a manual step), and Android
+// additionally auto-switches mid-session as it detects a different spoken language (see
+// androidIntentOptions below); neither the Web Speech API nor iOS's on-device recognizer support
+// that continuous auto-switch, so this is genuinely the most either platform offers.
+function deviceLocale(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().locale || 'en-IN';
+  } catch {
+    return 'en-IN';
+  }
+}
 
 interface UseVoiceToTextOptions {
   /** Called with each finalized chunk of speech as it's recognized. */
@@ -27,11 +46,7 @@ interface UseVoiceToTextResult {
   /** The current not-yet-final transcript, for a live "as you speak" preview. */
   interimText: string;
   error: string | null;
-  /** `lang` is a BCP-47 locale (e.g. 'hi-IN', 'mr-IN', 'gu-IN') — the on-device/browser
-   * recognizer picks one language per session, it doesn't detect/mix several at once, so the
-   * caller is expected to ask the user which language they're about to speak (see FoldingLetter's
-   * language chip next to the mic button) rather than this hook guessing. Defaults to English. */
-  start: (lang?: string) => Promise<void>;
+  start: () => Promise<void>;
   stop: () => void;
 }
 
@@ -58,6 +73,12 @@ export function useVoiceToText({ onFinalText }: UseVoiceToTextOptions): UseVoice
     }
   });
 
+  // Android-only: fires as the recognizer notices the spoken language has switched (see
+  // androidIntentOptions in start() below) — nothing to do here ourselves, the recognizer already
+  // applies the switch to its own subsequent results; this is just where a future debug log would
+  // go if the auto-switch ever needed diagnosing.
+  useSpeechRecognitionEvent('languagedetection', () => {});
+
   useSpeechRecognitionEvent('error', (event) => {
     setRecording(false);
     setInterimText('');
@@ -74,7 +95,7 @@ export function useVoiceToText({ onFinalText }: UseVoiceToTextOptions): UseVoice
     setInterimText('');
   });
 
-  const start = useCallback(async (lang = 'en-IN') => {
+  const start = useCallback(async () => {
     setError(null);
     const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     if (!permission.granted) {
@@ -82,7 +103,17 @@ export function useVoiceToText({ onFinalText }: UseVoiceToTextOptions): UseVoice
       return;
     }
     setRecording(true);
-    ExpoSpeechRecognitionModule.start({ lang, interimResults: true, continuous: true, addsPunctuation: true });
+    ExpoSpeechRecognitionModule.start({
+      lang: deviceLocale(),
+      interimResults: true,
+      continuous: true,
+      addsPunctuation: true,
+      // Lets Android's recognizer identify and switch to whatever language is actually being
+      // spoken mid-session instead of staying locked to the starting `lang` — the closest thing
+      // to real automatic language detection either platform offers (no iOS/web equivalent
+      // exists, so those stay on the single starting locale above).
+      androidIntentOptions: { EXTRA_ENABLE_LANGUAGE_DETECTION: true, EXTRA_ENABLE_LANGUAGE_SWITCH: 'balanced' },
+    });
   }, []);
 
   const stop = useCallback(() => {
