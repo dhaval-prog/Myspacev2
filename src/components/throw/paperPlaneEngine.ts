@@ -522,16 +522,15 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   // World-Y nudge to the 'ready'-phase camera's look-at target — see the camGoal assignment below.
   const READY_FRAME_LIFT = 6;
   // How far the resting plane's nose dips forward/down, in radians — see the 'ready' phase pose
-  // below. Raised twice now: -0.15 -> -0.45 -> -1.0, per repeated explicit feedback that the tilt
-  // still wasn't pronounced enough to read as a real landing-angle dive with the tail's topside
-  // visible to the (elevated, looking-down) camera — this is a proper ~57° nose-down dive.
-  const READY_PITCH_FORWARD = -1.0;
+  // below. -0.45 (up from an original -0.15) per explicit request for a pronounced nose-down
+  // tilt, tail end lifted — reverted back to this from a brief -1.0 that read as too steep.
+  const READY_PITCH_FORWARD = -0.45;
   // The 'ready' pose (held once fully folded, before being thrown) reads noticeably larger than
   // the fold animation and in-flight sizes, per explicit request — applied only while
   // phase === 'ready' (see the frame loop below), not to flight.scale's own base value, so the
-  // fold/flight sizing already tuned across prior rounds is untouched. 1.2 initially, then bumped
-  // another 20% on top (1.2 * 1.2) per follow-up feedback.
-  const READY_SCALE_BOOST = 1.44;
+  // fold/flight sizing already tuned across prior rounds is untouched. Reverted back to this
+  // 1.2x from a brief 1.44x that read as too large.
+  const READY_SCALE_BOOST = 1.2;
   function setPose(o: Formation, extra: Partial<Formation & { x: number; y: number; z: number; bank: number; yaw: number; pitch: number; rx: number }> = {}) {
     flight.position.set(pivot.x + o.x + (extra.x || 0), pivot.y + o.y + (extra.y || 0), pivot.z + o.z + (extra.z || 0));
     flight.rotation.set((o.bank || 0) + (extra.bank || 0), (o.yaw || 0) + (extra.yaw || 0), (o.pitch || 0) + (extra.pitch || 0));
