@@ -303,8 +303,11 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   // local, unscaled space, a child of shape/flight). Prior rounds climbed to 4.39 chasing "still
   // reads small" feedback, then 1.62 (37% of that), then 1.30 (another 20% down), then 1.17
   // (another 10% down, per user feedback that it was still a bit big); 1.287 is 1.17 scaled back
-  // up 10%, per subsequent user feedback in the other direction.
-  flight.scale.setScalar(1.287);
+  // up 10%, per subsequent user feedback in the other direction. The 'ready' phase applies its
+  // own extra boost on top of this (see READY_SCALE_BOOST and the frame loop below) — this is
+  // just the starting value for every other phase.
+  const BASE_FLIGHT_SCALE = 1.287;
+  flight.scale.setScalar(BASE_FLIGHT_SCALE);
   shape.add(mesh);
   flight.add(shape);
   scene.add(flight);
@@ -519,8 +522,14 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   // World-Y nudge to the 'ready'-phase camera's look-at target — see the camGoal assignment below.
   const READY_FRAME_LIFT = 6;
   // How far the resting plane's nose dips forward/down, in radians — see the 'ready' phase pose
-  // below.
-  const READY_PITCH_FORWARD = -0.15;
+  // below. -0.45 (up from -0.15) per explicit request for a more pronounced nose-down tilt, tail
+  // end lifted, rather than the previous barely-there dip.
+  const READY_PITCH_FORWARD = -0.45;
+  // The 'ready' pose (held once fully folded, before being thrown) reads noticeably larger than
+  // the fold animation and in-flight sizes, per explicit request — applied only while
+  // phase === 'ready' (see the frame loop below), not to flight.scale's own base value, so the
+  // fold/flight sizing already tuned across prior rounds is untouched.
+  const READY_SCALE_BOOST = 1.2;
   function setPose(o: Formation, extra: Partial<Formation & { x: number; y: number; z: number; bank: number; yaw: number; pitch: number; rx: number }> = {}) {
     flight.position.set(pivot.x + o.x + (extra.x || 0), pivot.y + o.y + (extra.y || 0), pivot.z + o.z + (extra.z || 0));
     flight.rotation.set((o.bank || 0) + (extra.bank || 0), (o.yaw || 0) + (extra.yaw || 0), (o.pitch || 0) + (extra.pitch || 0));
@@ -597,6 +606,7 @@ export function createPaperPlane(options: PaperPlaneOptions) {
       dirty = false;
     }
     if (phase === 'idle' || phase === 'folding') {
+      flight.scale.setScalar(BASE_FLIGHT_SCALE);
       if (resetT < 1) {
         resetT = Math.min(1, resetT + dt * 1.6);
         mat.opacity = E.out(resetT);
@@ -604,6 +614,7 @@ export function createPaperPlane(options: PaperPlaneOptions) {
       const drop = resetT < 1 ? 1.6 * (1 - E.out(resetT)) : 0;
       setPose(formation, { y: drop });
     } else if (phase === 'ready') {
+      flight.scale.setScalar(BASE_FLIGHT_SCALE * READY_SCALE_BOOST);
       const bob = Math.sin(clock * 1.6) * 0.06 * clamp01(clock * 1);
       const idleBank = Math.sin(clock * 1.1) * 0.02;
       // The fold timeline's own resting yaw/pitch/bank (baked into `formation` at t = FOLD_END,
@@ -625,6 +636,7 @@ export function createPaperPlane(options: PaperPlaneOptions) {
         rx: readyBankExtra * MAX_READY_BANK,
       });
     } else if (phase === 'flying' || phase === 'done') {
+      flight.scale.setScalar(BASE_FLIGHT_SCALE);
       flyT += dt * speed;
       const u = flyT;
       const back = Math.sin(PI * clamp01(u / 0.45)) * (u < 0.45 ? 1 : 0);
