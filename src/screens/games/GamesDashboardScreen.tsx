@@ -205,7 +205,7 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenThrow, onOp
       <BottomNav
         activeId="games"
         onSelect={(id) => {
-          if (id === 'home') onHome();
+          if (id === 'chat') onHome();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}

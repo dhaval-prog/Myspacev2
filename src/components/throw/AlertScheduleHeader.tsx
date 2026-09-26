@@ -75,20 +75,21 @@ function Stepper({
 interface AlertScheduleHeaderProps {
   schedule: AlertSchedule;
   onChange: (schedule: AlertSchedule) => void;
-  /** Inverts the whole picker to a black background with white/light chrome — a literal
-   * black↔white swap of the normal light day picker, per explicit request (the sheet itself
-   * turns black too — see AlertScheduleSheet). */
+  /** Inverts the whole picker to a black-ish background with white/light chrome — a literal
+   * black↔white swap of the normal light day picker, per explicit request. Sits directly on the
+   * night paper's own dark background (see FoldingLetter), not a separate black sheet. */
   isNight?: boolean;
 }
 
 /**
- * The paper's own time/day picker — rendered on the letter itself (see FoldingLetter's
- * scheduleHeader prop) only while writing a reminder to yourself. A three-column spinning wheel
- * (hour/minute/AM-PM, matching the reference screenshot's native-style time picker) sits above a
- * "Repeat" row that expands into an inline Never/Every Day/Weekly/Monthly list — a compact stand-in
- * for the reference's own push-to-a-new-screen Repeat picker, since this is embedded in the
- * compose card rather than a full settings screen. Weekly/Monthly reveal their own day picker
- * underneath, same as before.
+ * The paper's own time/day picker — rendered directly on the letter itself, above the writing
+ * area (see FoldingLetter's alertSchedule/onAlertScheduleChange props), only while writing a
+ * reminder to yourself, day and night alike. A three-column spinning wheel (hour/minute/AM-PM,
+ * matching the reference screenshot's native-style time picker) sits above a "Repeat" row that
+ * expands into an inline Never/Every Day/Weekly/Monthly list — a compact stand-in for the
+ * reference's own push-to-a-new-screen Repeat picker, since this is embedded in the compose card
+ * rather than a full settings screen. Weekly/Monthly reveal their own day picker underneath, same
+ * as before.
  */
 export function AlertScheduleHeader({ schedule, onChange, isNight }: AlertScheduleHeaderProps) {
   const [repeatOpen, setRepeatOpen] = useState(false);
@@ -237,8 +238,8 @@ const styles = StyleSheet.create({
     backgroundColor: throwColor.claySoft,
   },
   // Night skin — a literal invert of the day fill: white band instead of clay-brown/black, so it
-  // reads clearly against the sheet's own now-black background (see AlertScheduleSheet). The
-  // wheel digits invert to black to stay legible on top of it (see WheelPicker's own isNight).
+  // reads clearly against the night paper's own dark background. The wheel digits invert to
+  // black to stay legible on top of it (see WheelPicker's own isNight).
   highlightBandNight: { backgroundColor: '#FFFFFF' },
   colon: { fontFamily: throwFont.ui700, fontSize: 20, color: throwColor.ink },
   colonNight: { color: '#000000' },
@@ -267,7 +268,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(43,35,28,.05)',
   },
   // Night skin — a light-on-black tint instead of the day skin's dark-on-light one (a literal
-  // invert), so the row still reads as a subtle surface against the sheet's black background.
+  // invert), so the row still reads as a subtle surface against the night paper's own dark
+  // background.
   repeatRowNight: { backgroundColor: 'rgba(255,255,255,.08)' },
   repeatLabel: { fontFamily: throwFont.ui600, fontSize: 13, color: throwColor.ink },
   repeatLabelNight: { color: '#FFFFFF' },
@@ -284,7 +286,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   // Night skin — a literal invert: black dropdown instead of cream, with a light (rather than
-  // dark) border so its edge still reads against the sheet's own black background.
+  // dark) border so its edge still reads against the night paper's own dark background.
   repeatOptionsNight: { backgroundColor: '#000000', borderColor: 'rgba(255,255,255,.15)' },
   repeatOptionRow: {
     flexDirection: 'row',

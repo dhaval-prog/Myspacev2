@@ -30,6 +30,10 @@ interface LetterCanvasProps {
   /** Swaps the cream paper texture and blue ink for the dark "night" skin (see throwNightColor)
    * — driven by the destination's local day/night, same signal ThrowMap's own palette follows. */
   isNight?: boolean;
+  /** Extra top padding, in px — reserves room above the writing area for whatever's pinned to
+   * the paper's own top edge (currently only the self-reminder schedule picker, see FoldingLetter's
+   * alertSchedule prop), measured rather than guessed since that content's own height varies. */
+  extraTopPadding?: number;
 }
 
 export interface LetterCanvasHandle {
@@ -50,7 +54,7 @@ export interface LetterCanvasHandle {
  * the plane's baked texture, so the writing surface and the measured surface need to be the same
  * rectangle.
  */
-export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas({ onContentChange, hasPhoto, isNight }, ref) {
+export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas({ onContentChange, hasPhoto, isNight, extraTopPadding }, ref) {
   const [typedText, setTypedText] = useState('');
   // The current phrase's not-yet-final transcript — shown live appended after typedText (see
   // displayText below) so dictated words appear on the paper as they're spoken, not only once
@@ -94,7 +98,14 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
       {isNight ? null : <Image source={paperTextureAsset} style={StyleSheet.absoluteFill} resizeMode="cover" />}
 
       <TextInput
-        style={[StyleSheet.absoluteFill, styles.typedInput, hasPhoto && styles.typedInputWithPhoto, { color: penColor }]}
+        style={[
+          StyleSheet.absoluteFill,
+          styles.typedInput,
+          // Both reservations stack additively (a self-reminder can have both a photo and the
+          // schedule picker showing at once) rather than one clobbering the other.
+          { paddingTop: 66 + (hasPhoto ? 34 : 0) + (extraTopPadding ?? 0) },
+          { color: penColor },
+        ]}
         multiline
         placeholder="Write something for your loved one"
         placeholderTextColor={isNight ? throwNightColor.placeholder : PLACEHOLDER_COLOR}
@@ -123,10 +134,10 @@ const styles = StyleSheet.create({
   },
   typedInput: {
     padding: 20,
-    // More clearance above the streak/points badges (FoldingLetter's paperBadges, absolutely
+    // Base top clearance above the streak/points badges (FoldingLetter's paperBadges, absolutely
     // positioned in this same paper's top-right corner) — 44 left typed text starting almost
-    // directly under them.
-    paddingTop: 66,
+    // directly under them. `hasPhoto`/`extraTopPadding` (see the render) add to this rather than
+    // replacing it, for a photo strip and/or the self-reminder schedule picker pinned above.
     // Reserves room above FoldingLetter's bottom-controls row (photo/chat/voice/add-friend/
     // inbox), which now sits pinned to this same paper's bottom edge — without this, typed text
     // can run underneath those buttons instead of stopping short of them.
@@ -136,7 +147,4 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     textAlign: 'center',
   },
-  // Reserves room under the photo strip pasted near the top (see FoldingLetter's
-  // photoStripWrap) so the writing area starts below it instead of running underneath.
-  typedInputWithPhoto: { paddingTop: 100 },
 });

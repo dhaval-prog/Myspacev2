@@ -457,7 +457,7 @@ export function ThrowHomeScreen({
         <BottomNav
           activeId="throw"
           onSelect={(id) => {
-            if (id === 'home') onHome();
+            if (id === 'chat') onHome();
             if (id === 'expenses') onOpenExpenses();
             // 'throw' is a no-op here — this screen already is Throw.
           }}

@@ -75,7 +75,7 @@ export function NpatGameOverScreen({ onHome, onOpenExpenses: _onOpenExpenses, on
           }}
           style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
         >
-          <Text style={styles.secondaryLabel}>Back to Home</Text>
+          <Text style={styles.secondaryLabel}>Back to Chat</Text>
         </Pressable>
       </ScrollView>
     </LinearGradient>

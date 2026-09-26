@@ -151,7 +151,7 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenThrow }: NpatR
           }}
           style={styles.iconButton}
           accessibilityRole="button"
-          accessibilityLabel="Back to Home"
+          accessibilityLabel="Back to Chat"
         >
           <BlurView intensity={45} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
           <View style={styles.iconButtonTint} pointerEvents="none" />
@@ -162,7 +162,7 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenThrow }: NpatR
       <BottomNav
         activeId="games"
         onSelect={(id) => {
-          if (id === 'home') onHome();
+          if (id === 'chat') onHome();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}

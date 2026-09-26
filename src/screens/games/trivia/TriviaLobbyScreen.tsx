@@ -295,7 +295,7 @@ function TriviaHub({
       <BottomNav
         activeId="games"
         onSelect={(id) => {
-          if (id === 'home') onHome();
+          if (id === 'chat') onHome();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}
@@ -440,7 +440,7 @@ function TriviaReadyRoom({
       <BottomNav
         activeId="games"
         onSelect={(id) => {
-          if (id === 'home') {
+          if (id === 'chat') {
             leaveGame();
             onHome();
           }
