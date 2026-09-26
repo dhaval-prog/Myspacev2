@@ -87,3 +87,51 @@ export interface ComposeDraft {
   penColor: string;
   photoUrls: string[];
 }
+
+export type AlertRecurrence = 'once' | 'everyday' | 'weekly' | 'monthly';
+
+/** Raw shape of a `throw_alerts` row, as returned by Supabase. */
+export interface ThrowAlertRow {
+  id: string;
+  user_id: string;
+  message_text: string;
+  strokes: StrokePath[] | null;
+  pen_color: string | null;
+  recurrence_type: AlertRecurrence;
+  days_of_week: number[] | null;
+  day_of_month: number | null;
+  hour: number;
+  minute: number;
+  next_trigger_at: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Client-shaped self-reminder — a letter you throw to yourself that fires as a full-screen
+ * alert at the scheduled time instead of landing in someone else's inbox. */
+export interface ThrowAlert {
+  id: string;
+  messageText: string;
+  strokes: StrokePath[] | null;
+  penColor: string | null;
+  recurrence: AlertRecurrence;
+  /** 0 (Sunday) – 6 (Saturday), only meaningful when recurrence is 'weekly'. */
+  daysOfWeek: number[];
+  /** Only meaningful when recurrence is 'monthly'. */
+  dayOfMonth: number | null;
+  hour: number;
+  minute: number;
+  nextTriggerAt: string;
+  active: boolean;
+}
+
+/** The paper's time/day picker state — recomputed into an absolute `next_trigger_at` instant by
+ * `computeNextTrigger` (see utils/throwAlerts.ts) every time it changes or an alert fires. */
+export interface AlertSchedule {
+  recurrence: AlertRecurrence;
+  hour: number;
+  minute: number;
+  daysOfWeek: number[];
+  dayOfMonth: number;
+}

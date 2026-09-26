@@ -127,6 +127,12 @@ interface FoldingLetterProps {
    * (and slide) its own BottomNav out in lockstep with the paper folding away, and back in as
    * it unfolds. */
   onFoldProgress?: (value: number) => void;
+  /** Rendered on the paper itself, above the writing area — used for the self-reminder alert's
+   * time/day picker (AlertScheduleHeader). Its measured height is fed to LetterCanvas as extra
+   * top padding so typed text starts below it. Absent for an ordinary letter to a friend. */
+  scheduleHeader?: React.ReactNode;
+  /** Hides the streak/points badges — they don't mean anything for a self-reminder. */
+  hideBadges?: boolean;
 }
 
 /**
@@ -162,6 +168,8 @@ export function FoldingLetter({
   onContactDragStart,
   onContactDragOffset,
   onFoldProgress,
+  scheduleHeader,
+  hideBadges,
 }: FoldingLetterProps) {
   const [phase, setPhase] = useState<Phase>('writing');
   const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
@@ -177,6 +185,9 @@ export function FoldingLetter({
   // of pinned to it — reported directly against a real iPhone. Anchoring off two independently
   // *measured* (not CSS-resolved) heights sidesteps that mismatch entirely.
   const [bottomRowHeight, setBottomRowHeight] = useState(0);
+  // Measured height of the optional scheduleHeader (see its own prop doc comment) — fed to
+  // LetterCanvas as extra top padding, same measured-not-CSS-resolved reasoning as bottomRowHeight.
+  const [scheduleHeaderHeight, setScheduleHeaderHeight] = useState(0);
   const [stageFailed, setStageFailed] = useState(false);
   const letterCanvasRef = useRef<LetterCanvasHandle>(null);
   const voice = useVoiceToText({ onFinalText: (text) => letterCanvasRef.current?.appendText(text) });
@@ -627,23 +638,41 @@ export function FoldingLetter({
     <View ref={wrapRef} style={styles.wrap}>
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
-          <LetterCanvas ref={letterCanvasRef} onContentChange={setContent} hasPhoto={mediaItems.length > 0} />
+          <LetterCanvas
+            ref={letterCanvasRef}
+            onContentChange={setContent}
+            hasPhoto={mediaItems.length > 0}
+            extraTopPadding={scheduleHeaderHeight > 0 ? scheduleHeaderHeight + 16 : 0}
+          />
         </Animated.View>
+
+        {scheduleHeader && (
+          <Animated.View
+            onLayout={(e) => setScheduleHeaderHeight(e.nativeEvent.layout.height)}
+            style={[styles.scheduleHeaderWrap, { opacity: canvasOpacity }]}
+            pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
+          >
+            {scheduleHeader}
+          </Animated.View>
+        )}
 
         {/* Streak/leaderboard badges — moved here from a separate header chip so they read as
             part of the letter itself; fades with the same canvasOpacity as the writing surface
-            so it's never left floating over the folded plane underneath. */}
-        <Animated.View style={[styles.paperBadges, { opacity: canvasOpacity }]} pointerEvents="none">
-          {streak > 0 && (
-            <View style={styles.streakChip} accessibilityLabel={`${streak} day throw streak with ${recipientName}`}>
-              <Text style={styles.streakText}>🔥{streak}</Text>
+            so it's never left floating over the folded plane underneath. Hidden for a
+            self-reminder (hideBadges), where neither means anything. */}
+        {!hideBadges && (
+          <Animated.View style={[styles.paperBadges, { opacity: canvasOpacity }]} pointerEvents="none">
+            {streak > 0 && (
+              <View style={styles.streakChip} accessibilityLabel={`${streak} day throw streak with ${recipientName}`}>
+                <Text style={styles.streakText}>🔥{streak}</Text>
+              </View>
+            )}
+            <View style={styles.pointsChip} accessibilityLabel={`${points} leaderboard points with ${recipientName}`}>
+              <Icon path={POINTS_ICON} size={11} color={throwColor.clayDeep} strokeWidth={2} />
+              <Text style={styles.streakText}>{points}</Text>
             </View>
-          )}
-          <View style={styles.pointsChip} accessibilityLabel={`${points} leaderboard points with ${recipientName}`}>
-            <Icon path={POINTS_ICON} size={11} color={throwColor.clayDeep} strokeWidth={2} />
-            <Text style={styles.streakText}>{points}</Text>
-          </View>
-        </Animated.View>
+          </Animated.View>
+        )}
 
         {paperSize.width > 0 && (
           // Split into two nested Animated.Views on purpose — see the useNativeDriver comment on
@@ -811,6 +840,9 @@ const styles = StyleSheet.create({
   // The streak/leaderboard badges' new home, in the paper's own top-right corner instead of a
   // separate header chip.
   paperBadges: { position: 'absolute', top: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // The optional self-reminder schedule picker, spanning the paper's top edge above the writing
+  // area — see the scheduleHeader prop and scheduleHeaderHeight state.
+  scheduleHeaderWrap: { position: 'absolute', top: 16, left: 14, right: 14 },
   streakChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   pointsChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   streakText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.clayDeep },

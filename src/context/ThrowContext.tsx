@@ -60,6 +60,9 @@ function toLetter(row: ThrowRow, myId: string, nameFor: (userId: string) => stri
 interface ThrowContextValue {
   loading: boolean;
   myLocation: ThrowLocation | null;
+  /** My own display name/avatar, for the self-reminder "Myself" pseudo-contact on the map. */
+  myName: string;
+  myAvatarUrl: string | null;
   setMyLocation: (loc: ThrowLocation) => Promise<{ error: string | null }>;
   /** Accepted friends merged with their Throw location, if they've set one. */
   friends: ThrowFriend[];
@@ -94,6 +97,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
 
   const [loading, setLoading] = useState(true);
   const [myLocation, setMyLocationState] = useState<ThrowLocation | null>(null);
+  const [myProfile, setMyProfile] = useState<{ name: string; avatarUrl: string | null }>({ name: 'Myself', avatarUrl: null });
   const [friendLocations, setFriendLocations] = useState<Record<string, ThrowLocation>>({});
   const [rows, setRows] = useState<ThrowRow[]>([]);
   const [streaksByCounterpart, setStreaksByCounterpart] = useState<Record<string, number>>({});
@@ -108,18 +112,24 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     // data quietly in the background so it never interrupts whatever's on screen (mid-gesture
     // composing, an in-progress flight animation, etc.).
     if (!hasLoadedRef.current) setLoading(true);
-    const [meRes, throwsRes, streakRes] = await Promise.all([
+    const [meRes, throwsRes, streakRes, profileRes] = await Promise.all([
       supabase.from('throw_profiles').select('city,country,latitude,longitude').eq('user_id', myId).maybeSingle(),
       supabase.from('throws').select('*').or(`sender_id.eq.${myId},recipient_id.eq.${myId}`).order('created_at', { ascending: false }),
       supabase.from('throw_streaks').select('counterpart_id,current_streak,last_throw_date').eq('user_id', myId),
+      supabase.from('profiles').select('full_name,avatar_url').eq('id', myId).maybeSingle(),
     ]);
     warn('load my location', meRes.error);
     warn('load throws', throwsRes.error);
     warn('load throw streaks', streakRes.error);
+    warn('load my profile', profileRes.error);
 
     if (meRes.data) {
       const d = meRes.data as { city: string; country: string; latitude: number; longitude: number };
       setMyLocationState({ city: d.city, country: d.country, latitude: d.latitude, longitude: d.longitude });
+    }
+    if (profileRes.data) {
+      const p = profileRes.data as { full_name: string | null; avatar_url: string | null };
+      setMyProfile({ name: p.full_name?.trim() || 'Myself', avatarUrl: p.avatar_url });
     }
     // Each row's stored streak only advances when a throw to that counterpart actually happens —
     // if a whole day's gone by with nothing thrown to them since, it's lapsed even though the row
@@ -270,7 +280,23 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
 
   const streakFor = useCallback((counterpartId: string) => streaksByCounterpart[counterpartId] ?? 0, [streaksByCounterpart]);
 
-  const value: ThrowContextValue = { loading, myLocation, setMyLocation, friends, letters, inbox, unreadCount, streakFor, sendThrow, uploadPhoto, markRead, deleteThrow, refresh };
+  const value: ThrowContextValue = {
+    loading,
+    myLocation,
+    myName: myProfile.name,
+    myAvatarUrl: myProfile.avatarUrl,
+    setMyLocation,
+    friends,
+    letters,
+    inbox,
+    unreadCount,
+    streakFor,
+    sendThrow,
+    uploadPhoto,
+    markRead,
+    deleteThrow,
+    refresh,
+  };
   return <ThrowContext.Provider value={value}>{children}</ThrowContext.Provider>;
 }
 
