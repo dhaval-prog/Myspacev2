@@ -280,6 +280,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
             selected={pin.selected}
             dimmed={pin.dimmed}
             onPress={pin.onPress}
+            isNight={!isDay}
           />
         );
       })}

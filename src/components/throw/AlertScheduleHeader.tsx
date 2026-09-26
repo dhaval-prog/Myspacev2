@@ -32,17 +32,41 @@ function clamp(n: number, min: number, max: number): number {
 /** A small "-"/value/"+" control for the day-of-month picker — the one remaining spot still
  * using a plain stepper rather than a wheel, since a 1-31 wheel would be all but unreadable at
  * this width. */
-function Stepper({ value, onDec, onInc, accessibilityLabel }: { value: string; onDec: () => void; onInc: () => void; accessibilityLabel: string }) {
+function Stepper({
+  value,
+  onDec,
+  onInc,
+  accessibilityLabel,
+  isNight,
+}: {
+  value: string;
+  onDec: () => void;
+  onInc: () => void;
+  accessibilityLabel: string;
+  isNight?: boolean;
+}) {
   return (
     <View style={styles.stepper}>
-      <Pressable onPress={onDec} hitSlop={8} style={styles.stepperBtn} accessibilityRole="button" accessibilityLabel={`Decrease ${accessibilityLabel}`}>
-        <Text style={styles.stepperBtnLabel}>−</Text>
+      <Pressable
+        onPress={onDec}
+        hitSlop={8}
+        style={[styles.stepperBtn, isNight && styles.stepperBtnNight]}
+        accessibilityRole="button"
+        accessibilityLabel={`Decrease ${accessibilityLabel}`}
+      >
+        <Text style={[styles.stepperBtnLabel, isNight && styles.stepperBtnLabelNight]}>−</Text>
       </Pressable>
       <Text style={styles.stepperValue} accessibilityLabel={`${accessibilityLabel}: ${value}`}>
         {value}
       </Text>
-      <Pressable onPress={onInc} hitSlop={8} style={styles.stepperBtn} accessibilityRole="button" accessibilityLabel={`Increase ${accessibilityLabel}`}>
-        <Text style={styles.stepperBtnLabel}>+</Text>
+      <Pressable
+        onPress={onInc}
+        hitSlop={8}
+        style={[styles.stepperBtn, isNight && styles.stepperBtnNight]}
+        accessibilityRole="button"
+        accessibilityLabel={`Increase ${accessibilityLabel}`}
+      >
+        <Text style={[styles.stepperBtnLabel, isNight && styles.stepperBtnLabelNight]}>+</Text>
       </Pressable>
     </View>
   );
@@ -51,6 +75,9 @@ function Stepper({ value, onDec, onInc, accessibilityLabel }: { value: string; o
 interface AlertScheduleHeaderProps {
   schedule: AlertSchedule;
   onChange: (schedule: AlertSchedule) => void;
+  /** Swaps the wheel highlight, selected repeat option, and selected weekday chip from Throw's
+   * clay/brown day accent to a black-and-white glow, matching FoldingLetter's own isNight skin. */
+  isNight?: boolean;
 }
 
 /**
@@ -62,7 +89,7 @@ interface AlertScheduleHeaderProps {
  * compose card rather than a full settings screen. Weekly/Monthly reveal their own day picker
  * underneath, same as before.
  */
-export function AlertScheduleHeader({ schedule, onChange }: AlertScheduleHeaderProps) {
+export function AlertScheduleHeader({ schedule, onChange, isNight }: AlertScheduleHeaderProps) {
   const [repeatOpen, setRepeatOpen] = useState(false);
 
   const hour12 = ((schedule.hour + 11) % 12) + 1;
@@ -93,11 +120,11 @@ export function AlertScheduleHeader({ schedule, onChange }: AlertScheduleHeaderP
   return (
     <View style={styles.wrap}>
       <View style={styles.wheelRow}>
-        <View style={styles.highlightBand} pointerEvents="none" />
-        <WheelPicker items={HOUR_LABELS} selectedIndex={hourIndex} onChange={setHourIndex} width={44} accessibilityLabel="Hour" />
-        <Text style={styles.colon}>:</Text>
-        <WheelPicker items={MINUTE_LABELS} selectedIndex={schedule.minute} onChange={setMinuteIndex} width={44} accessibilityLabel="Minute" />
-        <WheelPicker items={PERIOD_LABELS} selectedIndex={periodIndex} onChange={setPeriodIndex} width={50} accessibilityLabel="Period" />
+        <View style={[styles.highlightBand, isNight && styles.highlightBandNight]} pointerEvents="none" />
+        <WheelPicker items={HOUR_LABELS} selectedIndex={hourIndex} onChange={setHourIndex} width={44} accessibilityLabel="Hour" isNight={isNight} />
+        <Text style={[styles.colon, isNight && styles.colonNight]}>:</Text>
+        <WheelPicker items={MINUTE_LABELS} selectedIndex={schedule.minute} onChange={setMinuteIndex} width={44} accessibilityLabel="Minute" isNight={isNight} />
+        <WheelPicker items={PERIOD_LABELS} selectedIndex={periodIndex} onChange={setPeriodIndex} width={50} accessibilityLabel="Period" isNight={isNight} />
       </View>
 
       <Pressable onPress={() => setRepeatOpen((o) => !o)} style={styles.repeatRow} accessibilityRole="button" accessibilityLabel="Repeat">
@@ -120,8 +147,12 @@ export function AlertScheduleHeader({ schedule, onChange }: AlertScheduleHeaderP
                 accessibilityRole="button"
                 accessibilityLabel={opt.label}
               >
-                <Text style={[styles.repeatOptionLabel, selected && styles.repeatOptionLabelSelected]}>{opt.label}</Text>
-                {selected && <Text style={styles.checkmark}>✓</Text>}
+                <Text
+                  style={[styles.repeatOptionLabel, selected && (isNight ? styles.repeatOptionLabelSelectedNight : styles.repeatOptionLabelSelected)]}
+                >
+                  {opt.label}
+                </Text>
+                {selected && <Text style={[styles.checkmark, isNight && styles.checkmarkNight]}>✓</Text>}
               </Pressable>
             );
           })}
@@ -136,7 +167,7 @@ export function AlertScheduleHeader({ schedule, onChange }: AlertScheduleHeaderP
               <Pressable
                 key={label}
                 onPress={() => toggleWeekday(i)}
-                style={[styles.weekdayChip, selected && styles.weekdayChipSelected]}
+                style={[styles.weekdayChip, selected && (isNight ? styles.weekdayChipSelectedNight : styles.weekdayChipSelected)]}
                 accessibilityRole="button"
                 accessibilityLabel={label}
               >
@@ -155,6 +186,7 @@ export function AlertScheduleHeader({ schedule, onChange }: AlertScheduleHeaderP
             onDec={() => setDayOfMonth(schedule.dayOfMonth - 1)}
             onInc={() => setDayOfMonth(schedule.dayOfMonth + 1)}
             accessibilityLabel="day of month"
+            isNight={isNight}
           />
         </View>
       )}
@@ -176,7 +208,18 @@ const styles = StyleSheet.create({
     borderRadius: throwRadius.card,
     backgroundColor: throwColor.claySoft,
   },
+  // Night skin — a black band with a soft white glow instead of the day skin's clay-brown fill;
+  // the wheel digits themselves switch to white too (see WheelPicker's own isNight).
+  highlightBandNight: {
+    backgroundColor: '#000000',
+    shadowColor: '#FFFFFF',
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 6,
+  },
   colon: { fontFamily: throwFont.ui700, fontSize: 20, color: throwColor.ink },
+  colonNight: { color: '#FFFFFF' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   stepperBtn: {
     width: 22,
@@ -186,7 +229,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  stepperBtnNight: { backgroundColor: '#000000' },
   stepperBtnLabel: { fontFamily: throwFont.ui700, fontSize: 15, color: throwColor.clayDeep, lineHeight: 16 },
+  stepperBtnLabelNight: { color: '#FFFFFF' },
   stepperValue: { fontFamily: throwFont.ui700, fontSize: 18, color: throwColor.ink, minWidth: 26, textAlign: 'center' },
   repeatRow: {
     flexDirection: 'row',
@@ -219,7 +264,11 @@ const styles = StyleSheet.create({
   },
   repeatOptionLabel: { fontFamily: throwFont.ui500, fontSize: 13, color: throwColor.inkSoft },
   repeatOptionLabelSelected: { fontFamily: throwFont.ui700, color: throwColor.clayDeep },
+  // Night skin — plain black instead of clay-brown; the dropdown itself stays on its normal
+  // light chrome, so black keeps full contrast without needing a glow.
+  repeatOptionLabelSelectedNight: { fontFamily: throwFont.ui700, color: '#000000' },
   checkmark: { fontFamily: throwFont.ui700, fontSize: 13, color: throwColor.clayDeep },
+  checkmarkNight: { color: '#000000' },
   weekdayRow: { flexDirection: 'row', gap: 5 },
   weekdayChip: {
     width: 24,
@@ -230,6 +279,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(43,35,28,.06)',
   },
   weekdayChipSelected: { backgroundColor: throwColor.clayDeep },
+  // Night skin — a black fill with a soft white glow instead of the day skin's clay-brown fill.
+  weekdayChipSelectedNight: {
+    backgroundColor: '#000000',
+    shadowColor: '#FFFFFF',
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 6,
+  },
   weekdayLabel: { fontFamily: throwFont.ui700, fontSize: 11, color: throwColor.inkSoft },
   weekdayLabelSelected: { color: '#fff' },
   monthlyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

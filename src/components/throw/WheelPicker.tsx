@@ -13,6 +13,10 @@ interface WheelPickerProps {
   onChange: (index: number) => void;
   width?: number;
   accessibilityLabel: string;
+  /** White digits instead of Throw's warm-ink day colour — the highlight band behind them
+   * switches to black at night (see AlertScheduleHeader), which would otherwise leave the ink
+   * text unreadable against it. */
+  isNight?: boolean;
 }
 
 /**
@@ -24,7 +28,7 @@ interface WheelPickerProps {
  * than a native date/time-picker component. A tap on any visible row also jumps straight to it,
  * both as a UX nicety and so this is fully drivable without a real scroll gesture.
  */
-export function WheelPicker({ items, selectedIndex, onChange, width = 56, accessibilityLabel }: WheelPickerProps) {
+export function WheelPicker({ items, selectedIndex, onChange, width = 56, accessibilityLabel, isNight }: WheelPickerProps) {
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(new Animated.Value(selectedIndex * WHEEL_ITEM_HEIGHT)).current;
   // True for the whole span from a drag's first touch to its settle — the effect below that keeps
@@ -97,7 +101,7 @@ export function WheelPicker({ items, selectedIndex, onChange, width = 56, access
               // columns share overlapping values (e.g. both hour and minute have a "09").
               accessibilityLabel={`${accessibilityLabel} ${label}`}
             >
-              <Animated.Text style={[styles.itemLabel, { opacity, transform: [{ scale }] }]}>{label}</Animated.Text>
+              <Animated.Text style={[styles.itemLabel, isNight && styles.itemLabelNight, { opacity, transform: [{ scale }] }]}>{label}</Animated.Text>
             </Pressable>
           );
         })}
@@ -113,4 +117,5 @@ const styles = StyleSheet.create({
   wrap: { height: WHEEL_HEIGHT },
   item: { height: WHEEL_ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' },
   itemLabel: { fontFamily: throwFont.ui700, fontSize: 20, color: throwColor.ink },
+  itemLabelNight: { color: '#FFFFFF' },
 });
