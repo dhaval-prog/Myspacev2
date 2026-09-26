@@ -1,29 +1,46 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Icon } from '../Icon';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 import { WEEKDAY_LABELS } from '../../utils/throwAlerts';
+import { WheelPicker, WHEEL_HEIGHT, WHEEL_ITEM_HEIGHT } from './WheelPicker';
 import type { AlertRecurrence, AlertSchedule } from '../../types/throw';
 
+const CHEVRON_ICON = 'M9 6l6 6-6 6';
+
 const RECURRENCE_OPTIONS: { id: AlertRecurrence; label: string }[] = [
-  { id: 'once', label: 'Once' },
-  { id: 'everyday', label: 'Everyday' },
+  { id: 'once', label: 'Never' },
+  { id: 'everyday', label: 'Every Day' },
   { id: 'weekly', label: 'Weekly' },
   { id: 'monthly', label: 'Monthly' },
 ];
+const RECURRENCE_LABEL: Record<AlertRecurrence, string> = {
+  once: 'Never',
+  everyday: 'Every Day',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+};
+
+const HOUR_LABELS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+const MINUTE_LABELS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+const PERIOD_LABELS = ['AM', 'PM'];
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
-/** A small "-"/value/"+" control, dependency-free like the rest of Throw's custom-styled pickers
- * (no native date/time-picker chrome anywhere in this app). */
+/** A small "-"/value/"+" control for the day-of-month picker — the one remaining spot still
+ * using a plain stepper rather than a wheel, since a 1-31 wheel would be all but unreadable at
+ * this width. */
 function Stepper({ value, onDec, onInc, accessibilityLabel }: { value: string; onDec: () => void; onInc: () => void; accessibilityLabel: string }) {
   return (
     <View style={styles.stepper}>
       <Pressable onPress={onDec} hitSlop={8} style={styles.stepperBtn} accessibilityRole="button" accessibilityLabel={`Decrease ${accessibilityLabel}`}>
         <Text style={styles.stepperBtnLabel}>−</Text>
       </Pressable>
-      <Text style={styles.stepperValue}>{value}</Text>
+      <Text style={styles.stepperValue} accessibilityLabel={`${accessibilityLabel}: ${value}`}>
+        {value}
+      </Text>
       <Pressable onPress={onInc} hitSlop={8} style={styles.stepperBtn} accessibilityRole="button" accessibilityLabel={`Increase ${accessibilityLabel}`}>
         <Text style={styles.stepperBtnLabel}>+</Text>
       </Pressable>
@@ -38,22 +55,34 @@ interface AlertScheduleHeaderProps {
 
 /**
  * The paper's own time/day picker — rendered on the letter itself (see FoldingLetter's
- * scheduleHeader prop) only while writing a reminder to yourself. A time stepper (12-hour, 5-min
- * steps), a recurrence chip row (Once/Everyday/Weekly/Monthly), and a conditional weekday or
- * day-of-month picker underneath depending on which recurrence is picked.
+ * scheduleHeader prop) only while writing a reminder to yourself. A three-column spinning wheel
+ * (hour/minute/AM-PM, matching the reference screenshot's native-style time picker) sits above a
+ * "Repeat" row that expands into an inline Never/Every Day/Weekly/Monthly list — a compact stand-in
+ * for the reference's own push-to-a-new-screen Repeat picker, since this is embedded in the
+ * compose card rather than a full settings screen. Weekly/Monthly reveal their own day picker
+ * underneath, same as before.
  */
 export function AlertScheduleHeader({ schedule, onChange }: AlertScheduleHeaderProps) {
-  const hour12 = ((schedule.hour + 11) % 12) + 1;
-  const period = schedule.hour >= 12 ? 'PM' : 'AM';
+  const [repeatOpen, setRepeatOpen] = useState(false);
 
-  // Stepping stays entirely in 24-hour space — converting a stepped 12-hour value back to 24
-  // hours while trying to preserve "the same period" is exactly what gets an 11am -> 12pm
-  // rollover wrong (12 is where AM/PM actually flips). Incrementing the 24-hour value directly
-  // rolls through AM/PM naturally, same as any real clock.
-  const stepHour = (delta: number) => onChange({ ...schedule, hour: (schedule.hour + delta + 24) % 24 });
-  const stepMinute = (delta: number) => onChange({ ...schedule, minute: (schedule.minute + delta + 60) % 60 });
-  const togglePeriod = () => onChange({ ...schedule, hour: (schedule.hour + 12) % 24 });
-  const setRecurrence = (recurrence: AlertRecurrence) => onChange({ ...schedule, recurrence });
+  const hour12 = ((schedule.hour + 11) % 12) + 1;
+  const hourIndex = hour12 - 1;
+  const periodIndex = schedule.hour >= 12 ? 1 : 0;
+
+  const setHourIndex = (index: number) => {
+    const h12 = index + 1;
+    const isPM = schedule.hour >= 12;
+    onChange({ ...schedule, hour: (h12 % 12) + (isPM ? 12 : 0) });
+  };
+  const setMinuteIndex = (index: number) => onChange({ ...schedule, minute: index });
+  const setPeriodIndex = (index: number) => {
+    const isPM = index === 1;
+    onChange({ ...schedule, hour: (hour12 % 12) + (isPM ? 12 : 0) });
+  };
+  const setRecurrence = (recurrence: AlertRecurrence) => {
+    onChange({ ...schedule, recurrence });
+    setRepeatOpen(false);
+  };
   const toggleWeekday = (day: number) => {
     const has = schedule.daysOfWeek.includes(day);
     const next = has ? schedule.daysOfWeek.filter((d) => d !== day) : [...schedule.daysOfWeek, day];
@@ -63,31 +92,41 @@ export function AlertScheduleHeader({ schedule, onChange }: AlertScheduleHeaderP
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.timeRow}>
-        <Stepper value={String(hour12).padStart(2, '0')} onDec={() => stepHour(-1)} onInc={() => stepHour(1)} accessibilityLabel="hour" />
+      <View style={styles.wheelRow}>
+        <View style={styles.highlightBand} pointerEvents="none" />
+        <WheelPicker items={HOUR_LABELS} selectedIndex={hourIndex} onChange={setHourIndex} width={44} accessibilityLabel="Hour" />
         <Text style={styles.colon}>:</Text>
-        <Stepper value={String(schedule.minute).padStart(2, '0')} onDec={() => stepMinute(-5)} onInc={() => stepMinute(5)} accessibilityLabel="minute" />
-        <Pressable onPress={togglePeriod} style={styles.periodBtn} accessibilityRole="button" accessibilityLabel="Toggle AM/PM">
-          <Text style={styles.periodLabel}>{period}</Text>
-        </Pressable>
+        <WheelPicker items={MINUTE_LABELS} selectedIndex={schedule.minute} onChange={setMinuteIndex} width={44} accessibilityLabel="Minute" />
+        <WheelPicker items={PERIOD_LABELS} selectedIndex={periodIndex} onChange={setPeriodIndex} width={50} accessibilityLabel="Period" />
       </View>
 
-      <View style={styles.recurrenceRow}>
-        {RECURRENCE_OPTIONS.map((opt) => {
-          const selected = schedule.recurrence === opt.id;
-          return (
-            <Pressable
-              key={opt.id}
-              onPress={() => setRecurrence(opt.id)}
-              style={[styles.recurrenceChip, selected && styles.recurrenceChipSelected]}
-              accessibilityRole="button"
-              accessibilityLabel={opt.label}
-            >
-              <Text style={[styles.recurrenceLabel, selected && styles.recurrenceLabelSelected]}>{opt.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <Pressable onPress={() => setRepeatOpen((o) => !o)} style={styles.repeatRow} accessibilityRole="button" accessibilityLabel="Repeat">
+        <Text style={styles.repeatLabel}>Repeat</Text>
+        <View style={styles.repeatRight}>
+          <Text style={styles.repeatValue}>{RECURRENCE_LABEL[schedule.recurrence]}</Text>
+          <Icon path={CHEVRON_ICON} size={13} color={throwColor.inkMute} strokeWidth={2} style={repeatOpen ? styles.chevronOpen : undefined} />
+        </View>
+      </Pressable>
+
+      {repeatOpen && (
+        <View style={styles.repeatOptions}>
+          {RECURRENCE_OPTIONS.map((opt) => {
+            const selected = schedule.recurrence === opt.id;
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => setRecurrence(opt.id)}
+                style={styles.repeatOptionRow}
+                accessibilityRole="button"
+                accessibilityLabel={opt.label}
+              >
+                <Text style={[styles.repeatOptionLabel, selected && styles.repeatOptionLabelSelected]}>{opt.label}</Text>
+                {selected && <Text style={styles.checkmark}>✓</Text>}
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       {schedule.recurrence === 'weekly' && (
         <View style={styles.weekdayRow}>
@@ -124,8 +163,19 @@ export function AlertScheduleHeader({ schedule, onChange }: AlertScheduleHeaderP
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center', gap: 10 },
-  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  wrap: { alignItems: 'center', gap: 8 },
+  wheelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: WHEEL_HEIGHT },
+  // One continuous band behind all three wheels, matching the reference screenshot's single
+  // selection pill spanning hour/minute/period rather than three separate ones per column.
+  highlightBand: {
+    position: 'absolute',
+    top: (WHEEL_HEIGHT - WHEEL_ITEM_HEIGHT) / 2,
+    left: 4,
+    right: 4,
+    height: WHEEL_ITEM_HEIGHT,
+    borderRadius: throwRadius.card,
+    backgroundColor: throwColor.claySoft,
+  },
   colon: { fontFamily: throwFont.ui700, fontSize: 20, color: throwColor.ink },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   stepperBtn: {
@@ -138,13 +188,38 @@ const styles = StyleSheet.create({
   },
   stepperBtnLabel: { fontFamily: throwFont.ui700, fontSize: 15, color: throwColor.clayDeep, lineHeight: 16 },
   stepperValue: { fontFamily: throwFont.ui700, fontSize: 18, color: throwColor.ink, minWidth: 26, textAlign: 'center' },
-  periodBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: throwRadius.pill, backgroundColor: throwColor.claySoft, marginLeft: 4 },
-  periodLabel: { fontFamily: throwFont.ui700, fontSize: 12, color: throwColor.clayDeep },
-  recurrenceRow: { flexDirection: 'row', gap: 6 },
-  recurrenceChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: throwRadius.pill, backgroundColor: 'rgba(43,35,28,.06)' },
-  recurrenceChipSelected: { backgroundColor: throwColor.clayDeep },
-  recurrenceLabel: { fontFamily: throwFont.ui600, fontSize: 11.5, color: throwColor.inkSoft },
-  recurrenceLabelSelected: { color: '#fff' },
+  repeatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: throwRadius.card,
+    backgroundColor: 'rgba(43,35,28,.05)',
+  },
+  repeatLabel: { fontFamily: throwFont.ui600, fontSize: 13, color: throwColor.ink },
+  repeatRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  repeatValue: { fontFamily: throwFont.ui500, fontSize: 12.5, color: throwColor.inkSoft },
+  chevronOpen: { transform: [{ rotate: '90deg' }] },
+  repeatOptions: {
+    width: '100%',
+    borderRadius: throwRadius.card,
+    backgroundColor: throwColor.paper,
+    borderWidth: 1,
+    borderColor: throwColor.cardBorder,
+    overflow: 'hidden',
+  },
+  repeatOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  repeatOptionLabel: { fontFamily: throwFont.ui500, fontSize: 13, color: throwColor.inkSoft },
+  repeatOptionLabelSelected: { fontFamily: throwFont.ui700, color: throwColor.clayDeep },
+  checkmark: { fontFamily: throwFont.ui700, fontSize: 13, color: throwColor.clayDeep },
   weekdayRow: { flexDirection: 'row', gap: 5 },
   weekdayChip: {
     width: 24,

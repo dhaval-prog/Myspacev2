@@ -72,6 +72,17 @@ const WHEEL_FOLD_DISTANCE = 500;
 // cross-browser "scroll ended" event to key off instead, so this is a debounce.
 const WHEEL_SETTLE_DEBOUNCE_MS = 180;
 
+// Design-size dimensions of the bottom-controls row (see bottomRowScale) — four round icon
+// buttons plus the wider mic button, at their full (unscaled) sizes and gap.
+const BOTTOM_ROW_ICON = 60;
+const BOTTOM_ROW_MIC = 76;
+const BOTTOM_ROW_GAP = 14;
+const BOTTOM_ROW_HPAD = 12;
+// A little extra clearance beyond the strict fit, so the outer icons never sit flush against the
+// paper's own rounded edge even at the smallest scale.
+const BOTTOM_ROW_SAFETY = 8;
+const BOTTOM_ROW_CONTENT_WIDTH = BOTTOM_ROW_ICON * 4 + BOTTOM_ROW_MIC + BOTTOM_ROW_GAP * 4;
+
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
 interface FoldingLetterContent {
@@ -631,6 +642,37 @@ export function FoldingLetter({
     setPaperSize({ width, height });
   };
 
+  // The bottom-controls row's icons are sized for a full-width phone paper — on a narrower one
+  // (or once the row's own horizontal padding is subtracted) their combined width can exceed the
+  // paper's, spilling the outer icons past its rounded edge. Rather than a fixed size that only
+  // happens to fit some devices, this scales every icon (and the gaps between them) down together
+  // by whatever factor keeps the row's total width within the paper — 1 (full design size) once
+  // the paper is wide enough for that to already fit, never below 0.6 (a plain scale factor, not a
+  // hard pixel floor, so the five icons always keep the same size relative to each other).
+  const bottomRowScale = useMemo(() => {
+    if (paperSize.width <= 0) return 1;
+    const available = paperSize.width - BOTTOM_ROW_HPAD * 2 - BOTTOM_ROW_SAFETY;
+    const s = available / BOTTOM_ROW_CONTENT_WIDTH;
+    return Math.max(0.6, Math.min(1, s));
+  }, [paperSize.width]);
+  const roundBtnSize = BOTTOM_ROW_ICON * bottomRowScale;
+  const micBtnSize = BOTTOM_ROW_MIC * bottomRowScale;
+  const roundBtnDynamicStyle = useMemo(
+    () => ({ width: roundBtnSize, height: roundBtnSize, borderRadius: roundBtnSize / 2 }),
+    [roundBtnSize],
+  );
+  const micBtnDynamicStyle = useMemo(() => ({ width: micBtnSize, height: micBtnSize, borderRadius: micBtnSize / 2 }), [micBtnSize]);
+  const badgeDynamicStyle = useMemo(
+    () => ({
+      minWidth: 18 * bottomRowScale,
+      height: 18 * bottomRowScale,
+      borderRadius: 9 * bottomRowScale,
+      top: -2 * bottomRowScale,
+      right: -2 * bottomRowScale,
+    }),
+    [bottomRowScale],
+  );
+
   const canvasOpacity = progress.interpolate({ inputRange: [0, 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
   const stageOpacity = progress.interpolate({ inputRange: [0, 0.2], outputRange: [0, 1], extrapolate: 'clamp' });
 
@@ -741,6 +783,7 @@ export function FoldingLetter({
           onLayout={(e) => setBottomRowHeight(e.nativeEvent.layout.height)}
           style={[
             styles.bottomRow,
+            { paddingHorizontal: BOTTOM_ROW_HPAD, gap: BOTTOM_ROW_GAP * bottomRowScale },
             paperSize.height > 0 && bottomRowHeight > 0 ? { top: paperSize.height - bottomRowHeight } : { bottom: 0 },
             { opacity: canvasOpacity, transform: [{ translateY: canvasOpacity.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] },
           ]}
@@ -753,9 +796,9 @@ export function FoldingLetter({
           accessibilityLabel="Add a photo"
         >
           {({ pressed }) => (
-            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                <Icon path={PHOTO_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
+            <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+                <Icon path={PHOTO_ICON} size={25 * bottomRowScale} color={throwColor.ink} strokeWidth={1.8} />
               </GlassSurface>
             </View>
           )}
@@ -763,9 +806,9 @@ export function FoldingLetter({
 
         <Pressable onPress={onOpenChats} accessibilityRole="button" accessibilityLabel="Chats">
           {({ pressed }) => (
-            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                <Icon path={CHAT_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
+            <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+                <Icon path={CHAT_ICON} size={25 * bottomRowScale} color={throwColor.ink} strokeWidth={1.8} />
               </GlassSurface>
             </View>
           )}
@@ -779,15 +822,15 @@ export function FoldingLetter({
         >
           {({ pressed }) =>
             voice.recording ? (
-              <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
-                <View style={[styles.micBtn, styles.micBtnActive]}>
-                  <Icon path={STOP_ICON} size={22} color={throwColor.paper} strokeWidth={1.8} />
+              <View style={[styles.micBtnShadow, micBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+                <View style={[styles.micBtn, micBtnDynamicStyle, styles.micBtnActive]}>
+                  <Icon path={STOP_ICON} size={22 * bottomRowScale} color={throwColor.paper} strokeWidth={1.8} />
                 </View>
               </View>
             ) : (
-              <View style={[styles.micBtnShadow, pressed && styles.roundBtnPressed]}>
-                <GlassSurface tint="light" tintColor={throwGlass.tintStrong} style={styles.micBtn}>
-                  <Icon path={MIC_ICON} size={27} color={throwColor.ink} strokeWidth={1.8} />
+              <View style={[styles.micBtnShadow, micBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+                <GlassSurface tint="light" tintColor={throwGlass.tintStrong} style={[styles.micBtn, micBtnDynamicStyle]}>
+                  <Icon path={MIC_ICON} size={27 * bottomRowScale} color={throwColor.ink} strokeWidth={1.8} />
                 </GlassSurface>
               </View>
             )
@@ -796,9 +839,9 @@ export function FoldingLetter({
 
         <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
           {({ pressed }) => (
-            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                <Icon path={QR_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
+            <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+                <Icon path={QR_ICON} size={25 * bottomRowScale} color={throwColor.ink} strokeWidth={1.8} />
               </GlassSurface>
             </View>
           )}
@@ -806,13 +849,13 @@ export function FoldingLetter({
 
         <Pressable onPress={onOpenInbox} accessibilityRole="button" accessibilityLabel="Inbox">
           {({ pressed }) => (
-            <View style={[styles.roundBtnShadow, pressed && styles.roundBtnPressed]}>
-              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.roundBtn}>
-                <Icon path={INBOX_ICON} size={25} color={throwColor.ink} strokeWidth={1.8} />
+            <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+                <Icon path={INBOX_ICON} size={25 * bottomRowScale} color={throwColor.ink} strokeWidth={1.8} />
               </GlassSurface>
               {unreadCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeLabel}>{unreadCount}</Text>
+                <View style={[styles.badge, badgeDynamicStyle]}>
+                  <Text style={[styles.badgeLabel, { fontSize: 10.5 * bottomRowScale }]}>{unreadCount}</Text>
                 </View>
               )}
             </View>
@@ -901,16 +944,18 @@ const styles = StyleSheet.create({
     // Centered as one compact cluster with even gaps, not stretched edge-to-edge via
     // `space-between` — on a real device (confirmed on iPhone 13) that stretch put the outer
     // icons flush against the paper's own rounded edge instead of reading as a centered row.
+    // `gap`/`paddingHorizontal` are applied inline (see the render) since both scale down
+    // together with the icons themselves on a narrower paper — see bottomRowScale.
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 24,
     paddingTop: 14,
     paddingBottom: 18,
   },
   // Split in two: the outer *Shadow view carries the drop shadow (which needs `overflow: visible`
   // to render), while the inner GlassSurface/View needs `overflow: hidden` so its blur/tint
-  // layers respect the rounded corners — the two requirements can't share one style.
+  // layers respect the rounded corners — the two requirements can't share one style. Base
+  // (unscaled) size — bottomRowScale's roundBtnDynamicStyle/micBtnDynamicStyle override
+  // width/height/borderRadius inline once the paper's own width is measured.
   roundBtnShadow: { width: 60, height: 60, borderRadius: 30, ...throwColor.shadowSoft },
   roundBtn: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   roundBtnPressed: { opacity: 0.7 },
