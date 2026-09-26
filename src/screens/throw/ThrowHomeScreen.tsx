@@ -23,8 +23,6 @@ import type { LatLng } from '../../utils/geo';
 const GEAR_ICON =
   'M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z';
 const BACK_ICON = 'M15 18l-6-6 6-6';
-// Feather Icons' "award" glyph (24x24 viewBox) — used for the leaderboard-points chip.
-const POINTS_ICON = 'M12 15a7 7 0 100-14 7 7 0 000 14z M8.21 13.89L7 23l5-3 5 3-1.21-9.12';
 
 // How long the arrival card stays up before the map returns to normal compose mode.
 const DELIVERED_HOLD_MS = 1800;
@@ -291,6 +289,8 @@ export function ThrowHomeScreen({
             <FoldingLetter
               recipientName={selectedFriend.name}
               recipientCity={selectedFriend.location!.city}
+              streak={selectedStreak}
+              points={selectedPoints}
               onThrow={handleThrow}
               onLaunched={handleLaunched}
               throwLabel={lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
@@ -339,24 +339,10 @@ export function ThrowHomeScreen({
             <Icon path={BACK_ICON} size={20} color={throwColor.inkSoft} strokeWidth={2} />
           </Pressable>
           <Text style={styles.headerTitle}>Throw</Text>
-          <View style={styles.headerRight}>
-            {selectedFriend && (
-              <>
-                {selectedStreak > 0 && (
-                  <View style={styles.streakChip} accessibilityLabel={`${selectedStreak} day throw streak with ${selectedFriend.name}`}>
-                    <Text style={styles.streakText}>🔥{selectedStreak}</Text>
-                  </View>
-                )}
-                <View style={styles.pointsChip} accessibilityLabel={`${selectedPoints} leaderboard points for ${selectedFriend.name}`}>
-                  <Icon path={POINTS_ICON} size={11} color={throwColor.clayDeep} strokeWidth={2} />
-                  <Text style={styles.streakText}>{selectedPoints}</Text>
-                </View>
-              </>
-            )}
-            <Pressable onPress={onOpenSettings} hitSlop={10} accessibilityRole="button" accessibilityLabel="Throw settings">
-              <Icon path={GEAR_ICON} size={19} color={throwColor.inkSoft} strokeWidth={1.8} />
-            </Pressable>
-          </View>
+          {/* Empty on purpose — streak/points moved into the paper's own top-right corner, and
+              settings moved onto BottomNav's FAB below (see its fabIconPath). Kept as a plain
+              placeholder matching headerBackBtn's width so the title above still sits centered. */}
+          <View style={styles.headerRight} />
         </GlassSurface>
       </Animated.View>
 
@@ -374,6 +360,9 @@ export function ThrowHomeScreen({
             if (id === 'expenses') onOpenExpenses();
             if (id === 'split') onOpenSplit();
           }}
+          onAdd={onOpenSettings}
+          fabIconPath={GEAR_ICON}
+          fabAccessibilityLabel="Throw settings"
           bottomInset={insets.bottom}
           reduceMotion={reduceMotion}
         />
@@ -402,10 +391,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontFamily: throwFont.hand700, fontSize: 26, color: throwColor.ink },
   headerBackBtn: { width: 48, alignItems: 'flex-start' },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 48, justifyContent: 'flex-end' },
-  streakChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  pointsChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  streakText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.clayDeep },
+  headerRight: { minWidth: 48 },
   // Fills the whole screen edge-to-edge on all four sides — the header pill and BottomNav dock
   // both float on top of it (see their own comments) rather than the map making room for either.
   mapArea: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
