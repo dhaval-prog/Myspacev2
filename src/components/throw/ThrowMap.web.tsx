@@ -32,6 +32,14 @@ const WORLD_ZOOM = 2;
 // already 85 (unlike MapLibre's 60), so no extra construction option is needed to allow it.
 const FOCUS_ZOOM = 17;
 const FOCUS_PITCH = 70;
+// Pixels of *bottom* padding applied to the focus camera — see `applyTarget`'s comment. With no
+// padding, `center` always renders at the exact vertical middle of the viewport (confirmed
+// directly via `map.project(map.getCenter())`, not assumed). Top padding would push it down (the
+// wrong direction for "a little above middle") — bottom padding pushes it up instead, and unlike
+// a negative top value (which mapbox-gl's own PaddingOptions validation rejects outright, an
+// actual thrown error caught live during testing here), this stays a valid non-negative number.
+// 100 lands it around 44% down a typical viewport.
+const FOCUS_PADDING_BOTTOM = 100;
 
 const ROUTE_SOURCE_ID = 'throw-route';
 const ROUTE_LAYER_ID = 'throw-route-line';
@@ -63,7 +71,18 @@ function applyTarget(map: mapboxgl.Map, target: Target) {
       { padding: 60, duration: 0 },
     );
   } else {
-    map.jumpTo({ center: [target.point.longitude, target.point.latitude], zoom: FOCUS_ZOOM, pitch: FOCUS_PITCH });
+    // `padding` shifts where `center` actually ends up on screen (it renders at the middle of
+    // whatever area padding *doesn't* reserve) rather than the raw viewport center — with none
+    // set, the focused contact's pin rendered at dead-center, right where the ready-pose plane's
+    // own peak sits (see paperPlaneEngine's READY_FRAME_LIFT), overlapping it. Reserving space
+    // along the bottom pushes the pin up above that instead, per user request for "a little above
+    // true center".
+    map.jumpTo({
+      center: [target.point.longitude, target.point.latitude],
+      zoom: FOCUS_ZOOM,
+      pitch: FOCUS_PITCH,
+      padding: { top: 0, bottom: FOCUS_PADDING_BOTTOM, left: 0, right: 0 },
+    });
   }
 }
 
