@@ -24,7 +24,7 @@ import type { PickedMedia } from './PhotoAttachSheet';
 import { AlertScheduleHeader } from './AlertScheduleHeader';
 import { GlassSurface } from '../friends/GlassSurface';
 import { Icon } from '../Icon';
-import { throwColor, throwFont, throwGlass, throwNightColor } from '../../theme/throwTokens';
+import { throwColor, throwFont, throwGlass, throwNightColor, throwRadius } from '../../theme/throwTokens';
 import { useVoiceToText } from '../../hooks/useVoiceToText';
 import type { LetterCanvasHandle } from './LetterCanvas';
 import type { PaperPlaneStageHandle } from './paperPlaneTypes';
@@ -789,6 +789,14 @@ export function FoldingLetter({
   return (
     <View ref={wrapRef} style={styles.wrap}>
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
+        {/* Clips everything below to the paper's own rounded rect — a defensive boundary, not
+            just tidy: on load, the bottom-controls row (and friends) briefly render at a
+            not-yet-correct position while paperSize/bottomRowHeight are still being measured
+            (see those states' own comments), and without this they could visibly poke out past
+            the paper's rounded edge for a frame or two before settling. The plane-stage block
+            below is deliberately OUTSIDE this clip — its liftoff animation needs to fly up past
+            the paper's own bounds, not be cut off at them. */}
+        <View style={styles.paperClip}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
           <LetterCanvas
             ref={letterCanvasRef}
@@ -825,27 +833,6 @@ export function FoldingLetter({
               <Icon path={POINTS_ICON} size={11} color={isNight ? throwNightColor.ink : throwColor.clayDeep} strokeWidth={2} />
               <Text style={[styles.streakText, isNight && styles.streakTextNight]}>{points}</Text>
             </View>
-          </Animated.View>
-        )}
-
-        {paperSize.width > 0 && (
-          // Split into two nested Animated.Views on purpose — see the useNativeDriver comment on
-          // launch() above for why liftY/liftOpacity (native-driven) can't share a node with
-          // stageOpacity (JS-driven, the fold-in fade). Position only ever moves vertically
-          // (liftY, throw-prep and the launch liftoff) — horizontal drag banks the plane in place
-          // via the 3D engine's own setReadyBank instead of translating this view, and the
-          // engine's own 'ready'-phase pose now handles the straight-ahead, nose-down resting tilt
-          // (see paperPlaneEngine.ts), so no CSS transform trickery is needed here any more.
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: stageOpacity }]} pointerEvents="none">
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: liftOpacity, transform: [{ translateY: liftY }] }]}>
-              {stageFailed ? (
-                <View style={styles.fallbackPlaneWrap}>
-                  <PaperPlane size={64} color={throwColor.clayDeep} />
-                </View>
-              ) : (
-                <PaperPlaneStage ref={stageRef} onPhase={handleStagePhase} onError={handleStageError} />
-              )}
-            </Animated.View>
           </Animated.View>
         )}
 
@@ -974,6 +961,30 @@ export function FoldingLetter({
           )}
         </Pressable>
         </Animated.View>
+        </View>
+
+        {paperSize.width > 0 && (
+          // Split into two nested Animated.Views on purpose — see the useNativeDriver comment on
+          // launch() above for why liftY/liftOpacity (native-driven) can't share a node with
+          // stageOpacity (JS-driven, the fold-in fade). Position only ever moves vertically
+          // (liftY, throw-prep and the launch liftoff) — horizontal drag banks the plane in place
+          // via the 3D engine's own setReadyBank instead of translating this view, and the
+          // engine's own 'ready'-phase pose now handles the straight-ahead, nose-down resting tilt
+          // (see paperPlaneEngine.ts), so no CSS transform trickery is needed here any more.
+          // Deliberately outside paperClip (see its own comment) — the liftoff needs to fly up
+          // past the paper's own rounded bounds, not be cut off at them.
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: stageOpacity }]} pointerEvents="none">
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: liftOpacity, transform: [{ translateY: liftY }] }]}>
+              {stageFailed ? (
+                <View style={styles.fallbackPlaneWrap}>
+                  <PaperPlane size={64} color={throwColor.clayDeep} />
+                </View>
+              ) : (
+                <PaperPlaneStage ref={stageRef} onPhase={handleStagePhase} onError={handleStageError} />
+              )}
+            </Animated.View>
+          </Animated.View>
+        )}
       </View>
 
       {phase === 'ready' && <Text style={styles.readyHint}>{hasContent ? throwLabel : 'Write something first'}</Text>}
@@ -991,6 +1002,11 @@ const styles = StyleSheet.create({
   // height, and this being `flex: 1` rather than a hardcoded height means it shrinks to make
   // room for that row automatically, no matter what height the parent hands `wrap`.
   paperArea: { flex: 1, minHeight: 150 },
+  // Clips the paper's own content (writing surface, badges, photo strip, bottom-controls row) to
+  // its rounded rect — see the render's own comment on why (a defensive boundary against a
+  // load-time layout-measurement race, not just tidy). Absolutely filled rather than flex-sized
+  // so it exactly matches paperArea's box regardless of any flex quirks.
+  paperClip: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: throwRadius.paper, overflow: 'hidden' },
   fallbackPlaneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // The streak/leaderboard badges' new home, in the paper's own top-right corner instead of a
   // separate header chip.
