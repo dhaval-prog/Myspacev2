@@ -149,11 +149,11 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [, forceRender] = useState(0);
 
-  // The viewer's own device clock governs the day/night palette — not any contact's destination,
-  // so every map and every contact reads the same day or night at once, per explicit request. This
-  // stays on the viewer's actual clock unconditionally (autoIsDay) — the paper/plane color the
-  // user can pin in Settings (see ThrowColorModeContext) only ever affects the letter itself.
-  const { autoIsDay: isDay } = useThrowColorMode();
+  // The map's own day/night/auto preference (see ThrowColorModeContext) — independent of the
+  // letter's own paper/plane color preference, and (per explicit request) user-controllable in
+  // Settings the same way. 'auto' falls back to the viewer's own device clock, not any contact's
+  // destination, so every map and every contact reads the same day or night at once.
+  const { mapIsDay: isDay } = useThrowColorMode();
   const isDayRef = useRef(isDay);
   isDayRef.current = isDay;
 

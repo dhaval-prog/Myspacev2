@@ -69,7 +69,7 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
   });
   mockUseThrowAlerts.mockReturnValue({ createAlert });
   mockUseGameStats.mockReturnValue({ statsFor: () => ({ totalPoints: 0 }) });
-  mockUseThrowColorMode.mockReturnValue({ mode: 'auto', isDay: true, setMode: jest.fn() });
+  mockUseThrowColorMode.mockReturnValue({ mode: 'auto', isDay: true, autoIsDay: true, setMode: jest.fn(), mapMode: 'auto', mapIsDay: true, setMapMode: jest.fn() });
   return createAlert;
 }
 

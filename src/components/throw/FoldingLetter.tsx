@@ -387,6 +387,19 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     });
   };
 
+  // A slower, smoother unfold than settleFold(0)'s own spring — that spring is tuned for
+  // settling the last bit of an in-progress drag (a small remaining distance), so snapping the
+  // *entire* fold open from a fully-folded plane with it reads as an abrupt jump. Used only by
+  // clearReminderDraft below (the "X" button), which unfolds the full distance in one go rather
+  // than finishing a drag the user already started most of themselves.
+  const unfoldSmoothly = () => {
+    Animated.timing(progress, { toValue: 0, duration: 650, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => {
+      setPhase('writing');
+      bakedRef.current = false;
+      dragAnchorRef.current = null;
+    });
+  };
+
   const springLiftBack = () => {
     stageRef.current?.setReadyBank(0);
     Animated.parallel([
@@ -571,7 +584,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         reminderShownRef.current = false;
         setReminderConfirmed(false);
         setReminderState('closed');
-        settleFold(0);
+        unfoldSmoothly();
       },
     }),
     [],

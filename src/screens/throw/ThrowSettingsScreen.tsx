@@ -36,11 +36,13 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
   const insets = useSafeAreaInsets();
   const { myLocation } = useThrow();
   const { friends, receivedRequests, sentRequests, acceptRequest, declineRequest, cancelRequest, removeFriend, blockFriend } = useFriends();
-  const { mode: colorMode, setMode: setColorMode } = useThrowColorMode();
+  const { mode: colorMode, setMode: setColorMode, mapMode, setMapMode } = useThrowColorMode();
   const [pane, setPane] = useState<Pane>('settings');
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
   const [colorModeSheetOpen, setColorModeSheetOpen] = useState(false);
+  const [mapModeSheetOpen, setMapModeSheetOpen] = useState(false);
   const colorModeLabel = COLOR_MODES.find((m) => m.key === colorMode)?.label ?? 'Auto';
+  const mapModeLabel = COLOR_MODES.find((m) => m.key === mapMode)?.label ?? 'Auto';
 
   if (pane === 'editLocation') {
     return <ThrowLocationSetupScreen mode="edit" onDone={() => setPane('settings')} onBack={() => setPane('settings')} />;
@@ -83,6 +85,15 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
               <Text style={styles.rowMeta}>For the letter's paper and plane only — everywhere else in Throw keeps following the time as usual</Text>
             </View>
             <Text style={styles.editLabel}>{colorModeLabel}</Text>
+          </GlassSurface>
+        </Pressable>
+        <Pressable onPress={() => setMapModeSheetOpen(true)}>
+          <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowName}>Map color</Text>
+              <Text style={styles.rowMeta}>For the map's basemap and recipient carousel only — the letter's own paper/plane color is separate</Text>
+            </View>
+            <Text style={styles.editLabel}>{mapModeLabel}</Text>
           </GlassSurface>
         </Pressable>
 
@@ -169,6 +180,31 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
               }}
               accessibilityRole="button"
               accessibilityLabel={`Paper & plane color — ${opt.label}`}
+              style={[styles.sheetOption, i !== COLOR_MODES.length - 1 && styles.sheetOptionDivider]}
+            >
+              <View style={styles.rowText}>
+                <Text style={styles.rowName}>{opt.label}</Text>
+                <Text style={styles.rowMeta}>{opt.description}</Text>
+              </View>
+              {active && <Icon path={CHECK_ICON} size={20} color={throwColor.clayDeep} strokeWidth={2.2} />}
+            </Pressable>
+          );
+        })}
+      </BottomSheet>
+
+      <BottomSheet visible={mapModeSheetOpen} onClose={() => setMapModeSheetOpen(false)}>
+        <Text style={styles.sheetTitle}>Map color</Text>
+        {COLOR_MODES.map((opt, i) => {
+          const active = mapMode === opt.key;
+          return (
+            <Pressable
+              key={opt.key}
+              onPress={() => {
+                setMapMode(opt.key);
+                setMapModeSheetOpen(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Map color — ${opt.label}`}
               style={[styles.sheetOption, i !== COLOR_MODES.length - 1 && styles.sheetOptionDivider]}
             >
               <View style={styles.rowText}>

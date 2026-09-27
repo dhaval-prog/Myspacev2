@@ -13,32 +13,39 @@ interface ThrowColorModeContextValue {
   mode: ThrowColorMode;
   /** The paper & plane color this setting resolves to — 'auto' follows the viewer's own device
    * clock (see isDaytimeNow), 'day'/'night' pin it regardless of the time. Only FoldingLetter's
-   * own paper/plane read this; everything else in Throw (the map, the recipient carousel) keeps
-   * following the viewer's actual clock unconditionally — see autoIsDay. */
+   * own paper/plane read this. */
   isDay: boolean;
-  /** The viewer's own device clock, unaffected by `mode` — what every Throw map and the recipient
-   * carousel render with, regardless of the paper/plane color the user has picked. */
+  /** The viewer's own device clock, unaffected by either `mode` below — the one shared "what time
+   * is it really" signal both `isDay` and `mapIsDay` fall back to for their own 'auto' case. */
   autoIsDay: boolean;
   setMode: (mode: ThrowColorMode) => void;
+  /** The map's own separate day/night/auto preference (`user_settings.throw_map_color_mode`) —
+   * independent of `mode` above, per explicit request that the map's basemap style be
+   * user-controllable the same way the letter's paper/plane color already is. */
+  mapMode: ThrowColorMode;
+  /** What `mapMode` resolves to — read by every ThrowMap (web/native) and the recipient carousel
+   * overlaid on it, so the carousel's own skin always matches whatever style the map beneath it
+   * is actually showing. */
+  mapIsDay: boolean;
+  setMapMode: (mode: ThrowColorMode) => void;
 }
 
 const ThrowColorModeContext = createContext<ThrowColorModeContextValue | null>(null);
 
 /**
- * Loads the signed-in user's paper/plane color preference (`user_settings.throw_color_mode`) and
- * derives two signals from it: `isDay` (what the preference actually resolves to — only the
- * letter's own paper/plane read this) and `autoIsDay` (the viewer's own device clock, always, for
- * everything else in Throw — the map, the recipient carousel — per explicit request that this
- * setting affect the letter alone, not the rest of Throw's day/night behavior). Both used to be
- * separate isDaytimeNow-polling useState/effects duplicated across ThrowHomeScreen and both
- * ThrowMap platforms; this context is the one shared computation. Defaults to 'auto' (the
- * pre-existing automatic day/night switching) whenever there's no signed-in user yet or no
- * override has been saved.
+ * Loads the signed-in user's two independent color preferences — the letter's own paper/plane
+ * (`user_settings.throw_color_mode`) and the map's own basemap (`throw_map_color_mode`) — and
+ * derives `isDay`/`mapIsDay` from each (falling back to `autoIsDay`, the viewer's own device
+ * clock, for either's 'auto' case). Both used to be separate isDaytimeNow-polling useState/
+ * effects duplicated across ThrowHomeScreen and both ThrowMap platforms; this context is the one
+ * shared computation. Both default to 'auto' (the pre-existing automatic day/night switching)
+ * whenever there's no signed-in user yet or no override has been saved.
  */
 export function ThrowColorModeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const userId = user?.id;
   const [mode, setModeState] = useState<ThrowColorMode>('auto');
+  const [mapMode, setMapModeState] = useState<ThrowColorMode>('auto');
   const [autoIsDay, setAutoIsDay] = useState(() => isDaytimeNow());
 
   useEffect(() => {
@@ -51,12 +58,15 @@ export function ThrowColorModeProvider({ children }: { children: React.ReactNode
   useEffect(() => {
     if (!userId) {
       setModeState('auto');
+      setMapModeState('auto');
       return;
     }
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.from('user_settings').select('throw_color_mode').eq('user_id', userId).maybeSingle();
-      if (!cancelled) setModeState((data?.throw_color_mode as ThrowColorMode | undefined) ?? 'auto');
+      const { data } = await supabase.from('user_settings').select('throw_color_mode, throw_map_color_mode').eq('user_id', userId).maybeSingle();
+      if (cancelled) return;
+      setModeState((data?.throw_color_mode as ThrowColorMode | undefined) ?? 'auto');
+      setMapModeState((data?.throw_map_color_mode as ThrowColorMode | undefined) ?? 'auto');
     })();
     return () => {
       cancelled = true;
@@ -74,9 +84,24 @@ export function ThrowColorModeProvider({ children }: { children: React.ReactNode
       });
   };
 
-  const isDay = mode === 'day' ? true : mode === 'night' ? false : autoIsDay;
+  const setMapMode = (next: ThrowColorMode) => {
+    setMapModeState(next);
+    if (!userId) return;
+    supabase
+      .from('user_settings')
+      .upsert({ user_id: userId, throw_map_color_mode: next }, { onConflict: 'user_id' })
+      .then(({ error }) => {
+        if (error) console.warn('[ThrowColorMode] failed to save map mode:', error.message);
+      });
+  };
 
-  const value = useMemo(() => ({ mode, isDay, autoIsDay, setMode }), [mode, isDay, autoIsDay]);
+  const isDay = mode === 'day' ? true : mode === 'night' ? false : autoIsDay;
+  const mapIsDay = mapMode === 'day' ? true : mapMode === 'night' ? false : autoIsDay;
+
+  const value = useMemo(
+    () => ({ mode, isDay, autoIsDay, setMode, mapMode, mapIsDay, setMapMode }),
+    [mode, isDay, autoIsDay, mapMode, mapIsDay],
+  );
   return <ThrowColorModeContext.Provider value={value}>{children}</ThrowColorModeContext.Provider>;
 }
 

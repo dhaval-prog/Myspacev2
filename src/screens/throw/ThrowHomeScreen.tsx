@@ -256,6 +256,15 @@ export function ThrowHomeScreen({
   const selectedStreak = selectedFriend && !isSelfSelected ? streakFor(selectedFriend.userId) : 0;
   const selectedPoints = selectedFriend && !isSelfSelected ? statsFor(selectedFriend.userId).totalPoints : 0;
 
+  // FoldingLetter's onReminderPeekChange prop itself goes undefined the instant the user flicks
+  // away from "Myself" (see its own conditional below) — a no-op prop can't tell this screen's own
+  // reminderPeeking to turn back off, so without this it stayed stuck true and the peek strip kept
+  // showing over a friend's letter. The render below is also gated on isSelfSelected directly, so
+  // this is belt-and-braces state hygiene rather than the only fix.
+  useEffect(() => {
+    if (!isSelfSelected) setReminderPeeking(false);
+  }, [isSelfSelected]);
+
   const handleAlertScheduleChange = (next: AlertSchedule) => {
     setAlertSchedule(next);
     setSelfComposeLocked(true);
@@ -275,11 +284,11 @@ export function ThrowHomeScreen({
   // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
   const focusTarget = selectedFriend?.location ?? myLocation ?? null;
 
-  // The letter paper's own night skin (see FoldingLetter's isNight prop below) is the one place
-  // in Throw that follows the user's own Settings color-mode pin, if they've set one — everywhere
-  // else (the map, the recipient carousel just below) stays on the viewer's actual device clock
-  // unconditionally (autoIsDay), per explicit request that the setting affect the letter alone.
-  const { isDay, autoIsDay } = useThrowColorMode();
+  // The letter paper's own night skin (see FoldingLetter's isNight prop below) follows its own
+  // Settings color-mode pin (`isDay`); the map and the recipient carousel overlaid on it follow
+  // the map's own separate pin instead (`mapIsDay`) — two independent user preferences, per
+  // explicit request.
+  const { isDay, mapIsDay } = useThrowColorMode();
 
   // Dragging the folded, ready-to-throw plane sideways (see FoldingLetter's onContactDragStart /
   // onContactDragOffset) cycles through recipients live, the same direction as swiping the
@@ -471,7 +480,7 @@ export function ThrowHomeScreen({
                 selectedIndex={selectedIndex}
                 onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)}
                 disabled={selfLocked}
-                isNight={!autoIsDay}
+                isNight={!mapIsDay}
               />
             </View>
           ))}
@@ -517,8 +526,11 @@ export function ThrowHomeScreen({
             drag handle (see onReminderPeekChange's own comment for why this lives here rather
             than inside FoldingLetter). Gated the same as the letter card itself (!inFlight &&
             selectedFriend) so a just-thrown letter's button can't linger after FoldingLetter
-            unmounts (its own effect has no unmount cleanup to report "gone" with). */}
-        {!inFlight && selectedFriend && reminderPeeking && (
+            unmounts (its own effect has no unmount cleanup to report "gone" with) — and explicitly
+            on isSelfSelected too (not just reminderPeeking), since flicking to a friend while
+            peeking a self-reminder otherwise left this showing over their letter instead (see the
+            reset effect above for why reminderPeeking alone can't be trusted here). */}
+        {!inFlight && selectedFriend && isSelfSelected && reminderPeeking && (
           <View style={[styles.reminderPeekWrap, { bottom: insets.bottom + 16 }]} pointerEvents="box-none">
             <View
               ref={reminderPeekRef}
