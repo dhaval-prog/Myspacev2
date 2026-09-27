@@ -152,9 +152,10 @@ interface FoldingLetterProps {
    * it unfolds. */
   onFoldProgress?: (value: number) => void;
   /** Present only for a self-reminder alert (writing to yourself), never an ordinary letter to a
-   * friend — pops up the time/day picker (AlertScheduleHeader) in its own bottom sheet the moment
-   * the fold completes (phase reaches 'ready'), right before the user would swipe up to throw,
-   * rather than sitting embedded on the paper the whole time (see scheduleModalVisible below). */
+   * friend — pops up the time/day picker (AlertScheduleHeader) in its own bottom sheet the first
+   * time the fold completes (phase reaches 'ready') with something written/attached, right before
+   * the user would swipe up to throw. Every fold after that first one shows a small peek strip
+   * instead of popping the sheet open again (see reminderState below). */
   alertSchedule?: AlertSchedule;
   onAlertScheduleChange?: (schedule: AlertSchedule) => void;
   /** Hides the streak/points badges — they don't mean anything for a self-reminder. */
@@ -234,10 +235,13 @@ export function FoldingLetter({
   const [mediaItems, setMediaItems] = useState<PickedMedia[]>([]);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   // For a self-reminder (alertSchedule/onAlertScheduleChange present), the timer+repeat picker
-  // is no longer embedded on the paper itself — it pops up the moment the fold completes (phase
-  // reaches 'ready'), right before the user would swipe up to throw, and closes again if they
-  // unfold back to writing (see the effect below).
-  const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
+  // pops up the moment the fold first completes (phase reaches 'ready') with something actually
+  // written/attached — 'closed' whenever there's nothing to show (writing, or an empty letter);
+  // 'open' the full sheet; 'peek' a small draggable strip standing in for it once the user has
+  // already seen the full sheet once this letter (see reminderShownRef and the effect below) —
+  // refolding after that shows the peek, not the full sheet again, until the user reopens it.
+  const [reminderState, setReminderState] = useState<'closed' | 'open' | 'peek'>('closed');
+  const reminderShownRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [paperSize, setPaperSize] = useState({ width: 0, height: 0 });
   // The bottom-controls row's own measured height (via onLayout, below) — used to position it
@@ -463,13 +467,27 @@ export function FoldingLetter({
   }, [isNight]);
 
   // Self-reminder only: the fold completing (phase reaching 'ready') is the trigger for the
-  // timer+repeat popup — see scheduleModalVisible above. Unfolding back out of 'ready' (to edit
-  // the message further) dismisses it again rather than leaving it stranded over the paper. Gated
-  // on hasContent (already true for typed text, an ink stroke, or an attached photo/video, see its
-  // own definition) — an empty letter has nothing to remind about, so folding one doesn't pop it up.
+  // timer+repeat popup — see reminderState above. Unfolding back out of 'ready' (to edit the
+  // message further) hides it entirely rather than leaving it stranded over the paper — refolding
+  // afterward re-fires this same effect and picks the right state again below. Gated on hasContent
+  // (already true for typed text, an ink stroke, or an attached photo/video, see its own
+  // definition) — an empty letter has nothing to remind about, so folding one doesn't show it.
   useEffect(() => {
     if (!alertSchedule || !onAlertScheduleChange) return;
-    setScheduleModalVisible(phase === 'ready' && hasContent);
+    if (phase !== 'ready' || !hasContent) {
+      setReminderState('closed');
+      return;
+    }
+    if (!reminderShownRef.current) {
+      // First time this letter has reached 'ready' with something to remind about — auto-open the
+      // full sheet once, exactly like before this round's change.
+      reminderShownRef.current = true;
+      setReminderState('open');
+    } else {
+      // Already shown once for this letter — every fold after that surfaces the small peek strip
+      // instead of popping the full sheet open again; the user drags/taps it open themselves.
+      setReminderState('peek');
+    }
   }, [phase, alertSchedule, onAlertScheduleChange, hasContent]);
 
   // react-native-web's PanResponder polyfill dedupes move dispatch against
@@ -951,18 +969,30 @@ export function FoldingLetter({
       <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(items) => setMediaItems((prev) => [...prev, ...items])} />
 
       {alertSchedule && onAlertScheduleChange && (
-        <BottomSheet visible={scheduleModalVisible} onClose={() => setScheduleModalVisible(false)}>
-          <Text style={styles.scheduleModalTitle}>Remind me</Text>
-          <AlertScheduleHeader schedule={alertSchedule} onChange={onAlertScheduleChange} />
-          <Pressable
-            onPress={() => setScheduleModalVisible(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Done setting reminder"
-            style={({ pressed }) => [styles.scheduleModalDone, pressed && styles.roundBtnPressed]}
-          >
-            <Text style={styles.scheduleModalDoneText}>Done</Text>
-          </Pressable>
-        </BottomSheet>
+        <>
+          <BottomSheet visible={reminderState === 'open'} onClose={() => setReminderState('peek')}>
+            <Text style={styles.scheduleModalTitle}>Remind me</Text>
+            <AlertScheduleHeader schedule={alertSchedule} onChange={onAlertScheduleChange} />
+            <Pressable
+              onPress={() => setReminderState('peek')}
+              accessibilityRole="button"
+              accessibilityLabel="Done setting reminder"
+              style={({ pressed }) => [styles.scheduleModalDone, pressed && styles.roundBtnPressed]}
+            >
+              <Text style={styles.scheduleModalDoneText}>Done</Text>
+            </Pressable>
+          </BottomSheet>
+          {reminderState === 'peek' && (
+            <Pressable
+              onPress={() => setReminderState('open')}
+              accessibilityRole="button"
+              accessibilityLabel="Show reminder settings"
+              style={styles.reminderPeek}
+            >
+              <View style={styles.reminderPeekHandle} />
+            </Pressable>
+          )}
+        </>
       )}
     </View>
   );
@@ -988,6 +1018,23 @@ const styles = StyleSheet.create({
   scheduleModalTitle: { fontFamily: throwFont.ui700, fontSize: 17, color: throwColor.ink, marginBottom: 12, textAlign: 'center' },
   scheduleModalDone: { marginTop: 20, backgroundColor: throwColor.ink, borderRadius: throwRadius.pill, paddingVertical: 14, alignItems: 'center' },
   scheduleModalDoneText: { fontFamily: throwFont.ui700, fontSize: 15, color: throwColor.paper },
+  // The collapsed stand-in for the reminder sheet (see reminderState) — a plain, non-modal strip
+  // (not another BottomSheet) so it never blocks the swipe-up-to-throw gesture on the plane behind
+  // it, unlike the full sheet's own scrim. Tapping it reopens the full sheet.
+  reminderPeek: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 28,
+    backgroundColor: throwColor.cardBg,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    alignItems: 'center',
+    paddingTop: 8,
+    ...throwColor.shadowSoft,
+  },
+  reminderPeekHandle: { width: 44, height: 4, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.16)' },
   streakChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   pointsChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   streakText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.clayDeep },
