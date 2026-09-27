@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
@@ -260,6 +260,16 @@ export function ThrowHomeScreen({
     setAlertSchedule(next);
     setSelfComposeLocked(true);
   };
+  // The "X" beside the peek strip's "Remind me" button — abandons the reminder draft entirely
+  // (schedule, written text, attached photos) rather than editing it, so the user can switch to
+  // a different contact without a half-finished reminder left locking the carousel. Mirrors the
+  // reset handleThrow's self branch already does on an actual successful send.
+  const handleClearReminder = () => {
+    foldingLetterRef.current?.clearReminderDraft();
+    setAlertSchedule(DEFAULT_ALERT_SCHEDULE);
+    setSelfComposeLocked(false);
+    setReminderPeeking(false);
+  };
 
   // Real "zoom to contact": the selected friend's own location, falling back to the user's own
   // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
@@ -519,6 +529,17 @@ export function ThrowHomeScreen({
             >
               <Text style={styles.reminderPeekButtonText}>Remind me</Text>
             </View>
+            {/* Clears the schedule + written text/photos and unfolds back to a blank letter —
+                see handleClearReminder — so the recipient carousel (locked while a reminder is
+                in progress, see selfLocked) can be unlocked again without finishing this one. */}
+            <Pressable
+              onPress={handleClearReminder}
+              accessibilityRole="button"
+              accessibilityLabel="Clear reminder"
+              style={({ pressed }) => [styles.reminderClearButton, pressed && styles.reminderClearButtonPressed]}
+            >
+              <Text style={styles.reminderClearButtonText}>✕</Text>
+            </Pressable>
           </View>
         )}
 
@@ -603,11 +624,12 @@ const styles = StyleSheet.create({
   // The self-reminder sheet's collapsed stand-in (see onReminderPeekChange) — a small "Remind me"
   // button, not a bare drag handle, pinned near the actual screen bottom (unlike letterCard,
   // which sits well short of it) so it reads as belonging to the whole screen, not just this
-  // narrower card. The wrap only centers its child (pointerEvents="box-none" so the empty space
-  // either side still reaches the map/plane behind it); the button itself (see its own
+  // narrower card. The wrap only centers its row (pointerEvents="box-none" so the empty space
+  // either side still reaches the map/plane behind it); "Remind me" itself (see its own
   // PanResponder comment) is a plain View, not another BottomSheet, so it never blocks the
-  // swipe-up-to-throw gesture either.
-  reminderPeekWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  // swipe-up-to-throw gesture either. The "X" beside it (see handleClearReminder) is a separate,
+  // smaller Pressable in the same row.
+  reminderPeekWrap: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   reminderPeekButton: {
     backgroundColor: throwColor.ink,
     borderRadius: throwRadius.pill,
@@ -616,6 +638,17 @@ const styles = StyleSheet.create({
     ...throwColor.shadowSoft,
   },
   reminderPeekButtonText: { fontFamily: throwFont.ui700, fontSize: 14, color: throwColor.paper },
+  reminderClearButton: {
+    width: 44,
+    height: 44,
+    borderRadius: throwRadius.pill,
+    backgroundColor: throwColor.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...throwColor.shadowSoft,
+  },
+  reminderClearButtonPressed: { opacity: 0.7 },
+  reminderClearButtonText: { fontFamily: throwFont.ui700, fontSize: 16, color: throwColor.paper },
   flightStatusWrap: {
     position: 'absolute',
     left: 12,
