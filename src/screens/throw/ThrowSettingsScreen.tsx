@@ -7,18 +7,19 @@ import { Icon } from '../../components/Icon';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { ThrowLocationSetupScreen } from './ThrowLocationSetupScreen';
-import { colors } from '../../theme';
+import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { throwColor, throwFont, throwGlass, throwRadius, throwSpace } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import { useFriends } from '../../context/FriendsContext';
 import { useThrowColorMode, type ThrowColorMode } from '../../context/ThrowColorModeContext';
 
 const BACK_ICON = 'M15 18l-6-6 6-6';
+const CHECK_ICON = 'M5 13l4 4L19 7';
 
-const COLOR_MODES: { key: ThrowColorMode; label: string }[] = [
-  { key: 'auto', label: 'Auto' },
-  { key: 'day', label: 'Day' },
-  { key: 'night', label: 'Night' },
+const COLOR_MODES: { key: ThrowColorMode; label: string; description: string }[] = [
+  { key: 'auto', label: 'Auto', description: "Follows your device's clock (day/night)" },
+  { key: 'day', label: 'Day', description: 'Always the day look' },
+  { key: 'night', label: 'Night', description: 'Always the night look' },
 ];
 
 interface ThrowSettingsScreenProps {
@@ -38,6 +39,8 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
   const { mode: colorMode, setMode: setColorMode } = useThrowColorMode();
   const [pane, setPane] = useState<Pane>('settings');
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
+  const [colorModeSheetOpen, setColorModeSheetOpen] = useState(false);
+  const colorModeLabel = COLOR_MODES.find((m) => m.key === colorMode)?.label ?? 'Auto';
 
   if (pane === 'editLocation') {
     return <ThrowLocationSetupScreen mode="edit" onDone={() => setPane('settings')} onBack={() => setPane('settings')} />;
@@ -73,26 +76,15 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
         </Pressable>
 
         <Text style={styles.eyebrow}>APPEARANCE</Text>
-        <View style={styles.colorCard}>
-          <Text style={styles.colorTitle}>Paper & plane color</Text>
-          <Text style={styles.colorSubtitle}>Auto follows your device's clock (day/night); Day and Night pin one look — for the letter's paper and plane only, everywhere else in Throw keeps following the time as usual.</Text>
-          <View style={styles.colorOptions}>
-            {COLOR_MODES.map((opt) => {
-              const active = colorMode === opt.key;
-              return (
-                <Pressable
-                  key={opt.key}
-                  onPress={() => setColorMode(opt.key)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Paper & plane color — ${opt.label}`}
-                  style={[styles.colorOption, active && styles.colorOptionActive]}
-                >
-                  <Text style={[styles.colorOptionText, active && styles.colorOptionTextActive]}>{opt.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
+        <Pressable onPress={() => setColorModeSheetOpen(true)}>
+          <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowName}>Paper & plane color</Text>
+              <Text style={styles.rowMeta}>For the letter's paper and plane only — everywhere else in Throw keeps following the time as usual</Text>
+            </View>
+            <Text style={styles.editLabel}>{colorModeLabel}</Text>
+          </GlassSurface>
+        </Pressable>
 
         {(receivedRequests.length > 0 || sentRequests.length > 0) && (
           <>
@@ -164,6 +156,31 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
         )}
       </ScrollView>
 
+      <BottomSheet visible={colorModeSheetOpen} onClose={() => setColorModeSheetOpen(false)}>
+        <Text style={styles.sheetTitle}>Paper & plane color</Text>
+        {COLOR_MODES.map((opt, i) => {
+          const active = colorMode === opt.key;
+          return (
+            <Pressable
+              key={opt.key}
+              onPress={() => {
+                setColorMode(opt.key);
+                setColorModeSheetOpen(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Paper & plane color — ${opt.label}`}
+              style={[styles.sheetOption, i !== COLOR_MODES.length - 1 && styles.sheetOptionDivider]}
+            >
+              <View style={styles.rowText}>
+                <Text style={styles.rowName}>{opt.label}</Text>
+                <Text style={styles.rowMeta}>{opt.description}</Text>
+              </View>
+              {active && <Icon path={CHECK_ICON} size={20} color={throwColor.clayDeep} strokeWidth={2.2} />}
+            </Pressable>
+          );
+        })}
+      </BottomSheet>
+
       <ConfirmDialog
         visible={confirmTarget !== null}
         title={confirmTarget ? (confirmTarget.kind === 'block' ? `Block ${confirmTarget.name}?` : `Remove ${confirmTarget.name}?`) : ''}
@@ -210,19 +227,9 @@ const styles = StyleSheet.create({
   rowName: { fontFamily: throwFont.ui700, fontSize: 14, color: throwColor.ink },
   rowMeta: { fontFamily: throwFont.ui400, fontSize: 12, color: throwColor.inkSoft },
   editLabel: { fontFamily: throwFont.ui700, fontSize: 13, color: throwColor.clayDeep },
-  colorCard: {
-    backgroundColor: throwColor.cardBg,
-    borderRadius: throwRadius.card,
-    padding: 16,
-    marginBottom: 8,
-  },
-  colorTitle: { fontFamily: throwFont.ui700, fontSize: 15, color: throwColor.ink, marginBottom: 6 },
-  colorSubtitle: { fontFamily: throwFont.ui400, fontSize: 12.5, color: throwColor.inkSoft, lineHeight: 18 },
-  colorOptions: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  colorOption: { flex: 1, paddingVertical: 10, borderRadius: throwRadius.pill, backgroundColor: colors.badgeInactiveBg, alignItems: 'center' },
-  colorOptionActive: { backgroundColor: colors.ink },
-  colorOptionText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: colors.badgeInactiveFg },
-  colorOptionTextActive: { color: colors.lime },
+  sheetTitle: { fontFamily: throwFont.ui700, fontSize: 17, color: throwColor.ink, marginBottom: 8, textAlign: 'center' },
+  sheetOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  sheetOptionDivider: { borderBottomWidth: 1, borderBottomColor: throwColor.cardBorder },
   acceptButton: { borderRadius: 999, backgroundColor: throwColor.clay, paddingVertical: 8, paddingHorizontal: 14 },
   acceptLabel: { fontFamily: throwFont.ui700, fontSize: 12.5, color: '#fff' },
   xButton: { width: 30, height: 30, borderRadius: 15, backgroundColor: throwColor.claySoft, alignItems: 'center', justifyContent: 'center' },
