@@ -64,44 +64,11 @@ interface ProfileRow {
   profile_visibility: 'only_me' | 'space_members';
 }
 
-type NotificationPrefs = Record<string, { push: boolean; email: boolean; inApp: boolean }>;
-
-const NOTIFICATION_CATEGORIES: { key: string; label: string }[] = [
-  { key: 'budget_alerts', label: 'Budget alerts' },
-  { key: 'budget_reset', label: 'Budget reset reminders' },
-  { key: 'payment_activity', label: 'UPI payment activity' },
-  { key: 'invitations', label: 'New invitations' },
-  { key: 'shared_space_activity', label: 'Shared space activity' },
-];
-
 const THROW_COLOR_MODES: { key: ThrowColorMode; label: string }[] = [
   { key: 'auto', label: 'Auto' },
   { key: 'day', label: 'Day' },
   { key: 'night', label: 'Night' },
 ];
-
-const UPI_ID_PATTERN = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z][a-zA-Z0-9]{1,64}$/;
-const CHANNELS: { key: 'push' | 'email' | 'inApp'; label: string }[] = [
-  { key: 'push', label: 'Push' },
-  { key: 'email', label: 'Email' },
-  { key: 'inApp', label: 'In-app' },
-];
-
-function defaultPrefs(): NotificationPrefs {
-  const prefs: NotificationPrefs = {};
-  for (const c of NOTIFICATION_CATEGORIES) prefs[c.key] = { push: true, email: true, inApp: true };
-  return prefs;
-}
-
-function mergePrefs(stored: Partial<NotificationPrefs> | null | undefined): NotificationPrefs {
-  const base = defaultPrefs();
-  if (!stored) return base;
-  for (const c of NOTIFICATION_CATEGORIES) {
-    const s = stored[c.key];
-    if (s) base[c.key] = { push: s.push ?? true, email: s.email ?? true, inApp: s.inApp ?? true };
-  }
-  return base;
-}
 
 interface SharedCard {
   id: string;
@@ -170,17 +137,6 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
   const [logoutOthersConfirm, setLogoutOthersConfirm] = useState(false);
   const [logoutAllConfirm, setLogoutAllConfirm] = useState(false);
 
-  // --- Payments (UPI) ---
-  const [upiId, setUpiId] = useState('');
-  const [upiVerified, setUpiVerified] = useState(false);
-  const [upiSaving, setUpiSaving] = useState(false);
-  const [upiVerifying, setUpiVerifying] = useState(false);
-  const [upiError, setUpiError] = useState<string | null>(null);
-  const [upiSaved, setUpiSaved] = useState(false);
-
-  // --- Notifications ---
-  const [prefs, setPrefs] = useState<NotificationPrefs>(defaultPrefs());
-
   // --- Shared spaces ---
   const [sharedCards, setSharedCards] = useState<SharedCard[]>([]);
 
@@ -209,19 +165,11 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       return;
     }
     (async () => {
-      const [profileRes, settingsRes, cardsRes, paymentProfileRes] = await Promise.all([
+      const [profileRes, cardsRes] = await Promise.all([
         supabase.from('profiles').select('full_name,username,phone,date_of_birth,avatar_url,profile_visibility').eq('id', userId).maybeSingle(),
-        supabase.from('user_settings').select('notification_prefs').eq('user_id', userId).maybeSingle(),
         supabase.from('budget_cards').select('id,label,rid,owner_id'),
-        supabase.from('user_payment_profiles').select('upi_id,upi_verified').eq('user_id', userId).maybeSingle(),
       ]);
       if (cancelled) return;
-
-      const paymentProfile = paymentProfileRes.data as { upi_id: string | null; upi_verified: boolean } | null;
-      if (paymentProfile) {
-        setUpiId(paymentProfile.upi_id ?? '');
-        setUpiVerified(paymentProfile.upi_verified);
-      }
 
       const p = profileRes.data as ProfileRow | null;
       if (p) {
@@ -232,7 +180,6 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
         setDob(p.date_of_birth ?? '');
         setVisibility(p.profile_visibility ?? 'space_members');
       }
-      setPrefs(mergePrefs((settingsRes.data?.notification_prefs as Partial<NotificationPrefs>) ?? null));
 
       const cards = (cardsRes.data as { id: string; label: string; rid: string; owner_id: string }[] | null) ?? [];
 
@@ -366,60 +313,6 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       setPasswordSuccess(false);
       setPasswordSheetOpen(false);
     }, 1200);
-  };
-
-  const saveUpiId = async () => {
-    if (!userId) return;
-    const trimmed = upiId.trim();
-    setUpiError(null);
-    if (!trimmed) {
-      setUpiError('Enter a UPI ID.');
-      return;
-    }
-    if (!UPI_ID_PATTERN.test(trimmed)) {
-      setUpiError('That doesn’t look like a valid UPI ID (e.g. name@bank).');
-      return;
-    }
-    setUpiSaving(true);
-    // Changing the UPI ID always resets verification — a new ID needs to be re-verified.
-    const { error } = await supabase
-      .from('user_payment_profiles')
-      .upsert({ user_id: userId, upi_id: trimmed, upi_verified: false }, { onConflict: 'user_id' });
-    setUpiSaving(false);
-    if (error) {
-      setUpiError(error.message);
-      return;
-    }
-    setUpiId(trimmed);
-    setUpiVerified(false);
-    setUpiSaved(true);
-    setTimeout(() => setUpiSaved(false), 2000);
-  };
-
-  const verifyUpiId = async () => {
-    setUpiError(null);
-    setUpiVerifying(true);
-    const { error } = await supabase.rpc('verify_own_upi_id');
-    setUpiVerifying(false);
-    if (error) {
-      setUpiError(error.message);
-      return;
-    }
-    setUpiVerified(true);
-  };
-
-  const togglePref = (categoryKey: string, channel: 'push' | 'email' | 'inApp') => {
-    if (!userId) return;
-    setPrefs((prev) => {
-      const next = { ...prev, [categoryKey]: { ...prev[categoryKey], [channel]: !prev[categoryKey][channel] } };
-      supabase
-        .from('user_settings')
-        .upsert({ user_id: userId, notification_prefs: next }, { onConflict: 'user_id' })
-        .then(({ error }) => {
-          if (error) console.warn('[account] failed to save notification prefs:', error.message);
-        });
-      return next;
-    });
   };
 
   const saveVisibility = (next: 'only_me' | 'space_members') => {
@@ -587,84 +480,8 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
               </View>
             </View>
           ) : null}
-          <Row label="Biometric login" sublabel="Face ID / Touch ID / Fingerprint" badge="Coming soon" />
-          <Row label="Two-factor authentication" badge="Coming soon" />
-          <Row label="Active devices" badge="Coming soon" />
           <Row label="Log out of other devices" sublabel="Keeps you signed in here" onPress={() => setLogoutOthersConfirm(true)} />
           <Row label="Log out of all devices" sublabel="Including this one" destructive onPress={() => setLogoutAllConfirm(true)} last />
-        </Card>
-
-        {/* Payments */}
-        <SectionLabel>Payments</SectionLabel>
-        <Card>
-          <View style={styles.upiHeaderRow}>
-            <Text style={styles.subHeading}>UPI ID</Text>
-            {upiVerified ? (
-              <View style={styles.upiVerifiedBadge}>
-                <Text style={styles.upiVerifiedBadgeText}>Verified ✓</Text>
-              </View>
-            ) : null}
-          </View>
-          <Text style={styles.emptyText}>Save your UPI ID so others can pay you directly.</Text>
-          <TextField
-            label="UPI ID"
-            value={upiId}
-            onChangeText={(v) => {
-              setUpiId(v);
-              setUpiSaved(false);
-            }}
-            placeholder="yourname@bank"
-            autoCapitalize="none"
-          />
-          <InlineError>{upiError}</InlineError>
-          {upiSaved && !upiVerified ? <InlineNote>Saved — verify it below so others can pay you.</InlineNote> : null}
-          <View style={[sheetStyles.actions, styles.upiActions]}>
-            <View style={sheetStyles.actionFlex}>
-              <ActionButton label="Save UPI ID" variant="secondary" onPress={saveUpiId} loading={upiSaving} />
-            </View>
-            <View style={sheetStyles.actionFlex}>
-              <ActionButton
-                label={upiVerified ? 'Verified ✓' : 'Verify UPI ID'}
-                variant={upiVerified ? 'success' : 'primary'}
-                onPress={verifyUpiId}
-                loading={upiVerifying}
-                disabled={upiVerified || !upiId.trim()}
-              />
-            </View>
-          </View>
-          <InlineNote>
-            Verifying confirms your UPI ID is well-formed and ready to receive payments — it isn't a bank confirmation that this ID
-            belongs to you, so double-check it's correct.
-          </InlineNote>
-        </Card>
-
-        {/* Notifications */}
-        <SectionLabel>Notifications</SectionLabel>
-        <Card>
-          <View style={styles.notifLegend}>
-            <Text style={styles.notifLegendText}>P · Push   E · Email   I · In-app</Text>
-          </View>
-          {NOTIFICATION_CATEGORIES.map((c, i) => (
-            <View key={c.key} style={[styles.notifRow, i !== NOTIFICATION_CATEGORIES.length - 1 && styles.notifRowDivider]}>
-              <Text style={styles.notifLabel}>{c.label}</Text>
-              <View style={styles.notifChips}>
-                {CHANNELS.map((ch) => {
-                  const active = prefs[c.key]?.[ch.key] ?? true;
-                  return (
-                    <Pressable
-                      key={ch.key}
-                      onPress={() => togglePref(c.key, ch.key)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${c.label} — ${ch.label}`}
-                      style={[styles.notifChip, active && styles.notifChipActive]}
-                    >
-                      <Text style={[styles.notifChipText, active && styles.notifChipTextActive]}>{ch.label[0]}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          ))}
         </Card>
 
         {/* Throw */}
@@ -1025,18 +842,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textPrimary,
   },
-  notifLegend: {
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
-    marginBottom: 4,
-  },
-  notifLegendText: {
-    fontFamily: fontFamily.mono500,
-    fontSize: 9.5,
-    letterSpacing: 0.6,
-    color: colors.textFaint,
-  },
   notifRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1053,29 +858,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans500,
     fontSize: 13,
     color: colors.textPrimary,
-  },
-  notifChips: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  notifChip: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.badgeInactiveBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notifChipActive: {
-    backgroundColor: colors.ink,
-  },
-  notifChipText: {
-    fontFamily: fontFamily.sans700,
-    fontSize: 11,
-    color: colors.badgeInactiveFg,
-  },
-  notifChipTextActive: {
-    color: colors.lime,
   },
   throwColorLabelWrap: {
     flex: 1,
@@ -1114,26 +896,6 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     color: colors.textPrimary,
     paddingTop: spacing.xs,
-  },
-  upiHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  upiVerifiedBadge: {
-    backgroundColor: colors.lime,
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  upiVerifiedBadgeText: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 10.5,
-    color: colors.ink,
-  },
-  upiActions: {
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
   },
   emptyText: {
     fontFamily: fontFamily.sans400,
