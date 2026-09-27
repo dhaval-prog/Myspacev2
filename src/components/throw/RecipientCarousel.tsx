@@ -63,6 +63,12 @@ interface RecipientCarouselProps {
    * off-center contact would, not sit at a constant full size/opacity beside the strip. Omitted
    * entirely (no slot rendered) when absent, e.g. in tests that don't care about stories. */
   onAddStory?: () => void;
+  /** True while the user is actually viewing/posting their own Status (see ThrowHomeScreen's
+   * isStatusMode) — moves the "active contact" chrome (pulse ring + inner border) from whichever
+   * real contact is otherwise selected onto the add-story slot itself, and rests the strip's own
+   * live offset there too, so Status visibly reads as the current selection instead of leaving a
+   * real contact looking selected while its own letter isn't even on screen. */
+  isAddStorySelected?: boolean;
 }
 
 /**
@@ -80,11 +86,15 @@ export function RecipientCarousel({
   storyCountFor,
   onOpenStory,
   onAddStory,
+  isAddStorySelected,
 }: RecipientCarouselProps) {
   const n = friends.length;
   const maxIndex = Math.max(0, n - 1);
-  const offset = useRef(new Animated.Value(Math.min(selectedIndex, maxIndex))).current;
-  const offsetValueRef = useRef(Math.min(selectedIndex, maxIndex));
+  // Where the strip's own live offset should rest whenever nothing is actively being dragged —
+  // the add-story slot (-1) while Status is selected, otherwise whatever real contact is.
+  const restingIndex = isAddStorySelected ? -1 : Math.min(selectedIndex, maxIndex);
+  const offset = useRef(new Animated.Value(restingIndex)).current;
+  const offsetValueRef = useRef(restingIndex);
   const grantOffsetRef = useRef(0);
   const draggingRef = useRef(false);
 
@@ -97,14 +107,18 @@ export function RecipientCarousel({
 
   React.useEffect(() => {
     if (draggingRef.current) return;
-    if (Math.round(offsetValueRef.current) === selectedIndex) return;
-    Animated.spring(offset, { toValue: selectedIndex, useNativeDriver: false, friction: 8, tension: 60 }).start();
-  }, [selectedIndex, offset]);
+    if (Math.round(offsetValueRef.current) === restingIndex) return;
+    Animated.spring(offset, { toValue: restingIndex, useNativeDriver: false, friction: 8, tension: 60 }).start();
+  }, [restingIndex, offset]);
 
   const snapTo = (index: number) => {
     const clamped = Math.max(0, Math.min(maxIndex, index));
     Animated.spring(offset, { toValue: clamped, useNativeDriver: false, friction: 8, tension: 60 }).start();
-    if (clamped !== selectedIndex) onChangeIndex(clamped);
+    // Also fires when the tapped contact is already `selectedIndex` but Status is what's actually
+    // showing (isAddStorySelected) — otherwise tapping your own already-selected contact while
+    // viewing Status would be a silent no-op (the index truly hasn't changed) and leave Status
+    // stuck on screen with no way back short of picking a *different* contact first.
+    if (clamped !== selectedIndex || isAddStorySelected) onChangeIndex(clamped);
   };
 
   const panResponder = useMemo(
@@ -125,10 +139,12 @@ export function RecipientCarousel({
           const raw = grantOffsetRef.current - g.dx / ITEM_SPACING;
           const nearest = Math.max(0, Math.min(maxIndex, Math.round(raw)));
           Animated.spring(offset, { toValue: nearest, useNativeDriver: false, friction: 8, tension: 60 }).start();
-          if (nearest !== selectedIndex) onChangeIndex(nearest);
+          // See snapTo's own comment — same "already selectedIndex, but Status is what's showing"
+          // case can be reached by dragging the strip back to rest on the same real contact too.
+          if (nearest !== selectedIndex || isAddStorySelected) onChangeIndex(nearest);
         },
       }),
-    [disabled, n, maxIndex, selectedIndex, onChangeIndex, offset],
+    [disabled, n, maxIndex, selectedIndex, onChangeIndex, offset, isAddStorySelected],
   );
 
   if (n === 0) return null;
@@ -166,14 +182,15 @@ export function RecipientCarousel({
           >
             <View style={styles.pressableContent}>
               <View style={styles.avatarWrap}>
-                <AddStoryButton onPress={onAddStory} />
+                {isAddStorySelected && <SelectedPulseRing isNight={isNight} />}
+                <AddStoryButton onPress={onAddStory} selected={isAddStorySelected} isNight={isNight} />
               </View>
             </View>
           </Animated.View>
         )}
         {friends.map((f, i) => {
           const { translateX, scale, opacity } = itemTransform(i);
-          const isSelected = i === selectedIndex;
+          const isSelected = i === selectedIndex && !isAddStorySelected;
           return (
             <Animated.View key={f.userId} style={[styles.item, { transform: [{ translateX }, { scale }], opacity }]}>
               <Pressable

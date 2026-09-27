@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon } from '../Icon';
-import { throwColor } from '../../theme/throwTokens';
+import { throwColor, throwNightColor } from '../../theme/throwTokens';
 
 const SIZE = 56;
 const BADGE_SIZE = 20;
@@ -12,17 +12,23 @@ const PLUS_ICON = 'M12 5v14M5 12h14';
 
 interface AddStoryButtonProps {
   onPress: () => void;
+  /** True while the user is actually viewing/posting their own Status — draws the same subtle
+   * inner border a selected real contact gets (see RecipientCarousel's own avatarSelected), so
+   * this slot visibly reads as "the current selection" instead of a real contact looking selected
+   * while Status is what's actually showing. */
+  selected?: boolean;
+  isNight?: boolean;
 }
 
 /** Opens the story capture flow (camera → photo/video, or pick from the library) — sits to the
  * left of the recipient carousel's top row, always visible regardless of who's selected, per
  * explicit request with its own reference screenshot (a dark circle, person glyph, small green
  * "+" badge). */
-export function AddStoryButton({ onPress }: AddStoryButtonProps) {
+export function AddStoryButton({ onPress, selected, isNight }: AddStoryButtonProps) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="Add to your story" hitSlop={8}>
       {({ pressed }) => (
-        <View style={[styles.circle, pressed && styles.pressed]}>
+        <View style={[styles.circle, selected && (isNight ? styles.circleSelectedNight : styles.circleSelected), pressed && styles.pressed]}>
           <Icon path={PERSON_ICON} size={26} color="rgba(255,255,255,.75)" strokeWidth={1.8} />
           <View style={styles.badge}>
             <Icon path={PLUS_ICON} size={12} color={throwColor.ink} strokeWidth={2.4} />
@@ -44,6 +50,8 @@ const styles = StyleSheet.create({
     ...throwColor.shadowSoft,
   },
   pressed: { opacity: 0.85 },
+  circleSelected: { borderWidth: 2, borderColor: throwColor.inkFaint },
+  circleSelectedNight: { borderWidth: 2, borderColor: throwNightColor.ink },
   badge: {
     position: 'absolute',
     right: -2,
