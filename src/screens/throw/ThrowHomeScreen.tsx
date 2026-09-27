@@ -10,10 +10,10 @@ import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { formatMiles } from '../../utils/geo';
 import { flightPath, spreadCoincidentPins } from '../../utils/mapProjection';
-import { isDaytimeNow } from '../../utils/solarTime';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import { useThrowAlerts } from '../../context/ThrowAlertsContext';
+import { useThrowColorMode } from '../../context/ThrowColorModeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useGameStats } from '../../context/GameStatsContext';
 import { formatAlertSchedule } from '../../utils/throwAlerts';
@@ -180,15 +180,8 @@ export function ThrowHomeScreen({
   // The letter paper's own night skin (see FoldingLetter's isNight prop) follows the exact same
   // day/night signal every Throw map already does (see ThrowMap) — the *viewer's own* device
   // clock, not any contact's destination, so every contact/map reads the same day or night at
-  // once, per explicit request. Recomputed on the same cadence ThrowMap uses so a session left
-  // open across the boundary still catches up.
-  const [isDay, setIsDay] = useState(() => isDaytimeNow());
-  useEffect(() => {
-    const recompute = () => setIsDay(isDaytimeNow());
-    recompute();
-    const interval = setInterval(recompute, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // once, per explicit request, unless the user has pinned a color mode in Settings.
+  const { isDay } = useThrowColorMode();
 
   // Dragging the folded, ready-to-throw plane sideways (see FoldingLetter's onContactDragStart /
   // onContactDragOffset) cycles through recipients live, the same direction as swiping the

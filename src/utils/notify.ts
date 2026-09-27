@@ -39,7 +39,7 @@ export type NotificationTarget =
   | { screen: 'throw'; throwId: string }
   | { screen: 'default' };
 
-/** Where tapping a notification should take you — falls back to Chats (the app's landing point)
+/** Where tapping a notification should take you — falls back to Throw (the app's landing point)
  * when it has nothing specific to focus. */
 export function targetForNotification(n: AppNotification): NotificationTarget {
   if (n.entityType === 'card' && n.entityId) return { screen: 'expenses', cardId: n.entityId };
