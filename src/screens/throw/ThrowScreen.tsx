@@ -56,7 +56,6 @@ function ThrowNavigator({
   if (screen.name === 'home') {
     return (
       <ThrowHomeScreen
-        onHome={onHome}
         onOpenExpenses={onOpenExpenses}
         onOpenChats={onOpenChats}
         onOpenAddFriend={onOpenAddFriend}

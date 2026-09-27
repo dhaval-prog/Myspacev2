@@ -75,7 +75,7 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
 
 async function renderScreen() {
   await renderWithSafeArea(
-    <ThrowHomeScreen onHome={noop} onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenInbox={noop} onOpenSettings={noop} />,
+    <ThrowHomeScreen onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenInbox={noop} onOpenSettings={noop} />,
   );
 }
 

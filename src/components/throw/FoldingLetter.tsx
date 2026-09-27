@@ -40,9 +40,8 @@ const X_ICON = 'M6 6l12 12M18 6L6 18';
 // no on-device video-frame decoding here, so this (not a broken <Image>) is what a video chip
 // shows instead of an actual preview frame.
 const PLAY_ICON = 'M8 5v14l11-7z';
-// Same glyphs as HomeScreen/ChatsListScreen's own Chats/QR icons — reused here so this row
-// reads as the same actions, not a Throw-specific reinterpretation.
-const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
+// Same glyph as HomeScreen/ChatsListScreen's own QR icon — reused here so this row reads as the
+// same action, not a Throw-specific reinterpretation.
 const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
 // Feather Icons' "award" glyph — the leaderboard-points badge, moved here from ThrowHomeScreen's
 // header now that the badge itself lives in the paper's top-right corner instead.
@@ -89,7 +88,7 @@ const WHEEL_FOLD_DISTANCE = 500;
 // cross-browser "scroll ended" event to key off instead, so this is a debounce.
 const WHEEL_SETTLE_DEBOUNCE_MS = 180;
 
-// Design-size dimensions of the bottom-controls row (see bottomRowScale) — four round icon
+// Design-size dimensions of the bottom-controls row (see bottomRowScale) — three round icon
 // buttons plus the wider mic button, at their full (unscaled) sizes and gap.
 const BOTTOM_ROW_ICON = 60;
 const BOTTOM_ROW_MIC = 76;
@@ -98,7 +97,7 @@ const BOTTOM_ROW_HPAD = 12;
 // A little extra clearance beyond the strict fit, so the outer icons never sit flush against the
 // paper's own rounded edge even at the smallest scale.
 const BOTTOM_ROW_SAFETY = 8;
-const BOTTOM_ROW_CONTENT_WIDTH = BOTTOM_ROW_ICON * 4 + BOTTOM_ROW_MIC + BOTTOM_ROW_GAP * 4;
+const BOTTOM_ROW_CONTENT_WIDTH = BOTTOM_ROW_ICON * 3 + BOTTOM_ROW_MIC + BOTTOM_ROW_GAP * 3;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
@@ -130,9 +129,6 @@ interface FoldingLetterProps {
    * attention). */
   onLaunched: () => void;
   throwLabel?: string;
-  /** Opens Orbit's Chats list — its button lives between Photo and Voice in the bottom-controls
-   * row, rather than in a separate header. */
-  onOpenChats: () => void;
   /** Opens the QR "Add a friend" sheet — its button lives between Voice and Inbox. */
   onOpenAddFriend: () => void;
   /** Opens the inbox — its button lives in the bottom-controls row below the paper alongside
@@ -221,7 +217,6 @@ export function FoldingLetter({
   onThrow,
   onLaunched,
   throwLabel = 'Swipe up to throw',
-  onOpenChats,
   onOpenAddFriend,
   onOpenInbox,
   unreadCount,
@@ -469,11 +464,13 @@ export function FoldingLetter({
 
   // Self-reminder only: the fold completing (phase reaching 'ready') is the trigger for the
   // timer+repeat popup — see scheduleModalVisible above. Unfolding back out of 'ready' (to edit
-  // the message further) dismisses it again rather than leaving it stranded over the paper.
+  // the message further) dismisses it again rather than leaving it stranded over the paper. Gated
+  // on hasContent (already true for typed text, an ink stroke, or an attached photo/video, see its
+  // own definition) — an empty letter has nothing to remind about, so folding one doesn't pop it up.
   useEffect(() => {
     if (!alertSchedule || !onAlertScheduleChange) return;
-    setScheduleModalVisible(phase === 'ready');
-  }, [phase, alertSchedule, onAlertScheduleChange]);
+    setScheduleModalVisible(phase === 'ready' && hasContent);
+  }, [phase, alertSchedule, onAlertScheduleChange, hasContent]);
 
   // react-native-web's PanResponder polyfill dedupes move dispatch against
   // `touchHistory.mostRecentTimeStamp`, and once `onMoveShouldSetPanResponderCapture` below steals
@@ -868,16 +865,6 @@ export function FoldingLetter({
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
               <BottomIconSurface isNight={isNight} tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
                 <Icon path={PHOTO_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
-              </BottomIconSurface>
-            </View>
-          )}
-        </Pressable>
-
-        <Pressable onPress={onOpenChats} accessibilityRole="button" accessibilityLabel="Chats">
-          {({ pressed }) => (
-            <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
-                <Icon path={CHAT_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
               </BottomIconSurface>
             </View>
           )}

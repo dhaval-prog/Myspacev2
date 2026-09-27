@@ -46,10 +46,11 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const focusKey = focus ? `${focus.latitude.toFixed(3)},${focus.longitude.toFixed(3)}` : '';
 
   // The viewer's own device clock governs the day/night palette — not any contact's destination,
-  // so every map and every contact reads the same day or night at once, per explicit request,
-  // unless the user has pinned a color mode in Settings (see ThrowColorModeContext). Same
+  // so every map and every contact reads the same day or night at once, per explicit request. This
+  // stays on the viewer's actual clock unconditionally (autoIsDay) — the paper/plane color the
+  // user can pin in Settings (see ThrowColorModeContext) only ever affects the letter itself. Same
   // reasoning and same shared hook as the web version, so both platforms agree.
-  const { isDay } = useThrowColorMode();
+  const { autoIsDay: isDay } = useThrowColorMode();
   // `onMapReady` (not just a mounted ref) is what actually gates safe imperative calls here — a
   // ref can be attached to the native view before the underlying map surface is ready, in which
   // case `animateToRegion`/`fitToCoordinates` can silently no-op or resolve into a wrong camera
