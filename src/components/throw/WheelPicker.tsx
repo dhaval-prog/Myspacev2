@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { throwColor, throwFont } from '../../theme/throwTokens';
 
 export const WHEEL_ITEM_HEIGHT = 34;
@@ -50,14 +50,41 @@ export function WheelPicker({ items, selectedIndex, onChange, width = 56, access
     if (index !== selectedIndex) onChange(index);
   };
 
+  // react-native-web's ScrollView never actually invokes onMomentumScrollEnd/onScrollEndDrag —
+  // confirmed directly in its source (ScrollViewBase's DOM scroll handler only ever calls
+  // `onScroll`, and never wires either prop to any scroll-end detection at all), so on web
+  // `handleScrollEnd` below is silently never called no matter how the wheel is scrolled. The
+  // wheel still visually snaps to and highlights a row (CSS scroll-snap plus this component's own
+  // opacity/scale interpolation), so a user scrolling it sees their pick "land" normally — but
+  // `settle()`/`onChange` never fires, silently leaving the schedule's hour/minute at whatever
+  // they were before, which is exactly the reported bug (time always saves as the untouched
+  // default). This timer is a web-only substitute: since raw `onScroll` DOES fire correctly on
+  // web, treat a lull with no further scroll events as "settled", the same idea RN's own native
+  // momentum-end detection is standing in for.
+  const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastScrollYRef = useRef(selectedIndex * WHEEL_ITEM_HEIGHT);
+  useEffect(
+    () => () => {
+      if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
+    },
+    [],
+  );
+
   const handleScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
     useNativeDriver: false,
-    listener: () => {
+    listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       interacting.current = true;
+      if (Platform.OS !== 'web') return;
+      lastScrollYRef.current = e.nativeEvent.contentOffset.y;
+      if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
+      scrollSettleTimerRef.current = setTimeout(() => settle(lastScrollYRef.current), 120);
     },
   });
 
-  const handleScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => settle(e.nativeEvent.contentOffset.y);
+  const handleScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
+    settle(e.nativeEvent.contentOffset.y);
+  };
 
   const selectItem = (index: number) => {
     interacting.current = false;
