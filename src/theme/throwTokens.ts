@@ -80,11 +80,13 @@ export const throwGlass = {
   tint: 'rgba(195,234,79,.16)',
   tintStrong: 'rgba(195,234,79,.26)',
   border: 'rgba(195,234,79,.4)',
-  // Same glass treatment, ink-tinted (the paper's own ink colour, #2B231C) instead of lime — for
-  // the letter's own bottom-controls row specifically (see FoldingLetter), per explicit request
-  // that it match the paper rather than the rest of Throw's chrome, which keeps the lime tint.
-  tintInk: 'rgba(43,35,28,.14)',
-  tintInkStrong: 'rgba(43,35,28,.22)',
+  // Same glass treatment, "water blue"-tinted (the same cool blue as throwColor.activeBlue)
+  // instead of lime — for the letter's own bottom-controls row specifically (see FoldingLetter),
+  // per explicit request. Was ink-tinted for one round, then explicitly changed to blue — kept as
+  // its own tokens (not touching tint/tintStrong) so every other Throw glass surface (contact
+  // rows, settings, search) stays lime-tinted regardless.
+  tintWaterBlue: 'rgba(61,123,255,.16)',
+  tintWaterBlueStrong: 'rgba(61,123,255,.26)',
 } as const;
 
 export const throwGradient = {

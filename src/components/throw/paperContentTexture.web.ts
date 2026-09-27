@@ -134,13 +134,12 @@ export async function bakeLetterTexture(content: PaperPlaneLetterContent, source
   canvas.width = base.naturalWidth || base.width || 1024;
   canvas.height = base.naturalHeight || base.height || 1024;
   const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(base, 0, 0, canvas.width, canvas.height);
-  if (content.isNight) {
-    // Covers the cream paper-grain texture with the night skin's own solid colour — only ever
-    // set when the destination currently reads as nighttime (see isNight's own doc comment).
-    ctx.fillStyle = throwNightColor.planePaper;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
+  // A flat solid colour rather than the paper-grain image itself — white by day, the night
+  // skin's own dark colour by night — per explicit request that the folded plane read as plain
+  // white rather than matching the open paper's cream. `base` is still loaded (see above) purely
+  // to size the canvas to the same dimensions as before.
+  ctx.fillStyle = content.isNight ? throwNightColor.planePaper : '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const sx = sourceSize.width > 0 ? canvas.width / sourceSize.width : 1;
   const sy = sourceSize.height > 0 ? canvas.height / sourceSize.height : 1;

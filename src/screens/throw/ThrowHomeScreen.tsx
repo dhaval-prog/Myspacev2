@@ -93,10 +93,11 @@ export function ThrowHomeScreen({
   const { statsFor } = useGameStats();
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [alertSchedule, setAlertSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
-  // Once the user has touched the alert schedule or started writing a self-reminder, switching
-  // to a different contact is locked (see selfLocked below) — otherwise a stray sideways swipe
-  // could yank them away from a reminder they're mid-thought on. Reset once the reminder is
-  // actually created (see handleThrow's self branch).
+  // Once the user has touched the alert schedule, switching to a different contact is locked
+  // (see selfLocked below) — otherwise a stray sideways swipe could yank them away from a
+  // reminder they're mid-thought on. Writing the reminder's own text does *not* lock this any
+  // more (per explicit request — composing shouldn't block flicking through contacts). Reset
+  // once the reminder is actually created (see handleThrow's self branch).
   const [selfComposeLocked, setSelfComposeLocked] = useState(false);
   const initializedRef = useRef(false);
 
@@ -258,9 +259,6 @@ export function ThrowHomeScreen({
   const handleAlertScheduleChange = (next: AlertSchedule) => {
     setAlertSchedule(next);
     setSelfComposeLocked(true);
-  };
-  const handleHasContentChange = (hasContent: boolean) => {
-    if (hasContent) setSelfComposeLocked(true);
   };
 
   // Real "zoom to contact": the selected friend's own location, falling back to the user's own
@@ -500,7 +498,6 @@ export function ThrowHomeScreen({
               onAlertScheduleChange={handleAlertScheduleChange}
               onReminderPeekChange={isSelfSelected ? setReminderPeeking : undefined}
               hideBadges={isSelfSelected}
-              onHasContentChange={isSelfSelected ? handleHasContentChange : undefined}
               isNight={!isDay}
             />
           </Animated.View>

@@ -224,13 +224,13 @@ export function createPaperPlane(options: PaperPlaneOptions) {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 300);
-  // Sky/ground both warmed toward the baked texture's own cream (#FBF6EC) rather than a neutral
-  // gray, and intensity raised — at the old 0xe4e1d8/1.35 the plane's own faces (mostly lit at
-  // oblique angles by this ambient term rather than straight-on by `key`) read as a flat gray
-  // instead of matching the open, unlit paper `<Image>`, per explicit request with a reference
-  // screenshot comparing the two.
-  scene.add(new THREE.HemisphereLight(0xfff7e8, 0xf3ead2, 1.75));
-  const key = new THREE.DirectionalLight(0xfffaf0, 1.55);
+  // Neutral white/near-white throughout (sky, key, fill) — the baked plane texture is now a flat
+  // solid colour itself (white by day, see paperContentTexture.*), so the rig no longer needs a
+  // warm cast to match the open paper's cream; a colored light here would just tint the white
+  // texture off-white again. Intensity kept raised (from the original 1.35) so the plane still
+  // reads as a bright white rather than a dim gray under ordinary Lambertian shading.
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xe8e8e8, 1.75));
+  const key = new THREE.DirectionalLight(0xffffff, 1.55);
   key.position.set(-6, 16, 9);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
@@ -240,10 +240,7 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   key.shadow.radius = 4;
   scene.add(key);
   scene.add(key.target);
-  // Was a cool blue-white (0xf3f6ff) — on faces angled away from `key`, this cool tint was the
-  // dominant light and recolored the warm cream paper toward gray-blue. Warmed to match the rest
-  // of the rig instead, same reasoning as the hemisphere light above.
-  const fill = new THREE.DirectionalLight(0xfff1de, 0.6);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.6);
   fill.position.set(10, 6, -6);
   scene.add(fill);
 

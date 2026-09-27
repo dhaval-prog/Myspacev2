@@ -173,13 +173,13 @@ export const LetterRasterizer = forwardRef<LetterRasterizerHandle>(function Lett
             imageReady.current = true;
           }}
         />
-        {draft?.content.isNight && (
-          // Covers the cream paper-grain texture above with the night skin's own solid colour —
-          // only ever set when the destination currently reads as nighttime (see isNight's own
-          // doc comment on PaperPlaneLetterContent). Drawn after (not instead of) the texture so
-          // its onLoad above still fires normally.
-          <Rect x={0} y={0} width={RASTER_SIZE} height={RASTER_SIZE} fill={throwNightColor.planePaper} />
-        )}
+        {/* Always covers the cream paper-grain texture above with a flat solid colour — white by
+            day, the night skin's own dark colour by night (see isNight's own doc comment on
+            PaperPlaneLetterContent) — per explicit request that the folded plane read as plain
+            white rather than matching the open paper's cream. The texture image above is still
+            rendered (not swapped out) purely so its onLoad still fires and the readiness-polling
+            loop above isn't stalled waiting on an image nothing else needs any more. */}
+        <Rect x={0} y={0} width={RASTER_SIZE} height={RASTER_SIZE} fill={draft?.content.isNight ? throwNightColor.planePaper : '#FFFFFF'} />
         <G>{contentNodes('full')}</G>
         <G transform={`translate(${half}, 0) scale(0.5)`}>{contentNodes('q2')}</G>
         <G transform={`translate(0, ${half}) scale(0.5)`}>{contentNodes('q3')}</G>
