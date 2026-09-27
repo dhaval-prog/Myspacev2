@@ -1,5 +1,5 @@
 import React from 'react';
-import { act } from '@testing-library/react-native';
+import { act, screen } from '@testing-library/react-native';
 import { renderWithSafeArea } from '../../../testUtils/renderWithSafeArea';
 import { ThrowHomeScreen } from '../ThrowHomeScreen';
 import { useAuth } from '../../../context/AuthContext';
@@ -13,6 +13,13 @@ jest.mock('../../../context/ThrowContext', () => ({ useThrow: jest.fn() }));
 jest.mock('../../../context/ThrowAlertsContext', () => ({ useThrowAlerts: jest.fn() }));
 jest.mock('../../../context/GameStatsContext', () => ({ useGameStats: jest.fn() }));
 jest.mock('../../../context/ThrowColorModeContext', () => ({ useThrowColorMode: jest.fn() }));
+
+// Never exercised by the earlier describe block below (flight state stays null there), but the
+// new flight/chrome tests do reach it — a passthrough stub keeps this file's existing convention
+// of mocking out anything BlurView-backed rather than relying on its native-module test fallback.
+jest.mock('../../../components/friends/GlassSurface', () => ({
+  GlassSurface: ({ children }: { children?: React.ReactNode }) => children,
+}));
 
 // ThrowMap (Leaflet/react-native-maps) and FoldingLetter/RecipientCarousel (Animated
 // gestures, a WebGL 3D stage) are heavy and irrelevant to what's under test here — the
@@ -134,4 +141,72 @@ describe('ThrowHomeScreen self-reminder contact lock', () => {
     expect(createAlert).toHaveBeenCalled();
     expect(mockCarouselProps.disabled).toBe(false);
   });
+});
+
+describe('ThrowHomeScreen flight/chrome behavior', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFoldingLetterProps = undefined;
+    mockCarouselProps = undefined;
+    mockThrowMapProps = undefined;
+  });
+
+  it('goes straight to a delivered confirmation — no separate "flying" phase — then clears it', async () => {
+    const createAlert = setupMocks();
+    await renderScreen();
+
+    // Folding the letter (see handleFoldProgress) hides BottomNav — mirrors what actually
+    // happens right before a throw.
+    await act(async () => {
+      mockFoldingLetterProps.onFoldProgress(1);
+    });
+    expect(screen.getByTestId('bottom-nav-wrap').props.pointerEvents).toBe('none');
+
+    await act(async () => {
+      await mockFoldingLetterProps.onThrow({ messageText: 'Drink water', strokes: null, penColor: '#4A90D9', photoUris: [] });
+    });
+    expect(createAlert).toHaveBeenCalled();
+
+    await act(async () => {
+      mockFoldingLetterProps.onLaunched();
+    });
+
+    // The delivered copy shows immediately — no intermediate "Flying to…"/"Sealing your
+    // reminder…" step ever renders, per explicit request that a throw skip the animated flight
+    // simulation and just confirm delivery on the same page.
+    expect(screen.getByText('Alert set')).toBeTruthy();
+    expect(screen.queryByText(/Flying to/)).toBeNull();
+    expect(screen.queryByText(/Sealing your reminder/)).toBeNull();
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 2000));
+    });
+    expect(screen.queryByText('Alert set')).toBeNull();
+  }, 10000);
+
+  it('restores the bottom nav once the delivered card clears, for the fresh letter that follows', async () => {
+    setupMocks();
+    await renderScreen();
+
+    await act(async () => {
+      mockFoldingLetterProps.onFoldProgress(1);
+    });
+    expect(screen.getByTestId('bottom-nav-wrap').props.pointerEvents).toBe('none');
+
+    await act(async () => {
+      await mockFoldingLetterProps.onThrow({ messageText: 'Drink water', strokes: null, penColor: '#4A90D9', photoUris: [] });
+    });
+    await act(async () => {
+      mockFoldingLetterProps.onLaunched();
+    });
+
+    // A brand-new FoldingLetter mounts right after the delivered card clears, starting at fold
+    // progress 0 — but nothing re-fires onFoldProgress(0) for it (an Animated.Value's listener
+    // never fires for a value it already started at), so without an explicit reset here the
+    // bottom nav would otherwise stay hidden on that fresh blank letter.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 2000));
+    });
+    expect(screen.getByTestId('bottom-nav-wrap').props.pointerEvents).toBe('box-none');
+  }, 10000);
 });
