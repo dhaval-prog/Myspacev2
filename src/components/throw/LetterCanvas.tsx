@@ -5,15 +5,14 @@ import type { StrokePath } from '../../types/throw';
 
 const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
 
-// A light-blue ballpoint-ink shade, matching the reference design's "handwritten in blue pen"
-// look — no longer user-selectable, so this is the only pen color a letter is ever written in.
-// Exported so FoldingLetter's own plane re-bake (see its rebakeContent) can derive the correct
-// ink colour directly from isNight, rather than trusting this component's own (potentially one
-// render behind) reported penColor.
-export const INK_BLUE = '#4A90D9';
-// The placeholder's own ink — a distinct blue-violet, so it always reads as a prompt rather than
-// something the user could mistake for typed text.
-const PLACEHOLDER_COLOR = '#4A55B0';
+// A blue-violet ballpoint-ink shade — no longer user-selectable, so this is the only pen color a
+// letter is ever written in. Matches the placeholder's own color exactly, per explicit request
+// (they used to differ, on purpose, so the placeholder always read as a prompt rather than
+// something the user could mistake for typed text — that's no longer the goal). Exported so
+// FoldingLetter's own plane re-bake (see its rebakeContent) can derive the correct ink colour
+// directly from isNight, rather than trusting this component's own (potentially one render
+// behind) reported penColor.
+export const INK_BLUE = '#4A55B0';
 
 interface LetterCanvasContent {
   messageText: string | null;
@@ -108,7 +107,7 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
         ]}
         multiline
         placeholder="Write something for your loved one"
-        placeholderTextColor={isNight ? throwNightColor.placeholder : PLACEHOLDER_COLOR}
+        placeholderTextColor={isNight ? throwNightColor.placeholder : INK_BLUE}
         value={displayText}
         // Ignores edits while a live interim transcript is showing — the box is displaying
         // dictated-but-not-yet-final words the user isn't meant to be typing over at that exact

@@ -54,6 +54,14 @@ const LAUNCH_VELOCITY = 0.5;
 // px — short/lateral movement is left alone for LetterCanvas's own stroke gesture underneath.
 const FOLD_CAPTURE_DY = 14;
 const FOLD_CAPTURE_RATIO = 1.7;
+// The writing-phase mirror of the above, for the opposite axis: a clearly horizontal flick on the
+// still-open paper changes the selected recipient (see writingGestureKindRef/contactCapturedRef)
+// instead of being left as a tap/text-selection drag in the TextInput underneath. A larger
+// distance than the fold's own 14px, since this doesn't have a child gesture with its own DY/
+// RATIO tradeoff to defer to — the extra margin just keeps ordinary taps/text-selection safely
+// out of it.
+const CONTACT_FLICK_CAPTURE_DX = 20;
+const CONTACT_FLICK_CAPTURE_RATIO = 1.7;
 // Once folded, an upward swipe only throws when it starts in this middle fraction of the paper's
 // width — the outer edges on either side are reserved for unfolding instead (see the 'ready'-phase
 // branches in the PanResponder below).
@@ -134,15 +142,16 @@ interface FoldingLetterProps {
    * Photo and Voice, rather than in a separate header. */
   onOpenInbox: () => void;
   unreadCount: number;
-  /** Fires once, right when a center-zone hold-and-drag starts on the folded, ready-to-throw
-   * plane — the caller's cue to snapshot which recipient is currently selected before live
-   * offsets (below) start moving it. Only wired once there's more than one recipient to cycle
-   * through. */
+  /** Fires once, right when a recipient-switching drag starts — either a center-zone hold-and-
+   * drag on the folded, ready-to-throw plane, or a clearly horizontal flick on the still-open
+   * writing paper (see CONTACT_FLICK_CAPTURE_DX). The caller's cue to snapshot which recipient is
+   * currently selected before live offsets (below) start moving it. Only wired once there's more
+   * than one recipient to cycle through. */
   onContactDragStart?: () => void;
-  /** Fires continuously while that same drag moves, with the horizontal offset expressed as a
-   * fractional recipient-step count (see CONTACT_DRAG_SPACING) relative to the drag's start —
-   * not capped at ±1, so a longer drag can move several recipients over. The caller rounds and
-   * clamps against its own list length. */
+  /** Fires continuously while that same drag moves (folded or still-open paper alike), with the
+   * horizontal offset expressed as a fractional recipient-step count (see CONTACT_DRAG_SPACING)
+   * relative to the drag's start — not capped at ±1, so a longer drag can move several recipients
+   * over. The caller rounds and clamps against its own list length. */
   onContactDragOffset?: (steps: number) => void;
   /** Fires on every change to the fold amount (0 = flat writing paper, 1 = folded-and-ready
    * plane) regardless of what's driving it — the pointer-drag fold above or the scroll-wheel
@@ -294,6 +303,15 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   // (past FOLD_CAPTURE_DY/RATIO) and is the { y, progress } pair everything since is measured from.
   const rawStartRef = useRef<{ x: number; y: number } | null>(null);
   const dragAnchorRef = useRef<{ y: number; progress: number } | null>(null);
+  // Web-only mirror of dragAnchorRef, for a writing-phase horizontal flick (see
+  // CONTACT_FLICK_CAPTURE_DX) instead of a fold — just a boolean rather than an anchored value,
+  // since contact offset is reported as a live delta off rawStartRef directly rather than an
+  // accumulated progress value the fold needs re-anchoring for.
+  const contactCapturedRef = useRef(false);
+  // Native's own record of which kind of gesture a writing-phase touch was captured as, decided
+  // once in onMoveShouldSetPanResponderCapture and read for the rest of that same gesture's
+  // onPanResponderMove/Release — mirrors contactCapturedRef's role for the web raw-listener path.
+  const writingGestureKindRef = useRef<'fold' | 'contact' | null>(null);
   const paperAreaRef = useRef<View>(null);
   // The whole compose card (paper + hint + bottom-controls row) — scroll-wheel fold/unfold (see
   // the effect below) listens here rather than on paperAreaRef, since it's meant to work whether
@@ -568,16 +586,27 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
       }
       const start = rawStartRef.current;
       if (!start || latest.current.phase !== 'writing') return;
+      if (contactCapturedRef.current) {
+        latest.current.onContactDragOffset?.((p.x - start.x) / CONTACT_DRAG_SPACING);
+        return;
+      }
       const dy = p.y - start.y;
       const dx = p.x - start.x;
       if (dy > FOLD_CAPTURE_DY && dy > Math.abs(dx) * FOLD_CAPTURE_RATIO) {
         const next = Math.max(0, Math.min(1, dy / FOLD_DRAG_DISTANCE));
         dragAnchorRef.current = { y: p.y, progress: next };
         applyFoldProgress(next);
+        return;
+      }
+      if (Math.abs(dx) > CONTACT_FLICK_CAPTURE_DX && Math.abs(dx) > Math.abs(dy) * CONTACT_FLICK_CAPTURE_RATIO && latest.current.onContactDragOffset) {
+        contactCapturedRef.current = true;
+        latest.current.onContactDragStart?.();
+        latest.current.onContactDragOffset(dx / CONTACT_DRAG_SPACING);
       }
     };
     const onUp = () => {
       rawStartRef.current = null;
+      contactCapturedRef.current = false;
       if (!dragAnchorRef.current) return;
       // Clear the anchor first — this is what actually stops tracking, synchronously, before
       // settleFold's spring even starts. Everything after this point no-ops in onMove above.
@@ -661,7 +690,24 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           if (phase === 'ready' || phase === 'folding') return true;
           // No `hasContent` gate — an empty paper can still be dragged into a fold; the actual
           // throw itself is what gets locked (see onPanResponderRelease below).
-          return g.dy > FOLD_CAPTURE_DY && g.dy > Math.abs(g.dx) * FOLD_CAPTURE_RATIO;
+          if (g.dy > FOLD_CAPTURE_DY && g.dy > Math.abs(g.dx) * FOLD_CAPTURE_RATIO) {
+            writingGestureKindRef.current = 'fold';
+            return true;
+          }
+          // A clearly horizontal flick on the still-open paper changes the selected recipient —
+          // the same gesture the folded, ready-to-throw plane already supports, just also
+          // available before folding. Gated on onContactDragOffset actually being provided (there's
+          // more than one recipient to switch between) so a single-friend session doesn't steal
+          // ordinary taps/text-selection drags in the TextInput underneath for no reason.
+          if (
+            latest.current.onContactDragOffset &&
+            Math.abs(g.dx) > CONTACT_FLICK_CAPTURE_DX &&
+            Math.abs(g.dx) > Math.abs(g.dy) * CONTACT_FLICK_CAPTURE_RATIO
+          ) {
+            writingGestureKindRef.current = 'contact';
+            return true;
+          }
+          return false;
         },
         onPanResponderGrant: (e) => {
           if (latest.current.phase === 'ready') {
@@ -678,9 +724,15 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             if (readyZoneRef.current === 'center') {
               latest.current.onContactDragStart?.();
             }
+          } else if (writingGestureKindRef.current === 'contact') {
+            latest.current.onContactDragStart?.();
           }
         },
         onPanResponderMove: (_, g) => {
+          if (writingGestureKindRef.current === 'contact') {
+            latest.current.onContactDragOffset?.(g.dx / CONTACT_DRAG_SPACING);
+            return;
+          }
           if (readyGestureActiveRef.current) {
             if (readyZoneRef.current === 'side') {
               // Dragging up from a side edge unfolds — the mirror image of the fold-drag's own
@@ -725,6 +777,11 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           applyFoldProgress(next);
         },
         onPanResponderRelease: (_, g) => {
+          if (writingGestureKindRef.current === 'contact') {
+            writingGestureKindRef.current = null;
+            return;
+          }
+          writingGestureKindRef.current = null;
           if (readyGestureActiveRef.current) {
             // Clear before settling — same reasoning as the raw DOM tracker's onUp: closes off any
             // stray move event that might otherwise land after release and re-drive progress.
@@ -906,7 +963,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         >
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintInk} style={[styles.roundBtn, roundBtnDynamicStyle]}>
                 <Icon path={PHOTO_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
               </BottomIconSurface>
             </View>
@@ -928,7 +985,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
               </View>
             ) : (
               <View style={[styles.micBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintStrong} style={[styles.micBtn, roundBtnDynamicStyle]}>
+                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintInkStrong} style={[styles.micBtn, roundBtnDynamicStyle]}>
                   <Icon path={MIC_ICON} size={27 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
                 </BottomIconSurface>
               </View>
@@ -939,7 +996,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintInk} style={[styles.roundBtn, roundBtnDynamicStyle]}>
                 <Icon path={QR_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
               </BottomIconSurface>
             </View>
@@ -949,7 +1006,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         <Pressable onPress={onOpenInbox} accessibilityRole="button" accessibilityLabel="Inbox">
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tint} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintInk} style={[styles.roundBtn, roundBtnDynamicStyle]}>
                 <Icon path={INBOX_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
               </BottomIconSurface>
               {unreadCount > 0 && (

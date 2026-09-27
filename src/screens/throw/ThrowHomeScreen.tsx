@@ -506,20 +506,22 @@ export function ThrowHomeScreen({
           </Animated.View>
         )}
 
-        {/* The self-reminder sheet's collapsed peek strip — see onReminderPeekChange's own
-            comment for why this lives here rather than inside FoldingLetter. Gated the same as
-            the letter card itself (!inFlight && selectedFriend) so a just-thrown letter's peek
-            can't linger after FoldingLetter unmounts (its own effect has no unmount cleanup to
-            report "gone" with). */}
+        {/* The self-reminder sheet's collapsed stand-in — a plain "Remind me" button, not a bare
+            drag handle (see onReminderPeekChange's own comment for why this lives here rather
+            than inside FoldingLetter). Gated the same as the letter card itself (!inFlight &&
+            selectedFriend) so a just-thrown letter's button can't linger after FoldingLetter
+            unmounts (its own effect has no unmount cleanup to report "gone" with). */}
         {!inFlight && selectedFriend && reminderPeeking && (
-          <View
-            ref={reminderPeekRef}
-            accessibilityRole="button"
-            accessibilityLabel="Show reminder settings"
-            style={[styles.reminderPeek, { bottom: insets.bottom }]}
-            {...(Platform.OS !== 'web' ? reminderPeekPanResponder.panHandlers : null)}
-          >
-            <View style={styles.reminderPeekHandle} />
+          <View style={[styles.reminderPeekWrap, { bottom: insets.bottom + 16 }]} pointerEvents="box-none">
+            <View
+              ref={reminderPeekRef}
+              accessibilityRole="button"
+              accessibilityLabel="Show reminder settings"
+              style={styles.reminderPeekButton}
+              {...(Platform.OS !== 'web' ? reminderPeekPanResponder.panHandlers : null)}
+            >
+              <Text style={styles.reminderPeekButtonText}>Remind me</Text>
+            </View>
           </View>
         )}
 
@@ -601,24 +603,22 @@ const styles = StyleSheet.create({
     right: 28,
     top: '32%',
   },
-  // The self-reminder sheet's collapsed stand-in (see onReminderPeekChange) — pinned to the
-  // actual screen bottom (unlike letterCard, which sits well short of it) so it reads as sticking
-  // to the bottom of the whole screen, not just this narrower card. A plain View (see its own
-  // PanResponder comment), not another BottomSheet, so it never blocks the swipe-up-to-throw
-  // gesture on the map/plane behind it.
-  reminderPeek: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 28,
-    backgroundColor: throwColor.cardBg,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    alignItems: 'center',
-    paddingTop: 8,
+  // The self-reminder sheet's collapsed stand-in (see onReminderPeekChange) — a small "Remind me"
+  // button, not a bare drag handle, pinned near the actual screen bottom (unlike letterCard,
+  // which sits well short of it) so it reads as belonging to the whole screen, not just this
+  // narrower card. The wrap only centers its child (pointerEvents="box-none" so the empty space
+  // either side still reaches the map/plane behind it); the button itself (see its own
+  // PanResponder comment) is a plain View, not another BottomSheet, so it never blocks the
+  // swipe-up-to-throw gesture either.
+  reminderPeekWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  reminderPeekButton: {
+    backgroundColor: throwColor.ink,
+    borderRadius: throwRadius.pill,
+    paddingVertical: 12,
+    paddingHorizontal: 26,
     ...throwColor.shadowSoft,
   },
-  reminderPeekHandle: { width: 44, height: 4, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.16)' },
+  reminderPeekButtonText: { fontFamily: throwFont.ui700, fontSize: 14, color: throwColor.paper },
   flightStatusWrap: {
     position: 'absolute',
     left: 12,

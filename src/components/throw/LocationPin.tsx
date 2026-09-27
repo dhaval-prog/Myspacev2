@@ -73,14 +73,17 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(201,113,79,.22)',
+    // Ink-tinted (the paper's own ink colour, #2B231C), not the clay/orange accent used
+    // elsewhere in Throw — per explicit request, matching the paper itself rather than the
+    // app's warm accent.
+    backgroundColor: 'rgba(43,35,28,.22)',
   },
-  // Night skin — a white glow instead of the day skin's clay-brown one, matching the map's own
-  // dark night basemap.
+  // Night skin — a white glow instead of the day skin's ink one, matching the map's own dark
+  // night basemap.
   glowNight: { backgroundColor: 'rgba(255,255,255,.28)' },
   ring: { position: 'absolute', top: -3, width: 20, height: 20, borderRadius: 10, backgroundColor: throwColor.pinRing },
   ringSelf: { backgroundColor: 'rgba(43,35,28,.14)' },
-  ringSelected: { backgroundColor: 'rgba(201,113,79,.4)' },
+  ringSelected: { backgroundColor: 'rgba(43,35,28,.4)' },
   ringSelectedNight: { backgroundColor: 'rgba(255,255,255,.45)' },
   dot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: throwColor.paper },
   dotSelf: { backgroundColor: throwColor.pinSelf },
