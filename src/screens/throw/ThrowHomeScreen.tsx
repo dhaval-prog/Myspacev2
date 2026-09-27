@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
@@ -10,7 +10,7 @@ import { GlassSurface } from '../../components/friends/GlassSurface';
 import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { formatMiles } from '../../utils/geo';
-import { flightPath, spreadCoincidentPins } from '../../utils/mapProjection';
+import { spreadCoincidentPins } from '../../utils/mapProjection';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import { useThrowAlerts } from '../../context/ThrowAlertsContext';
@@ -20,7 +20,6 @@ import { useGameStats } from '../../context/GameStatsContext';
 import { formatAlertSchedule } from '../../utils/throwAlerts';
 import type { AlertSchedule, StrokePath, ThrowLetter } from '../../types/throw';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
-import type { LatLng } from '../../utils/geo';
 
 // Feather Icons' "settings" gear glyph (24x24 viewBox) — a known-good path rather than a
 // freehand approximation.
@@ -34,21 +33,14 @@ const DELIVERED_HOLD_MS = 1800;
 // pushing content up above it.
 const BOTTOM_NAV_CLEARANCE = 92;
 
-type FlightPhase = 'in_flight' | 'delivered';
 interface FlightState {
   letter: ThrowLetter;
-  phase: FlightPhase;
   /** A self-reminder alert being "thrown" to yourself rather than a real letter to a friend —
-   * same fold/launch/flight visuals, different delivered-state copy. */
+   * same delivered-state copy swap, different wording. */
   isAlert?: boolean;
   /** Snapshot of formatAlertSchedule at the moment the alert was created — alertSchedule itself
-   * gets reset for the next reminder well before this flight finishes playing out. */
+   * gets reset for the next reminder well before this card clears. */
   alertScheduleSummary?: string;
-}
-
-function flightDurationMs(miles: number): number {
-  const t = Math.min(1, miles / 10000);
-  return Math.round(3000 + t * 3500);
 }
 
 function wait(ms: number): Promise<void> {
@@ -102,8 +94,6 @@ export function ThrowHomeScreen({
   const initializedRef = useRef(false);
 
   const [flight, setFlight] = useState<FlightState | null>(null);
-  const [flightProgress, setFlightProgress] = useState(0);
-  const flightAnim = useRef(new Animated.Value(0)).current;
   // Fades (and slightly slides down) BottomNav *and* the top header bar in lockstep with
   // FoldingLetter's own fold amount — 0 (flat writing paper) keeps both fully visible, 1 (folded,
   // ready to throw) hides both, driven by the exact same value whether the fold was triggered by
@@ -330,40 +320,27 @@ export function ThrowHomeScreen({
     return spreadCoincidentPins(list);
   }, [friendsWithLocation, selectedFriendId, lockedRecipient, selfLocked, myId]);
 
+  // Goes straight to the "delivered" card rather than first playing out a multi-second animated
+  // flight across the map — per explicit request that a throw stay on the same page/map and just
+  // confirm delivery, instead of a lengthy flight simulation taking over first.
   const runFlight = async (letter: ThrowLetter, isAlert: boolean, alertScheduleSummary?: string) => {
     const runId = ++flightRunIdRef.current;
     const stillCurrent = () => flightRunIdRef.current === runId;
 
-    setFlight({ letter, phase: 'in_flight', isAlert, alertScheduleSummary });
-    flightAnim.setValue(0);
-    // Throttled rather than applied on every animation frame — the map camera no longer follows
-    // the plane (see this screen's doc comment), but the plane marker itself still repaints on
-    // every update, and neither Leaflet nor react-native-maps can reliably keep up with 60
-    // calls/sec of marker churn. This is plenty smooth for the shrink/fade motion.
-    let lastUpdateAt = 0;
-    const listenerId = flightAnim.addListener(({ value }) => {
-      const now = Date.now();
-      if (value < 1 && now - lastUpdateAt < 100) return;
-      lastUpdateAt = now;
-      setFlightProgress(value);
-    });
-    await new Promise<void>((resolve) => {
-      Animated.timing(flightAnim, {
-        toValue: 1,
-        duration: reduceMotion ? 1100 : flightDurationMs(letter.distanceMiles),
-        easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: false,
-      }).start(() => resolve());
-    });
-    flightAnim.removeListener(listenerId);
-    if (!stillCurrent()) return;
-
-    setFlight({ letter, phase: 'delivered', isAlert, alertScheduleSummary });
+    setFlight({ letter, isAlert, alertScheduleSummary });
     await wait(DELIVERED_HOLD_MS);
     if (!stillCurrent()) return;
 
     setFlight(null);
-    setFlightProgress(0);
+    // The next FoldingLetter mounts fresh right after this (see !inFlight below) with its own
+    // fold progress back at 0 — but an Animated.Value's listener only fires on a *future*
+    // setValue, never for whatever value a brand-new instance already starts at, so nothing
+    // would otherwise tell chromeOpacity/chromeHidden (left at "hidden" from the just-thrown
+    // letter's own fold) to go back to visible for it. Resetting both here explicitly is what
+    // brings BottomNav back once the plane is thrown, instead of it staying hidden on the fresh
+    // blank letter.
+    chromeOpacity.setValue(1);
+    setChromeHidden(false);
   };
 
   const handleThrow = async (content: { messageText: string | null; strokes: StrokePath[] | null; penColor: string; photoUris: string[] }) => {
@@ -442,27 +419,12 @@ export function ThrowHomeScreen({
 
   const inFlight = flight !== null;
 
-  const flightRoutePoints = useMemo(() => {
-    if (!flight) return null;
-    const from: LatLng = { latitude: flight.letter.senderLatitude, longitude: flight.letter.senderLongitude };
-    const to: LatLng = { latitude: flight.letter.recipientLatitude, longitude: flight.letter.recipientLongitude };
-    return flightPath(from, to);
-  }, [flight]);
-
   return (
     <View style={styles.screen}>
       <ThrowGlassBackdrop heightMultiplier={0.6} />
 
       <View style={styles.mapArea}>
-        <ThrowMap
-          pins={pins}
-          focus={focusTarget}
-          route={
-            flight?.phase === 'in_flight' && flightRoutePoints
-              ? { points: flightRoutePoints, progress: flightProgress, showPlane: true }
-              : undefined
-          }
-        />
+        <ThrowMap pins={pins} focus={focusTarget} />
 
         {!inFlight &&
           (lockedRecipient ? (
@@ -555,25 +517,21 @@ export function ThrowHomeScreen({
           </View>
         )}
 
-        {inFlight && (
+        {flight && (
           <View style={[styles.flightStatusWrap, { bottom: insets.bottom + 16 + BOTTOM_NAV_CLEARANCE }]}>
             <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.flightStatus}>
-              {flight!.phase === 'delivered' ? (
-                flight!.isAlert ? (
-                  <>
-                    <Text style={styles.flightTitle}>Alert set</Text>
-                    <Text style={styles.flightBody}>{flight!.alertScheduleSummary}</Text>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.flightTitle}>Your letter has landed</Text>
-                    <Text style={styles.flightBody}>
-                      With {flight!.letter.counterpartName} in {flight!.letter.recipientCity} · {formatMiles(flight!.letter.distanceMiles)} away
-                    </Text>
-                  </>
-                )
+              {flight.isAlert ? (
+                <>
+                  <Text style={styles.flightTitle}>Alert set</Text>
+                  <Text style={styles.flightBody}>{flight.alertScheduleSummary}</Text>
+                </>
               ) : (
-                <Text style={styles.flightTitle}>{flight!.isAlert ? 'Sealing your reminder…' : `Flying to ${flight!.letter.counterpartName}…`}</Text>
+                <>
+                  <Text style={styles.flightTitle}>Your letter has landed</Text>
+                  <Text style={styles.flightBody}>
+                    With {flight.letter.counterpartName} in {flight.letter.recipientCity} · {formatMiles(flight.letter.distanceMiles)} away
+                  </Text>
+                </>
               )}
             </GlassSurface>
           </View>
@@ -581,6 +539,7 @@ export function ThrowHomeScreen({
       </View>
 
       <Animated.View
+        testID="bottom-nav-wrap"
         style={[
           styles.bottomNavWrap,
           { opacity: chromeOpacity, transform: [{ translateY: chromeOpacity.interpolate({ inputRange: [0, 1], outputRange: [BOTTOM_NAV_CLEARANCE, 0] }) }] },
