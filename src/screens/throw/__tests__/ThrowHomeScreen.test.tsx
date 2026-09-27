@@ -97,18 +97,13 @@ describe('ThrowHomeScreen self-reminder contact lock', () => {
     expect(typeof friendPin.onPress).toBe('function');
   });
 
-  it('locks the carousel and map pins once the self-reminder has any content', async () => {
+  it('does not lock the carousel/map pins just from writing (only from touching the schedule)', async () => {
     setupMocks();
     await renderScreen();
     expect(mockCarouselProps.disabled).toBe(false);
-
-    await act(async () => {
-      mockFoldingLetterProps.onHasContentChange(true);
-    });
-
-    expect(mockCarouselProps.disabled).toBe(true);
-    const friendPin = mockThrowMapProps.pins.find((p: any) => p.id === FRIEND.userId);
-    expect(friendPin.onPress).toBeUndefined();
+    // FoldingLetter no longer gets an onHasContentChange at all — writing shouldn't be able to
+    // lock contact-switching any more, per explicit request.
+    expect(mockFoldingLetterProps.onHasContentChange).toBeUndefined();
   });
 
   it('locks once the alert schedule is touched, even with no text written', async () => {
@@ -128,7 +123,7 @@ describe('ThrowHomeScreen self-reminder contact lock', () => {
     await renderScreen();
 
     await act(async () => {
-      mockFoldingLetterProps.onHasContentChange(true);
+      mockFoldingLetterProps.onAlertScheduleChange({ recurrence: 'everyday', hour: 8, minute: 0, daysOfWeek: [], dayOfMonth: 1 });
     });
     expect(mockCarouselProps.disabled).toBe(true);
 

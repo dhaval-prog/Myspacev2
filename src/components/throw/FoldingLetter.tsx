@@ -268,6 +268,16 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   // refolding after that shows the peek, not the full sheet again, until the user reopens it.
   const [reminderState, setReminderState] = useState<'closed' | 'open' | 'peek'>('closed');
   const reminderShownRef = useRef(false);
+  // Self-reminder only: whether the user has ever pressed "Done" in the timer+repeat sheet for
+  // this letter — swiping up to throw is locked until this is true (see the launch gate below),
+  // per explicit request that a self-reminder can't be thrown before its time is actually
+  // confirmed. Never reset back to false once set; re-editing the schedule after confirming once
+  // doesn't re-lock it.
+  const [reminderConfirmed, setReminderConfirmed] = useState(false);
+  // Whether this letter is a self-reminder at all (alertSchedule/onAlertScheduleChange both
+  // present) rather than an ordinary letter to a friend — the launch gate above only ever applies
+  // to this case.
+  const selfReminderMode = !!alertSchedule && !!onAlertScheduleChange;
   const [error, setError] = useState<string | null>(null);
   const [paperSize, setPaperSize] = useState({ width: 0, height: 0 });
   // The bottom-controls row's own measured height (via onLayout, below) — used to position it
@@ -440,6 +450,8 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     onContactDragOffset,
     onFoldProgress,
     isNight,
+    selfReminderMode,
+    reminderConfirmed,
   });
   latest.current = {
     disabled,
@@ -455,6 +467,8 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     onContactDragOffset,
     onFoldProgress,
     isNight,
+    selfReminderMode,
+    reminderConfirmed,
   };
 
   // The folded plane's baked texture only carries the first attached *photo* — see
@@ -507,8 +521,15 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   // afterward re-fires this same effect and picks the right state again below. Gated on hasContent
   // (already true for typed text, an ink stroke, or an attached photo/video, see its own
   // definition) — an empty letter has nothing to remind about, so folding one doesn't show it.
+  // Deliberately depends on `selfReminderMode` (a plain boolean) rather than `alertSchedule`/
+  // `onAlertScheduleChange` themselves — the caller passes a fresh `onAlertScheduleChange`
+  // function identity on every one of its own re-renders (it's not wrapped in useCallback), so
+  // depending on it directly re-ran this effect on every unrelated parent re-render (the map's
+  // own frequent location-driven re-renders, for one) and stomped `reminderState` from 'open'
+  // back down to 'peek' within moments of the user tapping "Remind me" to open it — confirmed
+  // directly as the reason that tap appeared to do nothing.
   useEffect(() => {
-    if (!alertSchedule || !onAlertScheduleChange) return;
+    if (!selfReminderMode) return;
     if (phase !== 'ready' || !hasContent) {
       setReminderState('closed');
       return;
@@ -523,7 +544,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
       // instead of popping the full sheet open again; the user drags/taps it open themselves.
       setReminderState('peek');
     }
-  }, [phase, alertSchedule, onAlertScheduleChange, hasContent]);
+  }, [phase, selfReminderMode, hasContent]);
 
   // The peek strip itself is rendered by the caller, not here (see onReminderPeekChange's own
   // doc comment for why) — this is just the notification that tells it when to show or hide.
@@ -798,10 +819,16 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             // An empty letter can still fold into the ready plane (see the removed `hasContent`
             // gates above), but swiping it up is a no-op instead of an actual throw — it just
             // springs back, same as any other release that doesn't clear the launch thresholds.
-            if (swipedUp && latest.current.hasContent) {
+            // A self-reminder additionally can't be thrown until its time has actually been
+            // confirmed via the sheet's own "Done" button (see reminderConfirmed) — an untouched
+            // popup that was just dismissed by swiping past it isn't a confirmed reminder.
+            const reminderGateOk = !latest.current.selfReminderMode || latest.current.reminderConfirmed;
+            if (swipedUp && latest.current.hasContent && reminderGateOk) {
               latest.current.launch();
             } else {
               latest.current.springLiftBack();
+              // Nudge them back to the sheet rather than just silently refusing to throw.
+              if (swipedUp && latest.current.hasContent && !reminderGateOk) setReminderState('open');
             }
             return;
           }
@@ -963,7 +990,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         >
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintInk} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
                 <Icon path={PHOTO_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
               </BottomIconSurface>
             </View>
@@ -985,7 +1012,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
               </View>
             ) : (
               <View style={[styles.micBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintInkStrong} style={[styles.micBtn, roundBtnDynamicStyle]}>
+                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlueStrong} style={[styles.micBtn, roundBtnDynamicStyle]}>
                   <Icon path={MIC_ICON} size={27 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
                 </BottomIconSurface>
               </View>
@@ -996,7 +1023,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintInk} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
                 <Icon path={QR_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
               </BottomIconSurface>
             </View>
@@ -1006,7 +1033,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         <Pressable onPress={onOpenInbox} accessibilityRole="button" accessibilityLabel="Inbox">
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintInk} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
                 <Icon path={INBOX_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
               </BottomIconSurface>
               {unreadCount > 0 && (
@@ -1044,7 +1071,11 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         )}
       </View>
 
-      {phase === 'ready' && <Text style={styles.readyHint}>{hasContent ? throwLabel : 'Write something first'}</Text>}
+      {phase === 'ready' && (
+        <Text style={styles.readyHint}>
+          {!hasContent ? 'Write something first' : selfReminderMode && !reminderConfirmed ? 'Set a reminder time first' : throwLabel}
+        </Text>
+      )}
       {voice.recording && <Text style={styles.readyHint}>Listening…</Text>}
       {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
 
@@ -1055,7 +1086,10 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           <Text style={styles.scheduleModalTitle}>Remind me</Text>
           <AlertScheduleHeader schedule={alertSchedule} onChange={onAlertScheduleChange} />
           <Pressable
-            onPress={() => setReminderState('peek')}
+            onPress={() => {
+              setReminderConfirmed(true);
+              setReminderState('peek');
+            }}
             accessibilityRole="button"
             accessibilityLabel="Done setting reminder"
             style={({ pressed }) => [styles.scheduleModalDone, pressed && styles.roundBtnPressed]}
