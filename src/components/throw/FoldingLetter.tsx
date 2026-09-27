@@ -939,7 +939,12 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             the paper's rounded edge for a frame or two before settling. The plane-stage block
             below is deliberately OUTSIDE this clip — its liftoff animation needs to fly up past
             the paper's own bounds, not be cut off at them. */}
-        <View style={[styles.paperClip, !isNight && styles.paperClipBordered]}>
+        <View style={styles.paperClip}>
+        {/* The grey day-skin border belongs to the flat writing paper, not the folded plane
+            underneath it — without its own opacity tied to canvasOpacity (same as the writing
+            surface below), it would stay visible as a big empty rectangle around the plane once
+            folded, since paperClip itself (just a clip boundary) never fades. */}
+        {!isNight && <Animated.View pointerEvents="none" style={[styles.paperClipBorder, { opacity: canvasOpacity }]} />}
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
           <LetterCanvas
             ref={letterCanvasRef}
@@ -1151,8 +1156,20 @@ const styles = StyleSheet.create({
   // so it exactly matches paperArea's box regardless of any flex quirks.
   paperClip: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: throwRadius.paper, overflow: 'hidden' },
   // A light grey edge around the paper itself, day skin only (per explicit request) — the night
-  // skin's own dark paper already reads as a distinct shape against the map without one.
-  paperClipBordered: { borderWidth: 1, borderColor: throwColor.cardBorder },
+  // skin's own dark paper already reads as a distinct shape against the map without one. A
+  // separate overlay (not merged onto paperClip itself) so its opacity can be tied to
+  // canvasOpacity and fade out with the writing surface once folded — see the render's own
+  // comment above.
+  paperClipBorder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: throwRadius.paper,
+    borderWidth: 1,
+    borderColor: throwColor.cardBorder,
+  },
   fallbackPlaneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // The streak/leaderboard badges' new home, in the paper's own top-right corner instead of a
   // separate header chip.
