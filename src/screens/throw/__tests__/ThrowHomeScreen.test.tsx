@@ -73,10 +73,21 @@ jest.mock('../../../components/throw/StatusPhotoViewer', () => ({
 // (or getUserMedia on web) — irrelevant here (these tests only care whether ThrowHomeScreen opens
 // the capture modal at all, not what the camera itself does), and this sidesteps needing to mock
 // expo-camera/expo-image-picker's native-module surface too.
+let mockStoryCaptureProps: any;
 jest.mock('../../../components/throw/StoryCaptureScreen', () => ({
-  StoryCaptureScreen: () => {
+  StoryCaptureScreen: (props: any) => {
+    mockStoryCaptureProps = props;
     const { Text } = require('react-native');
     return require('react').createElement(Text, { testID: 'story-capture' }, 'capture');
+  },
+}));
+
+let mockStoryPreviewProps: any;
+jest.mock('../../../components/throw/StoryPreviewScreen', () => ({
+  StoryPreviewScreen: (props: any) => {
+    mockStoryPreviewProps = props;
+    const { Text } = require('react-native');
+    return require('react').createElement(Text, { testID: 'story-preview' }, 'preview');
   },
 }));
 
@@ -309,7 +320,20 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     expect(screen.getByTestId('story-capture')).toBeTruthy();
   });
 
-  it('returns to the compose letter for Own Contact once the status viewer exits', async () => {
+  it('marks the add-story slot as the active selection while the status viewer is showing', async () => {
+    setupMocks();
+    withStories(2);
+    await renderScreen();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+
+    expect(mockCarouselProps.isAddStorySelected).toBe(true);
+  });
+
+  it('returns to the compose letter for Own Contact once a contact is tapped in the carousel', async () => {
     setupMocks();
     withStories(1);
     await renderScreen();
@@ -319,12 +343,99 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
       mockFoldingLetterProps.onContactDragOffset(-1);
     });
     expect(screen.getByTestId('status-photo-viewer')).toBeTruthy();
+    expect(mockCarouselProps.isAddStorySelected).toBe(true);
 
     await act(async () => {
-      mockStatusPhotoViewerProps.onExit();
+      mockCarouselProps.onChangeIndex(0);
     });
 
     expect(screen.getByTestId('folding-letter')).toBeTruthy();
     expect(screen.queryByTestId('status-photo-viewer')).toBeNull();
+    expect(mockCarouselProps.isAddStorySelected).toBe(false);
+  });
+});
+
+describe('ThrowHomeScreen story post-capture confirmation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockCarouselProps = undefined;
+    mockStoryCaptureProps = undefined;
+    mockStoryPreviewProps = undefined;
+  });
+
+  it('shows a preview with a confirm step instead of posting immediately after capture', async () => {
+    setupMocks();
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onAddStory();
+    });
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
+
+    await act(async () => {
+      mockStoryCaptureProps.onCaptured('file:///captured.jpg', 'photo');
+    });
+
+    expect(screen.queryByTestId('story-capture')).toBeNull();
+    expect(screen.getByTestId('story-preview')).toBeTruthy();
+    expect(mockStoryPreviewProps.localUri).toBe('file:///captured.jpg');
+    expect(mockStoryPreviewProps.mediaType).toBe('photo');
+  });
+
+  it('only calls postStory once the preview\'s confirm arrow is tapped', async () => {
+    const postStory = jest.fn().mockResolvedValue({ error: null });
+    setupMocks();
+    mockUseThrowStories.mockReturnValue({
+      loading: false,
+      storiesByUser: {},
+      storyCountFor: () => 0,
+      postStory,
+      markViewed: jest.fn(),
+      refresh: jest.fn(),
+    });
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onAddStory();
+    });
+    await act(async () => {
+      mockStoryCaptureProps.onCaptured('file:///captured.jpg', 'photo');
+    });
+    expect(postStory).not.toHaveBeenCalled();
+
+    await act(async () => {
+      mockStoryPreviewProps.onConfirm();
+    });
+
+    expect(postStory).toHaveBeenCalledWith('file:///captured.jpg', 'photo');
+    expect(screen.queryByTestId('story-preview')).toBeNull();
+  });
+
+  it('discards the capture and never calls postStory when the preview is cancelled', async () => {
+    const postStory = jest.fn().mockResolvedValue({ error: null });
+    setupMocks();
+    mockUseThrowStories.mockReturnValue({
+      loading: false,
+      storiesByUser: {},
+      storyCountFor: () => 0,
+      postStory,
+      markViewed: jest.fn(),
+      refresh: jest.fn(),
+    });
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onAddStory();
+    });
+    await act(async () => {
+      mockStoryCaptureProps.onCaptured('file:///captured.jpg', 'photo');
+    });
+
+    await act(async () => {
+      mockStoryPreviewProps.onCancel();
+    });
+
+    expect(screen.queryByTestId('story-preview')).toBeNull();
+    expect(postStory).not.toHaveBeenCalled();
   });
 });

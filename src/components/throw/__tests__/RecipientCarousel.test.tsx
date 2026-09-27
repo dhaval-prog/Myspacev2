@@ -53,6 +53,27 @@ describe('RecipientCarousel story-tap behavior', () => {
     expect(onOpenStory).not.toHaveBeenCalled();
     expect(onChangeIndex).not.toHaveBeenCalled();
   });
+
+  it('tapping the still-selected contact while Status is showing still fires onChangeIndex, so there is a way back', async () => {
+    // Status mode doesn't move `selectedIndex` away from Own Contact — it only sets
+    // isAddStorySelected — so re-tapping that same contact needs its own path back out, since the
+    // index genuinely isn't changing.
+    const onChangeIndex = jest.fn();
+    const onOpenStory = jest.fn();
+    await render(
+      <RecipientCarousel
+        friends={FRIENDS}
+        selectedIndex={0}
+        onChangeIndex={onChangeIndex}
+        storyCountFor={() => 0}
+        onOpenStory={onOpenStory}
+        isAddStorySelected
+      />,
+    );
+    fireEvent.press(screen.getByText('Myself'));
+    expect(onOpenStory).not.toHaveBeenCalled();
+    expect(onChangeIndex).toHaveBeenCalledWith(0);
+  });
 });
 
 describe('RecipientCarousel add-story slot', () => {

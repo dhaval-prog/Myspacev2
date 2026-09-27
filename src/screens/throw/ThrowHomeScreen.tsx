@@ -9,6 +9,7 @@ import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { GlassSurface } from '../../components/friends/GlassSurface';
 import { StoryCaptureScreen } from '../../components/throw/StoryCaptureScreen';
 import { StatusPhotoViewer } from '../../components/throw/StatusPhotoViewer';
+import { StoryPreviewScreen } from '../../components/throw/StoryPreviewScreen';
 import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
 import { StoryViewerScreen } from '../../components/throw/StoryViewerScreen';
 import { BottomNav } from '../../components/BottomNav';
@@ -27,12 +28,15 @@ import type { AlertSchedule, StrokePath, ThrowLetter } from '../../types/throw';
 import type { StoryMediaType } from '../../types/story';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 
-/** What's currently covering the screen for the story flow — capture (camera/gallery), the trim
- * step (only for a picked video over 15s), or the full-screen viewer for one contact's stories.
- * Never more than one at a time, so a single piece of state (not three booleans) makes that
- * mutual exclusion structural rather than something every setter has to remember to preserve. */
+/** What's currently covering the screen for the story flow — capture (camera/gallery), the preview
+ * step (a captured/picked photo or short video, awaiting the explicit post confirmation), the
+ * trim step (only for a picked video over 15s), or the full-screen viewer for one contact's
+ * stories. Never more than one at a time, so a single piece of state (not four booleans) makes
+ * that mutual exclusion structural rather than something every setter has to remember to
+ * preserve. */
 type StoryFlow =
   | { name: 'capture' }
+  | { name: 'preview'; localUri: string; mediaType: StoryMediaType }
   | { name: 'trim'; localUri: string; durationMs: number }
   | { name: 'viewer'; userId: string; authorName: string };
 
@@ -311,7 +315,14 @@ export function ThrowHomeScreen({
     setStoryFlow({ name: 'viewer', userId, authorName: name });
   };
 
-  const handleStoryCaptured = async (localUri: string, mediaType: StoryMediaType) => {
+  // Captured/picked media isn't posted right away any more — it lands on the preview step first
+  // (see StoryFlow's own comment), which is what actually calls postStory once the user taps its
+  // confirm arrow.
+  const handleStoryCaptured = (localUri: string, mediaType: StoryMediaType) => {
+    setStoryFlow({ name: 'preview', localUri, mediaType });
+  };
+
+  const handleStoryPreviewConfirmed = async (localUri: string, mediaType: StoryMediaType) => {
     setStoryFlow(null);
     await postStory(localUri, mediaType);
   };
@@ -516,7 +527,15 @@ export function ThrowHomeScreen({
               <RecipientCarousel
                 friends={friendsWithLocation}
                 selectedIndex={selectedIndex}
-                onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)}
+                onChangeIndex={(i) => {
+                  // Tapping/dragging to any real contact — including re-tapping whichever one was
+                  // already selected before Status — is the way back out of Status mode (see
+                  // isStatusMode's own comment); without this, tapping "Dhaval" again while
+                  // viewing Status would be a no-op (already `selectedFriendId`) and leave the
+                  // user stuck looking at their own photos with no way back.
+                  setIsStatusMode(false);
+                  setSelectedFriendId(friendsWithLocation[i]?.userId ?? null);
+                }}
                 disabled={selfLocked}
                 isNight={!mapIsDay}
                 storyCountFor={storyCountFor}
@@ -525,6 +544,7 @@ export function ThrowHomeScreen({
                   if (f) handleOpenStory(userId, f.userId === myId ? 'Your story' : f.name);
                 }}
                 onAddStory={() => setStoryFlow({ name: 'capture' })}
+                isAddStorySelected={isStatusMode}
               />
             </View>
           ))}
@@ -547,10 +567,6 @@ export function ThrowHomeScreen({
               {isStatusMode ? (
                 <StatusPhotoViewer
                   stories={myId ? storiesByUser[myId] ?? [] : []}
-                  onExit={() => {
-                    setIsStatusMode(false);
-                    if (myId) setSelectedFriendId(myId);
-                  }}
                   isNight={!isDay}
                 />
               ) : (
@@ -662,6 +678,17 @@ export function ThrowHomeScreen({
             onClose={() => setStoryFlow(null)}
             onCaptured={handleStoryCaptured}
             onPickedLongVideo={handleStoryPickedLongVideo}
+          />
+        </Modal>
+      )}
+
+      {storyFlow?.name === 'preview' && (
+        <Modal visible animationType="fade" onRequestClose={() => setStoryFlow(null)} statusBarTranslucent>
+          <StoryPreviewScreen
+            localUri={storyFlow.localUri}
+            mediaType={storyFlow.mediaType}
+            onCancel={() => setStoryFlow(null)}
+            onConfirm={() => handleStoryPreviewConfirmed(storyFlow.localUri, storyFlow.mediaType)}
           />
         </Modal>
       )}
