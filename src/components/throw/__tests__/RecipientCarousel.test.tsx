@@ -54,3 +54,19 @@ describe('RecipientCarousel story-tap behavior', () => {
     expect(onChangeIndex).not.toHaveBeenCalled();
   });
 });
+
+describe('RecipientCarousel add-story slot', () => {
+  it('is absent entirely when no onAddStory is given', async () => {
+    await render(<RecipientCarousel friends={FRIENDS} selectedIndex={0} onChangeIndex={jest.fn()} />);
+    expect(screen.queryByLabelText('Add to your story')).toBeNull();
+  });
+
+  it('opens the capture flow on tap, without affecting contact selection', async () => {
+    const onChangeIndex = jest.fn();
+    const onAddStory = jest.fn();
+    await render(<RecipientCarousel friends={FRIENDS} selectedIndex={0} onChangeIndex={onChangeIndex} onAddStory={onAddStory} />);
+    fireEvent.press(screen.getByLabelText('Add to your story'));
+    expect(onAddStory).toHaveBeenCalledTimes(1);
+    expect(onChangeIndex).not.toHaveBeenCalled();
+  });
+});

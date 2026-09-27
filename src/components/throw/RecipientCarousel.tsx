@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { StoryRing } from './StoryRing';
+import { AddStoryButton } from './AddStoryButton';
 import { throwColor, throwFont, throwNightColor } from '../../theme/throwTokens';
 import type { ThrowFriend } from '../../types/throw';
 
@@ -56,6 +57,12 @@ interface RecipientCarouselProps {
    * re-selecting them (which would otherwise be a no-op) — lets one tap target serve both
    * "switch to this contact" and "view their story" without a second control. */
   onOpenStory?: (userId: string) => void;
+  /** Opens the story capture flow — rendered as a slot in this same strip, one position to the
+   * left of the first real contact (index 0), rather than as a separate fixed-position control,
+   * per explicit request: it should fade/shrink with distance from center exactly like any other
+   * off-center contact would, not sit at a constant full size/opacity beside the strip. Omitted
+   * entirely (no slot rendered) when absent, e.g. in tests that don't care about stories. */
+  onAddStory?: () => void;
 }
 
 /**
@@ -64,7 +71,16 @@ interface RecipientCarouselProps {
  * distance. Clamped at the ends rather than a true infinite loop (simpler, and every real
  * friends list here is short enough that the clamp is never felt as a limitation).
  */
-export function RecipientCarousel({ friends, selectedIndex, onChangeIndex, disabled, isNight, storyCountFor, onOpenStory }: RecipientCarouselProps) {
+export function RecipientCarousel({
+  friends,
+  selectedIndex,
+  onChangeIndex,
+  disabled,
+  isNight,
+  storyCountFor,
+  onOpenStory,
+  onAddStory,
+}: RecipientCarouselProps) {
   const n = friends.length;
   const maxIndex = Math.max(0, n - 1);
   const offset = useRef(new Animated.Value(Math.min(selectedIndex, maxIndex))).current;
@@ -117,22 +133,46 @@ export function RecipientCarousel({ friends, selectedIndex, onChangeIndex, disab
 
   if (n === 0) return null;
 
+  // Every item's position/scale/opacity is purely a function of its own fixed slot index `i` and
+  // how far the live `offset` currently sits from it — shared here so the add-story slot (i = -1,
+  // rendered below) reads exactly like a real contact one position further left, the same falloff
+  // as every other off-center item, without duplicating this math for it.
+  const span = Math.max(1, maxIndex);
+  const itemTransform = (i: number) => ({
+    translateX: offset.interpolate({ inputRange: [0, span], outputRange: [i * ITEM_SPACING, (i - span) * ITEM_SPACING] }),
+    scale: offset.interpolate({
+      inputRange: [i - 2, i - 1, i, i + 1, i + 2],
+      outputRange: [0.68, 0.82, 1, 0.82, 0.68],
+      extrapolate: 'clamp',
+    }),
+    opacity: offset.interpolate({
+      inputRange: [i - 2, i - 1, i, i + 1, i + 2],
+      outputRange: [0.4, 0.68, 1, 0.68, 0.4],
+      extrapolate: 'clamp',
+    }),
+  });
+
+  const addStoryTransform = onAddStory ? itemTransform(-1) : null;
+
   return (
     <View style={styles.wrap} {...panResponder.panHandlers}>
       <View style={styles.strip}>
+        {onAddStory && addStoryTransform && (
+          <Animated.View
+            style={[
+              styles.item,
+              { transform: [{ translateX: addStoryTransform.translateX }, { scale: addStoryTransform.scale }], opacity: addStoryTransform.opacity },
+            ]}
+          >
+            <View style={styles.pressableContent}>
+              <View style={styles.avatarWrap}>
+                <AddStoryButton onPress={onAddStory} />
+              </View>
+            </View>
+          </Animated.View>
+        )}
         {friends.map((f, i) => {
-          const span = Math.max(1, maxIndex);
-          const translateX = offset.interpolate({ inputRange: [0, span], outputRange: [i * ITEM_SPACING, (i - span) * ITEM_SPACING] });
-          const scale = offset.interpolate({
-            inputRange: [i - 2, i - 1, i, i + 1, i + 2],
-            outputRange: [0.68, 0.82, 1, 0.82, 0.68],
-            extrapolate: 'clamp',
-          });
-          const opacity = offset.interpolate({
-            inputRange: [i - 2, i - 1, i, i + 1, i + 2],
-            outputRange: [0.4, 0.68, 1, 0.68, 0.4],
-            extrapolate: 'clamp',
-          });
+          const { translateX, scale, opacity } = itemTransform(i);
           const isSelected = i === selectedIndex;
           return (
             <Animated.View key={f.userId} style={[styles.item, { transform: [{ translateX }, { scale }], opacity }]}>

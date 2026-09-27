@@ -7,7 +7,6 @@ import { FoldingLetter } from '../../components/throw/FoldingLetter';
 import type { FoldingLetterHandle } from '../../components/throw/FoldingLetter';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { GlassSurface } from '../../components/friends/GlassSurface';
-import { AddStoryButton } from '../../components/throw/AddStoryButton';
 import { StoryCaptureScreen } from '../../components/throw/StoryCaptureScreen';
 import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
 import { StoryViewerScreen } from '../../components/throw/StoryViewerScreen';
@@ -476,25 +475,21 @@ export function ThrowHomeScreen({
               </View>
             )
           ) : (
-            <>
-              <View style={[styles.addStoryWrap, { top: insets.top + 16 }]}>
-                <AddStoryButton onPress={() => setStoryFlow({ name: 'capture' })} />
-              </View>
-              <View style={[styles.recipientOverlay, { top: insets.top + 16 }]}>
-                <RecipientCarousel
-                  friends={friendsWithLocation}
-                  selectedIndex={selectedIndex}
-                  onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)}
-                  disabled={selfLocked}
-                  isNight={!mapIsDay}
-                  storyCountFor={storyCountFor}
-                  onOpenStory={(userId) => {
-                    const f = friendsWithLocation.find((fr) => fr.userId === userId);
-                    if (f) handleOpenStory(userId, f.userId === myId ? 'Your story' : f.name);
-                  }}
-                />
-              </View>
-            </>
+            <View style={[styles.recipientOverlay, { top: insets.top + 16 }]}>
+              <RecipientCarousel
+                friends={friendsWithLocation}
+                selectedIndex={selectedIndex}
+                onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)}
+                disabled={selfLocked}
+                isNight={!mapIsDay}
+                storyCountFor={storyCountFor}
+                onOpenStory={(userId) => {
+                  const f = friendsWithLocation.find((fr) => fr.userId === userId);
+                  if (f) handleOpenStory(userId, f.userId === myId ? 'Your story' : f.name);
+                }}
+                onAddStory={() => setStoryFlow({ name: 'capture' })}
+              />
+            </View>
           ))}
 
         {!inFlight && selectedFriend && (
@@ -655,10 +650,6 @@ const styles = StyleSheet.create({
   // sibling of mapArea, absolutely pinned to the screen's bottom so it overlaps in front.
   bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
-  // Sits to the left of the (centered) recipient carousel, at the same vertical band as its
-  // avatar row — a fixed screen position rather than another carousel item, so it's always
-  // reachable regardless of which contact is selected or how many there are.
-  addStoryWrap: { position: 'absolute', left: 16, height: 130, justifyContent: 'center', zIndex: 1 },
   replyLine: {
     textAlign: 'center',
     fontFamily: throwFont.ui700,
