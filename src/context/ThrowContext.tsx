@@ -8,6 +8,23 @@ function warn(action: string, error: { message: string } | null) {
   if (error) console.warn(`[Throw] ${action} failed:`, error.message);
 }
 
+/** Supabase-js surfaces a raw network-layer failure (a fetch that never reached the server —
+ * offline, a dropped cell connection, etc.) as a bare `TypeError` whose message is whatever the
+ * platform's fetch implementation happened to say ("Load failed" on iOS/WebKit, "Network request
+ * failed" on Android/Hermes) — technically accurate but meaningless to a user staring at the
+ * screen. Swaps those specific messages for one they can act on; anything else (a real Postgrest/
+ * RLS error with its own clear message) passes through unchanged. */
+function friendlyErrorMessage(message: string): string {
+  if (/load failed|network request failed|failed to fetch/i.test(message)) {
+    return "Couldn't reach the server — check your connection and try again.";
+  }
+  return message;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** UTC calendar date as YYYY-MM-DD, matching the server's `current_date` (also UTC) — the streak
  * only cares about whole days apart, not exact instants, so this stays a plain date comparison
  * rather than pulling in timezone handling. */
@@ -192,10 +209,20 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
   const setMyLocation = useCallback(
     async (loc: ThrowLocation) => {
       if (!myId) return { error: 'not signed in' };
-      const { error } = await supabase
-        .from('throw_profiles')
-        .upsert({ user_id: myId, city: loc.city, country: loc.country, latitude: loc.latitude, longitude: loc.longitude, updated_at: new Date().toISOString() });
-      if (error) return { error: error.message };
+      const attempt = () =>
+        supabase
+          .from('throw_profiles')
+          .upsert({ user_id: myId, city: loc.city, country: loc.country, latitude: loc.latitude, longitude: loc.longitude, updated_at: new Date().toISOString() });
+      // A transient network blip (weak signal, a dropped cell connection right as the request
+      // goes out) is common right here — this is usually the very first network call of a fresh
+      // app session, before the connection's had a chance to settle. One retry after a short
+      // pause rides out most of those rather than bouncing the user straight to a raw error.
+      let { error } = await attempt();
+      if (error && /load failed|network request failed|failed to fetch/i.test(error.message)) {
+        await wait(1200);
+        ({ error } = await attempt());
+      }
+      if (error) return { error: friendlyErrorMessage(error.message) };
       setMyLocationState(loc);
       return { error: null };
     },
