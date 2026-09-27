@@ -391,9 +391,12 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   // settling the last bit of an in-progress drag (a small remaining distance), so snapping the
   // *entire* fold open from a fully-folded plane with it reads as an abrupt jump. Used only by
   // clearReminderDraft below (the "X" button), which unfolds the full distance in one go rather
-  // than finishing a drag the user already started most of themselves.
+  // than finishing a drag the user already started most of themselves. 900ms with an eased-in-
+  // and-out curve (not just eased-out) — an earlier 650ms/ease-out pass still read as too fast,
+  // since ease-out starts at full velocity; easing in *and* out reads as deliberate throughout,
+  // not just at the tail end.
   const unfoldSmoothly = () => {
-    Animated.timing(progress, { toValue: 0, duration: 650, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => {
+    Animated.timing(progress, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.cubic), useNativeDriver: false }).start(() => {
       setPhase('writing');
       bakedRef.current = false;
       dragAnchorRef.current = null;
@@ -1106,11 +1109,11 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
       </View>
 
       {phase === 'ready' && (
-        <Text style={styles.readyHint}>
+        <Text style={[styles.readyHint, isNight && styles.readyHintNight]}>
           {!hasContent ? 'Write something first' : selfReminderMode && !reminderConfirmed ? 'Set a reminder time first' : throwLabel}
         </Text>
       )}
-      {voice.recording && <Text style={styles.readyHint}>Listening…</Text>}
+      {voice.recording && <Text style={[styles.readyHint, isNight && styles.readyHintNight]}>Listening…</Text>}
       {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
 
       <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(items) => setMediaItems((prev) => [...prev, ...items])} />
@@ -1163,6 +1166,11 @@ const styles = StyleSheet.create({
   chipNight: { backgroundColor: throwNightColor.badgeBg },
   streakTextNight: { color: throwNightColor.ink },
   readyHint: { fontFamily: throwFont.ui600, fontSize: 12, color: throwColor.ink, textAlign: 'center', marginTop: 10 },
+  // The dark ink color is unreadable against the night skin's own dark paper — swaps to the same
+  // near-white ink the night paper's typed text already uses, per explicit request that both the
+  // "Set a reminder time first"/"Write something first" hints and "Listening…" be legible at
+  // night.
+  readyHintNight: { color: throwNightColor.ink },
   error: { fontFamily: throwFont.ui400, fontSize: 12, color: '#B3413A', textAlign: 'center', marginTop: 8 },
   // The night skin's bottom-icon chrome — a solid dark circle instead of light glass (see
   // BottomIconSurface). Layered on top of whatever size style (roundBtn/micBtn) is already
