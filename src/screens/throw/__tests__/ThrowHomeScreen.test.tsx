@@ -60,6 +60,26 @@ jest.mock('../../../components/throw/RecipientCarousel', () => ({
   },
 }));
 
+let mockStatusPhotoViewerProps: any;
+jest.mock('../../../components/throw/StatusPhotoViewer', () => ({
+  StatusPhotoViewer: (props: any) => {
+    mockStatusPhotoViewerProps = props;
+    const { Text } = require('react-native');
+    return require('react').createElement(Text, { testID: 'status-photo-viewer' }, 'status');
+  },
+}));
+
+// StoryCaptureScreen resolves to its .native/.web platform file, both of which touch expo-camera
+// (or getUserMedia on web) — irrelevant here (these tests only care whether ThrowHomeScreen opens
+// the capture modal at all, not what the camera itself does), and this sidesteps needing to mock
+// expo-camera/expo-image-picker's native-module surface too.
+jest.mock('../../../components/throw/StoryCaptureScreen', () => ({
+  StoryCaptureScreen: () => {
+    const { Text } = require('react-native');
+    return require('react').createElement(Text, { testID: 'story-capture' }, 'capture');
+  },
+}));
+
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseThrow = useThrow as jest.Mock;
 const mockUseThrowAlerts = useThrowAlerts as jest.Mock;
@@ -226,4 +246,85 @@ describe('ThrowHomeScreen flight/chrome behavior', () => {
     });
     expect(screen.getByTestId('bottom-nav-wrap').props.pointerEvents).toBe('box-none');
   }, 10000);
+});
+
+describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFoldingLetterProps = undefined;
+    mockCarouselProps = undefined;
+    mockThrowMapProps = undefined;
+    mockStatusPhotoViewerProps = undefined;
+  });
+
+  function withStories(count: number) {
+    mockUseThrowStories.mockReturnValue({
+      loading: false,
+      storiesByUser: {
+        [MY_ID]: Array.from({ length: count }, (_, i) => ({
+          id: `s${i}`,
+          userId: MY_ID,
+          mediaUrl: `https://example.com/${i}.jpg`,
+          mediaType: 'photo',
+          trimStartMs: null,
+          trimEndMs: null,
+          createdAt: new Date().toISOString(),
+        })),
+      },
+      storyCountFor: (userId: string) => (userId === MY_ID ? count : 0),
+      postStory: jest.fn().mockResolvedValue({ error: null }),
+      markViewed: jest.fn(),
+      refresh: jest.fn(),
+    });
+  }
+
+  it('shows the status photo viewer, with the posted stories, once dragged past Own Contact', async () => {
+    setupMocks();
+    withStories(2);
+    await renderScreen();
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+
+    expect(screen.queryByTestId('folding-letter')).toBeNull();
+    expect(screen.getByTestId('status-photo-viewer')).toBeTruthy();
+    expect(mockStatusPhotoViewerProps.stories).toHaveLength(2);
+  });
+
+  it('opens the capture flow instead, staying on Own Contact, when nothing has been posted yet', async () => {
+    setupMocks();
+    withStories(0);
+    await renderScreen();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    expect(screen.queryByTestId('status-photo-viewer')).toBeNull();
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
+  });
+
+  it('returns to the compose letter for Own Contact once the status viewer exits', async () => {
+    setupMocks();
+    withStories(1);
+    await renderScreen();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+    expect(screen.getByTestId('status-photo-viewer')).toBeTruthy();
+
+    await act(async () => {
+      mockStatusPhotoViewerProps.onExit();
+    });
+
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    expect(screen.queryByTestId('status-photo-viewer')).toBeNull();
+  });
 });

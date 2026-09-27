@@ -245,7 +245,11 @@ const styles = StyleSheet.create({
     backgroundColor: throwColor.activeBlueSoft,
   },
   pulseRingNight: { borderColor: throwNightColor.ink, backgroundColor: 'rgba(255,255,255,.18)' },
-  avatarSelected: { borderWidth: 2, borderColor: throwColor.activeBlue },
+  // The selected contact's own inner border, drawn directly on the avatar's edge — a subtle,
+  // low-opacity dark line (not a solid black/blue) per explicit request, distinct from the blue
+  // pulse ring/story wave that both sit further outside it (see pulseRing/StoryRing), which stay
+  // blue and unchanged.
+  avatarSelected: { borderWidth: 2, borderColor: throwColor.inkFaint },
   avatarSelectedNight: { borderWidth: 2, borderColor: throwNightColor.ink },
   name: { marginTop: 6, fontFamily: throwFont.ui600, fontSize: 12.5, color: throwColor.inkMute, textAlign: 'center' },
   nameSelected: { color: throwColor.ink, fontFamily: throwFont.ui700 },

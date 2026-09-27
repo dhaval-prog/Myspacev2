@@ -8,6 +8,7 @@ import type { FoldingLetterHandle } from '../../components/throw/FoldingLetter';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { GlassSurface } from '../../components/friends/GlassSurface';
 import { StoryCaptureScreen } from '../../components/throw/StoryCaptureScreen';
+import { StatusPhotoViewer } from '../../components/throw/StatusPhotoViewer';
 import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
 import { StoryViewerScreen } from '../../components/throw/StoryViewerScreen';
 import { BottomNav } from '../../components/BottomNav';
@@ -99,6 +100,10 @@ export function ThrowHomeScreen({
   const { statsFor } = useGameStats();
   const { storiesByUser, storyCountFor, postStory, markViewed } = useThrowStories();
   const [storyFlow, setStoryFlow] = useState<StoryFlow | null>(null);
+  // Tilting/flicking the letter left past "Own Contact" lands on a virtual "Status" slot (one
+  // position further than any real contact — see handleContactDragOffset) showing the user's own
+  // posted story photos/videos in place of the compose letter, rather than a real recipient.
+  const [isStatusMode, setIsStatusMode] = useState(false);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [alertSchedule, setAlertSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
   // Once the user has touched the alert schedule, switching to a different contact is locked
@@ -118,6 +123,12 @@ export function ThrowHomeScreen({
   // fades independently, on the same `progress` value, entirely inside that component instead —
   // no need to route it through here since it's already local there.
   const chromeOpacity = useRef(new Animated.Value(1)).current;
+  // Crossfades the letter card's own content whenever it swaps between the compose letter and
+  // the Status photo viewer (see isStatusMode) — FoldingLetter unmounts and StatusPhotoViewer
+  // mounts (or vice versa) the instant the drag crosses that boundary, same timing as any other
+  // live contact switch; this just fades the newly-mounted side in over a couple hundred ms so
+  // that swap reads as a smooth/cinematic transition rather than an instant snap.
+  const cardModeFade = useRef(new Animated.Value(1)).current;
   // Separate from chromeOpacity (an Animated.Value can't be read synchronously to gate
   // pointerEvents) — flips once the fold crosses the halfway point, same threshold the fold
   // itself settles toward, so both stop accepting touches right around when they're no longer
@@ -271,6 +282,11 @@ export function ThrowHomeScreen({
     if (!isSelfSelected) setReminderPeeking(false);
   }, [isSelfSelected]);
 
+  useEffect(() => {
+    cardModeFade.setValue(0);
+    Animated.timing(cardModeFade, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+  }, [isStatusMode, cardModeFade]);
+
   const handleAlertScheduleChange = (next: AlertSchedule) => {
     setAlertSchedule(next);
     setSelfComposeLocked(true);
@@ -325,13 +341,34 @@ export function ThrowHomeScreen({
   // and, like RecipientCarousel's own drag, clamps at the list's ends rather than wrapping.
   // Selecting a different friend here also re-centers the map, since focusTarget above already
   // follows selectedFriend.
+  // Guards the "entering Status" branch below against firing more than once per drag — the
+  // offset callback fires continuously while the finger's still down, and re-triggering it every
+  // tick past the boundary would either flicker isStatusMode or, worse, re-open the capture modal
+  // repeatedly for as long as the drag holds there. Reset on every fresh grant.
+  const statusBoundaryHandledRef = useRef(false);
   const handleContactDragStart = () => {
     dragBaseIndexRef.current = selectedIndex;
+    statusBoundaryHandledRef.current = false;
   };
   const handleContactDragOffset = (steps: number) => {
     const n = friendsWithLocation.length;
-    if (n < 2) return;
-    const nextIdx = Math.max(0, Math.min(n - 1, Math.round(dragBaseIndexRef.current + steps)));
+    if (n === 0) return;
+    // -1 is the virtual "Status" slot, one further left than any real contact (index 0) — see
+    // isStatusMode's own comment.
+    const nextIdx = Math.max(-1, Math.min(n - 1, Math.round(dragBaseIndexRef.current + steps)));
+    if (nextIdx === -1) {
+      if (statusBoundaryHandledRef.current) return;
+      statusBoundaryHandledRef.current = true;
+      if (myId) setSelectedFriendId(myId);
+      if (myId && storyCountFor(myId) > 0) {
+        setIsStatusMode(true);
+      } else {
+        // Nothing posted yet — per explicit request, this opens the capture flow directly rather
+        // than landing on an empty status view.
+        setStoryFlow({ name: 'capture' });
+      }
+      return;
+    }
     const nextFriend = friendsWithLocation[nextIdx];
     if (nextFriend && nextFriend.userId !== selectedFriendId) setSelectedFriendId(nextFriend.userId);
   };
@@ -506,26 +543,39 @@ export function ThrowHomeScreen({
               { bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) },
             ]}
           >
-            <FoldingLetter
-              ref={foldingLetterRef}
-              recipientName={selectedFriend.name}
-              streak={selectedStreak}
-              points={selectedPoints}
-              onThrow={handleThrow}
-              onLaunched={handleLaunched}
-              throwLabel={isSelfSelected ? 'Swipe up to set alert' : lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
-              onOpenAddFriend={onOpenAddFriend}
-              onOpenInbox={onOpenInbox}
-              unreadCount={unreadCount}
-              onContactDragStart={!lockedRecipient && !selfLocked && friendsWithLocation.length > 1 ? handleContactDragStart : undefined}
-              onContactDragOffset={!lockedRecipient && !selfLocked && friendsWithLocation.length > 1 ? handleContactDragOffset : undefined}
-              onFoldProgress={handleFoldProgress}
-              alertSchedule={isSelfSelected ? alertSchedule : undefined}
-              onAlertScheduleChange={handleAlertScheduleChange}
-              onReminderPeekChange={isSelfSelected ? setReminderPeeking : undefined}
-              hideBadges={isSelfSelected}
-              isNight={!isDay}
-            />
+            <Animated.View style={[styles.letterCardContent, { opacity: cardModeFade }]}>
+              {isStatusMode ? (
+                <StatusPhotoViewer
+                  stories={myId ? storiesByUser[myId] ?? [] : []}
+                  onExit={() => {
+                    setIsStatusMode(false);
+                    if (myId) setSelectedFriendId(myId);
+                  }}
+                  isNight={!isDay}
+                />
+              ) : (
+                <FoldingLetter
+                  ref={foldingLetterRef}
+                  recipientName={selectedFriend.name}
+                  streak={selectedStreak}
+                  points={selectedPoints}
+                  onThrow={handleThrow}
+                  onLaunched={handleLaunched}
+                  throwLabel={isSelfSelected ? 'Swipe up to set alert' : lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
+                  onOpenAddFriend={onOpenAddFriend}
+                  onOpenInbox={onOpenInbox}
+                  unreadCount={unreadCount}
+                  onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}
+                  onContactDragOffset={!lockedRecipient && !selfLocked ? handleContactDragOffset : undefined}
+                  onFoldProgress={handleFoldProgress}
+                  alertSchedule={isSelfSelected ? alertSchedule : undefined}
+                  onAlertScheduleChange={handleAlertScheduleChange}
+                  onReminderPeekChange={isSelfSelected ? setReminderPeeking : undefined}
+                  hideBadges={isSelfSelected}
+                  isNight={!isDay}
+                />
+              )}
+            </Animated.View>
           </Animated.View>
         )}
 
@@ -669,6 +719,7 @@ const styles = StyleSheet.create({
     right: 28,
     top: '32%',
   },
+  letterCardContent: { flex: 1 },
   // The self-reminder sheet's collapsed stand-in (see onReminderPeekChange) — a small "Remind me"
   // button, not a bare drag handle, pinned near the actual screen bottom (unlike letterCard,
   // which sits well short of it) so it reads as belonging to the whole screen, not just this
