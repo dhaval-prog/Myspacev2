@@ -44,6 +44,9 @@ export interface LetterCanvasHandle {
    * writes onto the paper as it's spoken rather than only once each phrase finalizes. Pass '' to
    * clear it (recognition ended, a phrase just finalized, or the user stopped recording). */
   setInterimText: (text: string) => void;
+  /** Wipes the written text back to blank — used by the self-reminder's "X" (clear) button,
+   * which abandons the whole draft rather than editing it. */
+  clearText: () => void;
 }
 
 /**
@@ -73,6 +76,10 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
         });
       },
       setInterimText: (text: string) => setInterimTextState(text),
+      clearText: () => {
+        setTypedText('');
+        setInterimTextState('');
+      },
     }),
     [],
   );

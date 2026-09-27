@@ -190,6 +190,12 @@ export interface FoldingLetterHandle {
    * onReminderPeekChange, on a tap or a drag-up past its own threshold. A no-op if there's no
    * self-reminder in progress (alertSchedule absent) or the sheet isn't currently peeked. */
   openReminder: () => void;
+  /** Abandons the self-reminder draft entirely — clears the written text/photos, unfolds back to
+   * a blank 'writing' phase, and resets this letter's own "already shown the sheet"/"confirmed"
+   * state so a later fold reads as a brand-new reminder. Called by the "X" button rendered
+   * beside the peek strip's "Remind me" button; the caller (ThrowHomeScreen) is responsible for
+   * resetting its own alertSchedule/selfComposeLocked state in lockstep with this call. */
+  clearReminderDraft: () => void;
 }
 
 /**
@@ -554,7 +560,22 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
 
   // The only imperative surface this component exposes — lets the caller's own peek-strip
   // (rendered for onReminderPeekChange, above) reopen the full sheet on a tap or drag-up.
-  useImperativeHandle(ref, () => ({ openReminder: () => setReminderState('open') }), []);
+  useImperativeHandle(
+    ref,
+    () => ({
+      openReminder: () => setReminderState('open'),
+      clearReminderDraft: () => {
+        letterCanvasRef.current?.clearText();
+        setContent({ messageText: null, strokes: null, penColor: throwColor.ink });
+        setMediaItems([]);
+        reminderShownRef.current = false;
+        setReminderConfirmed(false);
+        setReminderState('closed');
+        settleFold(0);
+      },
+    }),
+    [],
+  );
 
   // react-native-web's PanResponder polyfill dedupes move dispatch against
   // `touchHistory.mostRecentTimeStamp`, and once `onMoveShouldSetPanResponderCapture` below steals
