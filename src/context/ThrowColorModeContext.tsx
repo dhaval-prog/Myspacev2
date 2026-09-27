@@ -11,21 +11,29 @@ const DAYTIME_RECHECK_MS = 5 * 60 * 1000;
 
 interface ThrowColorModeContextValue {
   mode: ThrowColorMode;
-  /** The day/night palette every Throw map and letter should actually render with — 'auto'
-   * follows the viewer's own device clock (see isDaytimeNow), 'day'/'night' pin it regardless of
-   * the time. */
+  /** The paper & plane color this setting resolves to — 'auto' follows the viewer's own device
+   * clock (see isDaytimeNow), 'day'/'night' pin it regardless of the time. Only FoldingLetter's
+   * own paper/plane read this; everything else in Throw (the map, the recipient carousel) keeps
+   * following the viewer's actual clock unconditionally — see autoIsDay. */
   isDay: boolean;
+  /** The viewer's own device clock, unaffected by `mode` — what every Throw map and the recipient
+   * carousel render with, regardless of the paper/plane color the user has picked. */
+  autoIsDay: boolean;
   setMode: (mode: ThrowColorMode) => void;
 }
 
 const ThrowColorModeContext = createContext<ThrowColorModeContextValue | null>(null);
 
 /**
- * Loads the signed-in user's Throw color-mode preference (`user_settings.throw_color_mode`) and
- * derives the single `isDay` signal every Throw map/letter renders with — replacing what used to
- * be a separate isDaytimeNow-polling useState/effect duplicated in ThrowHomeScreen and both
- * ThrowMap platforms. Defaults to 'auto' (the pre-existing automatic day/night switching)
- * whenever there's no signed-in user yet or no override has been saved.
+ * Loads the signed-in user's paper/plane color preference (`user_settings.throw_color_mode`) and
+ * derives two signals from it: `isDay` (what the preference actually resolves to — only the
+ * letter's own paper/plane read this) and `autoIsDay` (the viewer's own device clock, always, for
+ * everything else in Throw — the map, the recipient carousel — per explicit request that this
+ * setting affect the letter alone, not the rest of Throw's day/night behavior). Both used to be
+ * separate isDaytimeNow-polling useState/effects duplicated across ThrowHomeScreen and both
+ * ThrowMap platforms; this context is the one shared computation. Defaults to 'auto' (the
+ * pre-existing automatic day/night switching) whenever there's no signed-in user yet or no
+ * override has been saved.
  */
 export function ThrowColorModeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -68,7 +76,7 @@ export function ThrowColorModeProvider({ children }: { children: React.ReactNode
 
   const isDay = mode === 'day' ? true : mode === 'night' ? false : autoIsDay;
 
-  const value = useMemo(() => ({ mode, isDay, setMode }), [mode, isDay]);
+  const value = useMemo(() => ({ mode, isDay, autoIsDay, setMode }), [mode, isDay, autoIsDay]);
   return <ThrowColorModeContext.Provider value={value}>{children}</ThrowColorModeContext.Provider>;
 }
 

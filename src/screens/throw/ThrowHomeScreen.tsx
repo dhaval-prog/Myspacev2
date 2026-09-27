@@ -57,7 +57,6 @@ function wait(ms: number): Promise<void> {
 const DEFAULT_ALERT_SCHEDULE: AlertSchedule = { recurrence: 'once', hour: 9, minute: 0, daysOfWeek: [], dayOfMonth: 1 };
 
 interface ThrowHomeScreenProps {
-  onHome: () => void;
   onOpenExpenses: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
@@ -77,7 +76,6 @@ interface ThrowHomeScreenProps {
  * appears briefly before handing the map back to normal compose mode.
  */
 export function ThrowHomeScreen({
-  onHome,
   onOpenExpenses,
   onOpenChats,
   onOpenAddFriend,
@@ -177,11 +175,11 @@ export function ThrowHomeScreen({
   // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
   const focusTarget = selectedFriend?.location ?? myLocation ?? null;
 
-  // The letter paper's own night skin (see FoldingLetter's isNight prop) follows the exact same
-  // day/night signal every Throw map already does (see ThrowMap) — the *viewer's own* device
-  // clock, not any contact's destination, so every contact/map reads the same day or night at
-  // once, per explicit request, unless the user has pinned a color mode in Settings.
-  const { isDay } = useThrowColorMode();
+  // The letter paper's own night skin (see FoldingLetter's isNight prop below) is the one place
+  // in Throw that follows the user's own Settings color-mode pin, if they've set one — everywhere
+  // else (the map, the recipient carousel just below) stays on the viewer's actual device clock
+  // unconditionally (autoIsDay), per explicit request that the setting affect the letter alone.
+  const { isDay, autoIsDay } = useThrowColorMode();
 
   // Dragging the folded, ready-to-throw plane sideways (see FoldingLetter's onContactDragStart /
   // onContactDragOffset) cycles through recipients live, the same direction as swiping the
@@ -373,7 +371,7 @@ export function ThrowHomeScreen({
                 selectedIndex={selectedIndex}
                 onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)}
                 disabled={selfLocked}
-                isNight={!isDay}
+                isNight={!autoIsDay}
               />
             </View>
           ))}
@@ -399,7 +397,6 @@ export function ThrowHomeScreen({
               onThrow={handleThrow}
               onLaunched={handleLaunched}
               throwLabel={isSelfSelected ? 'Swipe up to set alert' : lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
-              onOpenChats={onOpenChats}
               onOpenAddFriend={onOpenAddFriend}
               onOpenInbox={onOpenInbox}
               unreadCount={unreadCount}
@@ -450,7 +447,7 @@ export function ThrowHomeScreen({
         <BottomNav
           activeId="throw"
           onSelect={(id) => {
-            if (id === 'chat') onHome();
+            if (id === 'chat') onOpenChats();
             if (id === 'expenses') onOpenExpenses();
             // 'throw' is a no-op here — this screen already is Throw.
           }}

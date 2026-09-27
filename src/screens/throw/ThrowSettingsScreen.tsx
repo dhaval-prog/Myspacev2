@@ -7,11 +7,19 @@ import { Icon } from '../../components/Icon';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { ThrowLocationSetupScreen } from './ThrowLocationSetupScreen';
+import { colors } from '../../theme';
 import { throwColor, throwFont, throwGlass, throwRadius, throwSpace } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import { useFriends } from '../../context/FriendsContext';
+import { useThrowColorMode, type ThrowColorMode } from '../../context/ThrowColorModeContext';
 
 const BACK_ICON = 'M15 18l-6-6 6-6';
+
+const COLOR_MODES: { key: ThrowColorMode; label: string }[] = [
+  { key: 'auto', label: 'Auto' },
+  { key: 'day', label: 'Day' },
+  { key: 'night', label: 'Night' },
+];
 
 interface ThrowSettingsScreenProps {
   onBack: () => void;
@@ -27,6 +35,7 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
   const insets = useSafeAreaInsets();
   const { myLocation } = useThrow();
   const { friends, receivedRequests, sentRequests, acceptRequest, declineRequest, cancelRequest, removeFriend, blockFriend } = useFriends();
+  const { mode: colorMode, setMode: setColorMode } = useThrowColorMode();
   const [pane, setPane] = useState<Pane>('settings');
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
 
@@ -62,6 +71,28 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
             <Text style={styles.editLabel}>Edit</Text>
           </GlassSurface>
         </Pressable>
+
+        <Text style={styles.eyebrow}>APPEARANCE</Text>
+        <View style={styles.colorCard}>
+          <Text style={styles.colorTitle}>Paper & plane color</Text>
+          <Text style={styles.colorSubtitle}>Auto follows your device's clock (day/night); Day and Night pin one look — for the letter's paper and plane only, everywhere else in Throw keeps following the time as usual.</Text>
+          <View style={styles.colorOptions}>
+            {COLOR_MODES.map((opt) => {
+              const active = colorMode === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => setColorMode(opt.key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Paper & plane color — ${opt.label}`}
+                  style={[styles.colorOption, active && styles.colorOptionActive]}
+                >
+                  <Text style={[styles.colorOptionText, active && styles.colorOptionTextActive]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
 
         {(receivedRequests.length > 0 || sentRequests.length > 0) && (
           <>
@@ -179,6 +210,19 @@ const styles = StyleSheet.create({
   rowName: { fontFamily: throwFont.ui700, fontSize: 14, color: throwColor.ink },
   rowMeta: { fontFamily: throwFont.ui400, fontSize: 12, color: throwColor.inkSoft },
   editLabel: { fontFamily: throwFont.ui700, fontSize: 13, color: throwColor.clayDeep },
+  colorCard: {
+    backgroundColor: throwColor.cardBg,
+    borderRadius: throwRadius.card,
+    padding: 16,
+    marginBottom: 8,
+  },
+  colorTitle: { fontFamily: throwFont.ui700, fontSize: 15, color: throwColor.ink, marginBottom: 6 },
+  colorSubtitle: { fontFamily: throwFont.ui400, fontSize: 12.5, color: throwColor.inkSoft, lineHeight: 18 },
+  colorOptions: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  colorOption: { flex: 1, paddingVertical: 10, borderRadius: throwRadius.pill, backgroundColor: colors.badgeInactiveBg, alignItems: 'center' },
+  colorOptionActive: { backgroundColor: colors.ink },
+  colorOptionText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: colors.badgeInactiveFg },
+  colorOptionTextActive: { color: colors.lime },
   acceptButton: { borderRadius: 999, backgroundColor: throwColor.clay, paddingVertical: 8, paddingHorizontal: 14 },
   acceptLabel: { fontFamily: throwFont.ui700, fontSize: 12.5, color: '#fff' },
   xButton: { width: 30, height: 30, borderRadius: 15, backgroundColor: throwColor.claySoft, alignItems: 'center', justifyContent: 'center' },

@@ -150,9 +150,10 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const [, forceRender] = useState(0);
 
   // The viewer's own device clock governs the day/night palette — not any contact's destination,
-  // so every map and every contact reads the same day or night at once, per explicit request,
-  // unless the user has pinned a color mode in Settings (see ThrowColorModeContext).
-  const { isDay } = useThrowColorMode();
+  // so every map and every contact reads the same day or night at once, per explicit request. This
+  // stays on the viewer's actual clock unconditionally (autoIsDay) — the paper/plane color the
+  // user can pin in Settings (see ThrowColorModeContext) only ever affects the letter itself.
+  const { autoIsDay: isDay } = useThrowColorMode();
   const isDayRef = useRef(isDay);
   isDayRef.current = isDay;
 
