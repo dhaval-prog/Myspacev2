@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
@@ -7,6 +7,10 @@ import { FoldingLetter } from '../../components/throw/FoldingLetter';
 import type { FoldingLetterHandle } from '../../components/throw/FoldingLetter';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { GlassSurface } from '../../components/friends/GlassSurface';
+import { AddStoryButton } from '../../components/throw/AddStoryButton';
+import { StoryCaptureScreen } from '../../components/throw/StoryCaptureScreen';
+import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
+import { StoryViewerScreen } from '../../components/throw/StoryViewerScreen';
 import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { formatMiles } from '../../utils/geo';
@@ -15,11 +19,22 @@ import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/thro
 import { useThrow } from '../../context/ThrowContext';
 import { useThrowAlerts } from '../../context/ThrowAlertsContext';
 import { useThrowColorMode } from '../../context/ThrowColorModeContext';
+import { useThrowStories } from '../../context/ThrowStoriesContext';
 import { useAuth } from '../../context/AuthContext';
 import { useGameStats } from '../../context/GameStatsContext';
 import { formatAlertSchedule } from '../../utils/throwAlerts';
 import type { AlertSchedule, StrokePath, ThrowLetter } from '../../types/throw';
+import type { StoryMediaType } from '../../types/story';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
+
+/** What's currently covering the screen for the story flow — capture (camera/gallery), the trim
+ * step (only for a picked video over 15s), or the full-screen viewer for one contact's stories.
+ * Never more than one at a time, so a single piece of state (not three booleans) makes that
+ * mutual exclusion structural rather than something every setter has to remember to preserve. */
+type StoryFlow =
+  | { name: 'capture' }
+  | { name: 'trim'; localUri: string; durationMs: number }
+  | { name: 'viewer'; userId: string; authorName: string };
 
 // Feather Icons' "settings" gear glyph (24x24 viewBox) — a known-good path rather than a
 // freehand approximation.
@@ -83,6 +98,8 @@ export function ThrowHomeScreen({
   const { myLocation, myName, myAvatarUrl, friends, unreadCount, streakFor, sendThrow, uploadPhoto } = useThrow();
   const { createAlert } = useThrowAlerts();
   const { statsFor } = useGameStats();
+  const { storiesByUser, storyCountFor, postStory, markViewed } = useThrowStories();
+  const [storyFlow, setStoryFlow] = useState<StoryFlow | null>(null);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [alertSchedule, setAlertSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
   // Once the user has touched the alert schedule, switching to a different contact is locked
@@ -270,6 +287,29 @@ export function ThrowHomeScreen({
     setReminderPeeking(false);
   };
 
+  // Tapping the already-selected contact's ring (see RecipientCarousel's own onOpenStory) opens
+  // their story instead of re-selecting them (a no-op otherwise) — the same "tap once to select,
+  // tap the selected one again to open" convention avoids needing a whole second control just for
+  // viewing.
+  const handleOpenStory = (userId: string, name: string) => {
+    if ((storiesByUser[userId]?.length ?? 0) === 0) return;
+    setStoryFlow({ name: 'viewer', userId, authorName: name });
+  };
+
+  const handleStoryCaptured = async (localUri: string, mediaType: StoryMediaType) => {
+    setStoryFlow(null);
+    await postStory(localUri, mediaType);
+  };
+
+  const handleStoryPickedLongVideo = (localUri: string, durationMs: number) => {
+    setStoryFlow({ name: 'trim', localUri, durationMs });
+  };
+
+  const handleStoryTrimConfirmed = async (trim: { startMs: number; endMs: number }, localUri: string) => {
+    setStoryFlow(null);
+    await postStory(localUri, 'video', trim);
+  };
+
   // Real "zoom to contact": the selected friend's own location, falling back to the user's own
   // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
   const focusTarget = selectedFriend?.location ?? myLocation ?? null;
@@ -436,15 +476,25 @@ export function ThrowHomeScreen({
               </View>
             )
           ) : (
-            <View style={[styles.recipientOverlay, { top: insets.top + 16 }]}>
-              <RecipientCarousel
-                friends={friendsWithLocation}
-                selectedIndex={selectedIndex}
-                onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)}
-                disabled={selfLocked}
-                isNight={!mapIsDay}
-              />
-            </View>
+            <>
+              <View style={[styles.addStoryWrap, { top: insets.top + 16 }]}>
+                <AddStoryButton onPress={() => setStoryFlow({ name: 'capture' })} />
+              </View>
+              <View style={[styles.recipientOverlay, { top: insets.top + 16 }]}>
+                <RecipientCarousel
+                  friends={friendsWithLocation}
+                  selectedIndex={selectedIndex}
+                  onChangeIndex={(i) => setSelectedFriendId(friendsWithLocation[i]?.userId ?? null)}
+                  disabled={selfLocked}
+                  isNight={!mapIsDay}
+                  storyCountFor={storyCountFor}
+                  onOpenStory={(userId) => {
+                    const f = friendsWithLocation.find((fr) => fr.userId === userId);
+                    if (f) handleOpenStory(userId, f.userId === myId ? 'Your story' : f.name);
+                  }}
+                />
+              </View>
+            </>
           ))}
 
         {!inFlight && selectedFriend && (
@@ -560,6 +610,38 @@ export function ThrowHomeScreen({
           reduceMotion={reduceMotion}
         />
       </Animated.View>
+
+      {storyFlow?.name === 'capture' && (
+        <Modal visible animationType="slide" onRequestClose={() => setStoryFlow(null)} statusBarTranslucent>
+          <StoryCaptureScreen
+            onClose={() => setStoryFlow(null)}
+            onCaptured={handleStoryCaptured}
+            onPickedLongVideo={handleStoryPickedLongVideo}
+          />
+        </Modal>
+      )}
+
+      {storyFlow?.name === 'trim' && (
+        <Modal visible animationType="slide" onRequestClose={() => setStoryFlow(null)} statusBarTranslucent>
+          <StoryTrimScreen
+            localUri={storyFlow.localUri}
+            durationMs={storyFlow.durationMs}
+            onCancel={() => setStoryFlow(null)}
+            onConfirm={(trim) => handleStoryTrimConfirmed(trim, storyFlow.localUri)}
+          />
+        </Modal>
+      )}
+
+      {storyFlow?.name === 'viewer' && (
+        <Modal visible animationType="fade" onRequestClose={() => setStoryFlow(null)} statusBarTranslucent>
+          <StoryViewerScreen
+            authorName={storyFlow.authorName}
+            stories={storiesByUser[storyFlow.userId] ?? []}
+            onClose={() => setStoryFlow(null)}
+            onViewed={markViewed}
+          />
+        </Modal>
+      )}
     </View>
   );
 }
@@ -573,6 +655,10 @@ const styles = StyleSheet.create({
   // sibling of mapArea, absolutely pinned to the screen's bottom so it overlaps in front.
   bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
+  // Sits to the left of the (centered) recipient carousel, at the same vertical band as its
+  // avatar row — a fixed screen position rather than another carousel item, so it's always
+  // reachable regardless of which contact is selected or how many there are.
+  addStoryWrap: { position: 'absolute', left: 16, height: 130, justifyContent: 'center', zIndex: 1 },
   replyLine: {
     textAlign: 'center',
     fontFamily: throwFont.ui700,

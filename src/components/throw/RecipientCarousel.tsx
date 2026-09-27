@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FriendAvatar } from '../friends/FriendAvatar';
+import { StoryRing } from './StoryRing';
 import { throwColor, throwFont, throwNightColor } from '../../theme/throwTokens';
 import type { ThrowFriend } from '../../types/throw';
 
@@ -47,6 +48,14 @@ interface RecipientCarouselProps {
    * ring, matching the night reference screenshot — same day/night signal as FoldingLetter's own
    * isNight prop. */
   isNight?: boolean;
+  /** How many active stories a contact has, for the green status ring (see StoryRing) — absent
+   * (or 0 for everyone) simply renders no rings, so this stays optional for callers/tests that
+   * don't care about stories at all. */
+  storyCountFor?: (userId: string) => number;
+  /** Tapping a contact who is *already* selected and has an active story opens it instead of
+   * re-selecting them (which would otherwise be a no-op) — lets one tap target serve both
+   * "switch to this contact" and "view their story" without a second control. */
+  onOpenStory?: (userId: string) => void;
 }
 
 /**
@@ -55,7 +64,7 @@ interface RecipientCarouselProps {
  * distance. Clamped at the ends rather than a true infinite loop (simpler, and every real
  * friends list here is short enough that the clamp is never felt as a limitation).
  */
-export function RecipientCarousel({ friends, selectedIndex, onChangeIndex, disabled, isNight }: RecipientCarouselProps) {
+export function RecipientCarousel({ friends, selectedIndex, onChangeIndex, disabled, isNight, storyCountFor, onOpenStory }: RecipientCarouselProps) {
   const n = friends.length;
   const maxIndex = Math.max(0, n - 1);
   const offset = useRef(new Animated.Value(Math.min(selectedIndex, maxIndex))).current;
@@ -127,16 +136,29 @@ export function RecipientCarousel({ friends, selectedIndex, onChangeIndex, disab
           const isSelected = i === selectedIndex;
           return (
             <Animated.View key={f.userId} style={[styles.item, { transform: [{ translateX }, { scale }], opacity }]}>
-              <Pressable onPress={() => snapTo(i)} disabled={disabled} hitSlop={8} style={styles.pressableContent}>
+              <Pressable
+                onPress={() => {
+                  if (isSelected && onOpenStory && (storyCountFor?.(f.userId) ?? 0) > 0) {
+                    onOpenStory(f.userId);
+                    return;
+                  }
+                  snapTo(i);
+                }}
+                disabled={disabled}
+                hitSlop={8}
+                style={styles.pressableContent}
+              >
                 <View style={styles.avatarWrap}>
                   {isSelected && <SelectedPulseRing isNight={isNight} />}
-                  <FriendAvatar
-                    userId={f.userId}
-                    name={f.name}
-                    avatarUrl={f.avatarUrl}
-                    size={AVATAR_SIZE}
-                    style={isSelected && (isNight ? styles.avatarSelectedNight : styles.avatarSelected)}
-                  />
+                  <StoryRing count={storyCountFor?.(f.userId) ?? 0} size={AVATAR_SIZE}>
+                    <FriendAvatar
+                      userId={f.userId}
+                      name={f.name}
+                      avatarUrl={f.avatarUrl}
+                      size={AVATAR_SIZE}
+                      style={isSelected && (isNight ? styles.avatarSelectedNight : styles.avatarSelected)}
+                    />
+                  </StoryRing>
                 </View>
                 <Text
                   style={[

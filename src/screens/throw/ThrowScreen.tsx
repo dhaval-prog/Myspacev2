@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { ThrowProvider, useThrow } from '../../context/ThrowContext';
+import { ThrowStoriesProvider } from '../../context/ThrowStoriesContext';
 import { throwColor } from '../../theme/throwTokens';
 import { ThrowLocationSetupScreen } from './ThrowLocationSetupScreen';
 import { ThrowHomeScreen } from './ThrowHomeScreen';
@@ -90,14 +91,16 @@ function ThrowNavigator({
 export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFriend, initialThrowId, initialScreen }: ThrowScreenProps) {
   return (
     <ThrowProvider>
-      <ThrowNavigator
-        onHome={onHome}
-        onOpenExpenses={onOpenExpenses}
-        onOpenChats={onOpenChats}
-        onOpenAddFriend={onOpenAddFriend}
-        initialThrowId={initialThrowId}
-        initialScreen={initialScreen}
-      />
+      <ThrowStoriesProvider>
+        <ThrowNavigator
+          onHome={onHome}
+          onOpenExpenses={onOpenExpenses}
+          onOpenChats={onOpenChats}
+          onOpenAddFriend={onOpenAddFriend}
+          initialThrowId={initialThrowId}
+          initialScreen={initialScreen}
+        />
+      </ThrowStoriesProvider>
     </ThrowProvider>
   );
 }
