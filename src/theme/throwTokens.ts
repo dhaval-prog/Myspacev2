@@ -56,6 +56,12 @@ export const throwColor = {
   screenBg: '#F6F1E4',
   cardBg: '#FFFFFF',
   cardBorder: 'rgba(80,64,40,.1)',
+
+  // A story's "unseen, active" ring around a contact's avatar — a plain, saturated green rather
+  // than any of Throw's own warm/blue accents, matching the universal status-ring convention
+  // (WhatsApp/Instagram) per explicit reference screenshot. One story is a solid ring; more than
+  // one splits it into that many equal segments (see StoryRing).
+  storyRing: '#34C759',
   shadowSoft: {
     shadowColor: '#50402A',
     shadowOpacity: 0.12,

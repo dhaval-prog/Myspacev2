@@ -7,12 +7,20 @@ import { useThrow } from '../../../context/ThrowContext';
 import { useThrowAlerts } from '../../../context/ThrowAlertsContext';
 import { useGameStats } from '../../../context/GameStatsContext';
 import { useThrowColorMode } from '../../../context/ThrowColorModeContext';
+import { useThrowStories } from '../../../context/ThrowStoriesContext';
 
 jest.mock('../../../context/AuthContext', () => ({ useAuth: jest.fn() }));
 jest.mock('../../../context/ThrowContext', () => ({ useThrow: jest.fn() }));
 jest.mock('../../../context/ThrowAlertsContext', () => ({ useThrowAlerts: jest.fn() }));
 jest.mock('../../../context/GameStatsContext', () => ({ useGameStats: jest.fn() }));
 jest.mock('../../../context/ThrowColorModeContext', () => ({ useThrowColorMode: jest.fn() }));
+jest.mock('../../../context/ThrowStoriesContext', () => ({ useThrowStories: jest.fn() }));
+
+// expo-video has no jest/native-module fallback the way most other Expo packages here do (it
+// throws at import time in this test environment) — only StoryTrimScreen/StoryViewerScreen touch
+// it, and neither renders in these tests, but the bare `import` still runs at module-load time
+// through ThrowHomeScreen's own import of them, so this has to be mocked regardless.
+jest.mock('expo-video', () => ({ useVideoPlayer: () => ({}), VideoView: () => null }));
 
 // Never exercised by the earlier describe block below (flight state stays null there), but the
 // new flight/chrome tests do reach it — a passthrough stub keeps this file's existing convention
@@ -57,6 +65,7 @@ const mockUseThrow = useThrow as jest.Mock;
 const mockUseThrowAlerts = useThrowAlerts as jest.Mock;
 const mockUseGameStats = useGameStats as jest.Mock;
 const mockUseThrowColorMode = useThrowColorMode as jest.Mock;
+const mockUseThrowStories = useThrowStories as jest.Mock;
 
 const MY_ID = 'me-1';
 const FRIEND = { userId: 'friend-1', name: 'Priya', avatarUrl: null, location: { city: 'Pune', country: 'IN', latitude: 18.5, longitude: 73.8 } };
@@ -77,6 +86,14 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
   mockUseThrowAlerts.mockReturnValue({ createAlert });
   mockUseGameStats.mockReturnValue({ statsFor: () => ({ totalPoints: 0 }) });
   mockUseThrowColorMode.mockReturnValue({ mode: 'auto', isDay: true, autoIsDay: true, setMode: jest.fn(), mapMode: 'auto', mapIsDay: true, setMapMode: jest.fn() });
+  mockUseThrowStories.mockReturnValue({
+    loading: false,
+    storiesByUser: {},
+    storyCountFor: () => 0,
+    postStory: jest.fn().mockResolvedValue({ error: null }),
+    markViewed: jest.fn(),
+    refresh: jest.fn(),
+  });
   return createAlert;
 }
 
