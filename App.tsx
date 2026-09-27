@@ -12,6 +12,7 @@ import { GameProvider } from './src/context/GameContext';
 import { TriviaGameProvider } from './src/context/TriviaGameContext';
 import { GameStatsProvider } from './src/context/GameStatsContext';
 import { ThrowAlertsProvider, ThrowAlertsOverlay } from './src/context/ThrowAlertsContext';
+import { ThrowColorModeProvider } from './src/context/ThrowColorModeContext';
 import { CallOverlay } from './src/components/calls/CallOverlay';
 import type { NotificationTarget } from './src/utils/notify';
 import { LaunchIntro } from './src/components/LaunchIntro';
@@ -163,11 +164,13 @@ function RootNavigator() {
           <GameProvider>
             <TriviaGameProvider>
               <GameStatsProvider>
-                <ThrowAlertsProvider>
-                  <AppNavigator />
-                  <CallOverlay />
-                  <ThrowAlertsOverlay />
-                </ThrowAlertsProvider>
+                <ThrowColorModeProvider>
+                  <ThrowAlertsProvider>
+                    <AppNavigator />
+                    <CallOverlay />
+                    <ThrowAlertsOverlay />
+                  </ThrowAlertsProvider>
+                </ThrowColorModeProvider>
               </GameStatsProvider>
             </TriviaGameProvider>
           </GameProvider>

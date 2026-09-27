@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { throwColor } from '../../theme/throwTokens';
-import { isDaytimeNow } from '../../utils/solarTime';
+import { useThrowColorMode } from '../../context/ThrowColorModeContext';
 import { latLngAtProgress, planeOpacityForProgress, planeSizeForProgress } from '../../utils/mapProjection';
 import { LocationPin } from './LocationPin';
 import { PaperPlane } from './PaperPlane';
@@ -131,10 +131,6 @@ function addOrUpdateRoute(map: mapboxgl.Map, points: LatLng[] | undefined) {
   }
 }
 
-// Recheck often enough that a session left open across a day/night boundary (or a contact
-// switch into a different part of the world) still catches up, cheap enough not to matter.
-const DAYTIME_RECHECK_MS = 5 * 60 * 1000;
-
 /**
  * The real, interactive world map behind Throw — Mapbox GL JS over a custom Mapbox Studio style,
  * the same Throw-specific props surface as before: a handful of city-level pins plus an optional
@@ -154,8 +150,9 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const [, forceRender] = useState(0);
 
   // The viewer's own device clock governs the day/night palette — not any contact's destination,
-  // so every map and every contact reads the same day or night at once, per explicit request.
-  const [isDay, setIsDay] = useState(() => isDaytimeNow());
+  // so every map and every contact reads the same day or night at once, per explicit request,
+  // unless the user has pinned a color mode in Settings (see ThrowColorModeContext).
+  const { isDay } = useThrowColorMode();
   const isDayRef = useRef(isDay);
   isDayRef.current = isDay;
 
@@ -235,15 +232,6 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     applyTarget(map, targetRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey, fitKey]);
-
-  // Recompute the day/night palette periodically so a long-open session still catches up with
-  // the viewer's own clock crossing the boundary.
-  useEffect(() => {
-    const recheck = () => setIsDay(isDaytimeNow());
-    recheck();
-    const id = setInterval(recheck, DAYTIME_RECHECK_MS);
-    return () => clearInterval(id);
-  }, []);
 
   useEffect(() => {
     const map = mapRef.current;

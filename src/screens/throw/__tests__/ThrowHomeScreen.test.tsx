@@ -6,11 +6,13 @@ import { useAuth } from '../../../context/AuthContext';
 import { useThrow } from '../../../context/ThrowContext';
 import { useThrowAlerts } from '../../../context/ThrowAlertsContext';
 import { useGameStats } from '../../../context/GameStatsContext';
+import { useThrowColorMode } from '../../../context/ThrowColorModeContext';
 
 jest.mock('../../../context/AuthContext', () => ({ useAuth: jest.fn() }));
 jest.mock('../../../context/ThrowContext', () => ({ useThrow: jest.fn() }));
 jest.mock('../../../context/ThrowAlertsContext', () => ({ useThrowAlerts: jest.fn() }));
 jest.mock('../../../context/GameStatsContext', () => ({ useGameStats: jest.fn() }));
+jest.mock('../../../context/ThrowColorModeContext', () => ({ useThrowColorMode: jest.fn() }));
 
 // ThrowMap (Leaflet/react-native-maps) and FoldingLetter/RecipientCarousel (Animated
 // gestures, a WebGL 3D stage) are heavy and irrelevant to what's under test here — the
@@ -47,6 +49,7 @@ const mockUseAuth = useAuth as jest.Mock;
 const mockUseThrow = useThrow as jest.Mock;
 const mockUseThrowAlerts = useThrowAlerts as jest.Mock;
 const mockUseGameStats = useGameStats as jest.Mock;
+const mockUseThrowColorMode = useThrowColorMode as jest.Mock;
 
 const MY_ID = 'me-1';
 const FRIEND = { userId: 'friend-1', name: 'Priya', avatarUrl: null, location: { city: 'Pune', country: 'IN', latitude: 18.5, longitude: 73.8 } };
@@ -66,6 +69,7 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
   });
   mockUseThrowAlerts.mockReturnValue({ createAlert });
   mockUseGameStats.mockReturnValue({ statsFor: () => ({ totalPoints: 0 }) });
+  mockUseThrowColorMode.mockReturnValue({ mode: 'auto', isDay: true, setMode: jest.fn() });
   return createAlert;
 }
 

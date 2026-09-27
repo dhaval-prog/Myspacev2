@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { throwColor } from '../../theme/throwTokens';
 import { throwMapNightGoogleStyle } from '../../theme/throwMapNativeStyle';
-import { isDaytimeNow } from '../../utils/solarTime';
+import { useThrowColorMode } from '../../context/ThrowColorModeContext';
 import { latLngAtProgress, planeOpacityForProgress, planeSizeForProgress } from '../../utils/mapProjection';
 import { LocationPinGlyph } from './LocationPin';
 import { PaperPlane } from './PaperPlane';
@@ -31,10 +31,6 @@ function pointsKey(points: { latitude: number; longitude: number }[] | null | un
   return points ? points.map((p) => `${p.latitude.toFixed(3)},${p.longitude.toFixed(3)}`).join('|') : '';
 }
 
-// Recheck often enough that a session left open across a day/night boundary (or a contact switch
-// into a different part of the world) still catches up, cheap enough not to matter.
-const DAYTIME_RECHECK_MS = 5 * 60 * 1000;
-
 /** The real, interactive world map behind Throw — react-native-maps (Apple Maps on iOS out of the
  * box, Google Maps on Android once a Maps API key is added to app.json), same underlying stack as
  * Live Locations' MapCanvas but with a Throw-specific props surface: a handful of city-level pins
@@ -50,15 +46,10 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const focusKey = focus ? `${focus.latitude.toFixed(3)},${focus.longitude.toFixed(3)}` : '';
 
   // The viewer's own device clock governs the day/night palette — not any contact's destination,
-  // so every map and every contact reads the same day or night at once, per explicit request.
-  // Same reasoning and same helper as the web version, so both platforms agree.
-  const [isDay, setIsDay] = useState(() => isDaytimeNow());
-  useEffect(() => {
-    const recheck = () => setIsDay(isDaytimeNow());
-    recheck();
-    const id = setInterval(recheck, DAYTIME_RECHECK_MS);
-    return () => clearInterval(id);
-  }, []);
+  // so every map and every contact reads the same day or night at once, per explicit request,
+  // unless the user has pinned a color mode in Settings (see ThrowColorModeContext). Same
+  // reasoning and same shared hook as the web version, so both platforms agree.
+  const { isDay } = useThrowColorMode();
   // `onMapReady` (not just a mounted ref) is what actually gates safe imperative calls here — a
   // ref can be attached to the native view before the underlying map surface is ready, in which
   // case `animateToRegion`/`fitToCoordinates` can silently no-op or resolve into a wrong camera

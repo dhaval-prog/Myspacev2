@@ -7,6 +7,7 @@ import { Icon } from '../../components/Icon';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { ActionButton, Card, InlineError, InlineNote, Row, SectionLabel, TextField } from '../../components/account/rows';
 import { useAuth } from '../../context/AuthContext';
+import { useThrowColorMode, type ThrowColorMode } from '../../context/ThrowColorModeContext';
 import { supabase } from '../../lib/supabase';
 import { downloadCsv, downloadJson } from '../../utils/accountExport';
 
@@ -73,6 +74,12 @@ const NOTIFICATION_CATEGORIES: { key: string; label: string }[] = [
   { key: 'shared_space_activity', label: 'Shared space activity' },
 ];
 
+const THROW_COLOR_MODES: { key: ThrowColorMode; label: string }[] = [
+  { key: 'auto', label: 'Auto' },
+  { key: 'day', label: 'Day' },
+  { key: 'night', label: 'Night' },
+];
+
 const UPI_ID_PATTERN = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z][a-zA-Z0-9]{1,64}$/;
 const CHANNELS: { key: 'push' | 'email' | 'inApp'; label: string }[] = [
   { key: 'push', label: 'Push' },
@@ -136,6 +143,7 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
   const insets = useSafeAreaInsets();
   const { user, signOut, updatePassword, updateProfileName } = useAuth();
   const userId = user?.id ?? null;
+  const { mode: throwColorMode, setMode: setThrowColorMode } = useThrowColorMode();
 
   const [loading, setLoading] = useState(true);
 
@@ -659,6 +667,33 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
           ))}
         </Card>
 
+        {/* Throw */}
+        <SectionLabel>Throw</SectionLabel>
+        <Card>
+          <View style={[styles.notifRow, styles.notifRowDivider]}>
+            <View style={styles.throwColorLabelWrap}>
+              <Text style={styles.notifLabel}>Paper & plane color</Text>
+              <Text style={styles.throwColorSublabel}>Auto follows your device's clock (day/night); Day and Night pin one look.</Text>
+            </View>
+          </View>
+          <View style={styles.throwColorOptions}>
+            {THROW_COLOR_MODES.map((opt) => {
+              const active = throwColorMode === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => setThrowColorMode(opt.key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Paper & plane color — ${opt.label}`}
+                  style={[styles.throwColorOption, active && styles.throwColorOptionActive]}
+                >
+                  <Text style={[styles.throwColorOptionText, active && styles.throwColorOptionTextActive]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Card>
+
         {/* Shared Spaces & Invitations */}
         <SectionLabel>Shared spaces & invitations</SectionLabel>
         <Card>
@@ -1040,6 +1075,38 @@ const styles = StyleSheet.create({
     color: colors.badgeInactiveFg,
   },
   notifChipTextActive: {
+    color: colors.lime,
+  },
+  throwColorLabelWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  throwColorSublabel: {
+    fontFamily: fontFamily.sans500,
+    fontSize: 11.5,
+    color: colors.textFaint,
+  },
+  throwColorOptions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingVertical: 12,
+  },
+  throwColorOption: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: radius.sm,
+    backgroundColor: colors.badgeInactiveBg,
+    alignItems: 'center',
+  },
+  throwColorOptionActive: {
+    backgroundColor: colors.ink,
+  },
+  throwColorOptionText: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 12.5,
+    color: colors.badgeInactiveFg,
+  },
+  throwColorOptionTextActive: {
     color: colors.lime,
   },
   subHeading: {
