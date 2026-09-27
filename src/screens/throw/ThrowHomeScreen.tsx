@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
 import { FoldingLetter } from '../../components/throw/FoldingLetter';
+import type { FoldingLetterHandle } from '../../components/throw/FoldingLetter';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { GlassSurface } from '../../components/friends/GlassSurface';
 import { BottomNav } from '../../components/BottomNav';
@@ -120,6 +121,97 @@ export function ThrowHomeScreen({
     const hidden = value > 0.5;
     setChromeHidden((prev) => (prev === hidden ? prev : hidden));
   };
+
+  // The self-reminder sheet's collapsed peek strip (see FoldingLetter's onReminderPeekChange) is
+  // rendered here, not inside FoldingLetter itself — it needs to reach the real screen bottom,
+  // past the letter card's own (narrower, and dynamically-repositioned) bounds. openReminder is
+  // reached imperatively through this ref, since the sheet's own open/peek/closed state lives
+  // inside FoldingLetter, which already tracks the phase/content that drives it.
+  const foldingLetterRef = useRef<FoldingLetterHandle>(null);
+  const [reminderPeeking, setReminderPeeking] = useState(false);
+  // Opening the peek strip back up is either a tap (negligible movement) or an upward drag past
+  // this distance/velocity — same threshold shape as BottomSheet's own handle-drag-to-dismiss,
+  // just inverted, plus the tap case since this is a plain View (see below), not a Pressable.
+  const REMINDER_TAP_SLOP = 10;
+  const REMINDER_OPEN_DISTANCE = 24;
+  const REMINDER_OPEN_VELOCITY = 0.5;
+  const openReminderFromGesture = (dx: number, dy: number, velocityY: number) => {
+    const isTap = Math.abs(dx) < REMINDER_TAP_SLOP && Math.abs(dy) < REMINDER_TAP_SLOP;
+    if (isTap || dy < -REMINDER_OPEN_DISTANCE || velocityY < -REMINDER_OPEN_VELOCITY) {
+      foldingLetterRef.current?.openReminder();
+    }
+  };
+  // A plain View (not Pressable) carrying its own PanResponder, rather than a Pressable +
+  // PanResponder stacked on the same node — Pressable's own Pressability responder would
+  // otherwise compete with this one for the same touch, exactly the kind of gesture conflict
+  // FoldingLetter's own fold-vs-stroke negotiation exists to avoid elsewhere in Throw. Tapping is
+  // just a released drag with negligible movement (see openReminderFromGesture), so one responder
+  // covers both without needing Pressable at all.
+  const reminderPeekPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderRelease: (_, gesture) => openReminderFromGesture(gesture.dx, gesture.dy, gesture.vy),
+    }),
+  ).current;
+  // react-native-web's PanResponder polyfill doesn't reliably track a drag here either — the same
+  // dedupe bug FoldingLetter's own fold-drag and BottomSheet's own handle-drag already work around
+  // (see either's own comment for the full diagnosis). Skipped on native, where PanResponder's own
+  // tracking is reliable as-is.
+  const reminderPeekRef = useRef<View>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !reminderPeeking) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const node = reminderPeekRef.current as any as HTMLElement | null;
+    if (!node) return;
+    const getPoint = (e: MouseEvent | TouchEvent): { x: number; y: number } | null => {
+      if ('touches' in e) {
+        const t = e.touches[0] ?? e.changedTouches[0];
+        return t ? { x: t.clientX, y: t.clientY } : null;
+      }
+      return { x: e.clientX, y: e.clientY };
+    };
+    let start: { x: number; y: number } | null = null;
+    let last = { x: 0, y: 0 };
+    let lastT = 0;
+    let velocity = 0;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const p = getPoint(e);
+      if (!p) return;
+      start = p;
+      last = p;
+      lastT = Date.now();
+      velocity = 0;
+    };
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (!start) return;
+      const p = getPoint(e);
+      if (!p) return;
+      const now = Date.now();
+      const dt = now - lastT;
+      if (dt > 0) velocity = (p.y - last.y) / dt;
+      last = p;
+      lastT = now;
+    };
+    const onUp = () => {
+      if (!start) return;
+      openReminderFromGesture(last.x - start.x, last.y - start.y, velocity);
+      start = null;
+    };
+    node.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    node.addEventListener('touchstart', onDown, { passive: true });
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('touchend', onUp);
+    return () => {
+      node.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      node.removeEventListener('touchstart', onDown);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    };
+  }, [reminderPeeking]);
   // Holds the letter between a successful `sendThrow`/`createAlert` and FoldingLetter's own local
   // fold-and-liftoff animation finishing (`onLaunched`) — the map flight only starts once that
   // local flourish is done, so the two animations play back to back rather than fighting for
@@ -391,6 +483,7 @@ export function ThrowHomeScreen({
             ]}
           >
             <FoldingLetter
+              ref={foldingLetterRef}
               recipientName={selectedFriend.name}
               streak={selectedStreak}
               points={selectedPoints}
@@ -405,11 +498,29 @@ export function ThrowHomeScreen({
               onFoldProgress={handleFoldProgress}
               alertSchedule={isSelfSelected ? alertSchedule : undefined}
               onAlertScheduleChange={handleAlertScheduleChange}
+              onReminderPeekChange={isSelfSelected ? setReminderPeeking : undefined}
               hideBadges={isSelfSelected}
               onHasContentChange={isSelfSelected ? handleHasContentChange : undefined}
               isNight={!isDay}
             />
           </Animated.View>
+        )}
+
+        {/* The self-reminder sheet's collapsed peek strip — see onReminderPeekChange's own
+            comment for why this lives here rather than inside FoldingLetter. Gated the same as
+            the letter card itself (!inFlight && selectedFriend) so a just-thrown letter's peek
+            can't linger after FoldingLetter unmounts (its own effect has no unmount cleanup to
+            report "gone" with). */}
+        {!inFlight && selectedFriend && reminderPeeking && (
+          <View
+            ref={reminderPeekRef}
+            accessibilityRole="button"
+            accessibilityLabel="Show reminder settings"
+            style={[styles.reminderPeek, { bottom: insets.bottom }]}
+            {...(Platform.OS !== 'web' ? reminderPeekPanResponder.panHandlers : null)}
+          >
+            <View style={styles.reminderPeekHandle} />
+          </View>
         )}
 
         {inFlight && (
@@ -490,6 +601,24 @@ const styles = StyleSheet.create({
     right: 28,
     top: '32%',
   },
+  // The self-reminder sheet's collapsed stand-in (see onReminderPeekChange) — pinned to the
+  // actual screen bottom (unlike letterCard, which sits well short of it) so it reads as sticking
+  // to the bottom of the whole screen, not just this narrower card. A plain View (see its own
+  // PanResponder comment), not another BottomSheet, so it never blocks the swipe-up-to-throw
+  // gesture on the map/plane behind it.
+  reminderPeek: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 28,
+    backgroundColor: throwColor.cardBg,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    alignItems: 'center',
+    paddingTop: 8,
+    ...throwColor.shadowSoft,
+  },
+  reminderPeekHandle: { width: 44, height: 4, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.16)' },
   flightStatusWrap: {
     position: 'absolute',
     left: 12,

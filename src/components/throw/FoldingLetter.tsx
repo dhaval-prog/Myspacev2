@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -88,16 +88,15 @@ const WHEEL_FOLD_DISTANCE = 500;
 // cross-browser "scroll ended" event to key off instead, so this is a debounce.
 const WHEEL_SETTLE_DEBOUNCE_MS = 180;
 
-// Design-size dimensions of the bottom-controls row (see bottomRowScale) — three round icon
-// buttons plus the wider mic button, at their full (unscaled) sizes and gap.
+// Design-size dimensions of the bottom-controls row (see bottomRowScale) — four round icon
+// buttons, all the same size, at their full (unscaled) size and gap.
 const BOTTOM_ROW_ICON = 60;
-const BOTTOM_ROW_MIC = 76;
 const BOTTOM_ROW_GAP = 14;
 const BOTTOM_ROW_HPAD = 12;
 // A little extra clearance beyond the strict fit, so the outer icons never sit flush against the
 // paper's own rounded edge even at the smallest scale.
 const BOTTOM_ROW_SAFETY = 8;
-const BOTTOM_ROW_CONTENT_WIDTH = BOTTOM_ROW_ICON * 3 + BOTTOM_ROW_MIC + BOTTOM_ROW_GAP * 3;
+const BOTTOM_ROW_CONTENT_WIDTH = BOTTOM_ROW_ICON * 4 + BOTTOM_ROW_GAP * 3;
 
 type Phase = 'writing' | 'folding' | 'ready' | 'throwing';
 
@@ -154,10 +153,17 @@ interface FoldingLetterProps {
   /** Present only for a self-reminder alert (writing to yourself), never an ordinary letter to a
    * friend — pops up the time/day picker (AlertScheduleHeader) in its own bottom sheet the first
    * time the fold completes (phase reaches 'ready') with something written/attached, right before
-   * the user would swipe up to throw. Every fold after that first one shows a small peek strip
-   * instead of popping the sheet open again (see reminderState below). */
+   * the user would swipe up to throw. Every fold after that first one collapses to a small peek
+   * strip instead of popping the sheet open again (see reminderState below) — the caller renders
+   * that strip itself (see onReminderPeekChange/FoldingLetterHandle) since it needs to reach the
+   * true screen bottom, past this component's own (narrower) card bounds. */
   alertSchedule?: AlertSchedule;
   onAlertScheduleChange?: (schedule: AlertSchedule) => void;
+  /** Fires whenever the reminder sheet's peek strip should show or hide — the caller (not this
+   * component) renders that strip, positioned against the real screen bottom rather than this
+   * card's own bounds (see FoldingLetterHandle's openReminder for how a tap/drag-up on it reopens
+   * the full sheet). */
+  onReminderPeekChange?: (peeking: boolean) => void;
   /** Hides the streak/points badges — they don't mean anything for a self-reminder. */
   hideBadges?: boolean;
   /** Fires on every change to whether the letter currently has any content (typed text, a
@@ -168,6 +174,13 @@ interface FoldingLetterProps {
    * destination currently reads as nighttime (see ThrowHomeScreen, same signal ThrowMap's own
    * day/night palette follows), not a whole-app dark mode. */
   isNight?: boolean;
+}
+
+export interface FoldingLetterHandle {
+  /** Reopens the reminder sheet from its peek strip — called by whatever the caller renders for
+   * onReminderPeekChange, on a tap or a drag-up past its own threshold. A no-op if there's no
+   * self-reminder in progress (alertSchedule absent) or the sheet isn't currently peeked. */
+  openReminder: () => void;
 }
 
 /**
@@ -210,26 +223,30 @@ function BottomIconSurface({
     </GlassSurface>
   );
 }
-export function FoldingLetter({
-  recipientName,
-  streak,
-  points,
-  disabled,
-  onThrow,
-  onLaunched,
-  throwLabel = 'Swipe up to throw',
-  onOpenAddFriend,
-  onOpenInbox,
-  unreadCount,
-  onContactDragStart,
-  onContactDragOffset,
-  onFoldProgress,
-  alertSchedule,
-  onAlertScheduleChange,
-  hideBadges,
-  onHasContentChange,
-  isNight,
-}: FoldingLetterProps) {
+export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>(function FoldingLetter(
+  {
+    recipientName,
+    streak,
+    points,
+    disabled,
+    onThrow,
+    onLaunched,
+    throwLabel = 'Swipe up to throw',
+    onOpenAddFriend,
+    onOpenInbox,
+    unreadCount,
+    onContactDragStart,
+    onContactDragOffset,
+    onFoldProgress,
+    alertSchedule,
+    onAlertScheduleChange,
+    onReminderPeekChange,
+    hideBadges,
+    onHasContentChange,
+    isNight,
+  }: FoldingLetterProps,
+  ref,
+) {
   const [phase, setPhase] = useState<Phase>('writing');
   const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
   const [mediaItems, setMediaItems] = useState<PickedMedia[]>([]);
@@ -489,6 +506,16 @@ export function FoldingLetter({
       setReminderState('peek');
     }
   }, [phase, alertSchedule, onAlertScheduleChange, hasContent]);
+
+  // The peek strip itself is rendered by the caller, not here (see onReminderPeekChange's own
+  // doc comment for why) — this is just the notification that tells it when to show or hide.
+  useEffect(() => {
+    onReminderPeekChange?.(reminderState === 'peek');
+  }, [reminderState, onReminderPeekChange]);
+
+  // The only imperative surface this component exposes — lets the caller's own peek-strip
+  // (rendered for onReminderPeekChange, above) reopen the full sheet on a tap or drag-up.
+  useImperativeHandle(ref, () => ({ openReminder: () => setReminderState('open') }), []);
 
   // react-native-web's PanResponder polyfill dedupes move dispatch against
   // `touchHistory.mostRecentTimeStamp`, and once `onMoveShouldSetPanResponderCapture` below steals
@@ -763,12 +790,10 @@ export function FoldingLetter({
     return Math.max(0.6, Math.min(1, s));
   }, [paperSize.width]);
   const roundBtnSize = BOTTOM_ROW_ICON * bottomRowScale;
-  const micBtnSize = BOTTOM_ROW_MIC * bottomRowScale;
   const roundBtnDynamicStyle = useMemo(
     () => ({ width: roundBtnSize, height: roundBtnSize, borderRadius: roundBtnSize / 2 }),
     [roundBtnSize],
   );
-  const micBtnDynamicStyle = useMemo(() => ({ width: micBtnSize, height: micBtnSize, borderRadius: micBtnSize / 2 }), [micBtnSize]);
   const badgeDynamicStyle = useMemo(
     () => ({
       minWidth: 18 * bottomRowScale,
@@ -896,14 +921,14 @@ export function FoldingLetter({
         >
           {({ pressed }) =>
             voice.recording ? (
-              <View style={[styles.micBtnShadow, micBtnDynamicStyle, isNight && styles.micBtnShadowNight, pressed && styles.roundBtnPressed]}>
-                <View style={[styles.micBtn, micBtnDynamicStyle, isNight ? styles.micBtnActiveNight : styles.micBtnActive]}>
+              <View style={[styles.micBtnShadow, roundBtnDynamicStyle, isNight && styles.micBtnShadowNight, pressed && styles.roundBtnPressed]}>
+                <View style={[styles.micBtn, roundBtnDynamicStyle, isNight ? styles.micBtnActiveNight : styles.micBtnActive]}>
                   <Icon path={STOP_ICON} size={22 * bottomRowScale} color={isNight ? '#000000' : throwColor.paper} strokeWidth={1.8} />
                 </View>
               </View>
             ) : (
-              <View style={[styles.micBtnShadow, micBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintStrong} style={[styles.micBtn, micBtnDynamicStyle]}>
+              <View style={[styles.micBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintStrong} style={[styles.micBtn, roundBtnDynamicStyle]}>
                   <Icon path={MIC_ICON} size={27 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
                 </BottomIconSurface>
               </View>
@@ -969,34 +994,22 @@ export function FoldingLetter({
       <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(items) => setMediaItems((prev) => [...prev, ...items])} />
 
       {alertSchedule && onAlertScheduleChange && (
-        <>
-          <BottomSheet visible={reminderState === 'open'} onClose={() => setReminderState('peek')}>
-            <Text style={styles.scheduleModalTitle}>Remind me</Text>
-            <AlertScheduleHeader schedule={alertSchedule} onChange={onAlertScheduleChange} />
-            <Pressable
-              onPress={() => setReminderState('peek')}
-              accessibilityRole="button"
-              accessibilityLabel="Done setting reminder"
-              style={({ pressed }) => [styles.scheduleModalDone, pressed && styles.roundBtnPressed]}
-            >
-              <Text style={styles.scheduleModalDoneText}>Done</Text>
-            </Pressable>
-          </BottomSheet>
-          {reminderState === 'peek' && (
-            <Pressable
-              onPress={() => setReminderState('open')}
-              accessibilityRole="button"
-              accessibilityLabel="Show reminder settings"
-              style={styles.reminderPeek}
-            >
-              <View style={styles.reminderPeekHandle} />
-            </Pressable>
-          )}
-        </>
+        <BottomSheet visible={reminderState === 'open'} onClose={() => setReminderState('peek')}>
+          <Text style={styles.scheduleModalTitle}>Remind me</Text>
+          <AlertScheduleHeader schedule={alertSchedule} onChange={onAlertScheduleChange} />
+          <Pressable
+            onPress={() => setReminderState('peek')}
+            accessibilityRole="button"
+            accessibilityLabel="Done setting reminder"
+            style={({ pressed }) => [styles.scheduleModalDone, pressed && styles.roundBtnPressed]}
+          >
+            <Text style={styles.scheduleModalDoneText}>Done</Text>
+          </Pressable>
+        </BottomSheet>
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
@@ -1018,23 +1031,6 @@ const styles = StyleSheet.create({
   scheduleModalTitle: { fontFamily: throwFont.ui700, fontSize: 17, color: throwColor.ink, marginBottom: 12, textAlign: 'center' },
   scheduleModalDone: { marginTop: 20, backgroundColor: throwColor.ink, borderRadius: throwRadius.pill, paddingVertical: 14, alignItems: 'center' },
   scheduleModalDoneText: { fontFamily: throwFont.ui700, fontSize: 15, color: throwColor.paper },
-  // The collapsed stand-in for the reminder sheet (see reminderState) — a plain, non-modal strip
-  // (not another BottomSheet) so it never blocks the swipe-up-to-throw gesture on the plane behind
-  // it, unlike the full sheet's own scrim. Tapping it reopens the full sheet.
-  reminderPeek: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 28,
-    backgroundColor: throwColor.cardBg,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    alignItems: 'center',
-    paddingTop: 8,
-    ...throwColor.shadowSoft,
-  },
-  reminderPeekHandle: { width: 44, height: 4, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.16)' },
   streakChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   pointsChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: throwColor.claySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   streakText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.clayDeep },
@@ -1110,13 +1106,14 @@ const styles = StyleSheet.create({
   // Split in two: the outer *Shadow view carries the drop shadow (which needs `overflow: visible`
   // to render), while the inner GlassSurface/View needs `overflow: hidden` so its blur/tint
   // layers respect the rounded corners — the two requirements can't share one style. Base
-  // (unscaled) size — bottomRowScale's roundBtnDynamicStyle/micBtnDynamicStyle override
-  // width/height/borderRadius inline once the paper's own width is measured.
+  // (unscaled) size — bottomRowScale's roundBtnDynamicStyle overrides width/height/borderRadius
+  // inline once the paper's own width is measured. The mic button reuses the exact same
+  // roundBtnDynamicStyle (below) so all four bottom-row buttons are always the same size.
   roundBtnShadow: { width: 60, height: 60, borderRadius: 30, ...throwColor.shadowSoft },
   roundBtn: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   roundBtnPressed: { opacity: 0.7 },
-  micBtnShadow: { width: 76, height: 76, borderRadius: 38, ...throwColor.shadowSoft },
-  micBtn: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
+  micBtnShadow: { width: 60, height: 60, borderRadius: 30, ...throwColor.shadowSoft },
+  micBtn: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   micBtnActive: { backgroundColor: throwColor.clayDeep },
   // Night skin's "active" mic glow — a bright white circle with a soft white halo and a black
   // glyph, in place of the day skin's solid clay-orange fill, per the reference screenshot.
