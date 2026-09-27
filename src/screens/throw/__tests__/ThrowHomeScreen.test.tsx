@@ -17,7 +17,7 @@ jest.mock('../../../context/ThrowColorModeContext', () => ({ useThrowColorMode: 
 jest.mock('../../../context/ThrowStoriesContext', () => ({ useThrowStories: jest.fn() }));
 
 // expo-video has no jest/native-module fallback the way most other Expo packages here do (it
-// throws at import time in this test environment) — only StoryTrimScreen/StoryViewerScreen touch
+// throws at import time in this test environment) — only StoryTrimScreen/ContactStoryStack touch
 // it, and neither renders in these tests, but the bare `import` still runs at module-load time
 // through ThrowHomeScreen's own import of them, so this has to be mocked regardless.
 jest.mock('expo-video', () => ({ useVideoPlayer: () => ({}), VideoView: () => null }));
@@ -60,12 +60,12 @@ jest.mock('../../../components/throw/RecipientCarousel', () => ({
   },
 }));
 
-let mockStatusPhotoViewerProps: any;
-jest.mock('../../../components/throw/StatusPhotoViewer', () => ({
-  StatusPhotoViewer: (props: any) => {
-    mockStatusPhotoViewerProps = props;
+let mockContactStoryStackProps: any;
+jest.mock('../../../components/throw/ContactStoryStack', () => ({
+  ContactStoryStack: (props: any) => {
+    mockContactStoryStackProps = props;
     const { Text } = require('react-native');
-    return require('react').createElement(Text, { testID: 'status-photo-viewer' }, 'status');
+    return require('react').createElement(Text, { testID: 'contact-story-stack' }, 'stories');
   },
 }));
 
@@ -265,7 +265,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     mockFoldingLetterProps = undefined;
     mockCarouselProps = undefined;
     mockThrowMapProps = undefined;
-    mockStatusPhotoViewerProps = undefined;
+    mockContactStoryStackProps = undefined;
   });
 
   function withStories(count: number) {
@@ -289,7 +289,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     });
   }
 
-  it('shows the status photo viewer, with the posted stories, once dragged past Own Contact', async () => {
+  it('shows the contact story stack, with the posted stories, once dragged past Own Contact', async () => {
     setupMocks();
     withStories(2);
     await renderScreen();
@@ -301,8 +301,8 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     });
 
     expect(screen.queryByTestId('folding-letter')).toBeNull();
-    expect(screen.getByTestId('status-photo-viewer')).toBeTruthy();
-    expect(mockStatusPhotoViewerProps.stories).toHaveLength(2);
+    expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
+    expect(mockContactStoryStackProps.stories).toHaveLength(2);
   });
 
   it('opens the capture flow instead, staying on Own Contact, when nothing has been posted yet', async () => {
@@ -316,11 +316,11 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     });
 
     expect(screen.getByTestId('folding-letter')).toBeTruthy();
-    expect(screen.queryByTestId('status-photo-viewer')).toBeNull();
+    expect(screen.queryByTestId('contact-story-stack')).toBeNull();
     expect(screen.getByTestId('story-capture')).toBeTruthy();
   });
 
-  it('marks the add-story slot as the active selection while the status viewer is showing', async () => {
+  it('marks the add-story slot as the active selection while the story stack is showing', async () => {
     setupMocks();
     withStories(2);
     await renderScreen();
@@ -342,7 +342,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
       mockFoldingLetterProps.onContactDragStart();
       mockFoldingLetterProps.onContactDragOffset(-1);
     });
-    expect(screen.getByTestId('status-photo-viewer')).toBeTruthy();
+    expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
     expect(mockCarouselProps.isAddStorySelected).toBe(true);
 
     await act(async () => {
@@ -350,8 +350,103 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     });
 
     expect(screen.getByTestId('folding-letter')).toBeTruthy();
-    expect(screen.queryByTestId('status-photo-viewer')).toBeNull();
+    expect(screen.queryByTestId('contact-story-stack')).toBeNull();
     expect(mockCarouselProps.isAddStorySelected).toBe(false);
+  });
+});
+
+describe('ThrowHomeScreen tap-to-view story (any contact, inline in the card)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFoldingLetterProps = undefined;
+    mockCarouselProps = undefined;
+    mockContactStoryStackProps = undefined;
+  });
+
+  function withStoriesFor(userId: string, count: number) {
+    mockUseThrowStories.mockReturnValue({
+      loading: false,
+      storiesByUser: {
+        [userId]: Array.from({ length: count }, (_, i) => ({
+          id: `s${i}`,
+          userId,
+          mediaUrl: `https://example.com/${i}.jpg`,
+          mediaType: 'photo',
+          trimStartMs: null,
+          trimEndMs: null,
+          createdAt: new Date().toISOString(),
+        })),
+      },
+      storyCountFor: (id: string) => (id === userId ? count : 0),
+      postStory: jest.fn().mockResolvedValue({ error: null }),
+      markViewed: jest.fn(),
+      refresh: jest.fn(),
+    });
+  }
+
+  it('opens the already-selected contact\'s stories inline, without moving the carousel chrome', async () => {
+    setupMocks();
+    withStoriesFor(MY_ID, 3);
+    await renderScreen();
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+
+    await act(async () => {
+      mockCarouselProps.onOpenStory(MY_ID);
+    });
+
+    expect(screen.queryByTestId('folding-letter')).toBeNull();
+    expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
+    expect(mockContactStoryStackProps.stories).toHaveLength(3);
+    // Unlike the drag-into-Status entry point, tapping a normal contact doesn't relocate the
+    // carousel's own selection chrome onto the add-story slot — you're still exactly who you were.
+    expect(mockCarouselProps.isAddStorySelected).toBe(false);
+  });
+
+  it('works identically for a friend, not just Own Contact', async () => {
+    setupMocks();
+    withStoriesFor(FRIEND.userId, 1);
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onChangeIndex(1);
+    });
+    await act(async () => {
+      mockCarouselProps.onOpenStory(FRIEND.userId);
+    });
+
+    expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
+    expect(mockContactStoryStackProps.stories).toHaveLength(1);
+  });
+
+  it('does nothing for a contact with no active stories', async () => {
+    setupMocks();
+    withStoriesFor(MY_ID, 0);
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onOpenStory(MY_ID);
+    });
+
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    expect(screen.queryByTestId('contact-story-stack')).toBeNull();
+  });
+
+  it('reveals the compose letter again once the stack reports it has been exhausted', async () => {
+    setupMocks();
+    withStoriesFor(MY_ID, 1);
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onOpenStory(MY_ID);
+    });
+    expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
+
+    await act(async () => {
+      mockContactStoryStackProps.onExhausted();
+    });
+
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    expect(screen.queryByTestId('contact-story-stack')).toBeNull();
   });
 });
 
