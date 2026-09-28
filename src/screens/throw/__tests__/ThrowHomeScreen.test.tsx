@@ -519,7 +519,7 @@ describe('ThrowHomeScreen tap-to-view story (any contact, inline in the card)', 
     expect(screen.queryByTestId('contact-story-stack')).toBeNull();
   });
 
-  it('reveals the compose letter again once the stack reports it has been exhausted', async () => {
+  it('stays open on its own (no auto-revert) until a different contact is selected', async () => {
     setupMocks();
     withStoriesFor(MY_ID, 1);
     await renderScreen();
@@ -529,12 +529,46 @@ describe('ThrowHomeScreen tap-to-view story (any contact, inline in the card)', 
     });
     expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
 
+    // Picking a different contact (not any signal from the stack itself — there's no more
+    // "exhausted" concept now that every photo just moves between avatar/letter/bin) is the only
+    // way back to the compose letter.
     await act(async () => {
-      mockContactStoryStackProps.onExhausted();
+      mockCarouselProps.onChangeIndex(1);
     });
 
     expect(screen.getByTestId('folding-letter')).toBeTruthy();
     expect(screen.queryByTestId('contact-story-stack')).toBeNull();
+  });
+
+  it('passes the open contact\'s name and the avatar\'s screen position as the stack\'s flight target', async () => {
+    setupMocks();
+    withStoriesFor(MY_ID, 1);
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onOpenStory(MY_ID);
+    });
+
+    expect(mockContactStoryStackProps.contactName).toBe('Myself');
+    expect(typeof mockContactStoryStackProps.flightTargetX).toBe('number');
+    expect(typeof mockContactStoryStackProps.flightTargetY).toBe('number');
+  });
+
+  it('bumps the drop signal on every re-tap of the already-open contact\'s avatar', async () => {
+    setupMocks();
+    withStoriesFor(MY_ID, 1);
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onOpenStory(MY_ID);
+    });
+    const firstSignal = mockContactStoryStackProps.dropSignal;
+
+    await act(async () => {
+      mockCarouselProps.onOpenStory(MY_ID);
+    });
+
+    expect(mockContactStoryStackProps.dropSignal).toBeGreaterThan(firstSignal);
   });
 });
 

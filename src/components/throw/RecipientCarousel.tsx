@@ -8,14 +8,25 @@ import type { ThrowFriend } from '../../types/throw';
 
 const ITEM_SPACING = 92;
 // The selected contact's avatar — bumped up from the previous 52px per explicit request that it
-// read too small.
-const AVATAR_SIZE = 64;
+// read too small. Exported so ContactStoryStack can size its own avatar-circle morph to match
+// exactly, without a second magic number that could drift out of sync with this one.
+export const AVATAR_SIZE = 64;
 const PULSE_RING_SIZE = AVATAR_SIZE + 16;
 const PULSE_DURATION_MS = 1400;
 // Exported so ThrowHomeScreen can work out where the selected contact's own ring actually sits on
 // screen (see ContactStoryStack's flightTargetY) without duplicating this strip's height as its
 // own separate magic number that could quietly drift out of sync with this one.
 export const CAROUSEL_HEIGHT = 130;
+// The status-letter-stack avatar pulse (see storyModePulseSignal) — same 1.12/180ms the
+// interaction spec calls for, distinct from SelectedPulseRing's own slow looping "active" ring.
+const AVATAR_PULSE_SCALE = 1.12;
+const AVATAR_PULSE_MS = 180;
+// A small solid ring override for whichever contact's status-letter stack is currently open (see
+// storyModeAvatarCount) — blue while photos remain in the avatar, a plain grey once it's empty,
+// distinct from StoryRing's own animated "has an active story" ripple (which stays untouched and
+// keeps rendering underneath it).
+const AVATAR_COUNT_RING_SIZE = AVATAR_SIZE + 6;
+const AVATAR_COUNT_RING_GREY = '#CFCFCF';
 
 /** A soft, looping ring that expands and fades behind the selected contact's avatar — an
  * "active" indicator, distinct from the rest of Throw's warm-paper/clay palette on purpose (the
@@ -73,6 +84,28 @@ interface RecipientCarouselProps {
    * live offset there too, so Status visibly reads as the current selection instead of leaving a
    * real contact looking selected while its own letter isn't even on screen. */
   isAddStorySelected?: boolean;
+  /** How many of the *selected* contact's status photos are still sitting in their avatar right
+   * now — only meaningful while that contact's status-letter stack is actually open (see
+   * ContactStoryStack's own onAvatarCountChange). Present (even at 0) swaps the selected item's
+   * ring/badge from the normal "has an active story" look to a solid count ring; absent leaves
+   * every avatar exactly as it always looked. */
+  storyModeAvatarCount?: number;
+  /** Increment to make the selected avatar do its own quick scale pulse (a photo just landed in
+   * or flew back into the open contact's letter) — same trigger-by-changing-a-number convention
+   * as ThrowHomeScreen's other one-shot signals. */
+  storyModePulseSignal?: number;
+}
+
+/** The status-letter-stack's own small count badge — top-right of the avatar, matching the
+ * interaction spec's reference (hidden rather than showing "0", since an empty avatar already
+ * reads via the ring turning grey). */
+function AvatarCountBadge({ count, isNight }: { count: number; isNight?: boolean }) {
+  if (count <= 0) return null;
+  return (
+    <View style={[styles.countBadge, isNight && styles.countBadgeNight]}>
+      <Text style={styles.countBadgeText}>{count}</Text>
+    </View>
+  );
 }
 
 /**
@@ -91,7 +124,22 @@ export function RecipientCarousel({
   onOpenStory,
   onAddStory,
   isAddStorySelected,
+  storyModeAvatarCount,
+  storyModePulseSignal,
 }: RecipientCarouselProps) {
+  const avatarPulse = useRef(new Animated.Value(1)).current;
+  const isFirstPulseRender = useRef(true);
+  useEffect(() => {
+    if (isFirstPulseRender.current) {
+      isFirstPulseRender.current = false;
+      return;
+    }
+    Animated.sequence([
+      Animated.timing(avatarPulse, { toValue: AVATAR_PULSE_SCALE, duration: AVATAR_PULSE_MS, useNativeDriver: true }),
+      Animated.timing(avatarPulse, { toValue: 1, duration: AVATAR_PULSE_MS, useNativeDriver: true }),
+    ]).start();
+  }, [storyModePulseSignal, avatarPulse]);
+
   const n = friends.length;
   const maxIndex = Math.max(0, n - 1);
   // Where the strip's own live offset should rest whenever nothing is actively being dragged —
@@ -211,15 +259,31 @@ export function RecipientCarousel({
               >
                 <View style={styles.avatarWrap}>
                   {isSelected && <SelectedPulseRing isNight={isNight} />}
-                  <StoryRing count={storyCountFor?.(f.userId) ?? 0} size={AVATAR_SIZE}>
-                    <FriendAvatar
-                      userId={f.userId}
-                      name={f.name}
-                      avatarUrl={f.avatarUrl}
-                      size={AVATAR_SIZE}
-                      style={isSelected && (isNight ? styles.avatarSelectedNight : styles.avatarSelected)}
-                    />
-                  </StoryRing>
+                  <Animated.View
+                    style={isSelected && storyModeAvatarCount !== undefined ? { transform: [{ scale: avatarPulse }] } : undefined}
+                  >
+                    <StoryRing count={storyCountFor?.(f.userId) ?? 0} size={AVATAR_SIZE}>
+                      <FriendAvatar
+                        userId={f.userId}
+                        name={f.name}
+                        avatarUrl={f.avatarUrl}
+                        size={AVATAR_SIZE}
+                        style={isSelected && (isNight ? styles.avatarSelectedNight : styles.avatarSelected)}
+                      />
+                    </StoryRing>
+                    {isSelected && storyModeAvatarCount !== undefined && (
+                      <>
+                        <View
+                          pointerEvents="none"
+                          style={[
+                            styles.countRing,
+                            { borderColor: storyModeAvatarCount > 0 ? throwColor.activeBlue : AVATAR_COUNT_RING_GREY },
+                          ]}
+                        />
+                        <AvatarCountBadge count={storyModeAvatarCount} isNight={isNight} />
+                      </>
+                    )}
+                  </Animated.View>
                 </View>
                 <Text
                   style={[
@@ -246,6 +310,39 @@ export function RecipientCarousel({
 }
 
 const styles = StyleSheet.create({
+  // Centered as a fraction of the wrapping View rather than the (variable-padding, see StoryRing)
+  // element it's drawn on top of — StoryRing always centers the actual avatar within its own box
+  // regardless of that padding, so 50%/50% + a fixed negative margin lands on the avatar's own
+  // center either way.
+  countRing: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: AVATAR_COUNT_RING_SIZE,
+    height: AVATAR_COUNT_RING_SIZE,
+    marginLeft: -AVATAR_COUNT_RING_SIZE / 2,
+    marginTop: -AVATAR_COUNT_RING_SIZE / 2,
+    borderRadius: AVATAR_COUNT_RING_SIZE / 2,
+    borderWidth: 2.5,
+  },
+  countBadge: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -AVATAR_SIZE / 2 - 8,
+    marginLeft: AVATAR_SIZE / 2 - 12,
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    backgroundColor: throwColor.activeBlue,
+    borderWidth: 2,
+    borderColor: throwColor.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countBadgeNight: { borderColor: throwNightColor.ink },
+  countBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
   // Taller than before (108 → 130) to fit the bigger avatar/pulse ring plus both text lines
   // without clipping against `overflow: hidden`.
   wrap: { height: CAROUSEL_HEIGHT, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
