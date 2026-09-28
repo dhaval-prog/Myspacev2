@@ -671,6 +671,10 @@ export function ThrowHomeScreen({
                   onDeleteStory={handleDeleteStory}
                   onAvatarCountChange={setOpenAvatarCount}
                   onPulseAvatar={() => setOpenAvatarPulseSignal((n) => n + 1)}
+                  // Deleting the last photo empties the stack completely — go straight back to the
+                  // letter instead of leaving ContactStoryStack's own "Status deleted / Bring them
+                  // back" placeholder on screen.
+                  onAllDeleted={() => setStoryView(null)}
                 />
               ) : (
                 <FoldingLetter
