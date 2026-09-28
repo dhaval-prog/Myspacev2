@@ -168,6 +168,11 @@ interface ContactStoryStackProps {
   /** Fired whenever the avatar should do its own little scale pulse (a photo just landed in the
    * letter, or one just flew back into it). */
   onPulseAvatar?: () => void;
+  /** Fired the instant a delete empties the letter completely (nothing left in the avatar either)
+   * — the parent's cue to leave story mode immediately rather than let this render its own
+   * "Status deleted / Bring them back" placeholder. Never fires for a swipe-up-to-return (that
+   * just parks the photo back in the avatar, not gone), only for the delete gesture. */
+  onAllDeleted?: () => void;
 }
 
 /**
@@ -176,8 +181,9 @@ interface ContactStoryStackProps {
  * of three places (avatar / letter / bin, see PhotoLocation) rather than being "watched once and
  * gone": tapping the contact's avatar drops whatever's still there into the letter one at a time;
  * swiping the top card up sends it back into the avatar; long-pressing then dragging down (own
- * stories only) deletes it. Nothing here auto-reverts to the compose letter any more — the parent
- * only leaves story mode when the user picks a different contact.
+ * stories only) deletes it. The parent otherwise only leaves story mode when the user picks a
+ * different contact — except when a delete empties the stack completely, which hands control
+ * straight back to the parent (see onAllDeleted) instead of showing an empty placeholder here.
  */
 export function ContactStoryStack({
   stories,
@@ -191,7 +197,10 @@ export function ContactStoryStack({
   onDeleteStory,
   onAvatarCountChange,
   onPulseAvatar,
+  onAllDeleted,
 }: ContactStoryStackProps) {
+  const onAllDeletedRef = useRef(onAllDeleted);
+  onAllDeletedRef.current = onAllDeleted;
   const [locations, setLocationsState] = useState<Map<string, PhotoLocation>>(() => new Map(stories.map((s) => [s.id, 'avatar' as PhotoLocation])));
   const locationsRef = useRef(locations);
   locationsRef.current = locations;
@@ -385,11 +394,13 @@ export function ContactStoryStack({
       animsRef.current.delete(id);
       setLocation(id, 'bin');
       pendingDeleteRef.current.add(id);
-      setLetterOrder((prev) => {
-        const next = prev.filter((x) => x !== id);
-        next.forEach((otherId, idx) => settleCard(otherId, idx));
-        return next;
-      });
+      const next = letterOrderRef.current.filter((x) => x !== id);
+      next.forEach((otherId, idx) => settleCard(otherId, idx));
+      setLetterOrder(next);
+      if (next.length === 0) {
+        const stillInAvatar = stories.some((s) => (locationsRef.current.get(s.id) ?? 'avatar') === 'avatar');
+        if (!stillInAvatar) onAllDeletedRef.current?.();
+      }
     });
   };
 
