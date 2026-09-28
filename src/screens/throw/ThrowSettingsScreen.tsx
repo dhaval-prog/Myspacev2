@@ -29,6 +29,9 @@ const COLOR_MODES: { key: ThrowColorMode; label: string; description: string }[]
 // wind/asterisk-as-snowflake) that they don't need a design pass of their own.
 const WEATHER_ICONS: Record<WeatherCondition, string> = {
   clear: 'M12 17a5 5 0 100-10 5 5 0 000 10zM12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42',
+  // Feather "sunrise" — deliberately a different glyph from clear's own sun-with-rays, so the two
+  // read as distinct picks in the grid even though both are "sun" themed.
+  sunny: 'M17 18a5 5 0 00-10 0 M12 2v7 M4.22 10.22l1.42 1.42 M1 18h2 M21 18h2 M18.36 11.64l1.42-1.42 M23 22H1 M16 6l-4-4-4 4',
   cloudy: 'M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z',
   rain: 'M20 16.58A5 5 0 0018 7h-1.26A8 8 0 104 15.25 M8 19v1 M8 14v1 M12 21v1 M12 16v1 M16 19v1 M16 14v1',
   thunderstorm: 'M19 16.9A5 5 0 0018 7h-1.26a8 8 0 10-11.62 9 M13 11l-4 6h6l-4 6',
@@ -39,6 +42,7 @@ const WEATHER_ICONS: Record<WeatherCondition, string> = {
 
 const WEATHER_LABELS: Record<WeatherCondition, string> = {
   clear: 'Clear',
+  sunny: 'Sunny',
   cloudy: 'Cloudy',
   rain: 'Rain',
   thunderstorm: 'Thunderstorm',
@@ -47,11 +51,12 @@ const WEATHER_LABELS: Record<WeatherCondition, string> = {
   snow: 'Snow',
 };
 
-// Card grid order — matches the feature's own list order.
-const MANUAL_WEATHER_OPTIONS: WeatherCondition[] = ['clear', 'cloudy', 'rain', 'thunderstorm', 'lightning', 'wind', 'snow'];
+// Card grid order — matches the feature's own list order. 'sunny' sits right next to 'clear',
+// its own closest relative (same "no precipitation" family, different atmosphere).
+const MANUAL_WEATHER_OPTIONS: WeatherCondition[] = ['clear', 'sunny', 'cloudy', 'rain', 'thunderstorm', 'lightning', 'wind', 'snow'];
 
 // Only rain/thunderstorm/snow/wind actually have a particle-density/speed dial worth exposing —
-// clear/cloudy/lightning have no "how much" to turn up.
+// clear/sunny/cloudy/lightning have no "how much" to turn up.
 const INTENSITY_RELEVANT: WeatherCondition[] = ['rain', 'thunderstorm', 'wind', 'snow'];
 
 const INTENSITY_LEVELS: { key: WeatherIntensity; label: string }[] = [

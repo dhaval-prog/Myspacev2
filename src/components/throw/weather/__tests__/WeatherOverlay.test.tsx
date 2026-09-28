@@ -9,6 +9,7 @@ jest.mock('../../../../context/ThrowWeatherContext', () => ({ useThrowWeather: j
 jest.mock('../../../../hooks/useReducedMotion', () => ({ useReducedMotion: jest.fn() }));
 
 let mockClearProps: any;
+let mockSunnyProps: any;
 let mockCloudProps: any;
 let mockRainProps: any;
 let mockSnowProps: any;
@@ -16,6 +17,7 @@ let mockWindProps: any;
 let mockLightningProps: any;
 
 jest.mock('../ClearOverlay', () => ({ ClearOverlay: (p: any) => { mockClearProps = p; return null; } }));
+jest.mock('../SunnyRenderer', () => ({ SunnyRenderer: (p: any) => { mockSunnyProps = p; return null; } }));
 jest.mock('../CloudOverlay', () => ({ CloudOverlay: (p: any) => { mockCloudProps = p; return null; } }));
 jest.mock('../RainOverlay', () => ({ RainOverlay: (p: any) => { mockRainProps = p; return null; } }));
 jest.mock('../SnowOverlay', () => ({ SnowOverlay: (p: any) => { mockSnowProps = p; return null; } }));
@@ -40,18 +42,39 @@ describe('WeatherOverlay orchestration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseReducedMotion.mockReturnValue(false);
-    mockClearProps = mockCloudProps = mockRainProps = mockSnowProps = mockWindProps = mockLightningProps = undefined;
+    mockClearProps = mockSunnyProps = mockCloudProps = mockRainProps = mockSnowProps = mockWindProps = mockLightningProps = undefined;
   });
 
   it('clear: only ClearOverlay is active', async () => {
     setWeather('clear');
     await await render(<WeatherOverlay />);
     expect(mockClearProps.active).toBe(true);
+    expect(mockSunnyProps.active).toBe(false);
     expect(mockCloudProps.active).toBe(false);
     expect(mockRainProps.active).toBe(false);
     expect(mockSnowProps.active).toBe(false);
     expect(mockWindProps.active).toBe(false);
     expect(mockLightningProps.active).toBe(false);
+  });
+
+  it('sunny: only SunnyRenderer is active, ClearOverlay stays off', async () => {
+    setWeather('sunny');
+    await render(<WeatherOverlay />);
+    expect(mockSunnyProps.active).toBe(true);
+    expect(mockClearProps.active).toBe(false);
+    expect(mockCloudProps.active).toBe(false);
+    expect(mockRainProps.active).toBe(false);
+    expect(mockSnowProps.active).toBe(false);
+    expect(mockWindProps.active).toBe(false);
+    expect(mockLightningProps.active).toBe(false);
+  });
+
+  it('does not gate SunnyRenderer behind reduced motion the way ClearOverlay is (it dampens internally instead)', async () => {
+    mockUseReducedMotion.mockReturnValue(true);
+    setWeather('sunny');
+    await render(<WeatherOverlay />);
+    expect(mockSunnyProps.active).toBe(true);
+    expect(mockSunnyProps.reduceMotion).toBe(true);
   });
 
   it('cloudy: only CloudOverlay is active, not the dark variant', async () => {

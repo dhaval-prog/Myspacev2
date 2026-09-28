@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { ClearOverlay } from './ClearOverlay';
+import { SunnyRenderer } from './SunnyRenderer';
 import { CloudOverlay } from './CloudOverlay';
 import { RainOverlay } from './RainOverlay';
 import { SnowOverlay } from './SnowOverlay';
@@ -58,6 +59,7 @@ export function WeatherOverlay({ quality }: WeatherOverlayProps) {
   const isStorm = weather === 'thunderstorm';
   const isLightningOnly = weather === 'lightning';
   const showClear = weather === 'clear';
+  const showSunny = weather === 'sunny';
   const showCloud = weather === 'cloudy' || weather === 'rain' || weather === 'snow' || isStorm || isLightningOnly;
   const cloudDark = isStorm || isLightningOnly;
   const showRain = weather === 'rain' || isStorm;
@@ -93,6 +95,7 @@ export function WeatherOverlay({ quality }: WeatherOverlayProps) {
   return (
     <>
       <ClearOverlay active={showClear && !reduceMotion} />
+      <SunnyRenderer active={showSunny} reduceMotion={reduceMotion} />
       <CloudOverlay active={showCloud} dark={cloudDark} windController={windController} />
       <RainOverlay active={showRain} intensity={rainIntensity} quality={quality} config={rainConfig} windController={windController} />
       <SnowOverlay active={showSnow} intensity={intensity} quality={quality} config={snowConfig} />
