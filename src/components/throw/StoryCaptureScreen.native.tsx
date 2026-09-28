@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { Icon } from '../Icon';
@@ -12,6 +12,13 @@ import type { StoryMediaType } from '../../types/story';
 // gestures sharing one control by how long/far it's gone, not a separate button each.
 const HOLD_THRESHOLD_MS = 220;
 const MAX_VIDEO_SECONDS = 15;
+
+// Same thresholds/spacing FoldingLetter's own writing-phase contact flick uses (see its
+// CONTACT_FLICK_CAPTURE_DX/RATIO/CONTACT_DRAG_SPACING) — this camera fills the same "open letter"
+// slot, so switching contacts while it's showing should feel identical.
+const CONTACT_FLICK_CAPTURE_DX = 20;
+const CONTACT_FLICK_CAPTURE_RATIO = 1.7;
+const CONTACT_DRAG_SPACING = 70;
 
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 const FLIP_ICON = 'M4 4v5h5 M20 20v-5h-5 M4 9a8 8 0 0114-4.9L20 9 M20 15a8 8 0 01-14 4.9L4 15';
@@ -26,6 +33,11 @@ interface StoryCaptureScreenProps {
   /** A library-picked video whose duration ran past MAX_VIDEO_SECONDS — the caller shows the trim
    * screen before this can be posted. */
   onPickedLongVideo: (localUri: string, durationMs: number) => void;
+  /** Same horizontal flick-to-switch-contact gesture FoldingLetter offers while writing — this
+   * camera fills the same letter-card slot, so it needs the same way to move between contacts
+   * (including back out to Own Contact) without closing the camera first. */
+  onContactDragStart?: () => void;
+  onContactDragOffset?: (steps: number) => void;
 }
 
 /** Camera for posting a Throw story, filling the same letter-card slot FoldingLetter/
@@ -35,7 +47,13 @@ interface StoryCaptureScreenProps {
  * instead. Native only: expo-camera's web implementation has no video-recording support at all
  * (see the .web sibling of this file), so this native path is the live-recording one; both share
  * the same onCaptured/onPickedLongVideo contract. */
-export function StoryCaptureScreen({ onClose, onCaptured, onPickedLongVideo }: StoryCaptureScreenProps) {
+export function StoryCaptureScreen({
+  onClose,
+  onCaptured,
+  onPickedLongVideo,
+  onContactDragStart,
+  onContactDragOffset,
+}: StoryCaptureScreenProps) {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [facing, setFacing] = useState<CameraType>('back');
@@ -44,6 +62,39 @@ export function StoryCaptureScreen({ onClose, onCaptured, onPickedLongVideo }: S
   const cameraRef = useRef<CameraView>(null);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isRecordingRef = useRef(false);
+
+  // Read inside the PanResponder's callbacks without needing to rebuild it (and drop mid-gesture
+  // capture state) whenever a prop identity changes.
+  const latest = useRef({ onContactDragStart, onContactDragOffset });
+  latest.current = { onContactDragStart, onContactDragOffset };
+  const contactCapturedRef = useRef(false);
+
+  const contactPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponderCapture: (_, g) => {
+          if (!latest.current.onContactDragOffset) return false;
+          return Math.abs(g.dx) > CONTACT_FLICK_CAPTURE_DX && Math.abs(g.dx) > Math.abs(g.dy) * CONTACT_FLICK_CAPTURE_RATIO;
+        },
+        onPanResponderGrant: () => {
+          contactCapturedRef.current = true;
+          latest.current.onContactDragStart?.();
+        },
+        onPanResponderMove: (_, g) => {
+          // Negated — same reversed writing-phase convention FoldingLetter's own contact flick
+          // uses now: right flicks back toward Own Contact/Status, left flicks forward.
+          latest.current.onContactDragOffset?.(-g.dx / CONTACT_DRAG_SPACING);
+        },
+        onPanResponderRelease: () => {
+          contactCapturedRef.current = false;
+        },
+        onPanResponderTerminate: () => {
+          contactCapturedRef.current = false;
+        },
+      }),
+    [],
+  );
 
   useEffect(() => {
     if (!cameraPermission?.granted) requestCameraPermission();
@@ -117,7 +168,7 @@ export function StoryCaptureScreen({ onClose, onCaptured, onPickedLongVideo }: S
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} {...contactPanResponder.panHandlers}>
       <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={facing} mode={mode} videoQuality="720p" />
 
       <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close camera">

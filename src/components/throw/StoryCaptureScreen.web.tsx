@@ -8,6 +8,14 @@ import type { StoryMediaType } from '../../types/story';
 const HOLD_THRESHOLD_MS = 220;
 const MAX_VIDEO_MS = 15000;
 
+// Same thresholds/spacing FoldingLetter's own writing-phase contact flick uses (see its
+// CONTACT_FLICK_CAPTURE_DX/RATIO/CONTACT_DRAG_SPACING, and its raw-DOM-listener web path below) —
+// this camera fills the same "open letter" slot, so switching contacts while it's showing should
+// feel identical.
+const CONTACT_FLICK_CAPTURE_DX = 20;
+const CONTACT_FLICK_CAPTURE_RATIO = 1.7;
+const CONTACT_DRAG_SPACING = 70;
+
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 const FLIP_ICON = 'M4 4v5h5 M20 20v-5h-5 M4 9a8 8 0 0114-4.9L20 9 M20 15a8 8 0 01-14 4.9L4 15';
 const GALLERY_ICON = 'M4 8h4l1.6-2.5h4.8L16 8h4v11H4z M12 11.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z';
@@ -24,6 +32,11 @@ interface StoryCaptureScreenProps {
   onClose: () => void;
   onCaptured: (localUri: string, mediaType: StoryMediaType) => void;
   onPickedLongVideo: (localUri: string, durationMs: number) => void;
+  /** Same horizontal flick-to-switch-contact gesture FoldingLetter offers while writing — this
+   * camera fills the same letter-card slot, so it needs the same way to move between contacts
+   * (including back out to Own Contact) without closing the camera first. */
+  onContactDragStart?: () => void;
+  onContactDragOffset?: (steps: number) => void;
 }
 
 /**
@@ -39,7 +52,13 @@ interface StoryCaptureScreenProps {
  * actually be played back; video is still fully postable either way via the gallery pick below,
  * which every browser handles reliably (including the trim flow for anything over 15s).
  */
-export function StoryCaptureScreen({ onClose, onCaptured, onPickedLongVideo }: StoryCaptureScreenProps) {
+export function StoryCaptureScreen({
+  onClose,
+  onCaptured,
+  onPickedLongVideo,
+  onContactDragStart,
+  onContactDragOffset,
+}: StoryCaptureScreenProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -49,6 +68,13 @@ export function StoryCaptureScreen({ onClose, onCaptured, onPickedLongVideo }: S
   const maxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isRecordingRef = useRef(false);
+  const wrapRef = useRef<View>(null);
+  // Read inside the raw DOM listeners below without needing to re-attach them (and drop mid-
+  // gesture state) whenever a prop identity changes — same pattern FoldingLetter's own web path uses.
+  const latest = useRef({ onContactDragStart, onContactDragOffset });
+  latest.current = { onContactDragStart, onContactDragOffset };
+  const rawStartRef = useRef<{ x: number; y: number } | null>(null);
+  const contactCapturedRef = useRef(false);
 
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const [recording, setRecording] = useState(false);
@@ -85,6 +111,63 @@ export function StoryCaptureScreen({ onClose, onCaptured, onPickedLongVideo }: S
     },
     [],
   );
+
+  // Same raw mouse/touch-listener approach FoldingLetter's own web path uses for its writing-phase
+  // contact flick (see that file's own long comment on why): react-native-web's PanResponder
+  // polyfill drops move events under a real drag, corrupting gestureState mid-gesture, so this
+  // reads real pointer positions directly instead of trusting RN's own gesture tracking.
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const node = wrapRef.current as any as HTMLElement | null;
+    if (!node) return;
+    const getPoint = (e: MouseEvent | TouchEvent): { x: number; y: number } | null => {
+      if ('touches' in e) {
+        const t = e.touches[0];
+        return t ? { x: t.clientX, y: t.clientY } : null;
+      }
+      return { x: e.clientX, y: e.clientY };
+    };
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      rawStartRef.current = getPoint(e);
+    };
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      const start = rawStartRef.current;
+      if (!start) return;
+      const p = getPoint(e);
+      if (!p) return;
+      const dx = p.x - start.x;
+      const dy = p.y - start.y;
+      if (contactCapturedRef.current) {
+        // Negated — same reversed writing-phase convention FoldingLetter's own contact flick
+        // uses: right flicks back toward Own Contact/Status, left flicks forward.
+        latest.current.onContactDragOffset?.(-dx / CONTACT_DRAG_SPACING);
+        return;
+      }
+      if (Math.abs(dx) > CONTACT_FLICK_CAPTURE_DX && Math.abs(dx) > Math.abs(dy) * CONTACT_FLICK_CAPTURE_RATIO && latest.current.onContactDragOffset) {
+        contactCapturedRef.current = true;
+        latest.current.onContactDragStart?.();
+        latest.current.onContactDragOffset(-dx / CONTACT_DRAG_SPACING);
+      }
+    };
+    const onUp = () => {
+      rawStartRef.current = null;
+      contactCapturedRef.current = false;
+    };
+    node.addEventListener('mousedown', onDown);
+    node.addEventListener('touchstart', onDown, { passive: true });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchend', onUp);
+    return () => {
+      node.removeEventListener('mousedown', onDown);
+      node.removeEventListener('touchstart', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
+    };
+  }, []);
 
   const takePhoto = () => {
     const video = videoRef.current;
@@ -171,7 +254,7 @@ export function StoryCaptureScreen({ onClose, onCaptured, onPickedLongVideo }: S
   }
 
   return (
-    <View style={styles.screen}>
+    <View ref={wrapRef} style={styles.screen}>
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video ref={videoRef} autoPlay playsInline muted style={webVideoStyle} />
       <canvas ref={canvasRef} style={{ display: 'none' }} />

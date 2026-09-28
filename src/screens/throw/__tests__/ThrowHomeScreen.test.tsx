@@ -356,6 +356,41 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     expect(screen.queryByTestId('story-capture')).toBeNull();
     expect(mockCarouselProps.isAddStorySelected).toBe(false);
   });
+
+  it('passes the same contact-flick drag handlers to the inline camera as the letter itself', async () => {
+    setupMocks();
+    withStories(1);
+    await renderScreen();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
+    expect(typeof mockStoryCaptureProps.onContactDragStart).toBe('function');
+    expect(typeof mockStoryCaptureProps.onContactDragOffset).toBe('function');
+  });
+
+  it('flicking forward from Status inside the camera moves to the next contact and exits capture mode', async () => {
+    setupMocks();
+    withStories(1);
+    await renderScreen();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
+
+    await act(async () => {
+      mockStoryCaptureProps.onContactDragStart();
+      mockStoryCaptureProps.onContactDragOffset(1);
+    });
+
+    expect(screen.queryByTestId('story-capture')).toBeNull();
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    expect(mockFoldingLetterProps.recipientName).toBe(FRIEND.name);
+  });
 });
 
 describe('ThrowHomeScreen tap-to-view story (any contact, inline in the card)', () => {
