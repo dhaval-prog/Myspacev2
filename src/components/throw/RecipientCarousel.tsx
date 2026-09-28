@@ -1,17 +1,15 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { StoryRing } from './StoryRing';
-import { Icon } from '../Icon';
-import { useCarouselSurface, tentDeviation, type CarouselPosCore } from '../../hooks/useCarouselPos';
+import { AddStoryButton } from './AddStoryButton';
 import { throwColor, throwFont, throwNightColor } from '../../theme/throwTokens';
 import type { ThrowFriend } from '../../types/throw';
 
-const ITEM_SPACING = 82;
+const ITEM_SPACING = 92;
 // The selected contact's avatar — bumped up from the previous 52px per explicit request that it
-// read too small. Exported so ContactStoryStack (and MyStatusPanel) can size their own
-// avatar-circle morphs to match exactly, without a second magic number that could drift out of
-// sync with this one.
+// read too small. Exported so ContactStoryStack can size its own avatar-circle morph to match
+// exactly, without a second magic number that could drift out of sync with this one.
 export const AVATAR_SIZE = 64;
 const PULSE_RING_SIZE = AVATAR_SIZE + 16;
 const PULSE_DURATION_MS = 1400;
@@ -19,22 +17,16 @@ const PULSE_DURATION_MS = 1400;
 // screen (see ContactStoryStack's flightTargetY) without duplicating this strip's height as its
 // own separate magic number that could quietly drift out of sync with this one.
 export const CAROUSEL_HEIGHT = 130;
-// The status-letter-stack avatar pulse — same 1.12/180ms the interaction spec calls for, distinct
-// from SelectedPulseRing's own slow looping "active" ring.
+// The status-letter-stack avatar pulse (see storyModePulseSignal) — same 1.12/180ms the
+// interaction spec calls for, distinct from SelectedPulseRing's own slow looping "active" ring.
 const AVATAR_PULSE_SCALE = 1.12;
 const AVATAR_PULSE_MS = 180;
-// A small solid ring override for whichever avatar's status-letter stack is currently open (see
-// openIndex) — blue while photos remain in the avatar, a plain grey once it's empty, distinct
-// from StoryRing's own animated "has an active story" ripple (which stays untouched and keeps
-// rendering underneath it).
+// A small solid ring override for whichever contact's status-letter stack is currently open (see
+// storyModeAvatarCount) — blue while photos remain in the avatar, a plain grey once it's empty,
+// distinct from StoryRing's own animated "has an active story" ripple (which stays untouched and
+// keeps rendering underneath it).
 const AVATAR_COUNT_RING_SIZE = AVATAR_SIZE + 6;
 const AVATAR_COUNT_RING_GREY = '#CFCFCF';
-// The per-item falloff the interaction spec spells out exactly: `scale(1-0.2*min(1,|d|))`,
-// `opacity 1-0.28*min(1,|d|)` — flat beyond one contact away, not a continued gradient.
-const SCALE_FALLOFF = 0.2;
-const OPACITY_FALLOFF = 0.28;
-const PERSON_ICON = 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 11a4 4 0 100-8 4 4 0 000 8z';
-const PLUS_ICON = 'M12 5v14M5 12h14';
 
 /** A soft, looping ring that expands and fades behind the selected contact's avatar — an
  * "active" indicator, distinct from the rest of Throw's warm-paper/clay palette on purpose (the
@@ -63,6 +55,47 @@ function SelectedPulseRing({ isNight }: { isNight?: boolean }) {
   );
 }
 
+interface RecipientCarouselProps {
+  friends: ThrowFriend[];
+  selectedIndex: number;
+  onChangeIndex: (index: number) => void;
+  disabled?: boolean;
+  /** Switches the selected contact's pulse ring from Throw's day-skin blue to a white "beeping"
+   * ring, matching the night reference screenshot — same day/night signal as FoldingLetter's own
+   * isNight prop. */
+  isNight?: boolean;
+  /** How many active stories a contact has, for the green status ring (see StoryRing) — absent
+   * (or 0 for everyone) simply renders no rings, so this stays optional for callers/tests that
+   * don't care about stories at all. */
+  storyCountFor?: (userId: string) => number;
+  /** Tapping a contact who is *already* selected and has an active story opens it instead of
+   * re-selecting them (which would otherwise be a no-op) — lets one tap target serve both
+   * "switch to this contact" and "view their story" without a second control. */
+  onOpenStory?: (userId: string) => void;
+  /** Opens the story capture flow — rendered as a slot in this same strip, one position to the
+   * left of the first real contact (index 0), rather than as a separate fixed-position control,
+   * per explicit request: it should fade/shrink with distance from center exactly like any other
+   * off-center contact would, not sit at a constant full size/opacity beside the strip. Omitted
+   * entirely (no slot rendered) when absent, e.g. in tests that don't care about stories. */
+  onAddStory?: () => void;
+  /** True while the user is actually viewing/posting their own Status (see ThrowHomeScreen's
+   * isStatusMode) — moves the "active contact" chrome (pulse ring + inner border) from whichever
+   * real contact is otherwise selected onto the add-story slot itself, and rests the strip's own
+   * live offset there too, so Status visibly reads as the current selection instead of leaving a
+   * real contact looking selected while its own letter isn't even on screen. */
+  isAddStorySelected?: boolean;
+  /** How many of the *selected* contact's status photos are still sitting in their avatar right
+   * now — only meaningful while that contact's status-letter stack is actually open (see
+   * ContactStoryStack's own onAvatarCountChange). Present (even at 0) swaps the selected item's
+   * ring/badge from the normal "has an active story" look to a solid count ring; absent leaves
+   * every avatar exactly as it always looked. */
+  storyModeAvatarCount?: number;
+  /** Increment to make the selected avatar do its own quick scale pulse (a photo just landed in
+   * or flew back into the open contact's letter) — same trigger-by-changing-a-number convention
+   * as ThrowHomeScreen's other one-shot signals. */
+  storyModePulseSignal?: number;
+}
+
 /** The status-letter-stack's own small count badge — top-right of the avatar, matching the
  * interaction spec's reference (hidden rather than showing "0", since an empty avatar already
  * reads via the ring turning grey). */
@@ -75,180 +108,200 @@ function AvatarCountBadge({ count, isNight }: { count: number; isNight?: boolean
   );
 }
 
-/** The open-status-stack ring + badge + pulse overlay, shared between "You" and any real contact
- * whose stack is currently open (see openIndex) — factored out once so both draw it identically. */
-function OpenStackOverlay({ count, pulseSignal, isNight }: { count: number; pulseSignal?: number; isNight?: boolean }) {
-  const pulse = useRef(new Animated.Value(1)).current;
-  const isFirstRender = useRef(true);
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    Animated.sequence([
-      Animated.timing(pulse, { toValue: AVATAR_PULSE_SCALE, duration: AVATAR_PULSE_MS, useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 1, duration: AVATAR_PULSE_MS, useNativeDriver: true }),
-    ]).start();
-  }, [pulseSignal, pulse]);
-
-  return (
-    <Animated.View style={{ transform: [{ scale: pulse }] }}>
-      <View pointerEvents="none" style={[styles.countRing, { borderColor: count > 0 ? throwColor.activeBlue : AVATAR_COUNT_RING_GREY }]} />
-      <AvatarCountBadge count={count} isNight={isNight} />
-    </Animated.View>
-  );
-}
-
-interface RecipientCarouselProps {
-  /** The shared spring driving this rail (and, on the letter side, MyStatusPanel) — see
-   * useCarouselPos's own doc comment for why this is owned by the screen, not this component. */
-  core: CarouselPosCore;
-  /** "Myself" + real friends with a location, index 0..n-1 — unchanged from before "You" existed
-   * as its own rail item at index -1. */
-  friends: ThrowFriend[];
-  disabled?: boolean;
-  /** Switches the selected contact's pulse ring from Throw's day-skin blue to a white "beeping"
-   * ring, matching the night reference screenshot — same day/night signal as FoldingLetter's own
-   * isNight prop. */
-  isNight?: boolean;
-  /** How many active stories a contact has, for the blue status ring (see StoryRing) — also used
-   * for "You" via `youUserId`, since posting your own status is the exact same underlying signal
-   * wherever it's read from. */
-  storyCountFor?: (userId: string) => number;
-  /** Tapping an already-selected real contact (never "Myself" — see its own exclusion below) who
-   * has an active story opens it instead of re-selecting them (a no-op otherwise). */
-  onOpenStory?: (userId: string) => void;
-  /** Never treated as "has a status to view" on re-tap, even though it shares youUserId's own
-   * storyCountFor signal — "Myself" is the reminder-compose slot, not a status one; viewing/
-   * posting your own status is exclusively "You"'s job now. */
-  selfUserId?: string;
-  /** Your own id — "You" doesn't exist as a rail item at all without one (signed out). */
-  youUserId?: string;
-  /** Fired on every tap of the already-selected "You" avatar (unlike onOpenStory, never gated on
-   * already having a story — an empty avatar tap is just a no-op further down the line, inside
-   * MyStatusPanel's own dropSignal effect). */
-  onOpenYouStatus?: () => void;
-  /** Which rail index currently has its status stack open (-1 for "You", 0..n-1 for a friend) —
-   * shows the solid count ring/badge/pulse there instead of the normal ripple. Undefined when
-   * nothing is open. */
-  openIndex?: number;
-  openAvatarCount?: number;
-  openPulseSignal?: number;
-}
-
 /**
  * A floating avatar carousel over the map — swipe or tap to change who a letter is addressed
- * to, or (for "You", always the first/leftmost item) whose live status camera is showing. Not a
- * dropdown: the centered avatar is the selection, side avatars shrink and fade with distance.
- * Position math (translate/scale/opacity) is purely a function of the shared `core.pos` — see
- * useCarouselPos — so this never re-renders while swiping, only while actually re-selecting.
+ * to. Not a dropdown: the centered avatar is the selection, side avatars shrink and fade with
+ * distance. Clamped at the ends rather than a true infinite loop (simpler, and every real
+ * friends list here is short enough that the clamp is never felt as a limitation).
  */
 export function RecipientCarousel({
-  core,
   friends,
+  selectedIndex,
+  onChangeIndex,
   disabled,
   isNight,
   storyCountFor,
   onOpenStory,
-  selfUserId,
-  youUserId,
-  onOpenYouStatus,
-  openIndex,
-  openAvatarCount = 0,
-  openPulseSignal,
+  onAddStory,
+  isAddStorySelected,
+  storyModeAvatarCount,
+  storyModePulseSignal,
 }: RecipientCarouselProps) {
-  const { ref, panHandlers } = useCarouselSurface(core, ITEM_SPACING, !disabled);
+  const avatarPulse = useRef(new Animated.Value(1)).current;
+  const isFirstPulseRender = useRef(true);
+  useEffect(() => {
+    if (isFirstPulseRender.current) {
+      isFirstPulseRender.current = false;
+      return;
+    }
+    Animated.sequence([
+      Animated.timing(avatarPulse, { toValue: AVATAR_PULSE_SCALE, duration: AVATAR_PULSE_MS, useNativeDriver: true }),
+      Animated.timing(avatarPulse, { toValue: 1, duration: AVATAR_PULSE_MS, useNativeDriver: true }),
+    ]).start();
+  }, [storyModePulseSignal, avatarPulse]);
+
   const n = friends.length;
+  const maxIndex = Math.max(0, n - 1);
+  // Where the strip's own live offset should rest whenever nothing is actively being dragged —
+  // the add-story slot (-1) while Status is selected, otherwise whatever real contact is.
+  const restingIndex = isAddStorySelected ? -1 : Math.min(selectedIndex, maxIndex);
+  const offset = useRef(new Animated.Value(restingIndex)).current;
+  const offsetValueRef = useRef(restingIndex);
+  const grantOffsetRef = useRef(0);
+  const draggingRef = useRef(false);
 
-  if (n === 0 && !youUserId) return null;
+  React.useEffect(() => {
+    const id = offset.addListener(({ value }) => {
+      offsetValueRef.current = value;
+    });
+    return () => offset.removeListener(id);
+  }, [offset]);
 
-  const renderItem = (i: number, content: React.ReactNode) => {
-    const { d, a } = tentDeviation(core.pos, i);
-    const translateX = Animated.multiply(d, ITEM_SPACING);
-    const scale = a.interpolate({ inputRange: [0, 1], outputRange: [1, 1 - SCALE_FALLOFF] });
-    const opacity = a.interpolate({ inputRange: [0, 1], outputRange: [1, 1 - OPACITY_FALLOFF] });
-    return (
-      <Animated.View key={i} style={[styles.item, { transform: [{ translateX }, { scale }], opacity }]}>
-        {content}
-      </Animated.View>
-    );
+  React.useEffect(() => {
+    if (draggingRef.current) return;
+    if (Math.round(offsetValueRef.current) === restingIndex) return;
+    Animated.spring(offset, { toValue: restingIndex, useNativeDriver: false, friction: 8, tension: 60 }).start();
+  }, [restingIndex, offset]);
+
+  const snapTo = (index: number) => {
+    const clamped = Math.max(0, Math.min(maxIndex, index));
+    Animated.spring(offset, { toValue: clamped, useNativeDriver: false, friction: 8, tension: 60 }).start();
+    // Also fires when the tapped contact is already `selectedIndex` but Status is what's actually
+    // showing (isAddStorySelected) — otherwise tapping your own already-selected contact while
+    // viewing Status would be a silent no-op (the index truly hasn't changed) and leave Status
+    // stuck on screen with no way back short of picking a *different* contact first.
+    if (clamped !== selectedIndex || isAddStorySelected) onChangeIndex(clamped);
   };
 
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !disabled && n > 1,
+        onMoveShouldSetPanResponder: (_, g) => !disabled && n > 1 && Math.abs(g.dx) > 6,
+        onPanResponderGrant: () => {
+          draggingRef.current = true;
+          grantOffsetRef.current = offsetValueRef.current;
+        },
+        onPanResponderMove: (_, g) => {
+          const raw = grantOffsetRef.current - g.dx / ITEM_SPACING;
+          offset.setValue(Math.max(0, Math.min(maxIndex, raw)));
+        },
+        onPanResponderRelease: (_, g) => {
+          draggingRef.current = false;
+          const raw = grantOffsetRef.current - g.dx / ITEM_SPACING;
+          const nearest = Math.max(0, Math.min(maxIndex, Math.round(raw)));
+          Animated.spring(offset, { toValue: nearest, useNativeDriver: false, friction: 8, tension: 60 }).start();
+          // See snapTo's own comment — same "already selectedIndex, but Status is what's showing"
+          // case can be reached by dragging the strip back to rest on the same real contact too.
+          if (nearest !== selectedIndex || isAddStorySelected) onChangeIndex(nearest);
+        },
+      }),
+    [disabled, n, maxIndex, selectedIndex, onChangeIndex, offset, isAddStorySelected],
+  );
+
+  if (n === 0) return null;
+
+  // Every item's position/scale/opacity is purely a function of its own fixed slot index `i` and
+  // how far the live `offset` currently sits from it — shared here so the add-story slot (i = -1,
+  // rendered below) reads exactly like a real contact one position further left, the same falloff
+  // as every other off-center item, without duplicating this math for it.
+  const span = Math.max(1, maxIndex);
+  const itemTransform = (i: number) => ({
+    translateX: offset.interpolate({ inputRange: [0, span], outputRange: [i * ITEM_SPACING, (i - span) * ITEM_SPACING] }),
+    scale: offset.interpolate({
+      inputRange: [i - 2, i - 1, i, i + 1, i + 2],
+      outputRange: [0.68, 0.82, 1, 0.82, 0.68],
+      extrapolate: 'clamp',
+    }),
+    opacity: offset.interpolate({
+      inputRange: [i - 2, i - 1, i, i + 1, i + 2],
+      outputRange: [0.4, 0.68, 1, 0.68, 0.4],
+      extrapolate: 'clamp',
+    }),
+  });
+
+  const addStoryTransform = onAddStory ? itemTransform(-1) : null;
+
   return (
-    <View ref={ref} style={styles.wrap} {...panHandlers}>
+    <View style={styles.wrap} {...panResponder.panHandlers}>
       <View style={styles.strip}>
-        {youUserId &&
-          renderItem(
-            -1,
-            <Pressable
-              onPress={() => (core.index === -1 ? onOpenYouStatus?.() : core.springTo(-1))}
-              disabled={disabled}
-              hitSlop={8}
-              style={styles.pressableContent}
-              accessibilityRole="button"
-              accessibilityLabel="Your status"
-            >
+        {onAddStory && addStoryTransform && (
+          <Animated.View
+            style={[
+              styles.item,
+              { transform: [{ translateX: addStoryTransform.translateX }, { scale: addStoryTransform.scale }], opacity: addStoryTransform.opacity },
+            ]}
+          >
+            <View style={styles.pressableContent}>
               <View style={styles.avatarWrap}>
-                {core.index === -1 && <SelectedPulseRing isNight={isNight} />}
-                <StoryRing count={storyCountFor?.(youUserId) ?? 0} size={AVATAR_SIZE}>
-                  <View style={[styles.meCircle, core.index === -1 && (isNight ? styles.avatarSelectedNight : styles.avatarSelected)]}>
-                    <Icon path={PERSON_ICON} size={26} color="rgba(255,255,255,.75)" strokeWidth={1.8} />
-                    <View style={styles.meBadge}>
-                      <Icon path={PLUS_ICON} size={12} color={throwColor.ink} strokeWidth={2.4} />
-                    </View>
-                  </View>
-                </StoryRing>
-                {openIndex === -1 && <OpenStackOverlay count={openAvatarCount} pulseSignal={openPulseSignal} isNight={isNight} />}
+                {isAddStorySelected && <SelectedPulseRing isNight={isNight} />}
+                <AddStoryButton onPress={onAddStory} selected={isAddStorySelected} isNight={isNight} />
               </View>
-              <Text style={[styles.name, isNight && styles.nameNight, core.index === -1 && (isNight ? styles.nameSelectedNight : styles.nameSelected)]}>
-                You
-              </Text>
-              <Text style={[styles.city, isNight && styles.cityNight]}>{(storyCountFor?.(youUserId) ?? 0) > 0 ? 'My status' : 'Add status'}</Text>
-            </Pressable>,
-          )}
+            </View>
+          </Animated.View>
+        )}
         {friends.map((f, i) => {
-          const isSelected = core.index === i;
-          const canOpenStory = f.userId !== selfUserId && (storyCountFor?.(f.userId) ?? 0) > 0;
-          return renderItem(
-            i,
-            <Pressable
-              key={f.userId}
-              onPress={() => {
-                if (isSelected && canOpenStory) {
-                  onOpenStory?.(f.userId);
-                  return;
-                }
-                core.springTo(i);
-              }}
-              disabled={disabled}
-              hitSlop={8}
-              style={styles.pressableContent}
-            >
-              <View style={styles.avatarWrap}>
-                {isSelected && <SelectedPulseRing isNight={isNight} />}
-                <StoryRing count={storyCountFor?.(f.userId) ?? 0} size={AVATAR_SIZE}>
-                  <FriendAvatar
-                    userId={f.userId}
-                    name={f.name}
-                    avatarUrl={f.avatarUrl}
-                    size={AVATAR_SIZE}
-                    style={isSelected && (isNight ? styles.avatarSelectedNight : styles.avatarSelected)}
-                  />
-                </StoryRing>
-                {openIndex === i && <OpenStackOverlay count={openAvatarCount} pulseSignal={openPulseSignal} isNight={isNight} />}
-              </View>
-              <Text
-                style={[styles.name, isNight && styles.nameNight, isSelected && (isNight ? styles.nameSelectedNight : styles.nameSelected)]}
-                numberOfLines={1}
+          const { translateX, scale, opacity } = itemTransform(i);
+          const isSelected = i === selectedIndex && !isAddStorySelected;
+          return (
+            <Animated.View key={f.userId} style={[styles.item, { transform: [{ translateX }, { scale }], opacity }]}>
+              <Pressable
+                onPress={() => {
+                  if (isSelected && onOpenStory && (storyCountFor?.(f.userId) ?? 0) > 0) {
+                    onOpenStory(f.userId);
+                    return;
+                  }
+                  snapTo(i);
+                }}
+                disabled={disabled}
+                hitSlop={8}
+                style={styles.pressableContent}
               >
-                {f.name.split(' ')[0]}
-              </Text>
-              {f.location && (
-                <Text style={[styles.city, isNight && styles.cityNight]} numberOfLines={1}>
-                  {f.location.city}
+                <View style={styles.avatarWrap}>
+                  {isSelected && <SelectedPulseRing isNight={isNight} />}
+                  <Animated.View
+                    style={isSelected && storyModeAvatarCount !== undefined ? { transform: [{ scale: avatarPulse }] } : undefined}
+                  >
+                    <StoryRing count={storyCountFor?.(f.userId) ?? 0} size={AVATAR_SIZE}>
+                      <FriendAvatar
+                        userId={f.userId}
+                        name={f.name}
+                        avatarUrl={f.avatarUrl}
+                        size={AVATAR_SIZE}
+                        style={isSelected && (isNight ? styles.avatarSelectedNight : styles.avatarSelected)}
+                      />
+                    </StoryRing>
+                    {isSelected && storyModeAvatarCount !== undefined && (
+                      <>
+                        <View
+                          pointerEvents="none"
+                          style={[
+                            styles.countRing,
+                            { borderColor: storyModeAvatarCount > 0 ? throwColor.activeBlue : AVATAR_COUNT_RING_GREY },
+                          ]}
+                        />
+                        <AvatarCountBadge count={storyModeAvatarCount} isNight={isNight} />
+                      </>
+                    )}
+                  </Animated.View>
+                </View>
+                <Text
+                  style={[
+                    styles.name,
+                    isNight && styles.nameNight,
+                    isSelected && (isNight ? styles.nameSelectedNight : styles.nameSelected),
+                  ]}
+                  numberOfLines={1}
+                >
+                  {f.name.split(' ')[0]}
                 </Text>
-              )}
-            </Pressable>,
+                {f.location && (
+                  <Text style={[styles.city, isNight && styles.cityNight]} numberOfLines={1}>
+                    {f.location.city}
+                  </Text>
+                )}
+              </Pressable>
+            </Animated.View>
           );
         })}
       </View>
@@ -316,30 +369,6 @@ const styles = StyleSheet.create({
   // blue and unchanged.
   avatarSelected: { borderWidth: 2, borderColor: throwColor.inkFaint },
   avatarSelectedNight: { borderWidth: 2, borderColor: throwNightColor.ink },
-  // "You"'s own avatar content — a dark circle, person glyph, small green "+" badge, per explicit
-  // reference screenshot (was AddStoryButton's own look before "You" became a real rail item).
-  meCircle: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    backgroundColor: throwColor.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...throwColor.shadowSoft,
-  },
-  meBadge: {
-    position: 'absolute',
-    right: -3,
-    bottom: -3,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: throwColor.storyRing,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   name: { marginTop: 6, fontFamily: throwFont.ui600, fontSize: 12.5, color: throwColor.inkMute, textAlign: 'center' },
   nameSelected: { color: throwColor.ink, fontFamily: throwFont.ui700 },
   // Night skin — white instead of Throw's warm-ink day text, both for the selected contact and

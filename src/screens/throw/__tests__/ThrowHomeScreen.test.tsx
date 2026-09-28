@@ -25,7 +25,7 @@ jest.mock('../../../components/throw/weather/WeatherOverlay', () => ({
 }));
 
 // expo-video has no jest/native-module fallback the way most other Expo packages here do (it
-// throws at import time in this test environment) — only MyStatusPanel/ContactStoryStack touch
+// throws at import time in this test environment) — only StoryTrimScreen/ContactStoryStack touch
 // it, and neither renders in these tests, but the bare `import` still runs at module-load time
 // through ThrowHomeScreen's own import of them, so this has to be mocked regardless.
 jest.mock('expo-video', () => ({ useVideoPlayer: () => ({}), VideoView: () => null }));
@@ -77,15 +77,25 @@ jest.mock('../../../components/throw/ContactStoryStack', () => ({
   },
 }));
 
-// The live camera/capture/review/own-status flow is entirely MyStatusPanel's own concern now
-// (see its own dedicated test file) — this screen only needs to prove it wires the right props
-// through and mounts/hides it at the right times, same convention as ContactStoryStack above.
-let mockMyStatusPanelProps: any;
-jest.mock('../../../components/throw/MyStatusPanel', () => ({
-  MyStatusPanel: (props: any) => {
-    mockMyStatusPanelProps = props;
+// StoryCaptureScreen resolves to its .native/.web platform file, both of which touch expo-camera
+// (or getUserMedia on web) — irrelevant here (these tests only care whether ThrowHomeScreen opens
+// the capture modal at all, not what the camera itself does), and this sidesteps needing to mock
+// expo-camera/expo-image-picker's native-module surface too.
+let mockStoryCaptureProps: any;
+jest.mock('../../../components/throw/StoryCaptureScreen', () => ({
+  StoryCaptureScreen: (props: any) => {
+    mockStoryCaptureProps = props;
     const { Text } = require('react-native');
-    return require('react').createElement(Text, { testID: 'my-status-panel' }, 'status');
+    return require('react').createElement(Text, { testID: 'story-capture' }, 'capture');
+  },
+}));
+
+let mockStoryPreviewProps: any;
+jest.mock('../../../components/throw/StoryPreviewScreen', () => ({
+  StoryPreviewScreen: (props: any) => {
+    mockStoryPreviewProps = props;
+    const { Text } = require('react-native');
+    return require('react').createElement(Text, { testID: 'story-preview' }, 'preview');
   },
 }));
 
@@ -131,15 +141,6 @@ async function renderScreen() {
   await renderWithSafeArea(
     <ThrowHomeScreen onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenInbox={noop} onOpenSettings={noop} />,
   );
-}
-
-// core.springTo commits synchronously (see useCarouselPos's own doc comment) but also kicks off a
-// real requestAnimationFrame loop that needs to actually finish before the next act() block, same
-// reasoning RecipientCarousel's own test file needed this for.
-async function settle() {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 700));
-  });
 }
 
 describe('ThrowHomeScreen self-reminder contact lock', () => {
@@ -267,7 +268,142 @@ describe('ThrowHomeScreen flight/chrome behavior', () => {
   }, 10000);
 });
 
-describe('ThrowHomeScreen tap-to-view story (a real contact, inline in the card)', () => {
+describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFoldingLetterProps = undefined;
+    mockCarouselProps = undefined;
+    mockThrowMapProps = undefined;
+    mockContactStoryStackProps = undefined;
+    mockStoryCaptureProps = undefined;
+  });
+
+  function withStories(count: number) {
+    mockUseThrowStories.mockReturnValue({
+      loading: false,
+      storiesByUser: {
+        [MY_ID]: Array.from({ length: count }, (_, i) => ({
+          id: `s${i}`,
+          userId: MY_ID,
+          mediaUrl: `https://example.com/${i}.jpg`,
+          mediaType: 'photo',
+          trimStartMs: null,
+          trimEndMs: null,
+          createdAt: new Date().toISOString(),
+        })),
+      },
+      storyCountFor: (userId: string) => (userId === MY_ID ? count : 0),
+      postStory: jest.fn().mockResolvedValue({ error: null }),
+      markViewed: jest.fn(),
+      deleteStory: jest.fn().mockResolvedValue({ error: null }),
+      refresh: jest.fn(),
+    });
+  }
+
+  it('always opens the capture flow inline once dragged past Own Contact, even with existing stories', async () => {
+    setupMocks();
+    withStories(2);
+    await renderScreen();
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+
+    // Status is for adding a new story now, not viewing existing ones — those are reached the same
+    // way any other contact's stories are, by tapping the already-selected avatar (see the
+    // "tap-to-view story" describe block below).
+    expect(screen.queryByTestId('folding-letter')).toBeNull();
+    expect(screen.queryByTestId('contact-story-stack')).toBeNull();
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
+  });
+
+  it('opens the same inline capture flow when there is nothing posted yet', async () => {
+    setupMocks();
+    withStories(0);
+    await renderScreen();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
+  });
+
+  it('marks the add-story slot as the active selection, and locks the carousel, while capturing', async () => {
+    setupMocks();
+    withStories(2);
+    await renderScreen();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+
+    expect(mockCarouselProps.isAddStorySelected).toBe(true);
+    expect(mockCarouselProps.disabled).toBe(true);
+  });
+
+  it('returns to the compose letter for Own Contact once the capture flow is closed', async () => {
+    setupMocks();
+    withStories(1);
+    await renderScreen();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
+    expect(mockCarouselProps.isAddStorySelected).toBe(true);
+
+    await act(async () => {
+      mockStoryCaptureProps.onClose();
+    });
+
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    expect(screen.queryByTestId('story-capture')).toBeNull();
+    expect(mockCarouselProps.isAddStorySelected).toBe(false);
+  });
+
+  it('passes the same contact-flick drag handlers to the inline camera as the letter itself', async () => {
+    setupMocks();
+    withStories(1);
+    await renderScreen();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
+    expect(typeof mockStoryCaptureProps.onContactDragStart).toBe('function');
+    expect(typeof mockStoryCaptureProps.onContactDragOffset).toBe('function');
+  });
+
+  it('flicking forward from Status inside the camera moves to the next contact and exits capture mode', async () => {
+    setupMocks();
+    withStories(1);
+    await renderScreen();
+
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-1);
+    });
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
+
+    await act(async () => {
+      mockStoryCaptureProps.onContactDragStart();
+      mockStoryCaptureProps.onContactDragOffset(1);
+    });
+
+    expect(screen.queryByTestId('story-capture')).toBeNull();
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    expect(mockFoldingLetterProps.recipientName).toBe(FRIEND.name);
+  });
+});
+
+describe('ThrowHomeScreen tap-to-view story (any contact, inline in the card)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFoldingLetterProps = undefined;
@@ -297,23 +433,53 @@ describe('ThrowHomeScreen tap-to-view story (a real contact, inline in the card)
     });
   }
 
-  it("opens a friend's stories inline, without moving the carousel's own selection", async () => {
+  it('opens the already-selected contact\'s stories inline, without moving the carousel chrome', async () => {
     setupMocks();
-    withStoriesFor(FRIEND.userId, 3);
+    withStoriesFor(MY_ID, 3);
     await renderScreen();
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
 
     await act(async () => {
-      mockCarouselProps.core.springTo(1);
-    });
-    await settle();
-    await act(async () => {
-      mockCarouselProps.onOpenStory(FRIEND.userId);
+      mockCarouselProps.onOpenStory(MY_ID);
     });
 
     expect(screen.queryByTestId('folding-letter')).toBeNull();
     expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
     expect(mockContactStoryStackProps.stories).toHaveLength(3);
+    // Unlike the drag-into-Status entry point, tapping a normal contact doesn't relocate the
+    // carousel's own selection chrome onto the add-story slot — you're still exactly who you were.
+    expect(mockCarouselProps.isAddStorySelected).toBe(false);
+  });
+
+  it('works identically for a friend, not just Own Contact', async () => {
+    setupMocks();
+    withStoriesFor(FRIEND.userId, 1);
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onChangeIndex(1);
+    });
+    await act(async () => {
+      mockCarouselProps.onOpenStory(FRIEND.userId);
+    });
+
+    expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
+    expect(mockContactStoryStackProps.stories).toHaveLength(1);
+    // Only Own Contact gets the falling-in entrance/long-press-to-delete affordance — a friend's
+    // stories are view-only.
     expect(mockContactStoryStackProps.isOwnStories).toBe(false);
+  });
+
+  it('marks the stack as own-stories (falling-in entrance + long-press delete) only for Own Contact', async () => {
+    setupMocks();
+    withStoriesFor(MY_ID, 2);
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onOpenStory(MY_ID);
+    });
+
+    expect(mockContactStoryStackProps.isOwnStories).toBe(true);
   });
 
   it('deletes a story through ThrowStoriesContext once the stack reports a delete gesture committed', async () => {
@@ -321,7 +487,7 @@ describe('ThrowHomeScreen tap-to-view story (a real contact, inline in the card)
     setupMocks();
     mockUseThrowStories.mockReturnValue({
       loading: false,
-      storiesByUser: { [FRIEND.userId]: [{ id: 's0', userId: FRIEND.userId, mediaUrl: 'https://example.com/0.jpg', mediaType: 'photo', trimStartMs: null, trimEndMs: null, createdAt: new Date().toISOString() }] },
+      storiesByUser: { [MY_ID]: [{ id: 's0', userId: MY_ID, mediaUrl: 'https://example.com/0.jpg', mediaType: 'photo', trimStartMs: null, trimEndMs: null, createdAt: new Date().toISOString() }] },
       storyCountFor: () => 1,
       postStory: jest.fn().mockResolvedValue({ error: null }),
       markViewed: jest.fn(),
@@ -331,11 +497,7 @@ describe('ThrowHomeScreen tap-to-view story (a real contact, inline in the card)
     await renderScreen();
 
     await act(async () => {
-      mockCarouselProps.core.springTo(1);
-    });
-    await settle();
-    await act(async () => {
-      mockCarouselProps.onOpenStory(FRIEND.userId);
+      mockCarouselProps.onOpenStory(MY_ID);
     });
     await act(async () => {
       mockContactStoryStackProps.onDeleteStory('s0');
@@ -346,15 +508,11 @@ describe('ThrowHomeScreen tap-to-view story (a real contact, inline in the card)
 
   it('does nothing for a contact with no active stories', async () => {
     setupMocks();
-    withStoriesFor(FRIEND.userId, 0);
+    withStoriesFor(MY_ID, 0);
     await renderScreen();
 
     await act(async () => {
-      mockCarouselProps.core.springTo(1);
-    });
-    await settle();
-    await act(async () => {
-      mockCarouselProps.onOpenStory(FRIEND.userId);
+      mockCarouselProps.onOpenStory(MY_ID);
     });
 
     expect(screen.getByTestId('folding-letter')).toBeTruthy();
@@ -363,153 +521,154 @@ describe('ThrowHomeScreen tap-to-view story (a real contact, inline in the card)
 
   it('stays open on its own (no auto-revert) until a different contact is selected', async () => {
     setupMocks();
-    withStoriesFor(FRIEND.userId, 1);
+    withStoriesFor(MY_ID, 1);
     await renderScreen();
 
     await act(async () => {
-      mockCarouselProps.core.springTo(1);
-    });
-    await settle();
-    await act(async () => {
-      mockCarouselProps.onOpenStory(FRIEND.userId);
+      mockCarouselProps.onOpenStory(MY_ID);
     });
     expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
 
-    // Picking a different contact (not any signal from the stack itself) is the only way back to
-    // the compose letter.
+    // Picking a different contact (not any signal from the stack itself — there's no more
+    // "exhausted" concept now that every photo just moves between avatar/letter/bin) is the only
+    // way back to the compose letter.
     await act(async () => {
-      mockCarouselProps.core.springTo(0);
+      mockCarouselProps.onChangeIndex(1);
     });
-    await settle();
 
     expect(screen.getByTestId('folding-letter')).toBeTruthy();
     expect(screen.queryByTestId('contact-story-stack')).toBeNull();
   });
 
-  it("passes the open contact's name and the avatar's screen position as the stack's flight target", async () => {
+  it('passes the open contact\'s name and the avatar\'s screen position as the stack\'s flight target', async () => {
     setupMocks();
-    withStoriesFor(FRIEND.userId, 1);
+    withStoriesFor(MY_ID, 1);
     await renderScreen();
 
     await act(async () => {
-      mockCarouselProps.core.springTo(1);
-    });
-    await settle();
-    await act(async () => {
-      mockCarouselProps.onOpenStory(FRIEND.userId);
+      mockCarouselProps.onOpenStory(MY_ID);
     });
 
-    expect(mockContactStoryStackProps.contactName).toBe(FRIEND.name);
+    expect(mockContactStoryStackProps.contactName).toBe('Myself');
     expect(typeof mockContactStoryStackProps.flightTargetX).toBe('number');
     expect(typeof mockContactStoryStackProps.flightTargetY).toBe('number');
   });
 
   it('bumps the drop signal on every re-tap of the already-open contact\'s avatar', async () => {
     setupMocks();
-    withStoriesFor(FRIEND.userId, 1);
+    withStoriesFor(MY_ID, 1);
     await renderScreen();
 
     await act(async () => {
-      mockCarouselProps.core.springTo(1);
-    });
-    await settle();
-    await act(async () => {
-      mockCarouselProps.onOpenStory(FRIEND.userId);
+      mockCarouselProps.onOpenStory(MY_ID);
     });
     const firstSignal = mockContactStoryStackProps.dropSignal;
 
     await act(async () => {
-      mockCarouselProps.onOpenStory(FRIEND.userId);
+      mockCarouselProps.onOpenStory(MY_ID);
     });
 
     expect(mockContactStoryStackProps.dropSignal).toBeGreaterThan(firstSignal);
   });
-
-  it('never treats "Myself" (the self-reminder slot) as a story to open, via RecipientCarousel\'s own selfUserId exclusion', async () => {
-    setupMocks();
-    withStoriesFor(MY_ID, 4);
-    await renderScreen();
-
-    expect(mockCarouselProps.selfUserId).toBe(MY_ID);
-  });
 });
 
-describe('ThrowHomeScreen "You" status camera', () => {
+describe('ThrowHomeScreen story post-capture confirmation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCarouselProps = undefined;
-    mockMyStatusPanelProps = undefined;
+    mockStoryCaptureProps = undefined;
+    mockStoryPreviewProps = undefined;
   });
 
-  it('is always mounted, reading its own stories from ThrowStoriesContext keyed by my own id', async () => {
+  it('shows a preview with a confirm step instead of posting immediately after capture', async () => {
+    setupMocks();
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onAddStory();
+    });
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
+
+    await act(async () => {
+      mockStoryCaptureProps.onCaptured('file:///captured.jpg', 'photo');
+    });
+
+    expect(screen.queryByTestId('story-capture')).toBeNull();
+    expect(screen.getByTestId('story-preview')).toBeTruthy();
+    expect(mockStoryPreviewProps.localUri).toBe('file:///captured.jpg');
+    expect(mockStoryPreviewProps.mediaType).toBe('photo');
+    // Same flight target ContactStoryStack's own flicked-away cards use — the confirmed photo
+    // flies to the same place a consumed one came from.
+    expect(typeof mockStoryPreviewProps.flightTargetY).toBe('number');
+    // The carousel stays locked (and its chrome stays on the add-story slot) all the way through
+    // capture -> preview, not just during capture — you're still mid-way through posting your own
+    // story, not free to switch who you're addressing.
+    expect(mockCarouselProps.disabled).toBe(true);
+    expect(mockCarouselProps.isAddStorySelected).toBe(true);
+  });
+
+  it('only calls postStory once the preview\'s confirm arrow is tapped', async () => {
+    const postStory = jest.fn().mockResolvedValue({ error: null });
     setupMocks();
     mockUseThrowStories.mockReturnValue({
       loading: false,
-      storiesByUser: { [MY_ID]: [{ id: 's0', userId: MY_ID, mediaUrl: 'https://example.com/0.jpg', mediaType: 'photo', trimStartMs: null, trimEndMs: null, createdAt: new Date().toISOString() }] },
-      storyCountFor: () => 1,
-      postStory: jest.fn().mockResolvedValue({ error: null }),
+      storiesByUser: {},
+      storyCountFor: () => 0,
+      postStory,
       markViewed: jest.fn(),
       deleteStory: jest.fn().mockResolvedValue({ error: null }),
       refresh: jest.fn(),
     });
     await renderScreen();
 
-    expect(screen.getByTestId('my-status-panel')).toBeTruthy();
-    expect(mockMyStatusPanelProps.stories).toHaveLength(1);
-    expect(typeof mockMyStatusPanelProps.postStory).toBe('function');
-  });
-
-  it('hides the compose letter while "You" (rail index -1) is selected', async () => {
-    setupMocks();
-    await renderScreen();
-    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    await act(async () => {
+      mockCarouselProps.onAddStory();
+    });
+    await act(async () => {
+      mockStoryCaptureProps.onCaptured('file:///captured.jpg', 'photo');
+    });
+    expect(postStory).not.toHaveBeenCalled();
 
     await act(async () => {
-      mockCarouselProps.core.springTo(-1);
+      mockStoryPreviewProps.onConfirm();
     });
-    await settle();
 
+    expect(postStory).toHaveBeenCalledWith('file:///captured.jpg', 'photo');
+    expect(screen.queryByTestId('story-preview')).toBeNull();
+  });
+
+  it('discards the capture and reopens the camera, not Own Contact\'s letter, when the preview is cancelled', async () => {
+    // Regression test: "X" on the preview used to fall all the way through to storyFlow === null,
+    // which showed FoldingLetter for whichever contact was selected — always Own Contact, since
+    // capture always sets selectedFriendId to myId — reading as an unwanted jump to "Myself"'s
+    // letter instead of just backing out of the just-captured photo.
+    const postStory = jest.fn().mockResolvedValue({ error: null });
+    setupMocks();
+    mockUseThrowStories.mockReturnValue({
+      loading: false,
+      storiesByUser: {},
+      storyCountFor: () => 0,
+      postStory,
+      markViewed: jest.fn(),
+      deleteStory: jest.fn().mockResolvedValue({ error: null }),
+      refresh: jest.fn(),
+    });
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onAddStory();
+    });
+    await act(async () => {
+      mockStoryCaptureProps.onCaptured('file:///captured.jpg', 'photo');
+    });
+
+    await act(async () => {
+      mockStoryPreviewProps.onCancel();
+    });
+
+    expect(screen.queryByTestId('story-preview')).toBeNull();
+    expect(postStory).not.toHaveBeenCalled();
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
     expect(screen.queryByTestId('folding-letter')).toBeNull();
-    expect(screen.getByTestId('my-status-panel')).toBeTruthy();
-  });
-
-  it('bumps a dedicated drop signal on every re-tap of the already-selected "You" avatar, separate from a real contact\'s', async () => {
-    setupMocks();
-    await renderScreen();
-
-    await act(async () => {
-      mockCarouselProps.core.springTo(-1);
-    });
-    await settle();
-    const before = mockMyStatusPanelProps.dropSignal;
-
-    await act(async () => {
-      mockCarouselProps.onOpenYouStatus();
-    });
-
-    expect(mockMyStatusPanelProps.dropSignal).toBeGreaterThan(before);
-  });
-
-  it('springs back to the last real contact when MyStatusPanel\'s own close (✕) fires', async () => {
-    setupMocks();
-    await renderScreen();
-
-    await act(async () => {
-      mockCarouselProps.core.springTo(1);
-    });
-    await settle();
-    await act(async () => {
-      mockCarouselProps.core.springTo(-1);
-    });
-    await settle();
-    expect(screen.queryByTestId('folding-letter')).toBeNull();
-
-    await act(async () => {
-      mockMyStatusPanelProps.onClose();
-    });
-    await settle();
-
-    expect(screen.getByTestId('folding-letter')).toBeTruthy();
-    expect(mockFoldingLetterProps.recipientName).toBe(FRIEND.name);
   });
 });
