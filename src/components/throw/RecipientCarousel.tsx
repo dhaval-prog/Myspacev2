@@ -12,6 +12,10 @@ const ITEM_SPACING = 92;
 const AVATAR_SIZE = 64;
 const PULSE_RING_SIZE = AVATAR_SIZE + 16;
 const PULSE_DURATION_MS = 1400;
+// Exported so ThrowHomeScreen can work out where the selected contact's own ring actually sits on
+// screen (see ContactStoryStack's flightTargetY) without duplicating this strip's height as its
+// own separate magic number that could quietly drift out of sync with this one.
+export const CAROUSEL_HEIGHT = 130;
 
 /** A soft, looping ring that expands and fades behind the selected contact's avatar — an
  * "active" indicator, distinct from the rest of Throw's warm-paper/clay palette on purpose (the
@@ -244,8 +248,8 @@ export function RecipientCarousel({
 const styles = StyleSheet.create({
   // Taller than before (108 → 130) to fit the bigger avatar/pulse ring plus both text lines
   // without clipping against `overflow: hidden`.
-  wrap: { height: 130, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  strip: { width: ITEM_SPACING, height: 130, alignItems: 'center', justifyContent: 'center' },
+  wrap: { height: CAROUSEL_HEIGHT, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  strip: { width: ITEM_SPACING, height: CAROUSEL_HEIGHT, alignItems: 'center', justifyContent: 'center' },
   item: { position: 'absolute', width: ITEM_SPACING, alignItems: 'center' },
   // Centers the Pressable's own content — without this, RN's default `alignItems: 'stretch'`
   // makes each Text stretch to the width of its widest sibling (often the city name), which then

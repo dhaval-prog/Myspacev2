@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Image, LayoutChangeEvent, PanResponder, Platform, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Image, PanResponder, Platform, StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { Blackhole } from './Blackhole';
 import { throwColor, throwNightColor, throwRadius } from '../../theme/throwTokens';
 import type { ThrowStory } from '../../types/story';
 
@@ -10,7 +9,9 @@ const COMMIT_VELOCITY = 0.5;
 const MAX_TILT_DEG = 10;
 const FLIGHT_DURATION_MS = 480;
 const MIN_SCALE = 0.12;
-const DEFAULT_HEIGHT = 460;
+// Used only until the real measurement below resolves (effectively instant — see the layout
+// effect) or as a last resort if flightTargetY is never given at all.
+const DEFAULT_FLIGHT_DISTANCE = 260;
 const REST_1 = { scale: 0.94, translateY: 12, rotate: -3 };
 const REST_2 = { scale: 0.88, translateY: 22, rotate: 3 };
 
@@ -53,6 +54,12 @@ interface ContactStoryStackProps {
    * internally so the most recently posted one renders on top, per explicit request. */
   stories: ThrowStory[];
   isNight?: boolean;
+  /** The selected contact's own ring in RecipientCarousel, in absolute screen coordinates (see
+   * ThrowHomeScreen's own storyFlightTargetY) — a flicked-away card flies toward this exact point
+   * rather than to some destination invented just for this component, since the contact's ring is
+   * already the one thing on screen that's naturally "theirs" to disappear into. Falls back to a
+   * fixed distance if omitted (tests, or before the first real layout pass resolves it). */
+  flightTargetY?: number;
   /** Fired once every story has been flicked away — the parent (ThrowHomeScreen) swaps back to
    * showing the compose/letter card in the exact same slot, which is what makes the letter read as
    * "the final card underneath" without this component needing to know anything about
@@ -66,36 +73,41 @@ interface ContactStoryStackProps {
 /**
  * Replaces the compose letter, in the same card, while viewing a contact's (any contact's,
  * including your own) posted stories — a tactile stack of photo cards, most recent on top, that
- * you flick upward one at a time into a small blackhole at the top of the card. The next photo
- * rises smoothly into the primary position as each one disappears; once the last one is gone, this
- * unmounts (see onExhausted) and the letter underneath is what's left, exactly like it never left.
- * A slow/uncommitted drag just follows the finger and springs back — only a drag or flick that
- * crosses the distance/velocity threshold actually consumes the card.
+ * you flick upward one at a time, back into that same contact's own ring in the carousel above.
+ * The next photo rises smoothly into the primary position as each one disappears; once the last
+ * one is gone, this unmounts (see onExhausted) and the letter underneath is what's left, exactly
+ * like it never left. A slow/uncommitted drag just follows the finger and springs back — only a
+ * drag or flick that crosses the distance/velocity threshold actually consumes the card.
  */
-export function ContactStoryStack({ stories, isNight, onExhausted, onViewed }: ContactStoryStackProps) {
+export function ContactStoryStack({ stories, isNight, flightTargetY, onExhausted, onViewed }: ContactStoryStackProps) {
   // Most-recent-first — "the most recent/latest story should appear on top" per explicit request,
   // the reverse of the oldest-first order `stories` itself is always handed down in.
   const ordered = useMemo(() => [...stories].reverse(), [stories]);
   const [index, setIndex] = useState(0);
-  const [height, setHeight] = useState(DEFAULT_HEIGHT);
+  const [flightDistance, setFlightDistance] = useState(DEFAULT_FLIGHT_DISTANCE);
   const dragY = useRef(new Animated.Value(0)).current;
   const dragX = useRef(new Animated.Value(0)).current;
   const wrapRef = useRef<View>(null);
-  const [consumeCount, setConsumeCount] = useState(0);
-
-  // How far up a flicked card travels before it's considered "reached" the blackhole — scaled off
-  // the card's own real height (measured via onLayout) so the flight always covers roughly the top
-  // half of the card regardless of device size, rather than a fixed pixel distance that would look
-  // wrong on a much taller or shorter card.
-  const flightDistance = Math.max(160, height * 0.5 - 60);
 
   // Read inside commit() without needing the raw-DOM gesture effect's dependency array to include
   // it (that effect only ever needs to be set up once per dragY/dragX identity, not re-bound every
-  // time the card's own measured height changes).
+  // time the measured distance to the ring changes).
   const latestFlightDistance = useRef(flightDistance);
   latestFlightDistance.current = flightDistance;
 
-  const onLayout = (e: LayoutChangeEvent) => setHeight(e.nativeEvent.layout.height);
+  // Actual pixel distance from this card's own current center up to the contact's ring — measured
+  // rather than assumed, since the ring's screen position depends on the device's safe-area inset
+  // as well as this card's own (also somewhat variable) position. Re-measures on every relayout,
+  // which covers e.g. a rotation or a keyboard opening/closing.
+  const onLayout = () => {
+    if (flightTargetY == null) return;
+    requestAnimationFrame(() => {
+      wrapRef.current?.measureInWindow((_x, y, _width, height) => {
+        const ownCenterY = y + height / 2;
+        setFlightDistance(Math.max(140, ownCenterY - flightTargetY));
+      });
+    });
+  };
 
   const front = ordered[index];
   const behind1 = ordered[index + 1];
@@ -111,7 +123,6 @@ export function ContactStoryStack({ stories, isNight, onExhausted, onViewed }: C
   }, [front?.id]);
 
   const commit = () => {
-    setConsumeCount((c) => c + 1);
     Animated.parallel([
       Animated.timing(dragY, { toValue: -latestFlightDistance.current, duration: FLIGHT_DURATION_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
       Animated.timing(dragX, { toValue: 0, duration: FLIGHT_DURATION_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
@@ -286,21 +297,16 @@ export function ContactStoryStack({ stories, isNight, onExhausted, onViewed }: C
         <StoryMedia key={front.id} story={front} isFront />
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.veil, { opacity: veilOpacity }]} />
       </Animated.View>
-
-      <View style={styles.blackholeWrap}>
-        <Blackhole isNight={isNight} pulseSignal={consumeCount} />
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   // No overflow constraint here — the front card needs to be able to visually travel up past its
-  // own resting bounds toward the blackhole; only `clip`/`card` below (each individually rounded)
-  // clip their own photo content.
+  // own resting bounds toward the contact's ring in the carousel; only `clip`/`card` below (each
+  // individually rounded) clip their own photo content.
   root: { flex: 1, position: 'relative' },
   clip: { ...StyleSheet.absoluteFill, borderRadius: throwRadius.paper, overflow: 'hidden' },
   card: { ...StyleSheet.absoluteFill, borderRadius: throwRadius.paper, overflow: 'hidden', ...throwColor.shadowSoft },
   veil: { backgroundColor: '#FFFFFF' },
-  blackholeWrap: { position: 'absolute', top: 6, alignSelf: 'center', zIndex: 5 },
 });
