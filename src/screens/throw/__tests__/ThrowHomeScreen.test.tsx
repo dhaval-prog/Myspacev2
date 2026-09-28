@@ -478,6 +478,14 @@ describe('ThrowHomeScreen story post-capture confirmation', () => {
     expect(screen.getByTestId('story-preview')).toBeTruthy();
     expect(mockStoryPreviewProps.localUri).toBe('file:///captured.jpg');
     expect(mockStoryPreviewProps.mediaType).toBe('photo');
+    // Same flight target ContactStoryStack's own flicked-away cards use — the confirmed photo
+    // flies to the same place a consumed one came from.
+    expect(typeof mockStoryPreviewProps.flightTargetY).toBe('number');
+    // The carousel stays locked (and its chrome stays on the add-story slot) all the way through
+    // capture -> preview, not just during capture — you're still mid-way through posting your own
+    // story, not free to switch who you're addressing.
+    expect(mockCarouselProps.disabled).toBe(true);
+    expect(mockCarouselProps.isAddStorySelected).toBe(true);
   });
 
   it('only calls postStory once the preview\'s confirm arrow is tapped', async () => {

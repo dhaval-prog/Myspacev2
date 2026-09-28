@@ -294,10 +294,20 @@ export function ThrowHomeScreen({
   // into the virtual "Status" slot (which now always means "post something new", not "view what's
   // already there" — see handleContactDragOffset) or by tapping the add-story "+" directly.
   const isCaptureMode = storyFlow?.name === 'capture';
-  // Which of the three things the letter card is currently showing — a single source of truth so
+  // The confirm-before-posting step right after capture/pick — also inline, in the same slot, so
+  // the whole "post a story" pipeline reads as one continuous place rather than capture alone
+  // being inline and confirm popping up separately.
+  const isPreviewMode = storyFlow?.name === 'preview';
+  // Which of the four things the letter card is currently showing — a single source of truth so
   // every transition between any two of them (not just entering/leaving story mode) gets the same
   // smooth crossfade below, instead of only some pairs of states doing so.
-  const cardMode: 'capture' | 'story' | 'letter' = isCaptureMode ? 'capture' : isStoryMode ? 'story' : 'letter';
+  const cardMode: 'capture' | 'preview' | 'story' | 'letter' = isCaptureMode
+    ? 'capture'
+    : isPreviewMode
+      ? 'preview'
+      : isStoryMode
+        ? 'story'
+        : 'letter';
 
   // FoldingLetter's onReminderPeekChange prop itself goes undefined the instant the user flicks
   // away from "Myself" (see its own conditional below) — a no-op prop can't tell this screen's own
@@ -556,12 +566,12 @@ export function ThrowHomeScreen({
                   setStoryView(null);
                   setSelectedFriendId(friendsWithLocation[i]?.userId ?? null);
                 }}
-                disabled={selfLocked || isCaptureMode}
+                disabled={selfLocked || isCaptureMode || isPreviewMode}
                 isNight={!mapIsDay}
                 storyCountFor={storyCountFor}
                 onOpenStory={handleOpenStory}
                 onAddStory={() => setStoryFlow({ name: 'capture' })}
-                isAddStorySelected={storyView?.viaAddSlot === true || isCaptureMode}
+                isAddStorySelected={storyView?.viaAddSlot === true || isCaptureMode || isPreviewMode}
               />
             </View>
           ))}
@@ -586,6 +596,14 @@ export function ThrowHomeScreen({
                   onClose={() => setStoryFlow(null)}
                   onCaptured={handleStoryCaptured}
                   onPickedLongVideo={handleStoryPickedLongVideo}
+                />
+              ) : storyFlow?.name === 'preview' ? (
+                <StoryPreviewScreen
+                  localUri={storyFlow.localUri}
+                  mediaType={storyFlow.mediaType}
+                  flightTargetY={storyFlightTargetY}
+                  onCancel={() => setStoryFlow(null)}
+                  onConfirm={() => handleStoryPreviewConfirmed(storyFlow.localUri, storyFlow.mediaType)}
                 />
               ) : isStoryMode && selectedFriend ? (
                 <ContactStoryStack
@@ -698,17 +716,6 @@ export function ThrowHomeScreen({
           reduceMotion={reduceMotion}
         />
       </Animated.View>
-
-      {storyFlow?.name === 'preview' && (
-        <Modal visible animationType="fade" onRequestClose={() => setStoryFlow(null)} statusBarTranslucent>
-          <StoryPreviewScreen
-            localUri={storyFlow.localUri}
-            mediaType={storyFlow.mediaType}
-            onCancel={() => setStoryFlow(null)}
-            onConfirm={() => handleStoryPreviewConfirmed(storyFlow.localUri, storyFlow.mediaType)}
-          />
-        </Modal>
-      )}
 
       {storyFlow?.name === 'trim' && (
         <Modal visible animationType="slide" onRequestClose={() => setStoryFlow(null)} statusBarTranslucent>
