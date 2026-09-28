@@ -8,8 +8,6 @@ const BASE_LOOP_MS = 2400;
 const DEFAULT_ANGLE_DEG = 8;
 const PRESENCE_DURATION_MS = 1400;
 const RAIN_DROP_RGB = '214,226,240';
-const ATMOSPHERE_RGB = '18,26,38';
-const ATMOSPHERE_MAX_OPACITY = 0.12;
 // Same scoped, rotate-only wind connection as RainOverlay.native.tsx (see its own doc comment) —
 // read every frame from a ref a separate effect updates, so it never needs to restart the main tick
 // loop (and therefore never touches the fall-speed math) just because the wind sample changed.
@@ -129,10 +127,10 @@ export function RainOverlay({ active, intensity, quality = 'high', config, windC
       ctx.clearRect(0, 0, width, height);
       if (presence <= 0.0005) return;
 
-      if (presence > 0.001) {
-        ctx.fillStyle = `rgba(${ATMOSPHERE_RGB},${ATMOSPHERE_MAX_OPACITY * presence})`;
-        ctx.fillRect(0, 0, width, height);
-      }
+      // This canvas's own atmosphere wash was removed — weatherEngine.ts (mounted underneath, see
+      // WeatherOverlay.web.tsx) already supplies rain/thunderstorm's dim/fog ambiance now, and
+      // stacking a second wash here on top of it was reading as excessively faded/washed-out (see
+      // weatherEngine.ts's own setTargets comment).
 
       // Recomputed every frame (cheap — a handful of trig calls, dwarfed by the per-particle loop
       // below) rather than once per effect run, so a gust's own lean can nudge this without

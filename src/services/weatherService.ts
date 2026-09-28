@@ -15,6 +15,12 @@ export interface RawWeatherData {
   windDirectionDeg: number;
   temperatureC: number;
   humidityPct: number;
+  /** Open-Meteo's own `current.is_day` (1 daytime / 0 night) — the one extra field 'sunny'
+   * classification needs (see conditionIntensity below), fetched in the same request as everything
+   * else so this never costs a second API call. Defaults to false (night) when missing, the more
+   * conservative reading — an uncertain daytime call should fall back to the existing 'clear'
+   * behavior, never quietly invent a new 'sunny' reading. */
+  isDay: boolean;
 }
 
 /** WMO weather codes Open-Meteo's `current.weather_code` uses — grouped by which
@@ -65,7 +71,7 @@ function intensityFromWindKph(kph: number): WeatherIntensity {
   return 'medium';
 }
 
-function conditionIntensity(weatherCode: number, precipitationMm: number, windSpeedKph: number): { condition: WeatherCondition; intensity: WeatherIntensity } {
+function conditionIntensity(weatherCode: number, precipitationMm: number, windSpeedKph: number, isDay: boolean): { condition: WeatherCondition; intensity: WeatherIntensity } {
   if (RAIN_CODES.has(weatherCode)) {
     const fromCode: WeatherIntensity = RAIN_LIGHT_CODES.has(weatherCode) ? 'light' : RAIN_HEAVY_CODES.has(weatherCode) ? 'heavy' : 'medium';
     return { condition: 'rain', intensity: higherIntensity(fromCode, intensityFromPrecipitationMm(precipitationMm)) };
@@ -86,7 +92,10 @@ function conditionIntensity(weatherCode: number, precipitationMm: number, windSp
     return { condition: 'wind', intensity: intensityFromWindKph(windSpeedKph) };
   }
   if (CLOUDY_CODES.has(weatherCode)) return { condition: 'cloudy', intensity: 'light' };
-  return { condition: 'clear', intensity: 'light' };
+  // Only a truly clear-sky code (0) reaches here. Daytime reads as genuinely "sunny" (this
+  // feature's own Clear-vs-Sunny distinction — see types/weather.ts); the exact same code at night
+  // stays 'clear', preserving every existing automatic Clear reading exactly as it was.
+  return { condition: isDay ? 'sunny' : 'clear', intensity: 'light' };
 }
 
 /**
@@ -97,8 +106,8 @@ function conditionIntensity(weatherCode: number, precipitationMm: number, windSp
  * WeatherOverlay, Throw Settings all only ever see NormalizedWeather).
  */
 export function normalizeWeatherCondition(raw: RawWeatherData): NormalizedWeather {
-  const { weatherCode, precipitationMm, windSpeedKph, windDirectionDeg, temperatureC, humidityPct } = raw;
-  const { condition, intensity } = conditionIntensity(weatherCode, precipitationMm, windSpeedKph);
+  const { weatherCode, precipitationMm, windSpeedKph, windDirectionDeg, temperatureC, humidityPct, isDay } = raw;
+  const { condition, intensity } = conditionIntensity(weatherCode, precipitationMm, windSpeedKph, isDay);
   return { condition, intensity, windSpeedKph, windDirectionDeg, precipitationMm, temperatureC, humidityPct };
 }
 
@@ -110,7 +119,7 @@ export function normalizeWeatherCondition(raw: RawWeatherData): NormalizedWeathe
  */
 export async function getCurrentWeather(latitude: number, longitude: number): Promise<RawWeatherData | null> {
   try {
-    const fields = 'precipitation,weather_code,wind_speed_10m,wind_direction_10m,temperature_2m,relative_humidity_2m';
+    const fields = 'precipitation,weather_code,wind_speed_10m,wind_direction_10m,temperature_2m,relative_humidity_2m,is_day';
     const url = `${OPEN_METEO_BASE_URL}?latitude=${latitude}&longitude=${longitude}&current=${fields}`;
     const response = await fetch(url);
     if (!response.ok) return null;
@@ -125,6 +134,7 @@ export async function getCurrentWeather(latitude: number, longitude: number): Pr
       windDirectionDeg: num(current.wind_direction_10m, 0),
       temperatureC: num(current.temperature_2m, 20),
       humidityPct: num(current.relative_humidity_2m, 50),
+      isDay: current.is_day === 1 || current.is_day === true,
     };
   } catch (e) {
     console.warn('[WeatherService] getCurrentWeather failed:', e instanceof Error ? e.message : e);

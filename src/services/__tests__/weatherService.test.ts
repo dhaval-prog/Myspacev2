@@ -1,6 +1,6 @@
 import { getCurrentWeather, normalizeWeatherCondition } from '../weatherService';
 
-function raw(overrides: Partial<{ weatherCode: number; precipitationMm: number; windSpeedKph: number; windDirectionDeg: number; temperatureC: number; humidityPct: number }> = {}) {
+function raw(overrides: Partial<{ weatherCode: number; precipitationMm: number; windSpeedKph: number; windDirectionDeg: number; temperatureC: number; humidityPct: number; isDay: boolean }> = {}) {
   return {
     weatherCode: 0,
     precipitationMm: 0,
@@ -8,6 +8,7 @@ function raw(overrides: Partial<{ weatherCode: number; precipitationMm: number; 
     windDirectionDeg: 180,
     temperatureC: 22,
     humidityPct: 55,
+    isDay: true,
     ...overrides,
   };
 }
@@ -55,8 +56,12 @@ describe('normalizeWeatherCondition', () => {
     expect(normalizeWeatherCondition(raw({ weatherCode: 2, windSpeedKph: 10 }))).toMatchObject({ condition: 'cloudy', intensity: 'light' });
   });
 
-  it('maps a clear code to clear when wind is unremarkable', () => {
-    expect(normalizeWeatherCondition(raw({ weatherCode: 0, windSpeedKph: 10 }))).toMatchObject({ condition: 'clear', intensity: 'light' });
+  it('maps a clear code at night to clear when wind is unremarkable', () => {
+    expect(normalizeWeatherCondition(raw({ weatherCode: 0, windSpeedKph: 10, isDay: false }))).toMatchObject({ condition: 'clear', intensity: 'light' });
+  });
+
+  it('maps a clear code during the day to sunny (the same code stays clear at night) when wind is unremarkable', () => {
+    expect(normalizeWeatherCondition(raw({ weatherCode: 0, windSpeedKph: 10, isDay: true }))).toMatchObject({ condition: 'sunny', intensity: 'light' });
   });
 
   it('surfaces strong wind on an otherwise clear/cloudy reading as its own "wind" condition', () => {
@@ -70,7 +75,7 @@ describe('normalizeWeatherCondition', () => {
   });
 
   it('falls back to clear for an unrecognized code rather than throwing', () => {
-    expect(normalizeWeatherCondition(raw({ weatherCode: 9999 }))).toMatchObject({ condition: 'clear', intensity: 'light' });
+    expect(normalizeWeatherCondition(raw({ weatherCode: 9999, isDay: false }))).toMatchObject({ condition: 'clear', intensity: 'light' });
   });
 
   it('carries wind/precipitation/temperature/humidity straight through, unmodified', () => {
@@ -90,23 +95,24 @@ describe('getCurrentWeather', () => {
     globalThis.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        current: { weather_code: 61, precipitation: 1.2, wind_speed_10m: 18, wind_direction_10m: 245, temperature_2m: 27, relative_humidity_2m: 84 },
+        current: { weather_code: 61, precipitation: 1.2, wind_speed_10m: 18, wind_direction_10m: 245, temperature_2m: 27, relative_humidity_2m: 84, is_day: 1 },
       }),
     }) as unknown as typeof fetch;
 
     const result = await getCurrentWeather(19.07, 72.87);
-    expect(result).toEqual({ weatherCode: 61, precipitationMm: 1.2, windSpeedKph: 18, windDirectionDeg: 245, temperatureC: 27, humidityPct: 84 });
+    expect(result).toEqual({ weatherCode: 61, precipitationMm: 1.2, windSpeedKph: 18, windDirectionDeg: 245, temperatureC: 27, humidityPct: 84, isDay: true });
     expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('latitude=19.07'));
     expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('longitude=72.87'));
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('is_day'));
   });
 
-  it('defaults every optional field when the response omits them', async () => {
+  it('defaults every optional field (including isDay, to false) when the response omits them', async () => {
     globalThis.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ current: { weather_code: 0 } }),
     }) as unknown as typeof fetch;
 
-    expect(await getCurrentWeather(0, 0)).toEqual({ weatherCode: 0, precipitationMm: 0, windSpeedKph: 0, windDirectionDeg: 0, temperatureC: 20, humidityPct: 50 });
+    expect(await getCurrentWeather(0, 0)).toEqual({ weatherCode: 0, precipitationMm: 0, windSpeedKph: 0, windDirectionDeg: 0, temperatureC: 20, humidityPct: 50, isDay: false });
   });
 
   it('returns null (never throws) on a non-OK response', async () => {

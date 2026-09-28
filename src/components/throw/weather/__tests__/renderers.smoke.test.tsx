@@ -5,6 +5,7 @@ import { WindOverlay } from '../WindOverlay';
 import { CloudOverlay } from '../CloudOverlay';
 import { LightningController } from '../LightningController';
 import { ClearOverlay } from '../ClearOverlay';
+import { SunnyRenderer } from '../SunnyRenderer';
 import { WindController } from '../windController';
 
 // Every renderer here runs a real-timer-driven Animated.loop (jest has no native Animated module,
@@ -58,6 +59,18 @@ describe('CloudOverlay', () => {
 describe('ClearOverlay', () => {
   it('renders without crashing', async () => {
     const { unmount } = await render(<ClearOverlay active />);
+    await act(async () => {});
+    unmount();
+  });
+});
+
+describe('SunnyRenderer', () => {
+  it('renders active/inactive and reduced/full motion without crashing', async () => {
+    const { rerender, unmount } = await render(<SunnyRenderer active />);
+    await act(async () => {});
+    rerender(<SunnyRenderer active reduceMotion />);
+    await act(async () => {});
+    rerender(<SunnyRenderer active={false} />);
     await act(async () => {});
     unmount();
   });

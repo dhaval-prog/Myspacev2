@@ -10,6 +10,7 @@
  * No images: clouds, flakes and bokeh are generated into offscreen canvases at start-up.
  */
 import type { WeatherCondition, WeatherIntensity } from '../../../types/weather';
+import { sunConfigForHour } from './sunConfig';
 
 export interface WeatherEngineOptions {
   width: number;
@@ -42,22 +43,35 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const persp=y=>0.45+0.75*clamp((y-HZ)/(H-HZ),0,1); // near = bigger
 let now=performance.now();
 
-const L={stars:0,clouds:0,dark:0,dim:0,rain:0,snow:0,wind:0,light:0,fog:0};
+const L={stars:0,clouds:0,dark:0,dim:0,rain:0,snow:0,wind:0,light:0,fog:0,sun:0};
 const T={...L};
 let rainSpeed=1, windBase=.3;
+// Recomputed on every setTargets() call (i.e. whenever React hands the engine a new
+// condition/intensity, never per-frame) — cheap, and gives 'sunny' the "responds to time of day"
+// behavior this feature asks for without any extra API/timer of its own (see sunConfig.ts, shared
+// with SunnyRenderer.tsx so native/web read the same buckets).
+let sunCfg=sunConfigForHour(new Date().getHours());
 function setTargets(c,i){
   const k={light:.42,medium:.72,heavy:1}[i];
   Object.keys(T).forEach(x=>T[x]=0);
   if(c==='clear'){T.stars=1;windBase=.15}
-  if(c==='cloudy'){T.clouds=.85;T.dim=.22;T.stars=.2;windBase=.25}
+  // Lower than the original prototype's own values — stacked with RainOverlay's own atmosphere
+  // wash (rain/thunderstorm) and 18 overlapping cloud sprites, the old numbers here read as an
+  // excessively faded/washed-out map (reported directly against a screenshot). Cloud/dim are now
+  // tuned so cloudy/rain still clearly read as cloudy/rainy without burying the map underneath.
+  if(c==='cloudy'){T.clouds=.62;T.dim=.11;T.stars=.2;windBase=.25}
   // T.rain deliberately never set — actual rain (streaks, ground splashes, lens droplets) is drawn
   // by RainOverlay (see WeatherOverlay.web.tsx's own doc comment); this engine only supplies the
   // surrounding cloud/dim/fog ambiance for rain/thunderstorm.
-  if(c==='rain'){T.clouds=.8;T.dim=.3+.12*k;T.fog=k;windBase=.3}
+  if(c==='rain'){T.clouds=.58;T.dim=.15+.07*k;T.fog=k;windBase=.3}
   if(c==='thunderstorm'){T.clouds=1;T.dark=1;T.dim=.52;T.fog=1;T.wind=.35+.25*k;T.light=1;windBase=.75}
   if(c==='lightning'){T.clouds=.95;T.dark=1;T.dim=.46;T.light=1;windBase=.3}
   if(c==='wind'){T.wind=k;T.clouds=.35;T.stars=.55;windBase=.5+.5*k}
   if(c==='snow'){T.clouds=.6;T.dim=.16;T.snow=k;T.stars=.1;windBase=.2}
+  // Sunny — deliberately no T.stars (daytime, unlike 'clear' which can read as a clear night) and
+  // no T.clouds/T.dim/T.fog at all (see frame()'s own '----- sunny' block for what actually renders:
+  // a warm glow/rays/sheen, not clouds or a dark wash).
+  if(c==='sunny'){T.sun=1;windBase=.2;sunCfg=sunConfigForHour(new Date().getHours())}
   rainSpeed=c==='thunderstorm'?1.35:1;
 }
 const gust=t=>{ const s=t/1000; return .5+.28*Math.sin(s*.53)+.14*Math.sin(s*1.37+1.3)+.08*Math.sin(s*3.1+.4); };
@@ -95,6 +109,9 @@ const dust=[...Array(160)].map(()=>({x:rnd(0,W),y:rnd(HZ-40,H),v:rnd(.6,1.6),z:M
 const stars=[...Array(140)].map(()=>({x:rnd(0,W),y:rnd(0,HZ+40)*Math.random()+rnd(0,20),r:Math.random()<.1?rnd(1,1.6):rnd(.35,.9),tw:rnd(.6,2.4),ph:rnd(0,6.28)}));
 const motes=[...Array(34)].map(()=>({x:rnd(0,W),y:rnd(HZ,H),vx:rnd(-6,6),vy:rnd(-8,-2),ph:rnd(0,6.28),r:rnd(.8,1.8)}));
 let shoot=null, nextShoot=now+rnd(2500,6000);
+// sunny — a small number of warm motes catching the light, far fewer than clear's own moonlit set
+// per this feature's own "very low density... almost subconscious" note.
+const sunMotes=[...Array(10)].map(()=>({x:rnd(0,W),y:rnd(HZ,H*.7),vx:rnd(-4,4),vy:rnd(-3,3),ph:rnd(0,6.28),r:rnd(.7,1.5)}));
 // lightning
 const FULL={pre:.1,main:.55,sec:.22}, RED={pre:.04,main:.16,sec:.07};
 let strike=null, nextStrike=now+900, F=0;
@@ -154,6 +171,53 @@ function frame(t){
     // drifting motes catching moonlight
     for(const m of motes){ m.x+=(m.vx+Math.sin(t/1400+m.ph)*6)*dt; m.y+=m.vy*dt; if(m.y<HZ-20){m.y=H+10;m.x=rnd(0,W);} if(m.x<-10)m.x=W+10; if(m.x>W+10)m.x=-10;
       const tw=.5+.5*Math.sin(t/700+m.ph); ctx.globalAlpha=a*.45*tw; const r=m.r*persp(m.y)*3; ctx.drawImage(BOKEH,m.x-r,m.y-r,r*2,r*2); }
+    ctx.restore();
+  }
+
+  // ----- sunny: warm daylight sun — soft glow + a couple of subtle rays + a gentle warm sheen over
+  // the map + a few motes catching the light. Deliberately distinct from 'clear' above: no
+  // stars/moon (T.stars stays 0 for 'sunny'), no hard-edged disc-with-rays "sticker" — the glow/
+  // rays/sheen are what read as sunlight, the disc itself stays small and soft. Position/warmth/
+  // intensity come from sunCfg (see sunConfig.ts), refreshed whenever setWeather('sunny', …) runs.
+  if(L.sun>.01){
+    const a=L.sun, sc=sunCfg, rm=state.reduceMotion;
+    const sx=W*.84, sy=H*(.28-sc.elevation*.16)+20;
+    const warm=sc.warmth>.7?'255,214,150':sc.warmth>.45?'255,222,170':'255,236,200';
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    // soft glow
+    let g=ctx.createRadialGradient(sx,sy,0,sx,sy,170*sc.glowRadius);
+    g.addColorStop(0,`rgba(${warm},${.26*a*sc.intensity})`); g.addColorStop(1,`rgba(${warm},0)`);
+    ctx.fillStyle=g; ctx.fillRect(sx-220,sy-220,440,440);
+    // a couple of very soft directional rays — gently breathing normally; reduce-motion holds them
+    // at a fixed mid-brightness instead (never a hard beam either way).
+    const rayBreathe=rm?.85:.75+.25*Math.sin(t/9000);
+    for(let i=0;i<2;i++){
+      const ra=(sc.angle+140+i*22)*Math.PI/180, len=240*sc.glowRadius;
+      const ex=sx+Math.cos(ra)*len, ey=sy+Math.sin(ra)*len;
+      const lg=ctx.createLinearGradient(sx,sy,ex,ey);
+      lg.addColorStop(0,`rgba(${warm},${.05*a*sc.intensity*rayBreathe})`); lg.addColorStop(1,`rgba(${warm},0)`);
+      ctx.strokeStyle=lg; ctx.lineWidth=64; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
+    }
+    // warm sheen — drifts very slightly over the map normally (same technique as clear's own
+    // moonlight sheen); reduce-motion pins it in place instead of drifting.
+    const wx=rm?W*.5:W*.5+Math.sin(t/12000)*80, wy=rm?H*.5:H*.5+Math.cos(t/14000)*60;
+    g=ctx.createRadialGradient(wx,wy,0,wx,wy,340);
+    g.addColorStop(0,`rgba(${warm},${.045*a*sc.intensity})`); g.addColorStop(1,`rgba(${warm},0)`);
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // sun disc itself — small, soft-edged
+    ctx.globalCompositeOperation='source-over';
+    g=ctx.createRadialGradient(sx,sy,0,sx,sy,13);
+    g.addColorStop(0,`rgba(255,250,235,${a})`); g.addColorStop(.7,`rgba(255,232,190,${a*.9})`); g.addColorStop(1,'rgba(255,220,170,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,13,0,7); ctx.fill();
+    // a very small number of warm motes drifting through the light — reduce-motion keeps them
+    // visible (per explicit "never disable Sunny entirely") but stops their own drift.
+    ctx.globalCompositeOperation='lighter';
+    for(const m of sunMotes){
+      if(!rm){ m.x+=(m.vx+Math.sin(t/1600+m.ph)*4)*dt; m.y+=m.vy*dt;
+        if(m.y<HZ-20||m.y>H*.72){ m.y=rnd(HZ,H*.7); m.x=rnd(0,W); } if(m.x<-10)m.x=W+10; if(m.x>W+10)m.x=-10; }
+      const tw=rm?.75:.5+.5*Math.sin(t/900+m.ph); ctx.globalAlpha=a*.3*tw*sc.intensity; const r=m.r*persp(m.y)*2.4; ctx.drawImage(BOKEH,m.x-r,m.y-r,r*2,r*2); }
+    ctx.globalAlpha=1;
     ctx.restore();
   }
 

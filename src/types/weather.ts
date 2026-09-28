@@ -1,7 +1,12 @@
 /** Every weather condition Throw's weather system supports. Every one of these actually renders
  * now (see WeatherOverlay) — 'lightning' is reachable manually as its own standalone look (dark,
- * cloudy, occasional flashes, no rain) as well as automatically as part of 'thunderstorm'. */
-export type WeatherCondition = 'clear' | 'cloudy' | 'rain' | 'thunderstorm' | 'lightning' | 'wind' | 'snow';
+ * cloudy, occasional flashes, no rain) as well as automatically as part of 'thunderstorm'.
+ * 'sunny' is deliberately separate from 'clear' — same "no precipitation" family, but a warm,
+ * bright, sunlight-driven look (see SunnyRenderer.tsx / weatherEngine.ts's own 'sun' handling)
+ * rather than clear's calm/neutral one; automatic mode only ever reaches it for an actually clear
+ * sky during daytime (see weatherService.ts's own isDay-gated classification) — clear itself is
+ * untouched. */
+export type WeatherCondition = 'clear' | 'sunny' | 'cloudy' | 'rain' | 'thunderstorm' | 'lightning' | 'wind' | 'snow';
 
 /** How Throw decides what the weather currently is — 'automatic' asks WeatherService using the
  * existing Throw location; 'manual' is whatever the user picked in Throw Settings, independent of
