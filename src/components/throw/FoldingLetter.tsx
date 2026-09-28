@@ -645,7 +645,11 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
       const start = rawStartRef.current;
       if (!start || latest.current.phase !== 'writing') return;
       if (contactCapturedRef.current) {
-        latest.current.onContactDragOffset?.((p.x - start.x) / CONTACT_DRAG_SPACING);
+        // Negated — per explicit request, the still-open letter's own flick direction is reversed
+        // from the folded/ready plane's (see onPanResponderMove's own onContactDragOffset call
+        // below, which stays as dx/SPACING): right flicks back toward Own Contact/Status, left
+        // flicks forward, only while writing.
+        latest.current.onContactDragOffset?.(-(p.x - start.x) / CONTACT_DRAG_SPACING);
         return;
       }
       const dy = p.y - start.y;
@@ -659,7 +663,8 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
       if (Math.abs(dx) > CONTACT_FLICK_CAPTURE_DX && Math.abs(dx) > Math.abs(dy) * CONTACT_FLICK_CAPTURE_RATIO && latest.current.onContactDragOffset) {
         contactCapturedRef.current = true;
         latest.current.onContactDragStart?.();
-        latest.current.onContactDragOffset(dx / CONTACT_DRAG_SPACING);
+        // Negated — see the continuous-drag branch above for why.
+        latest.current.onContactDragOffset(-dx / CONTACT_DRAG_SPACING);
       }
     };
     const onUp = () => {
@@ -788,7 +793,11 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         },
         onPanResponderMove: (_, g) => {
           if (writingGestureKindRef.current === 'contact') {
-            latest.current.onContactDragOffset?.(g.dx / CONTACT_DRAG_SPACING);
+            // Negated — per explicit request, the still-open letter's own flick direction is
+            // reversed from the folded/ready plane's (see the 'center' zone branch below, which
+            // stays as dx/SPACING): right flicks back toward Own Contact/Status, left flicks
+            // forward, only while writing.
+            latest.current.onContactDragOffset?.(-g.dx / CONTACT_DRAG_SPACING);
             return;
           }
           if (readyGestureActiveRef.current) {
