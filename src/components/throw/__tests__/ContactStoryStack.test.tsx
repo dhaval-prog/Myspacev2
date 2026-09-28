@@ -39,4 +39,19 @@ describe('ContactStoryStack ordering and lifecycle', () => {
     await act(async () => {});
     expect(onExhausted).not.toHaveBeenCalled();
   });
+
+  it('behaves identically for your own stories as for anyone else\'s, absent any gesture', async () => {
+    // isOwnStories only changes what a long-press/flick-down does and how the stack's own
+    // entrance plays — it shouldn't change ordering, onViewed, or onExhausted at all.
+    const onViewed = jest.fn();
+    const stories = [photo('a'), photo('b')];
+    await render(<ContactStoryStack stories={stories} isOwnStories onExhausted={jest.fn()} onViewed={onViewed} />);
+    expect(screen.getByTestId('contact-story-image').props.source.uri).toBe('https://example.com/b.jpg');
+    expect(onViewed).toHaveBeenCalledWith('b');
+  });
+
+  it('never shows the delete overlay without a long press, own stories or not', async () => {
+    await render(<ContactStoryStack stories={[photo('a')]} isOwnStories onExhausted={jest.fn()} />);
+    expect(screen.queryByTestId('delete-overlay')).toBeNull();
+  });
 });

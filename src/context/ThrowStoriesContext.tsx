@@ -45,6 +45,12 @@ interface ThrowStoriesContextValue {
   /** Best-effort — records that I've watched a specific story. Never surfaced as an error since a
    * failed write here shouldn't block the viewer itself. */
   markViewed: (storyId: string) => Promise<void>;
+  /** Permanently removes one of *my own* stories (see ContactStoryStack's own long-press-to-delete
+   * gesture) — RLS already restricts this to rows I own, so there's no separate ownership check
+   * here. Best-effort in the same spirit as markViewed: the caller has already made room for the
+   * next photo locally by the time this is called, so a failure here just means the row lingers
+   * server-side rather than leaving the viewer stuck. */
+  deleteStory: (storyId: string) => Promise<{ error: string | null }>;
   refresh: () => Promise<void>;
 }
 
@@ -143,7 +149,18 @@ export function ThrowStoriesProvider({ children }: { children: React.ReactNode }
     [myId],
   );
 
-  const value: ThrowStoriesContextValue = { loading, storiesByUser, storyCountFor, postStory, markViewed, refresh };
+  const deleteStory = useCallback(
+    async (storyId: string): Promise<{ error: string | null }> => {
+      if (!myId) return { error: 'Not signed in.' };
+      const { error } = await supabase.from('throw_stories').delete().eq('id', storyId);
+      if (error) return { error: error.message };
+      await refresh();
+      return { error: null };
+    },
+    [myId, refresh],
+  );
+
+  const value: ThrowStoriesContextValue = { loading, storiesByUser, storyCountFor, postStory, markViewed, deleteStory, refresh };
   return <ThrowStoriesContext.Provider value={value}>{children}</ThrowStoriesContext.Provider>;
 }
 

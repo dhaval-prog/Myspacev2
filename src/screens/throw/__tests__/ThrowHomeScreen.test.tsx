@@ -123,6 +123,7 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
     storyCountFor: () => 0,
     postStory: jest.fn().mockResolvedValue({ error: null }),
     markViewed: jest.fn(),
+    deleteStory: jest.fn().mockResolvedValue({ error: null }),
     refresh: jest.fn(),
   });
   return createAlert;
@@ -286,6 +287,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
       storyCountFor: (userId: string) => (userId === MY_ID ? count : 0),
       postStory: jest.fn().mockResolvedValue({ error: null }),
       markViewed: jest.fn(),
+      deleteStory: jest.fn().mockResolvedValue({ error: null }),
       refresh: jest.fn(),
     });
   }
@@ -418,6 +420,7 @@ describe('ThrowHomeScreen tap-to-view story (any contact, inline in the card)', 
       storyCountFor: (id: string) => (id === userId ? count : 0),
       postStory: jest.fn().mockResolvedValue({ error: null }),
       markViewed: jest.fn(),
+      deleteStory: jest.fn().mockResolvedValue({ error: null }),
       refresh: jest.fn(),
     });
   }
@@ -454,6 +457,45 @@ describe('ThrowHomeScreen tap-to-view story (any contact, inline in the card)', 
 
     expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
     expect(mockContactStoryStackProps.stories).toHaveLength(1);
+    // Only Own Contact gets the falling-in entrance/long-press-to-delete affordance — a friend's
+    // stories are view-only.
+    expect(mockContactStoryStackProps.isOwnStories).toBe(false);
+  });
+
+  it('marks the stack as own-stories (falling-in entrance + long-press delete) only for Own Contact', async () => {
+    setupMocks();
+    withStoriesFor(MY_ID, 2);
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onOpenStory(MY_ID);
+    });
+
+    expect(mockContactStoryStackProps.isOwnStories).toBe(true);
+  });
+
+  it('deletes a story through ThrowStoriesContext once the stack reports a delete gesture committed', async () => {
+    const deleteStory = jest.fn().mockResolvedValue({ error: null });
+    setupMocks();
+    mockUseThrowStories.mockReturnValue({
+      loading: false,
+      storiesByUser: { [MY_ID]: [{ id: 's0', userId: MY_ID, mediaUrl: 'https://example.com/0.jpg', mediaType: 'photo', trimStartMs: null, trimEndMs: null, createdAt: new Date().toISOString() }] },
+      storyCountFor: () => 1,
+      postStory: jest.fn().mockResolvedValue({ error: null }),
+      markViewed: jest.fn(),
+      deleteStory,
+      refresh: jest.fn(),
+    });
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onOpenStory(MY_ID);
+    });
+    await act(async () => {
+      mockContactStoryStackProps.onDeleteStory('s0');
+    });
+
+    expect(deleteStory).toHaveBeenCalledWith('s0');
   });
 
   it('does nothing for a contact with no active stories', async () => {
@@ -532,6 +574,7 @@ describe('ThrowHomeScreen story post-capture confirmation', () => {
       storyCountFor: () => 0,
       postStory,
       markViewed: jest.fn(),
+      deleteStory: jest.fn().mockResolvedValue({ error: null }),
       refresh: jest.fn(),
     });
     await renderScreen();
@@ -552,7 +595,11 @@ describe('ThrowHomeScreen story post-capture confirmation', () => {
     expect(screen.queryByTestId('story-preview')).toBeNull();
   });
 
-  it('discards the capture and never calls postStory when the preview is cancelled', async () => {
+  it('discards the capture and reopens the camera, not Own Contact\'s letter, when the preview is cancelled', async () => {
+    // Regression test: "X" on the preview used to fall all the way through to storyFlow === null,
+    // which showed FoldingLetter for whichever contact was selected — always Own Contact, since
+    // capture always sets selectedFriendId to myId — reading as an unwanted jump to "Myself"'s
+    // letter instead of just backing out of the just-captured photo.
     const postStory = jest.fn().mockResolvedValue({ error: null });
     setupMocks();
     mockUseThrowStories.mockReturnValue({
@@ -561,6 +608,7 @@ describe('ThrowHomeScreen story post-capture confirmation', () => {
       storyCountFor: () => 0,
       postStory,
       markViewed: jest.fn(),
+      deleteStory: jest.fn().mockResolvedValue({ error: null }),
       refresh: jest.fn(),
     });
     await renderScreen();
@@ -578,5 +626,7 @@ describe('ThrowHomeScreen story post-capture confirmation', () => {
 
     expect(screen.queryByTestId('story-preview')).toBeNull();
     expect(postStory).not.toHaveBeenCalled();
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
+    expect(screen.queryByTestId('folding-letter')).toBeNull();
   });
 });
