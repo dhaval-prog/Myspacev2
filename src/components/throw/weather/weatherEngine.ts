@@ -50,8 +50,11 @@ function setTargets(c,i){
   Object.keys(T).forEach(x=>T[x]=0);
   if(c==='clear'){T.stars=1;windBase=.15}
   if(c==='cloudy'){T.clouds=.85;T.dim=.22;T.stars=.2;windBase=.25}
-  if(c==='rain'){T.clouds=.8;T.dim=.3+.12*k;T.rain=k;T.fog=k;windBase=.3}
-  if(c==='thunderstorm'){T.clouds=1;T.dark=1;T.dim=.52;T.rain=Math.max(.9,k);T.fog=1;T.wind=.35+.25*k;T.light=1;windBase=.75}
+  // T.rain deliberately never set — actual rain (streaks, ground splashes, lens droplets) is drawn
+  // by RainOverlay (see WeatherOverlay.web.tsx's own doc comment); this engine only supplies the
+  // surrounding cloud/dim/fog ambiance for rain/thunderstorm.
+  if(c==='rain'){T.clouds=.8;T.dim=.3+.12*k;T.fog=k;windBase=.3}
+  if(c==='thunderstorm'){T.clouds=1;T.dark=1;T.dim=.52;T.fog=1;T.wind=.35+.25*k;T.light=1;windBase=.75}
   if(c==='lightning'){T.clouds=.95;T.dark=1;T.dim=.46;T.light=1;windBase=.3}
   if(c==='wind'){T.wind=k;T.clouds=.35;T.stars=.55;windBase=.5+.5*k}
   if(c==='snow'){T.clouds=.6;T.dim=.16;T.snow=k;T.stars=.1;windBase=.2}
