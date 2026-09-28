@@ -5,9 +5,20 @@ import { RainOverlay } from './RainOverlay';
 import { SnowOverlay } from './SnowOverlay';
 import { WindOverlay } from './WindOverlay';
 import { LightningController } from './LightningController';
+import { useWindController } from './useWindController';
 import { useThrowWeather } from '../../../context/ThrowWeatherContext';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import type { WeatherIntensity, WeatherQuality } from '../../../types/weather';
+
+// Baseline gust/turbulence WeatherOverlay feeds WindController with — ThrowWeatherContext only
+// tracks a steady windSpeedKph/windDirectionDeg (a single reading, real or manual), not gustiness,
+// so these are fixed per weather condition rather than derived from anything in context. Storms get
+// a livelier wind than an ordinary breezy day (per this feature's own "storm intensifies everything
+// a little" note), everything else shares one calm-but-alive baseline.
+const BASE_GUST_STRENGTH = 0.35;
+const BASE_TURBULENCE = 0.4;
+const STORM_GUST_STRENGTH = 0.6;
+const STORM_TURBULENCE = 0.55;
 
 // How far off vertical wind can push rain/snow (see windAngleDeg below) — capped well short of
 // horizontal so it still reads as rain/snow, not wind, per this feature's own "do not make the
@@ -62,13 +73,30 @@ export function WeatherOverlay({ quality }: WeatherOverlayProps) {
   );
   const snowConfig = useMemo(() => ({ angle }), [angle]);
 
+  // One shared WindController per mount (see useWindController's own doc comment on why it's never
+  // recreated on a config change) — Wind/Leaves, Clouds, and Rain's own gust-lean all subscribe to
+  // this single instance rather than each running independent wind math, per this feature's own
+  // "shared animation loops" requirement. Config values are read continuously (windSpeedKph/
+  // windDirectionDeg already update on their own whenever ThrowWeatherContext gets a fresh reading);
+  // only gustStrength/turbulence step between the two fixed baselines above.
+  const windConfig = useMemo(
+    () => ({
+      speed: windSpeedKph,
+      direction: windDirectionDeg,
+      gustStrength: isStorm ? STORM_GUST_STRENGTH : BASE_GUST_STRENGTH,
+      turbulence: isStorm ? STORM_TURBULENCE : BASE_TURBULENCE,
+    }),
+    [windSpeedKph, windDirectionDeg, isStorm],
+  );
+  const windController = useWindController(windConfig, reduceMotion);
+
   return (
     <>
       <ClearOverlay active={showClear && !reduceMotion} />
-      <CloudOverlay active={showCloud} dark={cloudDark} windSpeedKph={windSpeedKph} blobCount={cloudDark ? 5 : 4} />
-      <RainOverlay active={showRain} intensity={rainIntensity} quality={quality} config={rainConfig} />
+      <CloudOverlay active={showCloud} dark={cloudDark} windController={windController} />
+      <RainOverlay active={showRain} intensity={rainIntensity} quality={quality} config={rainConfig} windController={windController} />
       <SnowOverlay active={showSnow} intensity={intensity} quality={quality} config={snowConfig} />
-      <WindOverlay active={showWind} intensity={isStorm ? 'medium' : intensity} quality={quality} windSpeedKph={windSpeedKph} windDirectionDeg={windDirectionDeg} />
+      <WindOverlay active={showWind} intensity={isStorm ? 'medium' : intensity} quality={quality} windController={windController} />
       <LightningController active={showLightning} reducedFlashing={reducedFlashing} reduceMotion={reduceMotion} />
     </>
   );

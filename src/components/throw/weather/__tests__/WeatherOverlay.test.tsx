@@ -106,6 +106,14 @@ describe('WeatherOverlay orchestration', () => {
     expect(mockClearProps.active).toBe(false);
   });
 
+  it('shares one WindController instance across Wind, Cloud, and Rain', async () => {
+    setWeather('thunderstorm');
+    await render(<WeatherOverlay />);
+    expect(typeof mockWindProps.windController?.subscribe).toBe('function');
+    expect(mockCloudProps.windController).toBe(mockWindProps.windController);
+    expect(mockRainProps.windController).toBe(mockWindProps.windController);
+  });
+
   it('snow: cloud (light) + snow active', async () => {
     setWeather('snow');
     await render(<WeatherOverlay />);

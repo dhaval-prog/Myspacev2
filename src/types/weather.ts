@@ -90,3 +90,57 @@ export interface RainConfig {
  * platform in weatherParticles.ts's own QUALITY_LAYER_COUNTS; overridable for a future settings
  * toggle or device-tier check. */
 export type WeatherQuality = 'high' | 'medium' | 'low';
+
+/** The shared wind model's own tunable inputs (see windController.ts's WindSimulation) — re-exported
+ * here (windController.ts itself re-exports the same shape) so every consumer that only needs the
+ * *shape*, not the simulation, can import it from the same place as the rest of Throw's weather
+ * types. The same wind system is meant to eventually drive leaves, rain, snow, dust, and clouds —
+ * this interface is intentionally condition-agnostic rather than leaf- or cloud-specific. */
+export interface WindConfig {
+  /** km/h, the wind's own steady baseline. */
+  speed: number;
+  /** Degrees, meteorological "blowing FROM" convention. */
+  direction: number;
+  /** 0–1 — how strong a gust can get on top of the base speed. */
+  gustStrength: number;
+  /** 0–1 — how much speed/direction wander moment to moment, independent of gusts. */
+  turbulence: number;
+}
+
+/** One cloud mass's own drifting/morphing state (see CloudOverlay.tsx) — `seed` is what makes a
+ * cloud's own slow morph deterministic-but-varied (derived math off a fixed seed) rather than
+ * needing its own ongoing random state, so no two clouds drift/morph identically. */
+export interface CloudParticle {
+  /** 0–1, fraction of the overlay's own width. */
+  x: number;
+  /** 0–1, fraction of the overlay's own height. */
+  y: number;
+  scale: number;
+  opacity: number;
+  /** Multiplies the shared, already-tiny cloud pace (see CloudOverlay's own atmospheric multiplier)
+   * — not a raw px/s value, since actual cloud speed is derived from wind speed at render time. */
+  speed: number;
+  /** Degrees — normally just the wind's own direction, kept per-particle so a future condition
+   * could vary it slightly per cloud without changing this shape. */
+  direction: number;
+  /** 0–2 — which depth layer this cloud belongs to (far/mid/near); also feeds size/opacity/blur. */
+  depth: number;
+  rotation: number;
+  /** Fixed per cloud for its whole lifetime — seeds its own slow, deterministic morph curve. */
+  seed: number;
+}
+
+/** The fully-resolved atmospheric state WeatherOverlay derives once (from ThrowWeatherContext's own
+ * windSpeedKph/windDirectionDeg plus per-condition gust/turbulence baselines) and hands to
+ * useWindController — the conceptual flow the feature asks for is
+ * WindController → Leaves, Rain, Snow → Clouds, all reading off this same shape rather than each
+ * renderer inventing its own wind reading. */
+export interface AtmosphericEnvironment {
+  windSpeed: number;
+  windDirection: number;
+  gustStrength: number;
+  turbulence: number;
+  /** km/h-scale, already reduced by the small atmospheric multiplier — NOT the same as windSpeed;
+   * clouds must never move at leaf/rain speed (see CloudOverlay's own doc comment). */
+  cloudSpeed: number;
+}
