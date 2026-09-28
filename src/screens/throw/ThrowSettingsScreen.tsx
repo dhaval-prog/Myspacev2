@@ -12,6 +12,8 @@ import { throwColor, throwFont, throwGlass, throwRadius, throwSpace } from '../.
 import { useThrow } from '../../context/ThrowContext';
 import { useFriends } from '../../context/FriendsContext';
 import { useThrowColorMode, type ThrowColorMode } from '../../context/ThrowColorModeContext';
+import { useThrowWeather } from '../../context/ThrowWeatherContext';
+import type { WeatherMode } from '../../types/weather';
 
 const BACK_ICON = 'M15 18l-6-6 6-6';
 const CHECK_ICON = 'M5 13l4 4L19 7';
@@ -20,6 +22,14 @@ const COLOR_MODES: { key: ThrowColorMode; label: string; description: string }[]
   { key: 'auto', label: 'Auto', description: "Follows your device's clock (day/night)" },
   { key: 'day', label: 'Day', description: 'Always the day look' },
   { key: 'night', label: 'Night', description: 'Always the night look' },
+];
+
+// Only two entries today, but the same shape COLOR_MODES already uses (and the same BottomSheet
+// list-with-checkmark rendering below) — adding a third mode later, if that ever makes sense,
+// wouldn't need a new UI pattern.
+const WEATHER_MODES: { key: WeatherMode; label: string; description: string }[] = [
+  { key: 'automatic', label: 'Automatic', description: 'Based on your Throw location' },
+  { key: 'manual', label: 'Manual', description: 'Pick a weather effect yourself' },
 ];
 
 interface ThrowSettingsScreenProps {
@@ -37,12 +47,16 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
   const { myLocation } = useThrow();
   const { friends, receivedRequests, sentRequests, acceptRequest, declineRequest, cancelRequest, removeFriend, blockFriend } = useFriends();
   const { mode: colorMode, setMode: setColorMode, mapMode, setMapMode } = useThrowColorMode();
+  const { mode: weatherMode, setMode: setWeatherMode, manualCondition, setManualCondition } = useThrowWeather();
   const [pane, setPane] = useState<Pane>('settings');
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
   const [colorModeSheetOpen, setColorModeSheetOpen] = useState(false);
   const [mapModeSheetOpen, setMapModeSheetOpen] = useState(false);
+  const [weatherModeSheetOpen, setWeatherModeSheetOpen] = useState(false);
   const colorModeLabel = COLOR_MODES.find((m) => m.key === colorMode)?.label ?? 'Auto';
   const mapModeLabel = COLOR_MODES.find((m) => m.key === mapMode)?.label ?? 'Auto';
+  const weatherModeLabel = WEATHER_MODES.find((m) => m.key === weatherMode)?.label ?? 'Automatic';
+  const manualRainOn = manualCondition === 'rain';
 
   if (pane === 'editLocation') {
     return <ThrowLocationSetupScreen mode="edit" onDone={() => setPane('settings')} onBack={() => setPane('settings')} />;
@@ -96,6 +110,31 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
             <Text style={styles.editLabel}>{mapModeLabel}</Text>
           </GlassSurface>
         </Pressable>
+
+        <Text style={styles.eyebrow}>WEATHER</Text>
+        <Pressable onPress={() => setWeatherModeSheetOpen(true)}>
+          <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowName}>Weather</Text>
+              <Text style={styles.rowMeta}>Adds a rain effect over the map when it's actually raining where you are</Text>
+            </View>
+            <Text style={styles.editLabel}>{weatherModeLabel}</Text>
+          </GlassSurface>
+        </Pressable>
+        {weatherMode === 'manual' && (
+          // Only "Rain" exists to pick today (see WeatherCondition's own doc comment for why the
+          // type already covers more) — a plain on/off row rather than another BottomSheet list,
+          // since there's nothing yet to pick *between*.
+          <Pressable onPress={() => setManualCondition(manualRainOn ? 'clear' : 'rain')}>
+            <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>
+              <View style={styles.rowText}>
+                <Text style={styles.rowName}>Rain</Text>
+                <Text style={styles.rowMeta}>Starts right away, regardless of the actual weather</Text>
+              </View>
+              <Text style={styles.editLabel}>{manualRainOn ? 'On' : 'Off'}</Text>
+            </GlassSurface>
+          </Pressable>
+        )}
 
         {(receivedRequests.length > 0 || sentRequests.length > 0) && (
           <>
@@ -206,6 +245,31 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
               accessibilityRole="button"
               accessibilityLabel={`Map color — ${opt.label}`}
               style={[styles.sheetOption, i !== COLOR_MODES.length - 1 && styles.sheetOptionDivider]}
+            >
+              <View style={styles.rowText}>
+                <Text style={styles.rowName}>{opt.label}</Text>
+                <Text style={styles.rowMeta}>{opt.description}</Text>
+              </View>
+              {active && <Icon path={CHECK_ICON} size={20} color={throwColor.clayDeep} strokeWidth={2.2} />}
+            </Pressable>
+          );
+        })}
+      </BottomSheet>
+
+      <BottomSheet visible={weatherModeSheetOpen} onClose={() => setWeatherModeSheetOpen(false)}>
+        <Text style={styles.sheetTitle}>Weather</Text>
+        {WEATHER_MODES.map((opt, i) => {
+          const active = weatherMode === opt.key;
+          return (
+            <Pressable
+              key={opt.key}
+              onPress={() => {
+                setWeatherMode(opt.key);
+                setWeatherModeSheetOpen(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Weather — ${opt.label}`}
+              style={[styles.sheetOption, i !== WEATHER_MODES.length - 1 && styles.sheetOptionDivider]}
             >
               <View style={styles.rowText}>
                 <Text style={styles.rowName}>{opt.label}</Text>

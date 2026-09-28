@@ -11,6 +11,7 @@ import { StoryCaptureScreen } from '../../components/throw/StoryCaptureScreen';
 import { ContactStoryStack } from '../../components/throw/ContactStoryStack';
 import { StoryPreviewScreen } from '../../components/throw/StoryPreviewScreen';
 import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
+import { WeatherOverlay } from '../../components/throw/weather/WeatherOverlay';
 import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { formatMiles } from '../../utils/geo';
@@ -553,6 +554,10 @@ export function ThrowHomeScreen({
 
       <View style={styles.mapArea}>
         <ThrowMap pins={pins} focus={focusTarget} />
+        {/* Screen-space atmospheric layer, not part of the map itself (see WeatherOverlay's own
+            doc comment) — always mounted regardless of `inFlight` so it keeps falling, unchanged,
+            all the way through the letter/fold/plane-flight lifecycle instead of restarting. */}
+        <WeatherOverlay />
 
         {!inFlight &&
           (lockedRecipient ? (
