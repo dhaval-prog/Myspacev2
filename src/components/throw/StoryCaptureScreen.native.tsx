@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { Icon } from '../Icon';
+import { throwRadius } from '../../theme/throwTokens';
 import type { StoryMediaType } from '../../types/story';
 
 // Instagram/WhatsApp's own convention: a quick tap takes a photo, holding the shutter records
@@ -27,11 +28,13 @@ interface StoryCaptureScreenProps {
   onPickedLongVideo: (localUri: string, durationMs: number) => void;
 }
 
-/** Full-screen camera for posting a Throw story — tap the shutter for a photo, hold it to record
- * up to 15s of video (auto-stops at the cap), or tap the gallery icon (bottom-left) to pick
- * existing media instead. Native only: expo-camera's web implementation has no video-recording
- * support at all (see the .web sibling of this file), so this native path is the live-recording
- * one; both share the same onCaptured/onPickedLongVideo contract. */
+/** Camera for posting a Throw story, filling the same letter-card slot FoldingLetter/
+ * ContactStoryStack otherwise occupy (see ThrowHomeScreen's own "Status contact" handling) rather
+ * than a separate full-screen takeover — tap the shutter for a photo, hold it to record up to 15s
+ * of video (auto-stops at the cap), or tap the gallery icon (bottom-left) to pick existing media
+ * instead. Native only: expo-camera's web implementation has no video-recording support at all
+ * (see the .web sibling of this file), so this native path is the live-recording one; both share
+ * the same onCaptured/onPickedLongVideo contract. */
 export function StoryCaptureScreen({ onClose, onCaptured, onPickedLongVideo }: StoryCaptureScreenProps) {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
@@ -167,10 +170,15 @@ export function StoryCaptureScreen({ onClose, onCaptured, onPickedLongVideo }: S
 const SHUTTER_SIZE = 74;
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000000' },
+  // Rounded + clipped to match the same paper-card slot this fills (see ContactStoryStack's own
+  // `card` style) — this used to be a genuine full-screen takeover, where square corners made
+  // sense; embedded inline, it needs to read as part of the same card the letter/stories do.
+  screen: { flex: 1, backgroundColor: '#000000', borderRadius: throwRadius.paper, overflow: 'hidden' },
   closeBtn: {
     position: 'absolute',
-    top: Platform.select({ ios: 56, default: 24 }),
+    // No longer sitting under a device status bar (that's the outer screen's job) — a small fixed
+    // inset now that this is one card's own corner, not the top of the whole device.
+    top: 12,
     left: 20,
     width: 40,
     height: 40,
@@ -181,7 +189,7 @@ const styles = StyleSheet.create({
   },
   flipBtn: {
     position: 'absolute',
-    top: Platform.select({ ios: 56, default: 24 }),
+    top: 12,
     right: 20,
     width: 40,
     height: 40,
@@ -192,7 +200,7 @@ const styles = StyleSheet.create({
   },
   bottomRow: {
     position: 'absolute',
-    bottom: 48,
+    bottom: 16,
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -221,7 +229,16 @@ const styles = StyleSheet.create({
   shutterInner: { width: SHUTTER_SIZE - 14, height: SHUTTER_SIZE - 14, borderRadius: (SHUTTER_SIZE - 14) / 2, backgroundColor: '#FFFFFF' },
   shutterInnerRecording: { borderRadius: 8, backgroundColor: '#FF3B30' },
   recordingHint: { position: 'absolute', bottom: 140, alignSelf: 'center', color: '#FFFFFF', fontSize: 13 },
-  permissionWrap: { flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 20 },
+  permissionWrap: {
+    flex: 1,
+    backgroundColor: '#000000',
+    borderRadius: throwRadius.paper,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 20,
+  },
   permissionText: { color: '#FFFFFF', fontSize: 15, textAlign: 'center' },
   permissionClose: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 999, backgroundColor: 'rgba(255,255,255,.15)' },
   permissionCloseText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },

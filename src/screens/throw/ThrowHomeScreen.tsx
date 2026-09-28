@@ -289,6 +289,15 @@ export function ThrowHomeScreen({
   // handleContactDragOffset) — belt-and-braces in the same spirit as isSelfSelected's own reset
   // effect just above, not the only thing keeping this in sync.
   const isStoryMode = storyView !== null && storyView.userId === selectedFriendId;
+  // Capturing a new story (see StoryFlow's own comment) takes over the same letter-card slot
+  // ContactStoryStack/FoldingLetter otherwise occupy — reached either by tilting/flicking left
+  // into the virtual "Status" slot (which now always means "post something new", not "view what's
+  // already there" — see handleContactDragOffset) or by tapping the add-story "+" directly.
+  const isCaptureMode = storyFlow?.name === 'capture';
+  // Which of the three things the letter card is currently showing — a single source of truth so
+  // every transition between any two of them (not just entering/leaving story mode) gets the same
+  // smooth crossfade below, instead of only some pairs of states doing so.
+  const cardMode: 'capture' | 'story' | 'letter' = isCaptureMode ? 'capture' : isStoryMode ? 'story' : 'letter';
 
   // FoldingLetter's onReminderPeekChange prop itself goes undefined the instant the user flicks
   // away from "Myself" (see its own conditional below) — a no-op prop can't tell this screen's own
@@ -302,7 +311,7 @@ export function ThrowHomeScreen({
   useEffect(() => {
     cardModeFade.setValue(0);
     Animated.timing(cardModeFade, { toValue: 1, duration: 300, useNativeDriver: true }).start();
-  }, [isStoryMode, cardModeFade]);
+  }, [cardMode, cardModeFade]);
 
   const handleAlertScheduleChange = (next: AlertSchedule) => {
     setAlertSchedule(next);
@@ -367,8 +376,8 @@ export function ThrowHomeScreen({
   // follows selectedFriend.
   // Guards the "entering Status" branch below against firing more than once per drag — the
   // offset callback fires continuously while the finger's still down, and re-triggering it every
-  // tick past the boundary would either flicker storyView or, worse, re-open the capture modal
-  // repeatedly for as long as the drag holds there. Reset on every fresh grant.
+  // tick past the boundary would re-open the capture flow repeatedly for as long as the drag holds
+  // there. Reset on every fresh grant.
   const statusBoundaryHandledRef = useRef(false);
   const handleContactDragStart = () => {
     dragBaseIndexRef.current = selectedIndex;
@@ -377,20 +386,17 @@ export function ThrowHomeScreen({
   const handleContactDragOffset = (steps: number) => {
     const n = friendsWithLocation.length;
     if (n === 0) return;
-    // -1 is the virtual "Status" slot, one further left than any real contact (index 0) — see
-    // storyView's own comment.
+    // -1 is the virtual "Status" slot, one further left than any real contact (index 0) — tilting/
+    // flicking into it always opens the capture flow now, regardless of whether you've already
+    // posted a story today: Status is for adding one, not for viewing what's already there (see
+    // isCaptureMode's own comment) — viewing your own existing stories works the same way viewing
+    // anyone else's does, by tapping your own already-selected avatar (see handleOpenStory).
     const nextIdx = Math.max(-1, Math.min(n - 1, Math.round(dragBaseIndexRef.current + steps)));
     if (nextIdx === -1) {
       if (statusBoundaryHandledRef.current) return;
       statusBoundaryHandledRef.current = true;
       if (myId) setSelectedFriendId(myId);
-      if (myId && storyCountFor(myId) > 0) {
-        setStoryView({ userId: myId, viaAddSlot: true });
-      } else {
-        // Nothing posted yet — per explicit request, this opens the capture flow directly rather
-        // than landing on an empty status view.
-        setStoryFlow({ name: 'capture' });
-      }
+      setStoryFlow({ name: 'capture' });
       return;
     }
     setStoryView(null);
@@ -550,12 +556,12 @@ export function ThrowHomeScreen({
                   setStoryView(null);
                   setSelectedFriendId(friendsWithLocation[i]?.userId ?? null);
                 }}
-                disabled={selfLocked}
+                disabled={selfLocked || isCaptureMode}
                 isNight={!mapIsDay}
                 storyCountFor={storyCountFor}
                 onOpenStory={handleOpenStory}
                 onAddStory={() => setStoryFlow({ name: 'capture' })}
-                isAddStorySelected={storyView?.viaAddSlot === true}
+                isAddStorySelected={storyView?.viaAddSlot === true || isCaptureMode}
               />
             </View>
           ))}
@@ -575,7 +581,13 @@ export function ThrowHomeScreen({
             ]}
           >
             <Animated.View style={[styles.letterCardContent, { opacity: cardModeFade }]}>
-              {isStoryMode && selectedFriend ? (
+              {isCaptureMode ? (
+                <StoryCaptureScreen
+                  onClose={() => setStoryFlow(null)}
+                  onCaptured={handleStoryCaptured}
+                  onPickedLongVideo={handleStoryPickedLongVideo}
+                />
+              ) : isStoryMode && selectedFriend ? (
                 <ContactStoryStack
                   key={selectedFriend.userId}
                   stories={storiesByUser[selectedFriend.userId] ?? []}
@@ -686,16 +698,6 @@ export function ThrowHomeScreen({
           reduceMotion={reduceMotion}
         />
       </Animated.View>
-
-      {storyFlow?.name === 'capture' && (
-        <Modal visible animationType="slide" onRequestClose={() => setStoryFlow(null)} statusBarTranslucent>
-          <StoryCaptureScreen
-            onClose={() => setStoryFlow(null)}
-            onCaptured={handleStoryCaptured}
-            onPickedLongVideo={handleStoryPickedLongVideo}
-          />
-        </Modal>
-      )}
 
       {storyFlow?.name === 'preview' && (
         <Modal visible animationType="fade" onRequestClose={() => setStoryFlow(null)} statusBarTranslucent>

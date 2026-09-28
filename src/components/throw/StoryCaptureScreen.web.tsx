@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Icon } from '../Icon';
+import { throwRadius } from '../../theme/throwTokens';
 import type { StoryMediaType } from '../../types/story';
 
 const HOLD_THRESHOLD_MS = 220;
@@ -26,7 +27,9 @@ interface StoryCaptureScreenProps {
 }
 
 /**
- * Web equivalent of the native camera screen — expo-camera's `CameraView.web` only implements
+ * Web equivalent of the native camera screen — fills the same letter-card slot FoldingLetter/
+ * ContactStoryStack otherwise occupy, rather than a separate full-screen takeover (see
+ * ThrowHomeScreen's own "Status contact" handling). expo-camera's `CameraView.web` only implements
  * `takePicture`, with no video recording at all (confirmed directly in its source), so this
  * bypasses `CameraView` entirely and drives `getUserMedia` + `MediaRecorder` itself: a live
  * `<video>` preview, a hidden `<canvas>` for the photo snapshot, and a `MediaRecorder` on the same
@@ -225,10 +228,13 @@ const webVideoStyle: React.CSSProperties = { width: '100%', height: '100%', obje
 const SHUTTER_SIZE = 74;
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000000' },
+  // Rounded + clipped to match the same paper-card slot this fills (see ContactStoryStack's own
+  // `card` style) — this used to be a genuine full-screen takeover, where square corners made
+  // sense; embedded inline, it needs to read as part of the same card the letter/stories do.
+  screen: { flex: 1, backgroundColor: '#000000', borderRadius: throwRadius.paper, overflow: 'hidden' },
   closeBtn: {
     position: 'absolute',
-    top: 24,
+    top: 12,
     left: 20,
     width: 40,
     height: 40,
@@ -239,7 +245,7 @@ const styles = StyleSheet.create({
   },
   flipBtn: {
     position: 'absolute',
-    top: 24,
+    top: 12,
     right: 20,
     width: 40,
     height: 40,
@@ -250,7 +256,7 @@ const styles = StyleSheet.create({
   },
   bottomRow: {
     position: 'absolute',
-    bottom: 48,
+    bottom: 16,
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -279,7 +285,16 @@ const styles = StyleSheet.create({
   shutterInner: { width: SHUTTER_SIZE - 14, height: SHUTTER_SIZE - 14, borderRadius: (SHUTTER_SIZE - 14) / 2, backgroundColor: '#FFFFFF' },
   shutterInnerRecording: { borderRadius: 8, backgroundColor: '#FF3B30' },
   recordingHint: { position: 'absolute', bottom: 140, alignSelf: 'center', color: '#FFFFFF', fontSize: 13 },
-  permissionWrap: { flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 20 },
+  permissionWrap: {
+    flex: 1,
+    backgroundColor: '#000000',
+    borderRadius: throwRadius.paper,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 20,
+  },
   permissionText: { color: '#FFFFFF', fontSize: 15, textAlign: 'center' },
   permissionClose: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 999, backgroundColor: 'rgba(255,255,255,.15)' },
   permissionCloseText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },

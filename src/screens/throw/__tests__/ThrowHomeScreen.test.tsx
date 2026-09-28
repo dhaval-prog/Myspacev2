@@ -266,6 +266,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     mockCarouselProps = undefined;
     mockThrowMapProps = undefined;
     mockContactStoryStackProps = undefined;
+    mockStoryCaptureProps = undefined;
   });
 
   function withStories(count: number) {
@@ -289,7 +290,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     });
   }
 
-  it('shows the contact story stack, with the posted stories, once dragged past Own Contact', async () => {
+  it('always opens the capture flow inline once dragged past Own Contact, even with existing stories', async () => {
     setupMocks();
     withStories(2);
     await renderScreen();
@@ -300,12 +301,15 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
       mockFoldingLetterProps.onContactDragOffset(-1);
     });
 
+    // Status is for adding a new story now, not viewing existing ones — those are reached the same
+    // way any other contact's stories are, by tapping the already-selected avatar (see the
+    // "tap-to-view story" describe block below).
     expect(screen.queryByTestId('folding-letter')).toBeNull();
-    expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
-    expect(mockContactStoryStackProps.stories).toHaveLength(2);
+    expect(screen.queryByTestId('contact-story-stack')).toBeNull();
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
   });
 
-  it('opens the capture flow instead, staying on Own Contact, when nothing has been posted yet', async () => {
+  it('opens the same inline capture flow when there is nothing posted yet', async () => {
     setupMocks();
     withStories(0);
     await renderScreen();
@@ -315,12 +319,10 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
       mockFoldingLetterProps.onContactDragOffset(-1);
     });
 
-    expect(screen.getByTestId('folding-letter')).toBeTruthy();
-    expect(screen.queryByTestId('contact-story-stack')).toBeNull();
     expect(screen.getByTestId('story-capture')).toBeTruthy();
   });
 
-  it('marks the add-story slot as the active selection while the story stack is showing', async () => {
+  it('marks the add-story slot as the active selection, and locks the carousel, while capturing', async () => {
     setupMocks();
     withStories(2);
     await renderScreen();
@@ -331,9 +333,10 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     });
 
     expect(mockCarouselProps.isAddStorySelected).toBe(true);
+    expect(mockCarouselProps.disabled).toBe(true);
   });
 
-  it('returns to the compose letter for Own Contact once a contact is tapped in the carousel', async () => {
+  it('returns to the compose letter for Own Contact once the capture flow is closed', async () => {
     setupMocks();
     withStories(1);
     await renderScreen();
@@ -342,15 +345,15 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
       mockFoldingLetterProps.onContactDragStart();
       mockFoldingLetterProps.onContactDragOffset(-1);
     });
-    expect(screen.getByTestId('contact-story-stack')).toBeTruthy();
+    expect(screen.getByTestId('story-capture')).toBeTruthy();
     expect(mockCarouselProps.isAddStorySelected).toBe(true);
 
     await act(async () => {
-      mockCarouselProps.onChangeIndex(0);
+      mockStoryCaptureProps.onClose();
     });
 
     expect(screen.getByTestId('folding-letter')).toBeTruthy();
-    expect(screen.queryByTestId('contact-story-stack')).toBeNull();
+    expect(screen.queryByTestId('story-capture')).toBeNull();
     expect(mockCarouselProps.isAddStorySelected).toBe(false);
   });
 });
