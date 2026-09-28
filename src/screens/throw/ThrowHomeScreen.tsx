@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
-import { RecipientCarousel } from '../../components/throw/RecipientCarousel';
+import { RecipientCarousel, CAROUSEL_HEIGHT } from '../../components/throw/RecipientCarousel';
 import { FoldingLetter } from '../../components/throw/FoldingLetter';
 import type { FoldingLetterHandle } from '../../components/throw/FoldingLetter';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
@@ -94,6 +94,11 @@ export function ThrowHomeScreen({
   lockedRecipient,
 }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
+  // Where the selected contact's own ring sits on screen, vertically — the recipient carousel's
+  // own top (see recipientOverlay's style) plus half its own height, i.e. the ring's center. A
+  // flicked-away story card flies toward this exact point (see ContactStoryStack's own
+  // flightTargetY) rather than some destination invented just for the story stack.
+  const storyFlightTargetY = insets.top + 16 + CAROUSEL_HEIGHT / 2;
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const myId = user?.id ?? null;
@@ -575,6 +580,7 @@ export function ThrowHomeScreen({
                   key={selectedFriend.userId}
                   stories={storiesByUser[selectedFriend.userId] ?? []}
                   isNight={!isDay}
+                  flightTargetY={storyFlightTargetY}
                   onExhausted={() => setStoryView(null)}
                   onViewed={markViewed}
                 />
