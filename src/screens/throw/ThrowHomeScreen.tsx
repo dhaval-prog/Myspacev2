@@ -105,7 +105,7 @@ export function ThrowHomeScreen({
   const { myLocation, myName, myAvatarUrl, friends, unreadCount, streakFor, sendThrow, uploadPhoto } = useThrow();
   const { createAlert } = useThrowAlerts();
   const { statsFor } = useGameStats();
-  const { storiesByUser, storyCountFor, postStory, markViewed } = useThrowStories();
+  const { storiesByUser, storyCountFor, postStory, markViewed, deleteStory } = useThrowStories();
   const [storyFlow, setStoryFlow] = useState<StoryFlow | null>(null);
   // Showing a contact's already-posted stories inline, in the same card the compose letter would
   // otherwise occupy — reached either by tapping the already-selected contact (any contact,
@@ -368,6 +368,13 @@ export function ThrowHomeScreen({
     await postStory(localUri, 'video', trim);
   };
 
+  // Long-press-then-flick-down inside ContactStoryStack (own stories only — see its own
+  // isOwnStories prop) — the stack itself has already made room for the next photo by the time
+  // this fires, so this only needs to actually remove it from the backend.
+  const handleDeleteStory = (storyId: string) => {
+    void deleteStory(storyId);
+  };
+
   // Real "zoom to contact": the selected friend's own location, falling back to the user's own
   // pin — handed to ThrowMap's `focus` prop, which drives the actual map camera.
   const focusTarget = selectedFriend?.location ?? myLocation ?? null;
@@ -609,7 +616,11 @@ export function ThrowHomeScreen({
                   localUri={storyFlow.localUri}
                   mediaType={storyFlow.mediaType}
                   flightTargetY={storyFlightTargetY}
-                  onCancel={() => setStoryFlow(null)}
+                  // Discarding a just-captured/picked photo re-opens the camera, not the letter —
+                  // preview only ever follows capture (see StoryFlow's own comment: it's always
+                  // reached from Status), so "X" backing out of it should land you right back
+                  // where you were, not jump forward to Own Contact's compose letter.
+                  onCancel={() => setStoryFlow({ name: 'capture' })}
                   onConfirm={() => handleStoryPreviewConfirmed(storyFlow.localUri, storyFlow.mediaType)}
                 />
               ) : isStoryMode && selectedFriend ? (
@@ -620,6 +631,8 @@ export function ThrowHomeScreen({
                   flightTargetY={storyFlightTargetY}
                   onExhausted={() => setStoryView(null)}
                   onViewed={markViewed}
+                  isOwnStories={selectedFriend.userId === myId}
+                  onDeleteStory={handleDeleteStory}
                 />
               ) : (
                 <FoldingLetter
@@ -725,11 +738,13 @@ export function ThrowHomeScreen({
       </Animated.View>
 
       {storyFlow?.name === 'trim' && (
-        <Modal visible animationType="slide" onRequestClose={() => setStoryFlow(null)} statusBarTranslucent>
+        // Same reasoning as the preview step's own onCancel above — backing out of trimming a
+        // picked long video should reopen the camera, not drop to Own Contact's letter.
+        <Modal visible animationType="slide" onRequestClose={() => setStoryFlow({ name: 'capture' })} statusBarTranslucent>
           <StoryTrimScreen
             localUri={storyFlow.localUri}
             durationMs={storyFlow.durationMs}
-            onCancel={() => setStoryFlow(null)}
+            onCancel={() => setStoryFlow({ name: 'capture' })}
             onConfirm={(trim) => handleStoryTrimConfirmed(trim, storyFlow.localUri)}
           />
         </Modal>
