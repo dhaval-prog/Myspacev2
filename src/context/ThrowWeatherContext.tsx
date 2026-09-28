@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useThrow } from './ThrowContext';
 import { getCurrentWeather, normalizeWeatherCondition } from '../services/weatherService';
-import type { ThrowWeatherState, WeatherCondition, WeatherMode } from '../types/weather';
+import type { NormalizedWeather, ThrowWeatherState, WeatherCondition, WeatherIntensity, WeatherMode } from '../types/weather';
 
 // Don't re-hit the weather API more than this often for the same location — see the refresh
 // effect's own comment for the other two things that *do* still trigger an early refresh
@@ -13,6 +13,11 @@ const CACHE_TTL_MS = 20 * 60 * 1000;
 // much shorter than CACHE_TTL_MS, just enough to stop a retry storm if e.g. the device is briefly
 // offline.
 const RETRY_COOLDOWN_MS = 60 * 1000;
+// Manual weather has no real reading to draw wind from — a fixed, unremarkable breeze so
+// rain/snow/wind/cloud renderers still have *something* physically plausible to angle themselves
+// by, rather than a suspiciously dead-still 0.
+const MANUAL_WIND_SPEED_KPH = 16;
+const MANUAL_WIND_DIRECTION_DEG = 205;
 
 function roundedLocationKey(lat: number, lng: number): string {
   // ~1km precision — plenty for "did the user's Throw location actually change" without a cache
@@ -22,9 +27,9 @@ function roundedLocationKey(lat: number, lng: number): string {
 
 interface ThrowWeatherContextValue extends ThrowWeatherState {
   setMode: (mode: WeatherMode) => void;
-  /** Only 'clear' (off) or 'rain' is actually selectable from Settings today — see
-   * ThrowWeatherState.manualCondition's own doc comment for why the type stays the full union. */
   setManualCondition: (condition: WeatherCondition) => void;
+  setManualIntensity: (intensity: WeatherIntensity) => void;
+  setReducedFlashing: (reduced: boolean) => void;
   /** Re-fetches now regardless of the cache — wired to a manual "Refresh" affordance if/when
    * Settings grows one; automatic mode's own effect already covers the ordinary cases (screen
    * opens, location changes, cache expires) without this ever needing to be called from there. */
@@ -35,11 +40,12 @@ const ThrowWeatherContext = createContext<ThrowWeatherContextValue | null>(null)
 
 /**
  * The "WeatherController" between Throw's own location/settings and WeatherOverlay — owns the one
- * shared `mode`/`manualCondition` preference (persisted to `user_settings`, same upsert-per-column
- * pattern ThrowColorModeContext already uses) and, in automatic mode, when to actually ask
- * WeatherService for a fresh reading. WeatherOverlay only ever reads the resulting `weather`/
- * `intensity` off this context — it has no idea whether that came from a real API call or a manual
- * override, which is the whole point (see this file's own architecture comment in weatherService.ts).
+ * shared mode/manualCondition/manualIntensity/reducedFlashing preference (persisted to
+ * `user_settings`, same upsert-per-column pattern ThrowColorModeContext already uses) and, in
+ * automatic mode, when to actually ask WeatherService for a fresh reading. WeatherOverlay only ever
+ * reads the resulting `weather`/`intensity`/`windSpeedKph`/`windDirectionDeg` off this context — it
+ * has no idea whether that came from a real API call or a manual override, which is the whole point
+ * (see weatherService.ts's own architecture comment).
  */
 export function ThrowWeatherProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -48,8 +54,9 @@ export function ThrowWeatherProvider({ children }: { children: React.ReactNode }
 
   const [mode, setModeState] = useState<WeatherMode>('automatic');
   const [manualCondition, setManualConditionState] = useState<WeatherCondition>('clear');
-  const [autoWeather, setAutoWeather] = useState<WeatherCondition>('clear');
-  const [autoIntensity, setAutoIntensity] = useState<ThrowWeatherState['intensity']>('medium');
+  const [manualIntensity, setManualIntensityState] = useState<WeatherIntensity>('medium');
+  const [reducedFlashing, setReducedFlashingState] = useState(false);
+  const [autoWeather, setAutoWeather] = useState<NormalizedWeather | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<number | undefined>(undefined);
 
@@ -63,44 +70,63 @@ export function ThrowWeatherProvider({ children }: { children: React.ReactNode }
     if (!userId) {
       setModeState('automatic');
       setManualConditionState('clear');
+      setManualIntensityState('medium');
+      setReducedFlashingState(false);
       return;
     }
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.from('user_settings').select('throw_weather_mode, throw_weather_manual_condition').eq('user_id', userId).maybeSingle();
+      const { data } = await supabase
+        .from('user_settings')
+        .select('throw_weather_mode, throw_weather_manual_condition, throw_weather_manual_intensity, throw_weather_reduced_flashing')
+        .eq('user_id', userId)
+        .maybeSingle();
       if (cancelled) return;
       setModeState((data?.throw_weather_mode as WeatherMode | undefined) ?? 'automatic');
       setManualConditionState((data?.throw_weather_manual_condition as WeatherCondition | undefined) ?? 'clear');
+      setManualIntensityState((data?.throw_weather_manual_intensity as WeatherIntensity | undefined) ?? 'medium');
+      setReducedFlashingState(data?.throw_weather_reduced_flashing ?? false);
     })();
     return () => {
       cancelled = true;
     };
   }, [userId]);
 
+  function persist(column: string, value: string | boolean, label: string) {
+    if (!userId) return;
+    supabase
+      .from('user_settings')
+      .upsert({ user_id: userId, [column]: value }, { onConflict: 'user_id' })
+      .then(({ error }) => {
+        if (error) console.warn(`[ThrowWeather] failed to save ${label}:`, error.message);
+      });
+  }
+
   const setMode = useCallback(
     (next: WeatherMode) => {
       setModeState(next);
-      if (!userId) return;
-      supabase
-        .from('user_settings')
-        .upsert({ user_id: userId, throw_weather_mode: next }, { onConflict: 'user_id' })
-        .then(({ error }) => {
-          if (error) console.warn('[ThrowWeather] failed to save mode:', error.message);
-        });
+      persist('throw_weather_mode', next, 'mode');
     },
     [userId],
   );
-
   const setManualCondition = useCallback(
     (next: WeatherCondition) => {
       setManualConditionState(next);
-      if (!userId) return;
-      supabase
-        .from('user_settings')
-        .upsert({ user_id: userId, throw_weather_manual_condition: next }, { onConflict: 'user_id' })
-        .then(({ error }) => {
-          if (error) console.warn('[ThrowWeather] failed to save manual condition:', error.message);
-        });
+      persist('throw_weather_manual_condition', next, 'manual condition');
+    },
+    [userId],
+  );
+  const setManualIntensity = useCallback(
+    (next: WeatherIntensity) => {
+      setManualIntensityState(next);
+      persist('throw_weather_manual_intensity', next, 'manual intensity');
+    },
+    [userId],
+  );
+  const setReducedFlashing = useCallback(
+    (next: boolean) => {
+      setReducedFlashingState(next);
+      persist('throw_weather_reduced_flashing', next, 'reduced flashing');
     },
     [userId],
   );
@@ -115,14 +141,12 @@ export function ThrowWeatherProvider({ children }: { children: React.ReactNode }
     if (requestId !== requestIdRef.current) return;
     setIsLoading(false);
     if (!raw) {
-      // Weather API failure (#14 in the feature request) — fall back to the normal map rather than
-      // surfacing an error; leaving autoWeather/autoIntensity exactly as they already were (whatever
-      // the last good reading was, or the 'clear' default) is exactly that fallback.
+      // Weather API failure — fall back to the normal map rather than surfacing an error; leaving
+      // autoWeather exactly as it already was (whatever the last good reading was, or null/'clear'
+      // by default) is exactly that fallback.
       return;
     }
-    const normalized = normalizeWeatherCondition(raw);
-    setAutoWeather(normalized.condition);
-    setAutoIntensity(normalized.intensity);
+    setAutoWeather(normalizeWeatherCondition(raw));
     setLastUpdated(Date.now());
     lastFetchedLocationKeyRef.current = roundedLocationKey(latitude, longitude);
   }, []);
@@ -147,24 +171,50 @@ export function ThrowWeatherProvider({ children }: { children: React.ReactNode }
   }, [mode, myLocation, runFetch]);
 
   // What's actually active — automatic mode's own latest reading, or the manual override verbatim.
-  // Automatic never falls back to a stale manual pick (see ThrowWeatherState.manualCondition's own
-  // doc comment) even if one exists from an earlier session.
-  const weather = mode === 'manual' ? manualCondition : autoWeather;
-  const intensity = mode === 'manual' ? 'medium' : autoIntensity;
+  // Automatic never falls back to a stale manual pick even if one exists from an earlier session
+  // (see ThrowWeatherState.manualCondition's own doc comment); with no reading yet (still loading,
+  // or the very first fetch hasn't landed), it stays 'clear' — the neutral state the feature's own
+  // loading-state notes ask for, rather than a spinner or a guess.
+  const weather = mode === 'manual' ? manualCondition : (autoWeather?.condition ?? 'clear');
+  const intensity = mode === 'manual' ? manualIntensity : (autoWeather?.intensity ?? 'light');
+  const windSpeedKph = mode === 'manual' ? MANUAL_WIND_SPEED_KPH : (autoWeather?.windSpeedKph ?? 0);
+  const windDirectionDeg = mode === 'manual' ? MANUAL_WIND_DIRECTION_DEG : (autoWeather?.windDirectionDeg ?? 0);
 
   const value = useMemo(
     () => ({
       mode,
       manualCondition,
+      manualIntensity,
       weather,
       intensity,
+      windSpeedKph,
+      windDirectionDeg,
+      reducedFlashing,
       isLoading: mode === 'automatic' && isLoading,
       lastUpdated,
       setMode,
       setManualCondition,
+      setManualIntensity,
+      setReducedFlashing,
       refresh,
     }),
-    [mode, manualCondition, weather, intensity, isLoading, lastUpdated, setMode, setManualCondition, refresh],
+    [
+      mode,
+      manualCondition,
+      manualIntensity,
+      weather,
+      intensity,
+      windSpeedKph,
+      windDirectionDeg,
+      reducedFlashing,
+      isLoading,
+      lastUpdated,
+      setMode,
+      setManualCondition,
+      setManualIntensity,
+      setReducedFlashing,
+      refresh,
+    ],
   );
 
   return <ThrowWeatherContext.Provider value={value}>{children}</ThrowWeatherContext.Provider>;
