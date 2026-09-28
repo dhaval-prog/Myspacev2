@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import { ThrowProvider, useThrow } from '../../context/ThrowContext';
 import { ThrowStoriesProvider } from '../../context/ThrowStoriesContext';
+import { ThrowWeatherProvider } from '../../context/ThrowWeatherContext';
 import { throwColor } from '../../theme/throwTokens';
 import { ThrowLocationSetupScreen } from './ThrowLocationSetupScreen';
 import { ThrowHomeScreen } from './ThrowHomeScreen';
@@ -92,14 +93,16 @@ export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFrie
   return (
     <ThrowProvider>
       <ThrowStoriesProvider>
-        <ThrowNavigator
-          onHome={onHome}
-          onOpenExpenses={onOpenExpenses}
-          onOpenChats={onOpenChats}
-          onOpenAddFriend={onOpenAddFriend}
-          initialThrowId={initialThrowId}
-          initialScreen={initialScreen}
-        />
+        <ThrowWeatherProvider>
+          <ThrowNavigator
+            onHome={onHome}
+            onOpenExpenses={onOpenExpenses}
+            onOpenChats={onOpenChats}
+            onOpenAddFriend={onOpenAddFriend}
+            initialThrowId={initialThrowId}
+            initialScreen={initialScreen}
+          />
+        </ThrowWeatherProvider>
       </ThrowStoriesProvider>
     </ThrowProvider>
   );

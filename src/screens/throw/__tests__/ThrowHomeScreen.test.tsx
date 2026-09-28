@@ -16,6 +16,14 @@ jest.mock('../../../context/GameStatsContext', () => ({ useGameStats: jest.fn() 
 jest.mock('../../../context/ThrowColorModeContext', () => ({ useThrowColorMode: jest.fn() }));
 jest.mock('../../../context/ThrowStoriesContext', () => ({ useThrowStories: jest.fn() }));
 
+// WeatherOverlay/RainOverlay are a purely visual screen-space effect (Animated loops/canvas,
+// irrelevant to anything under test in this file) — stubbed out the same way ThrowMap is, so tests
+// don't need a real ThrowWeatherContext (which itself needs a real, unmocked AuthContext/
+// ThrowContext to be safe to render) or to render actual rain particles.
+jest.mock('../../../components/throw/weather/WeatherOverlay', () => ({
+  WeatherOverlay: () => null,
+}));
+
 // expo-video has no jest/native-module fallback the way most other Expo packages here do (it
 // throws at import time in this test environment) — only StoryTrimScreen/ContactStoryStack touch
 // it, and neither renders in these tests, but the bare `import` still runs at module-load time
