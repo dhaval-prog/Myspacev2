@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { generateRainParticles, RAIN_LAYER_SPEED_MULTIPLIER } from './rainParticles';
+import type { WindController } from './windController';
 import type { RainConfig, WeatherIntensity, WeatherQuality } from '../../../types/weather';
 
 const BASE_LOOP_MS = 2400;
@@ -9,6 +10,10 @@ const PRESENCE_DURATION_MS = 1400;
 const RAIN_DROP_RGB = '214,226,240';
 const ATMOSPHERE_RGB = '18,26,38';
 const ATMOSPHERE_MAX_OPACITY = 0.12;
+// Same scoped, rotate-only wind connection as RainOverlay.native.tsx (see its own doc comment) —
+// read every frame from a ref a separate effect updates, so it never needs to restart the main tick
+// loop (and therefore never touches the fall-speed math) just because the wind sample changed.
+const GUST_LEAN_SCALE_DEG = 14;
 
 interface RainOverlayProps {
   active: boolean;
@@ -18,6 +23,9 @@ interface RainOverlayProps {
    * affords noticeably more particles for the same cost. */
   quality?: WeatherQuality;
   config?: Partial<RainConfig>;
+  /** Optional — when given, a gust nudges rain's own lean angle a little more diagonal for the
+   * gust's duration (see GUST_LEAN_SCALE_DEG). Omit to keep rain wind-independent. */
+  windController?: WindController;
 }
 
 /**
@@ -34,7 +42,7 @@ interface RainOverlayProps {
  * overlay, never touching Mapbox's own coordinate system, so panning/zooming/rotating the map
  * underneath doesn't affect it at all; it just keeps falling across whatever's on screen.
  */
-export function RainOverlay({ active, intensity, quality = 'high', config }: RainOverlayProps) {
+export function RainOverlay({ active, intensity, quality = 'high', config, windController }: RainOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Mutable, per-frame state that must NOT live in React state (that would mean a re-render every
   // frame, exactly what this canvas approach is meant to avoid) — refs instead.
@@ -43,10 +51,20 @@ export function RainOverlay({ active, intensity, quality = 'high', config }: Rai
   const presenceRef = useRef(0);
   const targetRef = useRef(active ? 1 : 0);
   const sizeRef = useRef({ width: 0, height: 0 });
+  const gustLeanDegRef = useRef(0);
 
   useEffect(() => {
     targetRef.current = active ? 1 : 0;
   }, [active]);
+
+  useEffect(() => {
+    if (!windController) return;
+    return windController.subscribe((wind) => {
+      const towardRad = (wind.directionDeg * Math.PI) / 180;
+      const horizontal = Math.sin(towardRad);
+      gustLeanDegRef.current = horizontal * (wind.gustFactor - 1) * GUST_LEAN_SCALE_DEG;
+    });
+  }, [windController]);
 
   useEffect(() => {
     particlesRef.current = generateRainParticles(quality, intensity);
@@ -86,13 +104,10 @@ export function RainOverlay({ active, intensity, quality = 'high', config }: Rai
     };
     document.addEventListener('visibilitychange', onVisibility);
 
-    const angleDeg = config?.angle ?? DEFAULT_ANGLE_DEG;
-    const angleRad = (angleDeg * Math.PI) / 180;
+    const baseAngleDeg = config?.angle ?? DEFAULT_ANGLE_DEG;
     const speed = config?.speed ?? 1;
     const opacityMultiplier = config?.opacity ?? 1;
     const presenceRatePerMs = 1 / PRESENCE_DURATION_MS;
-    const sinA = Math.sin(angleRad);
-    const cosA = Math.cos(angleRad);
 
     let rafId = 0;
     const tick = (time: number) => {
@@ -118,6 +133,14 @@ export function RainOverlay({ active, intensity, quality = 'high', config }: Rai
         ctx.fillStyle = `rgba(${ATMOSPHERE_RGB},${ATMOSPHERE_MAX_OPACITY * presence})`;
         ctx.fillRect(0, 0, width, height);
       }
+
+      // Recomputed every frame (cheap — a handful of trig calls, dwarfed by the per-particle loop
+      // below) rather than once per effect run, so a gust's own lean can nudge this without
+      // restarting the loop or touching yPositions/fall speed at all.
+      const angleDeg = baseAngleDeg + gustLeanDegRef.current;
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const sinA = Math.sin(angleRad);
+      const cosA = Math.cos(angleRad);
 
       const particles = particlesRef.current;
       const yPositions = yPositionsRef.current;

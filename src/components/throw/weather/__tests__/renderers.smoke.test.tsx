@@ -5,10 +5,15 @@ import { WindOverlay } from '../WindOverlay';
 import { CloudOverlay } from '../CloudOverlay';
 import { LightningController } from '../LightningController';
 import { ClearOverlay } from '../ClearOverlay';
+import { WindController } from '../windController';
 
 // Every renderer here runs a real-timer-driven Animated.loop (jest has no native Animated module,
 // so these fall back to JS timers) — always unmount before the next test starts, same reasoning
 // RainOverlay's own smoke test documents, so no leftover timer fires outside its own act() scope.
+
+function makeWindController() {
+  return new WindController({ speed: 20, direction: 90, gustStrength: 0.4, turbulence: 0.4 });
+}
 
 describe('SnowOverlay', () => {
   it('renders active and inactive without crashing', async () => {
@@ -22,20 +27,30 @@ describe('SnowOverlay', () => {
 
 describe('WindOverlay', () => {
   it('renders in both wind directions without crashing', async () => {
-    const { rerender, unmount } = await render(<WindOverlay active intensity="medium" windSpeedKph={20} windDirectionDeg={90} />);
-    await act(async () => {});
-    rerender(<WindOverlay active intensity="heavy" windSpeedKph={45} windDirectionDeg={270} />);
-    await act(async () => {});
+    const controller = makeWindController();
+    const { rerender, unmount } = await render(<WindOverlay active intensity="medium" windController={controller} />);
+    await act(async () => {
+      controller.tick(500);
+    });
+    rerender(<WindOverlay active intensity="heavy" windController={controller} />);
+    await act(async () => {
+      controller.tick(500);
+    });
     unmount();
   });
 });
 
 describe('CloudOverlay', () => {
   it('renders both the light and dark variant without crashing', async () => {
-    const { rerender, unmount } = await render(<CloudOverlay active />);
-    await act(async () => {});
-    rerender(<CloudOverlay active dark />);
-    await act(async () => {});
+    const controller = makeWindController();
+    const { rerender, unmount } = await render(<CloudOverlay active windController={controller} />);
+    await act(async () => {
+      controller.tick(500);
+    });
+    rerender(<CloudOverlay active dark windController={controller} />);
+    await act(async () => {
+      controller.tick(500);
+    });
     unmount();
   });
 });

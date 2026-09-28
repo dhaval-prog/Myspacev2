@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, AppState, Dimensions, Easing, StyleSheet, View } from 'react-native';
 import { generateRainParticles, RAIN_LAYER_SPEED_MULTIPLIER } from './rainParticles';
+import type { WindController } from './windController';
 import type { RainConfig, WeatherIntensity, WeatherQuality } from '../../../types/weather';
 
 // How long the fastest layer takes to fall the whole height of the screen at speed multiplier 1 —
@@ -22,6 +23,12 @@ const RAIN_DROP_COLOR = 'rgba(214,226,240,0.95)';
 // own module doc comment).
 const ATMOSPHERE_COLOR = 'rgba(18,26,38,1)';
 const ATMOSPHERE_MAX_OPACITY = 0.12;
+// Extra lean (degrees) at a gust's absolute peak — additive on top of config.angle's own steady
+// lean, and ONLY on top of the *rotate* transform (never touching the fall clocks/translateY, which
+// is what actually drives fall speed) — the deliberate, scoped way this feature's own live wind
+// connects to already-implemented rain without risking the "snap to top" glitch a live-varying
+// clock duration would cause (see this file's own module doc + the WindController it subscribes to).
+const GUST_LEAN_SCALE_DEG = 14;
 
 interface RainOverlayProps {
   /** Whether rain should currently be showing — flipping this plays the start/stop density ramp
@@ -33,6 +40,9 @@ interface RainOverlayProps {
    * stays conservative until there's an actual reason to raise it per device. */
   quality?: WeatherQuality;
   config?: Partial<RainConfig>;
+  /** Optional — when given, a gust nudges rain's own lean angle a little more diagonal for the
+   * gust's duration (see GUST_LEAN_SCALE_DEG). Omit to keep rain wind-independent. */
+  windController?: WindController;
 }
 
 /**
@@ -49,13 +59,23 @@ interface RainOverlayProps {
  * attached to a lat/lng, so panning/zooming/rotating the map underneath never touches this at all;
  * it just keeps falling across whatever's currently on screen.
  */
-export function RainOverlay({ active, intensity, quality = 'medium', config }: RainOverlayProps) {
+export function RainOverlay({ active, intensity, quality = 'medium', config, windController }: RainOverlayProps) {
   const [size, setSize] = useState<{ width: number; height: number }>(() => Dimensions.get('window'));
   const particles = useMemo(() => generateRainParticles(quality, intensity), [quality, intensity]);
 
   const presence = useRef(new Animated.Value(0)).current;
   const clocks = useRef([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]).current;
   const loopsRef = useRef<Animated.CompositeAnimation[]>([]);
+  const gustLean = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!windController) return;
+    return windController.subscribe((wind) => {
+      const towardRad = (wind.directionDeg * Math.PI) / 180;
+      const horizontal = Math.sin(towardRad);
+      gustLean.setValue(horizontal * (wind.gustFactor - 1) * GUST_LEAN_SCALE_DEG);
+    });
+  }, [windController, gustLean]);
 
   useEffect(() => {
     Animated.timing(presence, {
@@ -93,6 +113,14 @@ export function RainOverlay({ active, intensity, quality = 'medium', config }: R
   const angleDeg = config?.angle ?? DEFAULT_ANGLE_DEG;
   const opacityMultiplier = config?.opacity ?? 1;
   const angleTan = Math.tan((angleDeg * Math.PI) / 180);
+  // Rotate-only — the fall path itself (translateX/translateY above) stays keyed to the steady
+  // config.angle so a gust never touches position/speed math, only how visually diagonal each drop
+  // looks for the gust's own duration.
+  const rotateDeg = Animated.add(gustLean, angleDeg).interpolate({
+    inputRange: [-90, 90],
+    outputRange: ['-90deg', '90deg'],
+    extrapolate: 'clamp',
+  });
 
   return (
     <View
@@ -125,7 +153,7 @@ export function RainOverlay({ active, intensity, quality = 'medium', config }: R
               borderRadius: p.thickness / 2,
               backgroundColor: RAIN_DROP_COLOR,
               opacity: Animated.multiply(revealOpacity, p.opacity * opacityMultiplier),
-              transform: [{ translateX }, { translateY }, { rotate: `${angleDeg}deg` }],
+              transform: [{ translateX }, { translateY }, { rotate: rotateDeg }],
             }}
           />
         );
