@@ -589,20 +589,28 @@ export function ThrowHomeScreen({
             Not shown at all in the locked-recipient reply flow, same as the normal recipient
             carousel just above ("You" doesn't exist as a concept there either). */}
         {!inFlight && !lockedRecipient && myId && (
-          <MyStatusPanel
-            core={core}
-            flightTargetX={storyFlightTargetX}
-            flightTargetY={storyFlightTargetY}
-            isNight={!isDay}
-            stories={storiesByUser[myId] ?? []}
-            dropSignal={youDropSignal}
-            onViewed={markViewed}
-            onDeleteStory={handleDeleteStory}
-            onAvatarCountChange={setOpenAvatarCount}
-            onPulseAvatar={() => setOpenAvatarPulseSignal((n) => n + 1)}
-            postStory={postStory}
-            onClose={() => core.springTo(lastRealIndexRef.current)}
-          />
+          // Bounded to the exact same box the real letter card below occupies (left/right/top plus
+          // the same BottomNav-clearance-aware bottom) — MyStatusPanel's own internal layout
+          // (`track`/`cardWrap`/`cardBox`) fills whatever parent it's given via absolute-fill, so
+          // without this wrapper it would fill the entire screen instead of sitting in the letter.
+          <Animated.View
+            style={[styles.letterCard, { bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) }]}
+          >
+            <MyStatusPanel
+              core={core}
+              flightTargetX={storyFlightTargetX}
+              flightTargetY={storyFlightTargetY}
+              isNight={!isDay}
+              stories={storiesByUser[myId] ?? []}
+              dropSignal={youDropSignal}
+              onViewed={markViewed}
+              onDeleteStory={handleDeleteStory}
+              onAvatarCountChange={setOpenAvatarCount}
+              onPulseAvatar={() => setOpenAvatarPulseSignal((n) => n + 1)}
+              postStory={postStory}
+              onClose={() => core.springTo(lastRealIndexRef.current)}
+            />
+          </Animated.View>
         )}
 
         {!inFlight && selectedFriend && !isYouSelected && (
