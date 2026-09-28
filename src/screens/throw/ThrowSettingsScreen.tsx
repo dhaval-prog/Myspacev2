@@ -13,7 +13,7 @@ import { useThrow } from '../../context/ThrowContext';
 import { useFriends } from '../../context/FriendsContext';
 import { useThrowColorMode, type ThrowColorMode } from '../../context/ThrowColorModeContext';
 import { useThrowWeather } from '../../context/ThrowWeatherContext';
-import type { WeatherMode } from '../../types/weather';
+import type { WeatherCondition, WeatherIntensity } from '../../types/weather';
 
 const BACK_ICON = 'M15 18l-6-6 6-6';
 const CHECK_ICON = 'M5 13l4 4L19 7';
@@ -24,12 +24,40 @@ const COLOR_MODES: { key: ThrowColorMode; label: string; description: string }[]
   { key: 'night', label: 'Night', description: 'Always the night look' },
 ];
 
-// Only two entries today, but the same shape COLOR_MODES already uses (and the same BottomSheet
-// list-with-checkmark rendering below) — adding a third mode later, if that ever makes sense,
-// wouldn't need a new UI pattern.
-const WEATHER_MODES: { key: WeatherMode; label: string; description: string }[] = [
-  { key: 'automatic', label: 'Automatic', description: 'Based on your Throw location' },
-  { key: 'manual', label: 'Manual', description: 'Pick a weather effect yourself' },
+// Feather-style icon paths, one per WeatherCondition — small enough to read clearly at card size,
+// close enough to their real Feather counterparts (sun/cloud/cloud-drizzle/cloud-lightning/zap/
+// wind/asterisk-as-snowflake) that they don't need a design pass of their own.
+const WEATHER_ICONS: Record<WeatherCondition, string> = {
+  clear: 'M12 17a5 5 0 100-10 5 5 0 000 10zM12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42',
+  cloudy: 'M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z',
+  rain: 'M20 16.58A5 5 0 0018 7h-1.26A8 8 0 104 15.25 M8 19v1 M8 14v1 M12 21v1 M12 16v1 M16 19v1 M16 14v1',
+  thunderstorm: 'M19 16.9A5 5 0 0018 7h-1.26a8 8 0 10-11.62 9 M13 11l-4 6h6l-4 6',
+  lightning: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+  wind: 'M9.59 4.59A2 2 0 1111 8H2 M12.59 19.41A2 2 0 1014 16H2 M17.73 7.73A2.5 2.5 0 1119.5 12H2',
+  snow: 'M12 2v20 M4.93 4.93l14.14 14.14 M2 12h20 M4.93 19.07L19.07 4.93',
+};
+
+const WEATHER_LABELS: Record<WeatherCondition, string> = {
+  clear: 'Clear',
+  cloudy: 'Cloudy',
+  rain: 'Rain',
+  thunderstorm: 'Thunderstorm',
+  lightning: 'Lightning',
+  wind: 'Wind',
+  snow: 'Snow',
+};
+
+// Card grid order — matches the feature's own list order.
+const MANUAL_WEATHER_OPTIONS: WeatherCondition[] = ['clear', 'cloudy', 'rain', 'thunderstorm', 'lightning', 'wind', 'snow'];
+
+// Only rain/thunderstorm/snow/wind actually have a particle-density/speed dial worth exposing —
+// clear/cloudy/lightning have no "how much" to turn up.
+const INTENSITY_RELEVANT: WeatherCondition[] = ['rain', 'thunderstorm', 'wind', 'snow'];
+
+const INTENSITY_LEVELS: { key: WeatherIntensity; label: string }[] = [
+  { key: 'light', label: 'Low' },
+  { key: 'medium', label: 'Medium' },
+  { key: 'heavy', label: 'High' },
 ];
 
 interface ThrowSettingsScreenProps {
@@ -47,16 +75,24 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
   const { myLocation } = useThrow();
   const { friends, receivedRequests, sentRequests, acceptRequest, declineRequest, cancelRequest, removeFriend, blockFriend } = useFriends();
   const { mode: colorMode, setMode: setColorMode, mapMode, setMapMode } = useThrowColorMode();
-  const { mode: weatherMode, setMode: setWeatherMode, manualCondition, setManualCondition } = useThrowWeather();
+  const {
+    mode: weatherMode,
+    setMode: setWeatherMode,
+    manualCondition,
+    setManualCondition,
+    manualIntensity,
+    setManualIntensity,
+    reducedFlashing,
+    setReducedFlashing,
+  } = useThrowWeather();
   const [pane, setPane] = useState<Pane>('settings');
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
   const [colorModeSheetOpen, setColorModeSheetOpen] = useState(false);
   const [mapModeSheetOpen, setMapModeSheetOpen] = useState(false);
-  const [weatherModeSheetOpen, setWeatherModeSheetOpen] = useState(false);
+  const [intensitySheetOpen, setIntensitySheetOpen] = useState(false);
   const colorModeLabel = COLOR_MODES.find((m) => m.key === colorMode)?.label ?? 'Auto';
   const mapModeLabel = COLOR_MODES.find((m) => m.key === mapMode)?.label ?? 'Auto';
-  const weatherModeLabel = WEATHER_MODES.find((m) => m.key === weatherMode)?.label ?? 'Automatic';
-  const manualRainOn = manualCondition === 'rain';
+  const intensityLabel = INTENSITY_LEVELS.find((l) => l.key === manualIntensity)?.label ?? 'Medium';
 
   if (pane === 'editLocation') {
     return <ThrowLocationSetupScreen mode="edit" onDone={() => setPane('settings')} onBack={() => setPane('settings')} />;
@@ -112,29 +148,65 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
         </Pressable>
 
         <Text style={styles.eyebrow}>WEATHER</Text>
-        <Pressable onPress={() => setWeatherModeSheetOpen(true)}>
+        <Pressable onPress={() => setWeatherMode(weatherMode === 'automatic' ? 'manual' : 'automatic')}>
           <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>
             <View style={styles.rowText}>
-              <Text style={styles.rowName}>Weather</Text>
-              <Text style={styles.rowMeta}>Adds a rain effect over the map when it's actually raining where you are</Text>
+              <Text style={styles.rowName}>Automatic Weather</Text>
+              <Text style={styles.rowMeta}>Based on the real weather at your Throw location</Text>
             </View>
-            <Text style={styles.editLabel}>{weatherModeLabel}</Text>
+            <View style={[styles.toggleTrack, weatherMode === 'automatic' && styles.toggleTrackOn]}>
+              <View style={[styles.toggleThumb, weatherMode === 'automatic' && styles.toggleThumbOn]} />
+            </View>
           </GlassSurface>
         </Pressable>
+
         {weatherMode === 'manual' && (
-          // Only "Rain" exists to pick today (see WeatherCondition's own doc comment for why the
-          // type already covers more) — a plain on/off row rather than another BottomSheet list,
-          // since there's nothing yet to pick *between*.
-          <Pressable onPress={() => setManualCondition(manualRainOn ? 'clear' : 'rain')}>
-            <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>
-              <View style={styles.rowText}>
-                <Text style={styles.rowName}>Rain</Text>
-                <Text style={styles.rowMeta}>Starts right away, regardless of the actual weather</Text>
-              </View>
-              <Text style={styles.editLabel}>{manualRainOn ? 'On' : 'Off'}</Text>
-            </GlassSurface>
-          </Pressable>
+          <>
+            <View style={styles.weatherGrid}>
+              {MANUAL_WEATHER_OPTIONS.map((key) => {
+                const selected = manualCondition === key;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => setManualCondition(key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Weather — ${WEATHER_LABELS[key]}`}
+                    style={[styles.weatherCard, selected && styles.weatherCardSelected]}
+                  >
+                    <Icon path={WEATHER_ICONS[key]} size={22} color={selected ? throwColor.activeBlue : throwColor.inkSoft} strokeWidth={2} />
+                    <Text style={[styles.weatherCardLabel, selected && styles.weatherCardLabelSelected]} numberOfLines={1}>
+                      {WEATHER_LABELS[key]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {INTENSITY_RELEVANT.includes(manualCondition) && (
+              <Pressable onPress={() => setIntensitySheetOpen(true)}>
+                <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>
+                  <View style={styles.rowText}>
+                    <Text style={styles.rowName}>Intensity</Text>
+                    <Text style={styles.rowMeta}>How heavy {WEATHER_LABELS[manualCondition].toLowerCase()} looks</Text>
+                  </View>
+                  <Text style={styles.editLabel}>{intensityLabel}</Text>
+                </GlassSurface>
+              </Pressable>
+            )}
+          </>
         )}
+
+        <Pressable onPress={() => setReducedFlashing(!reducedFlashing)}>
+          <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowName}>Reduce Flashing</Text>
+              <Text style={styles.rowMeta}>Softer, dimmer lightning instead of a bright flash</Text>
+            </View>
+            <View style={[styles.toggleTrack, reducedFlashing && styles.toggleTrackOn]}>
+              <View style={[styles.toggleThumb, reducedFlashing && styles.toggleThumbOn]} />
+            </View>
+          </GlassSurface>
+        </Pressable>
 
         {(receivedRequests.length > 0 || sentRequests.length > 0) && (
           <>
@@ -256,25 +328,22 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
         })}
       </BottomSheet>
 
-      <BottomSheet visible={weatherModeSheetOpen} onClose={() => setWeatherModeSheetOpen(false)}>
-        <Text style={styles.sheetTitle}>Weather</Text>
-        {WEATHER_MODES.map((opt, i) => {
-          const active = weatherMode === opt.key;
+      <BottomSheet visible={intensitySheetOpen} onClose={() => setIntensitySheetOpen(false)}>
+        <Text style={styles.sheetTitle}>Intensity</Text>
+        {INTENSITY_LEVELS.map((opt, i) => {
+          const active = manualIntensity === opt.key;
           return (
             <Pressable
               key={opt.key}
               onPress={() => {
-                setWeatherMode(opt.key);
-                setWeatherModeSheetOpen(false);
+                setManualIntensity(opt.key);
+                setIntensitySheetOpen(false);
               }}
               accessibilityRole="button"
-              accessibilityLabel={`Weather — ${opt.label}`}
-              style={[styles.sheetOption, i !== WEATHER_MODES.length - 1 && styles.sheetOptionDivider]}
+              accessibilityLabel={`Intensity — ${opt.label}`}
+              style={[styles.sheetOption, i !== INTENSITY_LEVELS.length - 1 && styles.sheetOptionDivider]}
             >
-              <View style={styles.rowText}>
-                <Text style={styles.rowName}>{opt.label}</Text>
-                <Text style={styles.rowMeta}>{opt.description}</Text>
-              </View>
+              <Text style={styles.rowName}>{opt.label}</Text>
               {active && <Icon path={CHECK_ICON} size={20} color={throwColor.clayDeep} strokeWidth={2.2} />}
             </Pressable>
           );
@@ -338,4 +407,51 @@ const styles = StyleSheet.create({
   actionLabel: { fontFamily: throwFont.ui700, fontSize: 11.5, color: throwColor.clayDeep },
   actionButtonDanger: { borderRadius: 999, backgroundColor: '#B3413A', paddingVertical: 7, paddingHorizontal: 11 },
   actionLabelDanger: { fontFamily: throwFont.ui700, fontSize: 11.5, color: '#fff' },
+  // A small pill toggle in Throw's own palette rather than RN's stock Switch, which reads as a
+  // generic system control next to the rest of this screen's soft glass rows.
+  toggleTrack: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: throwColor.claySoft,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleTrackOn: { backgroundColor: throwColor.activeBlue },
+  toggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+    ...throwColor.shadowSoft,
+  },
+  toggleThumbOn: { alignSelf: 'flex-end' },
+  // The manual weather picker — a compact card grid rather than a dropdown/list, per explicit
+  // request, with a glowing blue border/icon on whichever card is selected (the same accent
+  // RecipientCarousel's own "selected contact" pulse ring already uses, so "this is the active
+  // pick" reads consistently across Throw rather than inventing a second accent color).
+  weatherGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  weatherCard: {
+    width: '22.5%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: throwRadius.card,
+    borderWidth: 1,
+    borderColor: throwGlass.border,
+    backgroundColor: 'rgba(251,246,236,.5)',
+  },
+  weatherCardSelected: {
+    borderWidth: 2,
+    borderColor: throwColor.activeBlue,
+    backgroundColor: throwColor.activeBlueSoft,
+    shadowColor: throwColor.activeBlue,
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 3,
+  },
+  weatherCardLabel: { fontFamily: throwFont.ui600, fontSize: 10.5, color: throwColor.inkSoft, textAlign: 'center' },
+  weatherCardLabelSelected: { color: throwColor.ink, fontFamily: throwFont.ui700 },
 });
