@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel, CAROUSEL_HEIGHT } from '../../components/throw/RecipientCarousel';
@@ -100,6 +100,13 @@ export function ThrowHomeScreen({
   // flicked-away story card flies toward this exact point (see ContactStoryStack's own
   // flightTargetY) rather than some destination invented just for the story stack.
   const storyFlightTargetY = insets.top + 16 + CAROUSEL_HEIGHT / 2;
+  // Horizontally, the selected/open contact's avatar always sits at the recipient overlay's own
+  // center — RecipientCarousel's own itemTransform is built so the centered item always renders
+  // at its strip's center, and that strip is itself centered within recipientOverlay, which spans
+  // the full screen width (see its own style) — so this is just the screen's own center, no
+  // measurement/ref needed.
+  const { width: windowWidth } = useWindowDimensions();
+  const storyFlightTargetX = windowWidth / 2;
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const myId = user?.id ?? null;
@@ -117,6 +124,16 @@ export function ThrowHomeScreen({
   // contact to watch their stories doesn't relocate anything, since you're still exactly where you
   // were, just looking at what's in their card instead of their letter.
   const [storyView, setStoryView] = useState<{ userId: string; viaAddSlot: boolean } | null>(null);
+  // Increments every time the open contact's own avatar is tapped again (see handleOpenStory) —
+  // ContactStoryStack watches this to drop whatever's still sitting in the avatar into the letter,
+  // staggered. Also covers the very first open, since it fires on that same tap.
+  const [dropSignal, setDropSignal] = useState(0);
+  // How many of the open contact's photos are still in their avatar right now, and a one-shot
+  // signal to pulse that avatar — both mirrored up from ContactStoryStack (see its own
+  // onAvatarCountChange/onPulseAvatar) into RecipientCarousel's matching props. Reset once
+  // storyView actually changes so a *different* contact never inherits a stale count/ring.
+  const [openAvatarCount, setOpenAvatarCount] = useState(0);
+  const [openAvatarPulseSignal, setOpenAvatarPulseSignal] = useState(0);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [alertSchedule, setAlertSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
   // Once the user has touched the alert schedule, switching to a different contact is locked
@@ -319,6 +336,12 @@ export function ThrowHomeScreen({
     if (!isSelfSelected) setReminderPeeking(false);
   }, [isSelfSelected]);
 
+  // A freshly-opened (or closed) contact's status stack starts its own count from scratch — never
+  // carries over whatever the previous contact's avatar happened to be showing.
+  useEffect(() => {
+    setOpenAvatarCount(0);
+  }, [storyView?.userId]);
+
   useEffect(() => {
     cardModeFade.setValue(0);
     Animated.timing(cardModeFade, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -346,6 +369,10 @@ export function ThrowHomeScreen({
   const handleOpenStory = (userId: string) => {
     if ((storiesByUser[userId]?.length ?? 0) === 0) return;
     setStoryView({ userId, viaAddSlot: false });
+    // Also fires on every re-tap of the already-open contact's own avatar (see
+    // RecipientCarousel's own onPress) — that's the "tap avatar to drop photos" gesture itself,
+    // not just the initial open.
+    setDropSignal((n) => n + 1);
   };
 
   // Captured/picked media isn't posted right away any more — it lands on the preview step first
@@ -589,6 +616,8 @@ export function ThrowHomeScreen({
                 onOpenStory={handleOpenStory}
                 onAddStory={() => setStoryFlow({ name: 'capture' })}
                 isAddStorySelected={storyView?.viaAddSlot === true || isCaptureMode || isPreviewMode}
+                storyModeAvatarCount={isStoryMode ? openAvatarCount : undefined}
+                storyModePulseSignal={openAvatarPulseSignal}
               />
             </View>
           ))}
@@ -633,11 +662,15 @@ export function ThrowHomeScreen({
                   key={selectedFriend.userId}
                   stories={storiesByUser[selectedFriend.userId] ?? []}
                   isNight={!isDay}
+                  contactName={selectedFriend.name}
+                  flightTargetX={storyFlightTargetX}
                   flightTargetY={storyFlightTargetY}
-                  onExhausted={() => setStoryView(null)}
+                  dropSignal={dropSignal}
                   onViewed={markViewed}
                   isOwnStories={selectedFriend.userId === myId}
                   onDeleteStory={handleDeleteStory}
+                  onAvatarCountChange={setOpenAvatarCount}
+                  onPulseAvatar={() => setOpenAvatarPulseSignal((n) => n + 1)}
                 />
               ) : (
                 <FoldingLetter
