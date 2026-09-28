@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel, CAROUSEL_HEIGHT } from '../../components/throw/RecipientCarousel';
@@ -7,13 +7,12 @@ import { FoldingLetter } from '../../components/throw/FoldingLetter';
 import type { FoldingLetterHandle } from '../../components/throw/FoldingLetter';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { GlassSurface } from '../../components/friends/GlassSurface';
-import { StoryCaptureScreen } from '../../components/throw/StoryCaptureScreen';
 import { ContactStoryStack } from '../../components/throw/ContactStoryStack';
-import { StoryPreviewScreen } from '../../components/throw/StoryPreviewScreen';
-import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
+import { MyStatusPanel } from '../../components/throw/MyStatusPanel';
 import { WeatherOverlay } from '../../components/throw/weather/WeatherOverlay';
 import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useCarouselPos } from '../../hooks/useCarouselPos';
 import { formatMiles } from '../../utils/geo';
 import { spreadCoincidentPins } from '../../utils/mapProjection';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
@@ -25,19 +24,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useGameStats } from '../../context/GameStatsContext';
 import { formatAlertSchedule } from '../../utils/throwAlerts';
 import type { AlertSchedule, StrokePath, ThrowLetter } from '../../types/throw';
-import type { StoryMediaType } from '../../types/story';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
-
-/** What's currently covering the screen for the story flow — capture (camera/gallery), the preview
- * step (a captured/picked photo or short video, awaiting the explicit post confirmation), or the
- * trim step (only for a picked video over 15s). Watching a contact's already-posted stories isn't
- * a separate screen any more (see storyView below) — it happens inline, in the same card. Never
- * more than one at a time, so a single piece of state (not three booleans) makes that mutual
- * exclusion structural rather than something every setter has to remember to preserve. */
-type StoryFlow =
-  | { name: 'capture' }
-  | { name: 'preview'; localUri: string; mediaType: StoryMediaType }
-  | { name: 'trim'; localUri: string; durationMs: number };
 
 // Feather Icons' "settings" gear glyph (24x24 viewBox) — a known-good path rather than a
 // freehand approximation.
@@ -114,24 +101,24 @@ export function ThrowHomeScreen({
   const { createAlert } = useThrowAlerts();
   const { statsFor } = useGameStats();
   const { storiesByUser, storyCountFor, postStory, markViewed, deleteStory } = useThrowStories();
-  const [storyFlow, setStoryFlow] = useState<StoryFlow | null>(null);
   // Showing a contact's already-posted stories inline, in the same card the compose letter would
-  // otherwise occupy — reached either by tapping the already-selected contact (any contact,
-  // including yourself; see RecipientCarousel's own onOpenStory) or by tilting/flicking the letter
-  // left past "Own Contact" into the virtual "Status" slot (see handleContactDragOffset).
-  // `viaAddSlot` only distinguishes which entry point was used, so the carousel's own chrome (see
-  // isAddStorySelected below) only moves onto the add-story slot for the latter — tapping a normal
-  // contact to watch their stories doesn't relocate anything, since you're still exactly where you
-  // were, just looking at what's in their card instead of their letter.
-  const [storyView, setStoryView] = useState<{ userId: string; viaAddSlot: boolean } | null>(null);
+  // otherwise occupy — reached by tapping the already-selected contact (see RecipientCarousel's
+  // own onOpenStory). Never "Myself" or "You" — see handleOpenStory/handleOpenYouStatus's own
+  // comments for why those two are excluded from this.
+  const [storyView, setStoryView] = useState<{ userId: string } | null>(null);
   // Increments every time the open contact's own avatar is tapped again (see handleOpenStory) —
   // ContactStoryStack watches this to drop whatever's still sitting in the avatar into the letter,
   // staggered. Also covers the very first open, since it fires on that same tap.
   const [dropSignal, setDropSignal] = useState(0);
-  // How many of the open contact's photos are still in their avatar right now, and a one-shot
-  // signal to pulse that avatar — both mirrored up from ContactStoryStack (see its own
-  // onAvatarCountChange/onPulseAvatar) into RecipientCarousel's matching props. Reset once
-  // storyView actually changes so a *different* contact never inherits a stale count/ring.
+  // "You"'s own dropSignal — a separate counter (see handleOpenYouStatus) since tapping "You"'s
+  // avatar must never also drop photos into whichever real contact's stack happens to be open, or
+  // vice versa.
+  const [youDropSignal, setYouDropSignal] = useState(0);
+  // How many of the open avatar's photos are still in it right now, and a one-shot signal to
+  // pulse that avatar — mirrored up from whichever ContactStoryStack is actually "open" right now
+  // (either MyStatusPanel's own embedded one, or the real contact's inside the fixed letter card)
+  // into RecipientCarousel's matching props. Reset whenever openIndex itself changes so a freshly-
+  // opened avatar never inherits a stale count/ring from whichever was open before it.
   const [openAvatarCount, setOpenAvatarCount] = useState(0);
   const [openAvatarPulseSignal, setOpenAvatarPulseSignal] = useState(0);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
@@ -307,25 +294,36 @@ export function ThrowHomeScreen({
   // handleContactDragOffset) — belt-and-braces in the same spirit as isSelfSelected's own reset
   // effect just above, not the only thing keeping this in sync.
   const isStoryMode = storyView !== null && storyView.userId === selectedFriendId;
-  // Capturing a new story (see StoryFlow's own comment) takes over the same letter-card slot
-  // ContactStoryStack/FoldingLetter otherwise occupy — reached either by tilting/flicking left
-  // into the virtual "Status" slot (which now always means "post something new", not "view what's
-  // already there" — see handleContactDragOffset) or by tapping the add-story "+" directly.
-  const isCaptureMode = storyFlow?.name === 'capture';
-  // The confirm-before-posting step right after capture/pick — also inline, in the same slot, so
-  // the whole "post a story" pipeline reads as one continuous place rather than capture alone
-  // being inline and confirm popping up separately.
-  const isPreviewMode = storyFlow?.name === 'preview';
-  // Which of the four things the letter card is currently showing — a single source of truth so
-  // every transition between any two of them (not just entering/leaving story mode) gets the same
-  // smooth crossfade below, instead of only some pairs of states doing so.
-  const cardMode: 'capture' | 'preview' | 'story' | 'letter' = isCaptureMode
-    ? 'capture'
-    : isPreviewMode
-      ? 'preview'
-      : isStoryMode
-        ? 'story'
-        : 'letter';
+  // Which of the two things the fixed letter card is currently showing — a single source of truth
+  // so the crossfade below applies uniformly. "You" doesn't participate in this any more (see
+  // MyStatusPanel's own always-mounted, separately-sliding panel) — the fixed card just hides
+  // outright while "You" is selected (see isYouSelected below).
+  const cardMode: 'story' | 'letter' = isStoryMode ? 'story' : 'letter';
+
+  // The shared spring driving both the recipient rail's avatars and "You"'s own letter panel (see
+  // useCarouselPos) — -1 is always "You", 0..n-1 mirrors friendsWithLocation exactly. Committing a
+  // new *real* index (>= 0) is what actually moves selectedFriendId/storyView, the same instant a
+  // tap/flick/swipe resolves to it — "You" itself needs no such wiring here, since its own panel
+  // just reads core.pos/core.index directly.
+  const lastRealIndexRef = useRef(0);
+  const core = useCarouselPos({
+    min: -1,
+    max: Math.max(0, friendsWithLocation.length - 1),
+    initial: 0,
+    onSettle: (index) => {
+      if (index < 0) return;
+      lastRealIndexRef.current = index;
+      const next = friendsWithLocation[index];
+      if (next) setSelectedFriendId(next.userId);
+      setStoryView(null);
+    },
+  });
+  const isYouSelected = core.index === -1;
+  // Which avatar (if any) currently has its status stack open — "You" whenever it's the selected
+  // rail item at all (MyStatusPanel's own overlay is always mounted, see its own doc comment), a
+  // real contact only while actively in story mode for them. Drives both RecipientCarousel's own
+  // ring/badge/pulse chrome and the reset effect just below.
+  const openIndex = isYouSelected ? -1 : isStoryMode ? selectedIndex : undefined;
 
   // FoldingLetter's onReminderPeekChange prop itself goes undefined the instant the user flicks
   // away from "Myself" (see its own conditional below) — a no-op prop can't tell this screen's own
@@ -336,11 +334,11 @@ export function ThrowHomeScreen({
     if (!isSelfSelected) setReminderPeeking(false);
   }, [isSelfSelected]);
 
-  // A freshly-opened (or closed) contact's status stack starts its own count from scratch — never
-  // carries over whatever the previous contact's avatar happened to be showing.
+  // A freshly-opened avatar's status stack starts its own count from scratch — never carries over
+  // whatever was open before it (see openIndex's own comment).
   useEffect(() => {
     setOpenAvatarCount(0);
-  }, [storyView?.userId]);
+  }, [openIndex]);
 
   useEffect(() => {
     cardModeFade.setValue(0);
@@ -365,35 +363,24 @@ export function ThrowHomeScreen({
   // Tapping the already-selected contact's ring (see RecipientCarousel's own onOpenStory) opens
   // their stories inline, in the same card, instead of re-selecting them (a no-op otherwise) — the
   // same "tap once to select, tap the selected one again to open" convention avoids needing a whole
-  // second control just for viewing. Works identically for any contact, including yourself.
+  // second control just for viewing. Never fires for "Myself" (RecipientCarousel's own
+  // selfUserId exclusion) — that avatar is the self-reminder slot now, not a status one; viewing/
+  // posting your own status is exclusively "You"'s job (see handleOpenYouStatus below).
   const handleOpenStory = (userId: string) => {
     if ((storiesByUser[userId]?.length ?? 0) === 0) return;
-    setStoryView({ userId, viaAddSlot: false });
+    setStoryView({ userId });
     // Also fires on every re-tap of the already-open contact's own avatar (see
     // RecipientCarousel's own onPress) — that's the "tap avatar to drop photos" gesture itself,
     // not just the initial open.
     setDropSignal((n) => n + 1);
   };
 
-  // Captured/picked media isn't posted right away any more — it lands on the preview step first
-  // (see StoryFlow's own comment), which is what actually calls postStory once the user taps its
-  // confirm arrow.
-  const handleStoryCaptured = (localUri: string, mediaType: StoryMediaType) => {
-    setStoryFlow({ name: 'preview', localUri, mediaType });
-  };
-
-  const handleStoryPreviewConfirmed = async (localUri: string, mediaType: StoryMediaType) => {
-    setStoryFlow(null);
-    await postStory(localUri, mediaType);
-  };
-
-  const handleStoryPickedLongVideo = (localUri: string, durationMs: number) => {
-    setStoryFlow({ name: 'trim', localUri, durationMs });
-  };
-
-  const handleStoryTrimConfirmed = async (trim: { startMs: number; endMs: number }, localUri: string) => {
-    setStoryFlow(null);
-    await postStory(localUri, 'video', trim);
+  // "You"'s own equivalent of handleOpenStory — fires on every tap of the already-selected "You"
+  // avatar, unconditionally (unlike a real contact, there's no separate "open" step: MyStatusPanel's
+  // own ContactStoryStack overlay is always mounted on top of the camera, this just tells it to
+  // drop whatever's still in the avatar).
+  const handleOpenYouStatus = () => {
+    setYouDropSignal((n) => n + 1);
   };
 
   // Long-press-then-flick-down inside ContactStoryStack (own stories only — see its own
@@ -416,41 +403,24 @@ export function ThrowHomeScreen({
   // Dragging the folded, ready-to-throw plane sideways (see FoldingLetter's onContactDragStart /
   // onContactDragOffset) cycles through recipients live, the same direction as swiping the
   // carousel — dragging right moves toward higher-index entries, left toward lower-index ones —
-  // and, like RecipientCarousel's own drag, clamps at the list's ends rather than wrapping.
-  // Selecting a different friend here also re-centers the map, since focusTarget above already
-  // follows selectedFriend.
-  // Guards the "entering Status" branch below against firing more than once per drag — the
-  // offset callback fires continuously while the finger's still down, and re-triggering it every
-  // tick past the boundary would re-open the capture flow repeatedly for as long as the drag holds
-  // there. Reset on every fresh grant.
-  const statusBoundaryHandledRef = useRef(false);
+  // and, like RecipientCarousel's own drag, clamps at the list's ends rather than wrapping. Never
+  // reaches "You" (index -1 on the shared rail) — composing a letter/reminder has nothing to do
+  // with the status camera, so this stays clamped to the real-contacts range it always covered.
   const handleContactDragStart = () => {
     dragBaseIndexRef.current = selectedIndex;
-    statusBoundaryHandledRef.current = false;
   };
   const handleContactDragOffset = (steps: number) => {
     const n = friendsWithLocation.length;
     if (n === 0) return;
-    // -1 is the virtual "Status" slot, one further left than any real contact (index 0) — tilting/
-    // flicking into it always opens the capture flow now, regardless of whether you've already
-    // posted a story today: Status is for adding one, not for viewing what's already there (see
-    // isCaptureMode's own comment) — viewing your own existing stories works the same way viewing
-    // anyone else's does, by tapping your own already-selected avatar (see handleOpenStory).
-    const nextIdx = Math.max(-1, Math.min(n - 1, Math.round(dragBaseIndexRef.current + steps)));
-    if (nextIdx === -1) {
-      if (statusBoundaryHandledRef.current) return;
-      statusBoundaryHandledRef.current = true;
-      if (myId) setSelectedFriendId(myId);
-      setStoryFlow({ name: 'capture' });
-      return;
-    }
+    const nextIdx = Math.max(0, Math.min(n - 1, Math.round(dragBaseIndexRef.current + steps)));
     setStoryView(null);
-    // Also exits capture/preview mode — otherwise dragging back to a real contact from the Status
-    // slot (see the StoryCaptureScreen flick gesture above) would leave the camera showing on top
-    // of a now-different, non-Status selection.
-    setStoryFlow(null);
     const nextFriend = friendsWithLocation[nextIdx];
     if (nextFriend && nextFriend.userId !== selectedFriendId) setSelectedFriendId(nextFriend.userId);
+    // Keeps the avatar rail's own shared position in sync — it's the single source of truth for
+    // where every avatar renders now (see useCarouselPos), so a selection driven from here (the
+    // letter's own flick, not the rail's own swipe) still needs to tell it explicitly, or the
+    // strip would visually stay put while the letter shows a different contact entirely.
+    core.springTo(nextIdx);
   };
 
   const pins: ThrowMapPin[] = useMemo(() => {
@@ -598,31 +568,52 @@ export function ThrowHomeScreen({
           ) : (
             <View style={[styles.recipientOverlay, { top: insets.top + 16 }]}>
               <RecipientCarousel
+                core={core}
                 friends={friendsWithLocation}
-                selectedIndex={selectedIndex}
-                onChangeIndex={(i) => {
-                  // Tapping/dragging to any real contact — including re-tapping whichever one was
-                  // already selected before Status — is the way back out of story mode (see
-                  // storyView's own comment); without this, tapping "Dhaval" again while viewing
-                  // Status would be a no-op (already `selectedFriendId`) and leave the user stuck
-                  // looking at their own photos with no way back.
-                  setStoryView(null);
-                  setStoryFlow(null);
-                  setSelectedFriendId(friendsWithLocation[i]?.userId ?? null);
-                }}
-                disabled={selfLocked || isCaptureMode || isPreviewMode}
+                disabled={selfLocked}
                 isNight={!mapIsDay}
                 storyCountFor={storyCountFor}
                 onOpenStory={handleOpenStory}
-                onAddStory={() => setStoryFlow({ name: 'capture' })}
-                isAddStorySelected={storyView?.viaAddSlot === true || isCaptureMode || isPreviewMode}
-                storyModeAvatarCount={isStoryMode ? openAvatarCount : undefined}
-                storyModePulseSignal={openAvatarPulseSignal}
+                selfUserId={myId ?? undefined}
+                youUserId={myId ?? undefined}
+                onOpenYouStatus={handleOpenYouStatus}
+                openIndex={openIndex}
+                openAvatarCount={openAvatarCount}
+                openPulseSignal={openAvatarPulseSignal}
               />
             </View>
           ))}
 
-        {!inFlight && selectedFriend && (
+        {/* Always mounted regardless of which rail position is actually selected — see its own
+            doc comment on why the camera needs to be pre-warmable before it's even on screen.
+            Not shown at all in the locked-recipient reply flow, same as the normal recipient
+            carousel just above ("You" doesn't exist as a concept there either). */}
+        {!inFlight && !lockedRecipient && myId && (
+          // Bounded to the exact same box the real letter card below occupies (left/right/top plus
+          // the same BottomNav-clearance-aware bottom) — MyStatusPanel's own internal layout
+          // (`track`/`cardWrap`/`cardBox`) fills whatever parent it's given via absolute-fill, so
+          // without this wrapper it would fill the entire screen instead of sitting in the letter.
+          <Animated.View
+            style={[styles.letterCard, { bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) }]}
+          >
+            <MyStatusPanel
+              core={core}
+              flightTargetX={storyFlightTargetX}
+              flightTargetY={storyFlightTargetY}
+              isNight={!isDay}
+              stories={storiesByUser[myId] ?? []}
+              dropSignal={youDropSignal}
+              onViewed={markViewed}
+              onDeleteStory={handleDeleteStory}
+              onAvatarCountChange={setOpenAvatarCount}
+              onPulseAvatar={() => setOpenAvatarPulseSignal((n) => n + 1)}
+              postStory={postStory}
+              onClose={() => core.springTo(lastRealIndexRef.current)}
+            />
+          </Animated.View>
+        )}
+
+        {!inFlight && selectedFriend && !isYouSelected && (
           // `bottom` shrinks from its normal BOTTOM_NAV_CLEARANCE-reserved position down to just
           // the safe-area inset as the letter folds, on the same chromeOpacity value that already
           // fades BottomNav out — that reserved clearance exists so the card clears the *visible*
@@ -637,27 +628,7 @@ export function ThrowHomeScreen({
             ]}
           >
             <Animated.View style={[styles.letterCardContent, { opacity: cardModeFade }]}>
-              {isCaptureMode ? (
-                <StoryCaptureScreen
-                  onClose={() => setStoryFlow(null)}
-                  onCaptured={handleStoryCaptured}
-                  onPickedLongVideo={handleStoryPickedLongVideo}
-                  onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}
-                  onContactDragOffset={!lockedRecipient && !selfLocked ? handleContactDragOffset : undefined}
-                />
-              ) : storyFlow?.name === 'preview' ? (
-                <StoryPreviewScreen
-                  localUri={storyFlow.localUri}
-                  mediaType={storyFlow.mediaType}
-                  flightTargetY={storyFlightTargetY}
-                  // Discarding a just-captured/picked photo re-opens the camera, not the letter —
-                  // preview only ever follows capture (see StoryFlow's own comment: it's always
-                  // reached from Status), so "X" backing out of it should land you right back
-                  // where you were, not jump forward to Own Contact's compose letter.
-                  onCancel={() => setStoryFlow({ name: 'capture' })}
-                  onConfirm={() => handleStoryPreviewConfirmed(storyFlow.localUri, storyFlow.mediaType)}
-                />
-              ) : isStoryMode && selectedFriend ? (
+              {isStoryMode && selectedFriend ? (
                 <ContactStoryStack
                   key={selectedFriend.userId}
                   stories={storiesByUser[selectedFriend.userId] ?? []}
@@ -671,10 +642,6 @@ export function ThrowHomeScreen({
                   onDeleteStory={handleDeleteStory}
                   onAvatarCountChange={setOpenAvatarCount}
                   onPulseAvatar={() => setOpenAvatarPulseSignal((n) => n + 1)}
-                  // Deleting the last photo empties the stack completely — go straight back to the
-                  // letter instead of leaving ContactStoryStack's own "Status deleted / Bring them
-                  // back" placeholder on screen.
-                  onAllDeleted={() => setStoryView(null)}
                 />
               ) : (
                 <FoldingLetter
@@ -778,19 +745,6 @@ export function ThrowHomeScreen({
           reduceMotion={reduceMotion}
         />
       </Animated.View>
-
-      {storyFlow?.name === 'trim' && (
-        // Same reasoning as the preview step's own onCancel above — backing out of trimming a
-        // picked long video should reopen the camera, not drop to Own Contact's letter.
-        <Modal visible animationType="slide" onRequestClose={() => setStoryFlow({ name: 'capture' })} statusBarTranslucent>
-          <StoryTrimScreen
-            localUri={storyFlow.localUri}
-            durationMs={storyFlow.durationMs}
-            onCancel={() => setStoryFlow({ name: 'capture' })}
-            onConfirm={(trim) => handleStoryTrimConfirmed(trim, storyFlow.localUri)}
-          />
-        </Modal>
-      )}
     </View>
   );
 }
