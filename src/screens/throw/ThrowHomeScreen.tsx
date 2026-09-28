@@ -410,6 +410,10 @@ export function ThrowHomeScreen({
       return;
     }
     setStoryView(null);
+    // Also exits capture/preview mode — otherwise dragging back to a real contact from the Status
+    // slot (see the StoryCaptureScreen flick gesture above) would leave the camera showing on top
+    // of a now-different, non-Status selection.
+    setStoryFlow(null);
     const nextFriend = friendsWithLocation[nextIdx];
     if (nextFriend && nextFriend.userId !== selectedFriendId) setSelectedFriendId(nextFriend.userId);
   };
@@ -564,6 +568,7 @@ export function ThrowHomeScreen({
                   // Status would be a no-op (already `selectedFriendId`) and leave the user stuck
                   // looking at their own photos with no way back.
                   setStoryView(null);
+                  setStoryFlow(null);
                   setSelectedFriendId(friendsWithLocation[i]?.userId ?? null);
                 }}
                 disabled={selfLocked || isCaptureMode || isPreviewMode}
@@ -596,6 +601,8 @@ export function ThrowHomeScreen({
                   onClose={() => setStoryFlow(null)}
                   onCaptured={handleStoryCaptured}
                   onPickedLongVideo={handleStoryPickedLongVideo}
+                  onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}
+                  onContactDragOffset={!lockedRecipient && !selfLocked ? handleContactDragOffset : undefined}
                 />
               ) : storyFlow?.name === 'preview' ? (
                 <StoryPreviewScreen
