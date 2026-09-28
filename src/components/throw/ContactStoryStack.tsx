@@ -40,6 +40,14 @@ const ENTRY_STAGGER_MS = 130;
 // Alternating signs per layer read as a more natural, less mechanical tumble than every photo
 // rotating the same way as it falls.
 const ENTRY_START_ROTATE_DEG: Record<'front' | 'behind1' | 'behind2', number> = { front: -13, behind1: 10, behind2: -8 };
+// Web only: without this, holding down on a photo for this component's own long-press-to-delete
+// gesture (see startLongPressTimer) is instead intercepted by Mobile Safari's native text-selection/
+// callout UI (the "Copy / Look Up / Translate / Search Web" bar) — the same underlying browser
+// behavior CardStack.tsx's own `noSelect` already works around for drag gestures, plus the two
+// Safari-specific keys (RN's ViewStyle type doesn't model any of these — loosely-typed, same as
+// `noSelect` there) that actually suppress the touch-and-hold callout itself, not just click-drag
+// text selection.
+const noSelect: Record<string, unknown> = { userSelect: 'none', webkitUserSelect: 'none', webkitTouchCallout: 'none' };
 
 // Same split-by-media-type reasoning as the rest of Throw's story components (see the retired
 // StatusPhotoViewer) — hooks can't be conditional, so a photo story never touches useVideoPlayer.
@@ -476,8 +484,8 @@ export function ContactStoryStack({ stories, isNight, flightTargetY, onExhausted
   };
 
   return (
-    <View ref={wrapRef} onLayout={onLayout} style={styles.root} {...panResponder.panHandlers}>
-      <View style={[styles.clip, { backgroundColor: isNight ? throwNightColor.paper : throwColor.paper }]}>
+    <View ref={wrapRef} onLayout={onLayout} style={[styles.root, noSelect]} {...panResponder.panHandlers}>
+      <View style={[styles.clip, noSelect, { backgroundColor: isNight ? throwNightColor.paper : throwColor.paper }]}>
         {behind2 && (
           <Animated.View style={[StyleSheet.absoluteFill, restStyle(REST_2, behind2Entry)]}>
             <StoryMedia key={behind2.id} story={behind2} />
@@ -490,7 +498,7 @@ export function ContactStoryStack({ stories, isNight, flightTargetY, onExhausted
         )}
       </View>
 
-      <Animated.View style={[styles.card, frontStyle]}>
+      <Animated.View style={[styles.card, noSelect, frontStyle]}>
         <StoryMedia key={front.id} story={front} isFront />
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.veil, { opacity: veilOpacity }]} />
         {/* The trash icon travels with the photo (it's drawn "on" it, per explicit request) — the
