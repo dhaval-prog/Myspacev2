@@ -168,18 +168,11 @@ interface ContactStoryStackProps {
   /** Fired whenever the avatar should do its own little scale pulse (a photo just landed in the
    * letter, or one just flew back into it). */
   onPulseAvatar?: () => void;
-  /** However many cards are currently in the letter (not the avatar) — lets a parent that overlays
-   * this on top of something else (see MyStatusPanel's own live camera) toggle pointer-events on
-   * the overlay itself: touches should fall through to whatever's underneath while there's nothing
-   * here to grab, and only this stack's own gestures should claim them once there is. */
-  onLetterCountChange?: (count: number) => void;
-  /** Suppresses the dashed-border "Tap X's status to open" / "Status deleted" placeholder — for
-   * MyStatusPanel's own embedding, where the live camera underneath already fills that space, so
-   * the normal empty-state card would just sit on top of it looking like a stray overlay. The
-   * "Bring them back" restore flow (reachable only through that placeholder) is unreachable while
-   * this is set — own-status deletes are rare enough that losing that specific undo path here is
-   * an acceptable trade rather than drawing the placeholder over a live camera. */
-  hideEmptyState?: boolean;
+  /** Fired the instant a delete empties the letter completely (nothing left in the avatar either)
+   * — the parent's cue to leave story mode immediately rather than let this render its own
+   * "Status deleted / Bring them back" placeholder. Never fires for a swipe-up-to-return (that
+   * just parks the photo back in the avatar, not gone), only for the delete gesture. */
+  onAllDeleted?: () => void;
 }
 
 /**
@@ -188,8 +181,9 @@ interface ContactStoryStackProps {
  * of three places (avatar / letter / bin, see PhotoLocation) rather than being "watched once and
  * gone": tapping the contact's avatar drops whatever's still there into the letter one at a time;
  * swiping the top card up sends it back into the avatar; long-pressing then dragging down (own
- * stories only) deletes it. Nothing here auto-reverts to the compose letter any more — the parent
- * only leaves story mode when the user picks a different contact.
+ * stories only) deletes it. The parent otherwise only leaves story mode when the user picks a
+ * different contact — except when a delete empties the stack completely, which hands control
+ * straight back to the parent (see onAllDeleted) instead of showing an empty placeholder here.
  */
 export function ContactStoryStack({
   stories,
@@ -203,9 +197,10 @@ export function ContactStoryStack({
   onDeleteStory,
   onAvatarCountChange,
   onPulseAvatar,
-  onLetterCountChange,
-  hideEmptyState,
+  onAllDeleted,
 }: ContactStoryStackProps) {
+  const onAllDeletedRef = useRef(onAllDeleted);
+  onAllDeletedRef.current = onAllDeleted;
   const [locations, setLocationsState] = useState<Map<string, PhotoLocation>>(() => new Map(stories.map((s) => [s.id, 'avatar' as PhotoLocation])));
   const locationsRef = useRef(locations);
   locationsRef.current = locations;
@@ -399,11 +394,13 @@ export function ContactStoryStack({
       animsRef.current.delete(id);
       setLocation(id, 'bin');
       pendingDeleteRef.current.add(id);
-      setLetterOrder((prev) => {
-        const next = prev.filter((x) => x !== id);
-        next.forEach((otherId, idx) => settleCard(otherId, idx));
-        return next;
-      });
+      const next = letterOrderRef.current.filter((x) => x !== id);
+      next.forEach((otherId, idx) => settleCard(otherId, idx));
+      setLetterOrder(next);
+      if (next.length === 0) {
+        const stillInAvatar = stories.some((s) => (locationsRef.current.get(s.id) ?? 'avatar') === 'avatar');
+        if (!stillInAvatar) onAllDeletedRef.current?.();
+      }
     });
   };
 
@@ -595,11 +592,6 @@ export function ContactStoryStack({
   useEffect(() => {
     onAvatarCountChangeRef.current?.(avatarCount);
   }, [avatarCount]);
-  const onLetterCountChangeRef = useRef(onLetterCountChange);
-  onLetterCountChangeRef.current = onLetterCountChange;
-  useEffect(() => {
-    onLetterCountChangeRef.current?.(letterOrder.length);
-  }, [letterOrder.length]);
 
   const handleRestore = () => {
     const binnedIds = stories.filter((s) => locations.get(s.id) === 'bin').map((s) => s.id);
@@ -676,7 +668,7 @@ export function ContactStoryStack({
 
   const cardElements = letterOrder.map((id, idx) => renderCard(id, idx)).reverse();
 
-  const showEmpty = letterOrder.length === 0 && !hideEmptyState;
+  const showEmpty = letterOrder.length === 0;
   const firstName = contactName.split(' ')[0] || contactName;
   const emptyText = avatarCount > 0 ? `Tap ${firstName}'s status to open` : binnedCount > 0 ? 'Status deleted' : 'No status yet';
 
