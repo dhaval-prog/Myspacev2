@@ -219,6 +219,15 @@ export function ThrowHomeScreen({
   // letter card's own width-derived scale) so the chips read at roughly the same size as
   // FoldingLetter's own bottom-controls row instead of shrinking down to match the card.
   const inboxChipScale = inboxScale * 1.35;
+  // The plane-chip row's own measured height — reserved as extra clearance below the letter card
+  // (see letterCard's own `bottom` style) so the card's height, while still filling the rest of
+  // the available space, stops short of the row instead of extending underneath it. PlaneSlider
+  // floats in its own full-width sibling overlay (not nested inside the letter card, unlike
+  // FoldingLetter's own bottom-controls row, which is a child of the same paper) precisely because
+  // it needs more room than that slim icon row — measuring it directly here, rather than
+  // hardcoding an estimate, keeps this correct however tall the row's header/chips/replay actually
+  // render at any given scale.
+  const [inboxChipRowHeight, setInboxChipRowHeight] = useState(0);
   const inboxLandingPoint: Point = { x: inboxAreaSize.width / 2, y: inboxCardHeight / 2 };
   const inboxBelowOrigin: Point = { x: inboxLandingPoint.x, y: inboxCardHeight + 120 * inboxScale };
   const inboxLetterAreaRef = useRef<View>(null);
@@ -816,7 +825,16 @@ export function ThrowHomeScreen({
           <Animated.View
             style={[
               styles.letterCard,
-              { bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) },
+              {
+                // Adds the plane-chip row's own measured clearance (see inboxChipRowHeight) on top
+                // of the usual BottomNav-driven offset, fading in on the same inboxChromeOpacity
+                // value the row itself crossfades in on — so the card's own bottom edge stops short
+                // of the row instead of growing underneath it once inbox mode is fully open.
+                bottom: Animated.add(
+                  Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)),
+                  Animated.multiply(inboxChromeOpacity, inboxChipRowHeight),
+                ),
+              },
             ]}
           >
             <Animated.View style={[styles.letterCardContent, { opacity: cardModeFade }]}>
@@ -1023,6 +1041,7 @@ export function ThrowHomeScreen({
           { opacity: inboxChromeOpacity, transform: [{ translateY: inboxChromeOpacity.interpolate({ inputRange: [0, 1], outputRange: [BOTTOM_NAV_CLEARANCE, 0] }) }] },
         ]}
         pointerEvents={inboxMode ? 'box-none' : 'none'}
+        onLayout={(e) => setInboxChipRowHeight(e.nativeEvent.layout.height)}
       >
         {selectedFriend && (
           <PlaneSlider

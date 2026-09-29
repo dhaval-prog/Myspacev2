@@ -13,6 +13,7 @@ export type LetterStage =
   | 'open'
   | 'folding'
   | 'shrink'
+  | 'fadeOut'
   | 'trash'
   | 'empty';
 
@@ -46,6 +47,9 @@ interface LetterFoldCardProps {
 // ----- timings, ported verbatim from the design handoff's own renderVals() -----
 const D = 500;
 const LAG = 200;
+// The plain crossfade duration for 'fadeOut'/'open' — the in-place received-letters panel's own
+// switch-between-letters treatment (see useInboxArrival's own foldAway).
+const FADE_MS = 260;
 const HALF = 250;
 const FOLD_EASING = Easing.bezier(0.6, 0, 0.3, 1);
 const WING_EASING = Easing.bezier(0.3, 1.1, 0.4, 1);
@@ -160,10 +164,16 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
       letterScale.setValue(1);
       letterRotate.setValue(0);
       letterTranslateY.setValue(0);
-      // Reduced motion can land here directly from 'hidden'/'empty' (see ThrowInboxScreen's own
-      // play()), skipping the flight/fold choreography entirely — "just crossfade the letter" per
-      // explicit request, so opacity alone still animates even though nothing else does.
-      Animated.timing(letterOpacity, { toValue: 1, duration: reduceMotion ? 220 : 0, useNativeDriver: true }).start();
+      // A plain crossfade in every case now, not just reduced motion — per explicit request, the
+      // incoming letter should simply fade in once the plane lands (see useInboxArrival's own
+      // foldAway/'fadeOut', the matching fade-out on the way out) rather than snap in instantly.
+      Animated.timing(letterOpacity, { toValue: 1, duration: reduceMotion ? 220 : FADE_MS, useNativeDriver: true }).start();
+    } else if (stage === 'fadeOut') {
+      // The currently-open letter, about to be replaced by a different one (see useInboxArrival's
+      // own foldAway) — just fades out in place, scale/rotate/position untouched, instead of the
+      // fold-closed-then-shrink-away flourish 'folding'/'shrink' below still drive for
+      // ThrowInboxScreen's own standalone arrival flow.
+      Animated.timing(letterOpacity, { toValue: 0, duration: dur ?? FADE_MS, useNativeDriver: true }).start();
     } else if (stage === 'shrink') {
       Animated.timing(letterTranslateY, { toValue: 260, duration: dur ?? 340, easing: SHRINK_EASING, useNativeDriver: true }).start();
       Animated.timing(letterScale, { toValue: 0.25, duration: dur ?? 340, easing: SHRINK_EASING, useNativeDriver: true }).start();
@@ -177,14 +187,16 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
     }
 
     // ----- tri-fold panels -----
-    // Entering 'open' always reveals the panels instantly (setValue, not Animated.timing) — per
-    // explicit request, the plane-landing arrival no longer plays the tri-fold unfold flourish at
-    // all (see useInboxArrival's own play(), which now jumps straight from 'flying' to 'open' with
-    // no intervening 'landed'/'wings'/'corners'/'expand' stages), so there is nothing left for this
-    // effect to still be animating toward by the time 'open' is reached. Leaving 'open' (folded
-    // true — the close-and-swap-letter animation, still used when picking a different chip or
-    // deleting) keeps its own animated fold exactly as before.
-    if (stage === 'open') {
+    // 'open' and 'fadeOut' both keep the panels fully unfolded/front-facing, set instantly
+    // (setValue, not Animated.timing) rather than animated — per explicit request, the in-place
+    // received-letters panel no longer plays the tri-fold fold/unfold flourish at all, on either
+    // the incoming letter (useInboxArrival's play() jumps straight from 'flying' to 'open') or the
+    // outgoing one ('fadeOut' just fades the outer opacity down — see the block above — without
+    // ever touching the fold geometry, so the currently-open letter visibly fades out as itself
+    // instead of snapping to its folded/back-of-envelope appearance first). Leaving 'open' this
+    // way for any *other* stage (folded true — 'folding'/'shrink'/etc., still used by
+    // ThrowInboxScreen's own standalone arrival flow) keeps its animated fold exactly as before.
+    if (stage === 'open' || stage === 'fadeOut') {
       topRotateX.setValue(0);
       botRotateX.setValue(0);
       topFrontOpacity.setValue(1);
@@ -420,7 +432,9 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
       </Animated.View>
 
       {stage === 'open' && onThrowBack && (
-        <View pointerEvents="box-none" style={[styles.throwBackWrap, { bottom: s(14, scale) }]}>
+        // `bottom` needs vScale, not scale — same reasoning as SignatureRow's own bottom offset —
+        // so this stays a small gap above the card's own (independently scaled) bottom edge.
+        <View pointerEvents="box-none" style={[styles.throwBackWrap, { bottom: s(14, vScale) }]}>
           <Text onPress={onThrowBack} style={[styles.throwBackBtn, { fontSize: s(12.5, scale), paddingHorizontal: s(14, scale), paddingVertical: s(8, scale), borderRadius: s(14, scale) }]}>
             Throw Back
           </Text>
