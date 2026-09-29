@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { Icon } from '../Icon';
+import { AutoplayVideoFill } from '../AutoplayVideoFill';
 import { throwColor, throwNightColor, throwRadius } from '../../theme/throwTokens';
 import { noSelect } from '../../theme/webStyles';
 import type { ThrowStory } from '../../types/story';
@@ -55,16 +55,6 @@ const DELETE_COMMIT_EASING = Easing.bezier(0.5, 0, 0.8, 0.4);
 
 const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 
-function StoryVideoMedia({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = true;
-    p.muted = true;
-    p.play();
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <VideoView player={player as any} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} pointerEvents="none" />;
-}
-
 function StoryMedia({ story, testID }: { story: ThrowStory; testID?: string }) {
   if (story.mediaType === 'photo') {
     // pointerEvents="none" — react-native-web's Image renders a plain <img>, natively draggable
@@ -76,7 +66,7 @@ function StoryMedia({ story, testID }: { story: ThrowStory; testID?: string }) {
       </View>
     );
   }
-  return <StoryVideoMedia uri={story.mediaUrl} />;
+  return <AutoplayVideoFill uri={story.mediaUrl} />;
 }
 
 interface CardAnim {

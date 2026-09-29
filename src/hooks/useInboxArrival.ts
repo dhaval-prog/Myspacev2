@@ -35,6 +35,11 @@ interface UseInboxArrivalOptions {
    * screen's own "flies up from the chip row" origin. Defaults to landingPoint offset down. */
   belowOrigin?: Point;
   deleteThrow: (throwId: string) => Promise<{ error: string | null }>;
+  /** Marks a letter read once it's actually shown open (see play()'s own call) — clears its
+   * contribution to unreadCountFor's per-contact badge (RecipientCarousel/ContactsRail) the next
+   * time the inbox refreshes. Optional so callers with nothing unread-related to show (or whose
+   * "letters" aren't real throws at all, e.g. self-reminders) can simply omit it. */
+  markRead?: (throwId: string) => Promise<void>;
 }
 
 /**
@@ -46,7 +51,7 @@ interface UseInboxArrivalOptions {
  * NOT this hook's job either way — the caller decides which contact's `letters` to hand in.
  */
 export function useInboxArrival(opts: UseInboxArrivalOptions) {
-  const { enabled, letters, contactName, reduceMotion, scale, landingPoint, belowOrigin, deleteThrow } = opts;
+  const { enabled, letters, contactName, reduceMotion, scale, landingPoint, belowOrigin, deleteThrow, markRead } = opts;
 
   const [activeLetterIdx, setActiveLetterIdx] = useState(0);
   const [stage, setStage] = useState<LetterStage>('hidden');
@@ -87,11 +92,21 @@ export function useInboxArrival(opts: UseInboxArrivalOptions) {
     }
   };
 
+  // Best-effort — a letter opening is what actually clears its contribution to the per-contact
+  // unread badge (RecipientCarousel/ContactsRail), same as ThrowLetterDetailScreen's own markRead
+  // call used to before this panel existed. Guarded on status so a re-open of an already-read
+  // letter (switching back to a chip you've already seen) doesn't fire a redundant write+refresh.
+  const markIfUnread = (idx: number) => {
+    const l = visibleLetters[idx];
+    if (l && l.status === 'thrown') void markRead?.(l.id);
+  };
+
   const play = (idx: number, from: Point | null) => {
     clear();
     if (reduceMotion) {
       setActiveLetterIdx(idx);
       setStageBoth('open');
+      markIfUnread(idx);
       return;
     }
     const fly = () => {
@@ -125,6 +140,7 @@ export function useInboxArrival(opts: UseInboxArrivalOptions) {
           // it's entered this way, so nothing else needs to change to make this read as instant.
           setPlane(null);
           setStageBoth('open');
+          markIfUnread(idx);
         }
       };
       rafRef.current = requestAnimationFrame(step);

@@ -52,7 +52,7 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
   const scale = width / inboxLayout.phone.width;
   const reduceMotion = useReducedMotion();
   const { mapIsDay } = useThrowColorMode();
-  const { inbox, deleteThrow } = useThrow();
+  const { inbox, deleteThrow, markRead } = useThrow();
 
   const [locallyDeletedIds, setLocallyDeletedIds] = useState<Set<string>>(new Set());
 
@@ -108,12 +108,21 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
 
   const LAND: Point = { x: s(inboxLayout.landingPoint.x, scale), y: s(inboxLayout.landingPoint.y, scale) };
 
+  // Best-effort — a letter opening is what actually clears its contribution to ContactsRail's own
+  // per-contact unread badge (see railContacts below), same guard useInboxArrival's own copy uses
+  // so re-opening an already-read letter doesn't fire a redundant write+refresh.
+  const markIfUnread = (ci: number, idx: number) => {
+    const l = contacts[ci]?.letters[idx];
+    if (l && l.status === 'thrown') void markRead(l.id);
+  };
+
   const play = (ci: number, idx: number, from: Point | null) => {
     clear();
     if (reduceMotion) {
       setSelectedContactIdx(ci);
       setActiveLetterIdx(idx);
       setStageBoth('open');
+      markIfUnread(ci, idx);
       return;
     }
     const fly = () => {
@@ -147,7 +156,10 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
           later(() => setStageBoth('wings'), 40);
           later(() => setStageBoth('corners'), 560);
           later(() => setStageBoth('expand'), 1060);
-          later(() => setStageBoth('open'), 1520);
+          later(() => {
+            setStageBoth('open');
+            markIfUnread(ci, idx);
+          }, 1520);
         }
       };
       rafRef.current = requestAnimationFrame(step);
@@ -215,7 +227,17 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
     }, 520);
   };
 
-  const railContacts: ContactRailItem[] = contacts.map((c) => ({ id: c.id, name: c.name, sub: c.sub, avatarUrl: c.avatarUrl, count: c.letters.length }));
+  // Unread count, not total letters — and computed off this screen's own already deletion-aware
+  // `contacts` (see locallyDeletedIds above) rather than context's unreadCountFor directly, so the
+  // badge drops the instant a delete lands here instead of lagging behind until the next real
+  // inbox refresh resolves.
+  const railContacts: ContactRailItem[] = contacts.map((c) => ({
+    id: c.id,
+    name: c.name,
+    sub: c.sub,
+    avatarUrl: c.avatarUrl,
+    count: c.letters.filter((l) => l.status === 'thrown').length,
+  }));
   const currentContact = contacts[selectedContactIdx] ?? null;
   const currentLetters = currentContact?.letters ?? [];
   const activeLetter = currentLetters[activeLetterIdx] ?? null;

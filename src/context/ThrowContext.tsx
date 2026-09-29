@@ -88,6 +88,10 @@ interface ThrowContextValue {
   /** Letters I received, newest first. */
   inbox: ThrowLetter[];
   unreadCount: number;
+  /** How many of a specific counterpart's letters to me are still unread — the per-contact count
+   * behind the small badge on their avatar circle (RecipientCarousel/ContactsRail), as opposed to
+   * unreadCount's own app-wide total. */
+  unreadCountFor: (counterpartId: string) => number;
   /** Consecutive calendar days (UTC) I've thrown at least one letter to this specific counterpart,
    * ending today or yesterday — 0 once a day's gone by with nothing thrown to them, or if we've
    * never thrown to them at all. */
@@ -299,6 +303,10 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
   const letters = useMemo(() => rows.map((r) => toLetter(r, myId ?? '', nameFor, avatarFor)), [rows, myId, nameFor, avatarFor]);
   const inbox = useMemo(() => letters.filter((l) => l.direction === 'received'), [letters]);
   const unreadCount = useMemo(() => inbox.filter((l) => l.status === 'thrown').length, [inbox]);
+  const unreadCountFor = useCallback(
+    (counterpartId: string) => inbox.filter((l) => l.counterpartId === counterpartId && l.status === 'thrown').length,
+    [inbox],
+  );
 
   const friends: ThrowFriend[] = useMemo(
     () => fsFriends.map((f) => ({ userId: f.userId, name: f.name, avatarUrl: f.avatarUrl, location: friendLocations[f.userId] ?? null })),
@@ -317,6 +325,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     letters,
     inbox,
     unreadCount,
+    unreadCountFor,
     streakFor,
     sendThrow,
     uploadPhoto,

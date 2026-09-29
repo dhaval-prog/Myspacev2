@@ -102,6 +102,12 @@ interface RecipientCarouselProps {
    * reacting once `selectedIndex` itself lands on a new value. Undefined the rest of the time,
    * which leaves the existing resting-index spring below fully in charge. */
   liveOffset?: number;
+  /** How many of a contact's letters to me are still unread — shown as a small top-right badge on
+   * *any* contact's avatar (not just the selected one, unlike storyModeAvatarCount's own badge),
+   * per explicit request; a letter being opened clears it the next time this refreshes (see
+   * useInboxArrival's own markRead call). Omitted entirely for callers that don't track unread
+   * letters at all (tests, or a carousel shown outside Throw's own letter flow). */
+  unreadCountFor?: (userId: string) => number;
 }
 
 /** The status-letter-stack's own small count badge — top-right of the avatar, matching the
@@ -135,6 +141,7 @@ export function RecipientCarousel({
   storyModeAvatarCount,
   storyModePulseSignal,
   liveOffset,
+  unreadCountFor,
 }: RecipientCarouselProps) {
   const avatarPulse = useRef(new Animated.Value(1)).current;
   const isFirstPulseRender = useRef(true);
@@ -300,6 +307,12 @@ export function RecipientCarousel({
                         />
                         <AvatarCountBadge count={storyModeAvatarCount} isNight={isNight} />
                       </>
+                    )}
+                    {/* Unread-letter badge — any contact, not just the selected one (unlike the
+                        story-mode badge above, which it defers to whenever both would otherwise
+                        land on the same avatar). */}
+                    {!(isSelected && storyModeAvatarCount !== undefined) && (
+                      <AvatarCountBadge count={unreadCountFor?.(f.userId) ?? 0} isNight={isNight} />
                     )}
                   </Animated.View>
                 </View>
