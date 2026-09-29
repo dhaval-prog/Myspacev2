@@ -153,6 +153,11 @@ interface FoldingLetterProps {
    * relative to the drag's start — not capped at ±1, so a longer drag can move several recipients
    * over. The caller rounds and clamps against its own list length. */
   onContactDragOffset?: (steps: number) => void;
+  /** Fires once, right when a recipient-switching drag (either variant above) ends — the caller's
+   * cue to stop treating its own carousel strip as live-tracking this drag and let it spring back
+   * to resting on whichever recipient actually ended up selected, instead of only reacting the
+   * next time `selectedIndex` itself changes. */
+  onContactDragEnd?: () => void;
   /** Fires on every change to the fold amount (0 = flat writing paper, 1 = folded-and-ready
    * plane) regardless of what's driving it — the pointer-drag fold above or the scroll-wheel
    * fold below both funnel through the same `progress` value. The caller uses this to fade
@@ -252,6 +257,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     unreadCount,
     onContactDragStart,
     onContactDragOffset,
+    onContactDragEnd,
     onFoldProgress,
     alertSchedule,
     onAlertScheduleChange,
@@ -470,6 +476,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     springLiftBack,
     onContactDragStart,
     onContactDragOffset,
+    onContactDragEnd,
     onFoldProgress,
     isNight,
     selfReminderMode,
@@ -487,6 +494,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     springLiftBack,
     onContactDragStart,
     onContactDragOffset,
+    onContactDragEnd,
     onFoldProgress,
     isNight,
     selfReminderMode,
@@ -669,7 +677,9 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     };
     const onUp = () => {
       rawStartRef.current = null;
+      const wasContactDrag = contactCapturedRef.current;
       contactCapturedRef.current = false;
+      if (wasContactDrag) latest.current.onContactDragEnd?.();
       if (!dragAnchorRef.current) return;
       // Clear the anchor first — this is what actually stops tracking, synchronously, before
       // settleFold's spring even starts. Everything after this point no-ops in onMove above.
@@ -846,6 +856,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         onPanResponderRelease: (_, g) => {
           if (writingGestureKindRef.current === 'contact') {
             writingGestureKindRef.current = null;
+            latest.current.onContactDragEnd?.();
             return;
           }
           writingGestureKindRef.current = null;
@@ -854,6 +865,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             // stray move event that might otherwise land after release and re-drive progress.
             readyGestureActiveRef.current = false;
             stageRef.current?.setReadyBank(0);
+            if (readyZoneRef.current === 'center') latest.current.onContactDragEnd?.();
             if (readyZoneRef.current === 'side') {
               latest.current.settleFold(progressRef.current >= 0.5 ? 1 : 0);
               return;

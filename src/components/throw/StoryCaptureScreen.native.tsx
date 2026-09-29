@@ -4,7 +4,7 @@ import Svg, { Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { Icon } from '../Icon';
-import { throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwRadius } from '../../theme/throwTokens';
 import type { StoryMediaType } from '../../types/story';
 
 // Instagram/WhatsApp's own convention: a quick tap takes a photo, holding the shutter records
@@ -20,11 +20,17 @@ const MAX_VIDEO_SECONDS = 15;
 // card, not popped into place; the shutter's own press-scale gives the button real weight; the
 // brief white flash on a photo capture mimics an actual shutter flash.
 const ENTER_MS = 220;
-const EXIT_MS = 200;
 const SHUTTER_PRESS_SCALE = 0.88;
 const SHUTTER_SCALE_MS = 110;
 const FLASH_MS = 160;
 const SHUTTER_SIZE = 74;
+// Closing now flies the whole camera up and shrinks it into the status contact's own avatar
+// ring — the same flight-and-shrink StoryPreviewScreen's "Add to status" already uses for a
+// confirmed photo (identical constants/easing, so both read as the same visual language), rather
+// than the old in-place fade — per explicit request with its own reference screenshot.
+const CLOSE_FLIGHT_MS = 480;
+const CLOSE_MIN_SCALE = 0.12;
+const DEFAULT_CLOSE_FLIGHT_DISTANCE = 260;
 // A thin ring drawn just outside the shutter, filling clockwise over the 15s cap while recording
 // — the same "how much longer can I hold this" cue Instagram/Snapchat's own record buttons give.
 const RING_SIZE = SHUTTER_SIZE + 16;
@@ -68,6 +74,12 @@ interface StoryCaptureScreenProps {
    * (including back out to Own Contact) without closing the camera first. */
   onContactDragStart?: () => void;
   onContactDragOffset?: (steps: number) => void;
+  onContactDragEnd?: () => void;
+  /** The status contact's own avatar, in absolute screen coordinates (see ThrowHomeScreen's own
+   * storyFlightTargetY) — closing the camera flies it up and shrinks it toward this exact point,
+   * the same destination StoryPreviewScreen's "Add to status" flies a confirmed photo to, per
+   * explicit request. Falls back to a fixed distance if omitted. */
+  flightTargetY?: number;
 }
 
 /** Camera for posting a Throw story, filling the same letter-card slot FoldingLetter/
@@ -83,6 +95,8 @@ export function StoryCaptureScreen({
   onPickedLongVideo,
   onContactDragStart,
   onContactDragOffset,
+  onContactDragEnd,
+  flightTargetY,
 }: StoryCaptureScreenProps) {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
@@ -95,10 +109,14 @@ export function StoryCaptureScreen({
 
   const enterOpacity = useRef(new Animated.Value(0)).current;
   const enterScale = useRef(new Animated.Value(0.96)).current;
+  const closeFlightY = useRef(new Animated.Value(0)).current;
   const shutterScale = useRef(new Animated.Value(1)).current;
   const flashOpacity = useRef(new Animated.Value(0)).current;
   const recordProgress = useRef(new Animated.Value(0)).current;
   const closingRef = useRef(false);
+  const wrapRef = useRef<View>(null);
+  // Read inside handleClose without needing to rebuild it on every relayout.
+  const flightDistanceRef = useRef(DEFAULT_CLOSE_FLIGHT_DISTANCE);
 
   useEffect(() => {
     Animated.parallel([
@@ -108,23 +126,35 @@ export function StoryCaptureScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mirrors the enter animation in reverse — closing shrinks/fades the same way it grew in,
-  // rather than the camera just vanishing — and only calls the real onClose once that's played
-  // out, so the parent doesn't unmount this mid-animation. Guarded against a double tap firing it
-  // twice while the exit is already in flight.
+  const onLayout = () => {
+    if (flightTargetY == null) return;
+    requestAnimationFrame(() => {
+      wrapRef.current?.measureInWindow((_x, y, _width, height) => {
+        const ownCenterY = y + height / 2;
+        flightDistanceRef.current = Math.max(140, ownCenterY - flightTargetY);
+      });
+    });
+  };
+
+  // Flies the whole camera up and shrinks it into the status contact's own avatar — the same
+  // flight-and-shrink StoryPreviewScreen's "Add to status" already uses for a confirmed photo
+  // (see CLOSE_FLIGHT_MS/CLOSE_MIN_SCALE's own comment) — and only calls the real onClose once
+  // that's played out, so the parent doesn't unmount this mid-flight. Guarded against a double
+  // tap firing it twice while the exit is already in flight.
   const handleClose = () => {
     if (closingRef.current) return;
     closingRef.current = true;
     Animated.parallel([
-      Animated.timing(enterOpacity, { toValue: 0, duration: EXIT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      Animated.timing(enterScale, { toValue: 0.96, duration: EXIT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.timing(enterOpacity, { toValue: 0, duration: CLOSE_FLIGHT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(enterScale, { toValue: CLOSE_MIN_SCALE, duration: CLOSE_FLIGHT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(closeFlightY, { toValue: -flightDistanceRef.current, duration: CLOSE_FLIGHT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
     ]).start(() => onClose());
   };
 
   // Read inside the PanResponder's callbacks without needing to rebuild it (and drop mid-gesture
   // capture state) whenever a prop identity changes.
-  const latest = useRef({ onContactDragStart, onContactDragOffset });
-  latest.current = { onContactDragStart, onContactDragOffset };
+  const latest = useRef({ onContactDragStart, onContactDragOffset, onContactDragEnd });
+  latest.current = { onContactDragStart, onContactDragOffset, onContactDragEnd };
   const contactCapturedRef = useRef(false);
 
   const contactPanResponder = useMemo(
@@ -146,9 +176,11 @@ export function StoryCaptureScreen({
         },
         onPanResponderRelease: () => {
           contactCapturedRef.current = false;
+          latest.current.onContactDragEnd?.();
         },
         onPanResponderTerminate: () => {
           contactCapturedRef.current = false;
+          latest.current.onContactDragEnd?.();
         },
       }),
     [],
@@ -251,7 +283,9 @@ export function StoryCaptureScreen({
 
   return (
     <Animated.View
-      style={[styles.screen, { opacity: enterOpacity, transform: [{ scale: enterScale }] }]}
+      ref={wrapRef}
+      onLayout={onLayout}
+      style={[styles.screen, { opacity: enterOpacity, transform: [{ translateY: closeFlightY }, { scale: enterScale }] }]}
       {...contactPanResponder.panHandlers}
     >
       <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={facing} mode={mode} videoQuality="720p" />
@@ -354,6 +388,10 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,.4)',
+    // Same blue accent Throw's active/selected chrome already uses elsewhere (the carousel's own
+    // pulse ring, the selected map pin) — per explicit request with its own reference screenshot.
+    borderWidth: 1.5,
+    borderColor: throwColor.activeBlue,
     alignItems: 'center',
     justifyContent: 'center',
   },

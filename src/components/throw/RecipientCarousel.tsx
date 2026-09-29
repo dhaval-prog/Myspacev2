@@ -94,6 +94,13 @@ interface RecipientCarouselProps {
    * or flew back into the open contact's letter) — same trigger-by-changing-a-number convention
    * as ThrowHomeScreen's other one-shot signals. */
   storyModePulseSignal?: number;
+  /** A live, externally-driven fractional index (see FoldingLetter/StoryCaptureScreen's own
+   * onContactDragOffset), present only while a recipient-switching drag is actually in progress
+   * elsewhere on screen (the letter's own writing-phase flick, or the status camera's) — the
+   * strip tracks it 1:1, the same way its own internal drag already does, instead of only
+   * reacting once `selectedIndex` itself lands on a new value. Undefined the rest of the time,
+   * which leaves the existing resting-index spring below fully in charge. */
+  liveOffset?: number;
 }
 
 /** The status-letter-stack's own small count badge — top-right of the avatar, matching the
@@ -126,6 +133,7 @@ export function RecipientCarousel({
   isAddStorySelected,
   storyModeAvatarCount,
   storyModePulseSignal,
+  liveOffset,
 }: RecipientCarouselProps) {
   const avatarPulse = useRef(new Animated.Value(1)).current;
   const isFirstPulseRender = useRef(true);
@@ -158,10 +166,19 @@ export function RecipientCarousel({
   }, [offset]);
 
   React.useEffect(() => {
-    if (draggingRef.current) return;
+    if (draggingRef.current || liveOffset != null) return;
     if (Math.round(offsetValueRef.current) === restingIndex) return;
     Animated.spring(offset, { toValue: restingIndex, useNativeDriver: false, friction: 8, tension: 60 }).start();
-  }, [restingIndex, offset]);
+  }, [restingIndex, offset, liveOffset]);
+
+  // Tracks an externally-driven drag 1:1 (no spring) — the same immediate `setValue` the strip's
+  // own internal PanResponder already uses for its own move events below, just fed by someone
+  // else's gesture instead. The moment `liveOffset` goes back to undefined (the drag ended), the
+  // effect above takes back over and springs to wherever `selectedIndex` actually landed.
+  React.useEffect(() => {
+    if (liveOffset == null) return;
+    offset.setValue(Math.max(-1, Math.min(maxIndex, liveOffset)));
+  }, [liveOffset, maxIndex, offset]);
 
   const snapTo = (index: number) => {
     const clamped = Math.max(0, Math.min(maxIndex, index));
