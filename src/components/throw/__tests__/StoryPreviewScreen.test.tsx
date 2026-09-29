@@ -11,7 +11,7 @@ describe('StoryPreviewScreen', () => {
     await render(<StoryPreviewScreen localUri="file:///a.jpg" mediaType="photo" onCancel={onCancel} onConfirm={onConfirm} />);
 
     await act(async () => {
-      fireEvent.press(screen.getByLabelText('Discard'));
+      fireEvent.press(screen.getByLabelText('Retake'));
     });
 
     expect(onCancel).toHaveBeenCalledTimes(1);
@@ -23,7 +23,7 @@ describe('StoryPreviewScreen', () => {
     await render(<StoryPreviewScreen localUri="file:///a.jpg" mediaType="photo" onCancel={jest.fn()} onConfirm={onConfirm} />);
 
     await act(async () => {
-      fireEvent.press(screen.getByLabelText('Post to your story'));
+      fireEvent.press(screen.getByLabelText('Add to status'));
     });
     expect(onConfirm).not.toHaveBeenCalled();
 
@@ -37,11 +37,11 @@ describe('StoryPreviewScreen', () => {
     await render(<StoryPreviewScreen localUri="file:///a.jpg" mediaType="photo" onCancel={jest.fn()} onConfirm={jest.fn()} />);
 
     await act(async () => {
-      fireEvent.press(screen.getByLabelText('Post to your story'));
+      fireEvent.press(screen.getByLabelText('Add to status'));
     });
 
-    expect(screen.queryByLabelText('Discard')).toBeNull();
-    expect(screen.queryByLabelText('Post to your story')).toBeNull();
+    expect(screen.queryByLabelText('Retake')).toBeNull();
+    expect(screen.queryByLabelText('Add to status')).toBeNull();
 
     // Let the flight animation finish so nothing is left running into the next test.
     await act(async () => {

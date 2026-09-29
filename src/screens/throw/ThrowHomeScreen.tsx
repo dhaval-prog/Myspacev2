@@ -423,19 +423,28 @@ export function ThrowHomeScreen({
   // tick past the boundary would re-open the capture flow repeatedly for as long as the drag holds
   // there. Reset on every fresh grant.
   const statusBoundaryHandledRef = useRef(false);
+  // The strip's own live-drag position (see RecipientCarousel's liveOffset prop) — set the moment
+  // a recipient-switching drag starts and updated continuously while it moves, so the carousel
+  // tracks the finger 1:1 instead of only reacting once selectedFriendId itself lands on a new
+  // contact. Back to null the instant the drag ends (handleContactDragEnd), handing control back
+  // to RecipientCarousel's own resting-index spring.
+  const [contactDragLiveOffset, setContactDragLiveOffset] = useState<number | null>(null);
   const handleContactDragStart = () => {
     dragBaseIndexRef.current = selectedIndex;
     statusBoundaryHandledRef.current = false;
+    setContactDragLiveOffset(selectedIndex);
   };
   const handleContactDragOffset = (steps: number) => {
     const n = friendsWithLocation.length;
     if (n === 0) return;
+    const raw = dragBaseIndexRef.current + steps;
+    setContactDragLiveOffset(Math.max(-1, Math.min(n - 1, raw)));
     // -1 is the virtual "Status" slot, one further left than any real contact (index 0) — tilting/
     // flicking into it always opens the capture flow now, regardless of whether you've already
     // posted a story today: Status is for adding one, not for viewing what's already there (see
     // isCaptureMode's own comment) — viewing your own existing stories works the same way viewing
     // anyone else's does, by tapping your own already-selected avatar (see handleOpenStory).
-    const nextIdx = Math.max(-1, Math.min(n - 1, Math.round(dragBaseIndexRef.current + steps)));
+    const nextIdx = Math.max(-1, Math.min(n - 1, Math.round(raw)));
     if (nextIdx === -1) {
       if (statusBoundaryHandledRef.current) return;
       statusBoundaryHandledRef.current = true;
@@ -450,6 +459,9 @@ export function ThrowHomeScreen({
     setStoryFlow(null);
     const nextFriend = friendsWithLocation[nextIdx];
     if (nextFriend && nextFriend.userId !== selectedFriendId) setSelectedFriendId(nextFriend.userId);
+  };
+  const handleContactDragEnd = () => {
+    setContactDragLiveOffset(null);
   };
 
   const pins: ThrowMapPin[] = useMemo(() => {
@@ -617,6 +629,7 @@ export function ThrowHomeScreen({
                 isAddStorySelected={storyView?.viaAddSlot === true || isCaptureMode || isPreviewMode}
                 storyModeAvatarCount={isStoryMode ? openAvatarCount : undefined}
                 storyModePulseSignal={openAvatarPulseSignal}
+                liveOffset={contactDragLiveOffset ?? undefined}
               />
             </View>
           ))}
@@ -643,6 +656,8 @@ export function ThrowHomeScreen({
                   onPickedLongVideo={handleStoryPickedLongVideo}
                   onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}
                   onContactDragOffset={!lockedRecipient && !selfLocked ? handleContactDragOffset : undefined}
+                  onContactDragEnd={!lockedRecipient && !selfLocked ? handleContactDragEnd : undefined}
+                  flightTargetY={storyFlightTargetY}
                 />
               ) : storyFlow?.name === 'preview' ? (
                 <StoryPreviewScreen
@@ -690,6 +705,7 @@ export function ThrowHomeScreen({
                   unreadCount={unreadCount}
                   onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}
                   onContactDragOffset={!lockedRecipient && !selfLocked ? handleContactDragOffset : undefined}
+                  onContactDragEnd={!lockedRecipient && !selfLocked ? handleContactDragEnd : undefined}
                   onFoldProgress={handleFoldProgress}
                   alertSchedule={isSelfSelected ? alertSchedule : undefined}
                   onAlertScheduleChange={handleAlertScheduleChange}

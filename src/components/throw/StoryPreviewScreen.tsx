@@ -1,13 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { Animated, Easing, Image, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Icon } from '../Icon';
-import { throwColor, throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 import type { StoryMediaType } from '../../types/story';
 
-const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
-const ARROW_ICON = 'M5 12h14M13 6l6 6-6 6';
-const CONFIRM_SIZE = 56;
+const PLUS_ICON = 'M12 5v14M5 12h14';
 const FLIGHT_DURATION_MS = 480;
 const MIN_SCALE = 0.12;
 const MAX_TILT_DEG = 8;
@@ -41,12 +39,12 @@ interface StoryPreviewScreenProps {
 /**
  * Shown right after the camera/gallery hands back a photo or short video, before it's actually
  * posted — replaces the compose letter in the same card, the same way StoryCaptureScreen/
- * ContactStoryStack do, rather than a separate full-screen takeover. The green circle + right-
- * arrow bottom-right (per explicit request with its own reference screenshot) is the only way to
- * actually post: tapping it shrinks, tilts, and fades the photo as it flies up toward the
- * contact's ring, and only once that flight finishes does onConfirm actually fire (see
- * ThrowHomeScreen's own handleStoryPreviewConfirmed) — the close button in the top-left discards
- * it immediately instead, with no such flourish.
+ * ContactStoryStack do, rather than a separate full-screen takeover. Two pill buttons along the
+ * bottom (per explicit request with its own reference screenshot): "Retake" on the left discards
+ * immediately and reopens the camera (see ThrowHomeScreen's own onCancel wiring), "Add to status"
+ * on the right is the only way to actually post — tapping it shrinks, tilts, and fades the photo
+ * as it flies up toward the contact's ring, and only once that flight finishes does onConfirm
+ * actually fire (see ThrowHomeScreen's own handleStoryPreviewConfirmed).
  */
 export function StoryPreviewScreen({ localUri, mediaType, flightTargetY, onCancel, onConfirm }: StoryPreviewScreenProps) {
   const [flying, setFlying] = useState(false);
@@ -96,15 +94,18 @@ export function StoryPreviewScreen({ localUri, mediaType, flightTargetY, onCance
       </Animated.View>
 
       {!flying && (
-        <>
-          <Pressable onPress={onCancel} hitSlop={12} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Discard">
-            <Icon path={CLOSE_ICON} size={22} color="#FFFFFF" strokeWidth={2.2} />
+        <View style={styles.bottomRow}>
+          <Pressable onPress={onCancel} hitSlop={10} style={styles.retakeBtn} accessibilityRole="button" accessibilityLabel="Retake">
+            <Text style={styles.retakeText}>Retake</Text>
           </Pressable>
 
-          <Pressable onPress={handleConfirm} hitSlop={12} style={styles.confirmBtn} accessibilityRole="button" accessibilityLabel="Post to your story">
-            <Icon path={ARROW_ICON} size={26} color="#FFFFFF" strokeWidth={2.6} />
+          <Pressable onPress={handleConfirm} hitSlop={10} style={styles.confirmBtn} accessibilityRole="button" accessibilityLabel="Add to status">
+            <View style={styles.confirmIconWrap}>
+              <Icon path={PLUS_ICON} size={14} color="#FFFFFF" strokeWidth={2.6} />
+            </View>
+            <Text style={styles.confirmText}>Add to status</Text>
           </Pressable>
-        </>
+        </View>
       )}
     </View>
   );
@@ -116,27 +117,39 @@ const styles = StyleSheet.create({
   // clips only its own photo content.
   root: { flex: 1, position: 'relative' },
   card: { ...StyleSheet.absoluteFill, borderRadius: throwRadius.paper, overflow: 'hidden', backgroundColor: '#000000' },
-  closeBtn: {
-    position: 'absolute',
-    top: 12,
-    left: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmBtn: {
+  bottomRow: {
     position: 'absolute',
     bottom: 16,
-    right: 24,
-    width: CONFIRM_SIZE,
-    height: CONFIRM_SIZE,
-    borderRadius: CONFIRM_SIZE / 2,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  retakeBtn: {
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    borderRadius: 999,
+    backgroundColor: 'rgba(60,58,54,.65)',
+  },
+  retakeText: { color: '#FFFFFF', fontSize: 15, fontFamily: throwFont.ui600 },
+  confirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    ...throwColor.shadowSoft,
+  },
+  confirmIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: throwColor.storyRing,
     alignItems: 'center',
     justifyContent: 'center',
-    ...throwColor.shadowSoft,
   },
+  confirmText: { color: '#1A1A1A', fontSize: 15, fontFamily: throwFont.ui700 },
 });

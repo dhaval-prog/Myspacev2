@@ -3,7 +3,7 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import Svg, { Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import { Icon } from '../Icon';
-import { throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwRadius } from '../../theme/throwTokens';
 import type { StoryMediaType } from '../../types/story';
 
 const HOLD_THRESHOLD_MS = 220;
@@ -13,11 +13,15 @@ const MAX_VIDEO_MS = 15000;
 // comment on the same constants (no change to tap/hold thresholds, recording behavior, or
 // gestures above/below).
 const ENTER_MS = 220;
-const EXIT_MS = 200;
 const SHUTTER_PRESS_SCALE = 0.88;
 const SHUTTER_SCALE_MS = 110;
 const FLASH_MS = 160;
 const SHUTTER_SIZE = 74;
+// Closing now flies the whole camera up and shrinks it into the status contact's own avatar
+// ring — see the native sibling's own comment on these same constants.
+const CLOSE_FLIGHT_MS = 480;
+const CLOSE_MIN_SCALE = 0.12;
+const DEFAULT_CLOSE_FLIGHT_DISTANCE = 260;
 // A thin ring drawn just outside the shutter, filling clockwise over the 15s cap while recording
 // — same as the native sibling's own ring (see its comment).
 const RING_SIZE = SHUTTER_SIZE + 16;
@@ -56,6 +60,10 @@ interface StoryCaptureScreenProps {
    * (including back out to Own Contact) without closing the camera first. */
   onContactDragStart?: () => void;
   onContactDragOffset?: (steps: number) => void;
+  onContactDragEnd?: () => void;
+  /** The status contact's own avatar, in absolute screen coordinates — see the native sibling's
+   * own comment. */
+  flightTargetY?: number;
 }
 
 /**
@@ -77,6 +85,8 @@ export function StoryCaptureScreen({
   onPickedLongVideo,
   onContactDragStart,
   onContactDragOffset,
+  onContactDragEnd,
+  flightTargetY,
 }: StoryCaptureScreenProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -90,8 +100,8 @@ export function StoryCaptureScreen({
   const wrapRef = useRef<View>(null);
   // Read inside the raw DOM listeners below without needing to re-attach them (and drop mid-
   // gesture state) whenever a prop identity changes — same pattern FoldingLetter's own web path uses.
-  const latest = useRef({ onContactDragStart, onContactDragOffset });
-  latest.current = { onContactDragStart, onContactDragOffset };
+  const latest = useRef({ onContactDragStart, onContactDragOffset, onContactDragEnd });
+  latest.current = { onContactDragStart, onContactDragOffset, onContactDragEnd };
   const rawStartRef = useRef<{ x: number; y: number } | null>(null);
   const contactCapturedRef = useRef(false);
 
@@ -102,10 +112,13 @@ export function StoryCaptureScreen({
 
   const enterOpacity = useRef(new Animated.Value(0)).current;
   const enterScale = useRef(new Animated.Value(0.96)).current;
+  const closeFlightY = useRef(new Animated.Value(0)).current;
   const shutterScale = useRef(new Animated.Value(1)).current;
   const flashOpacity = useRef(new Animated.Value(0)).current;
   const recordProgress = useRef(new Animated.Value(0)).current;
   const closingRef = useRef(false);
+  // Read inside handleClose without needing to rebuild it on every relayout.
+  const flightDistanceRef = useRef(DEFAULT_CLOSE_FLIGHT_DISTANCE);
 
   useEffect(() => {
     Animated.parallel([
@@ -115,13 +128,25 @@ export function StoryCaptureScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mirrors the enter animation in reverse — see the native sibling's own comment.
+  const onLayout = () => {
+    if (flightTargetY == null) return;
+    requestAnimationFrame(() => {
+      wrapRef.current?.measureInWindow((_x, y, _width, height) => {
+        const ownCenterY = y + height / 2;
+        flightDistanceRef.current = Math.max(140, ownCenterY - flightTargetY);
+      });
+    });
+  };
+
+  // Flies the whole camera up and shrinks it into the status contact's own avatar — see the
+  // native sibling's own comment.
   const handleClose = () => {
     if (closingRef.current) return;
     closingRef.current = true;
     Animated.parallel([
-      Animated.timing(enterOpacity, { toValue: 0, duration: EXIT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      Animated.timing(enterScale, { toValue: 0.96, duration: EXIT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.timing(enterOpacity, { toValue: 0, duration: CLOSE_FLIGHT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(enterScale, { toValue: CLOSE_MIN_SCALE, duration: CLOSE_FLIGHT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(closeFlightY, { toValue: -flightDistanceRef.current, duration: CLOSE_FLIGHT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
     ]).start(() => onClose());
   };
 
@@ -195,7 +220,9 @@ export function StoryCaptureScreen({
     };
     const onUp = () => {
       rawStartRef.current = null;
+      const wasContactDrag = contactCapturedRef.current;
       contactCapturedRef.current = false;
+      if (wasContactDrag) latest.current.onContactDragEnd?.();
     };
     node.addEventListener('mousedown', onDown);
     node.addEventListener('touchstart', onDown, { passive: true });
@@ -308,7 +335,8 @@ export function StoryCaptureScreen({
   return (
     <Animated.View
       ref={wrapRef}
-      style={[styles.screen, { opacity: enterOpacity, transform: [{ scale: enterScale }] }]}
+      onLayout={onLayout}
+      style={[styles.screen, { opacity: enterOpacity, transform: [{ translateY: closeFlightY }, { scale: enterScale }] }]}
     >
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video ref={videoRef} autoPlay playsInline muted style={webVideoStyle} />
@@ -412,6 +440,10 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,.4)',
+    // Same blue accent Throw's active/selected chrome already uses elsewhere — see the native
+    // sibling's own comment.
+    borderWidth: 1.5,
+    borderColor: throwColor.activeBlue,
     alignItems: 'center',
     justifyContent: 'center',
   },
