@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, screen } from '@testing-library/react-native';
+import { act, fireEvent, screen } from '@testing-library/react-native';
 import { renderWithSafeArea } from '../../../testUtils/renderWithSafeArea';
 import { ThrowHomeScreen } from '../ThrowHomeScreen';
 import { useAuth } from '../../../context/AuthContext';
@@ -99,6 +99,28 @@ jest.mock('../../../components/throw/StoryPreviewScreen', () => ({
   },
 }));
 
+// LetterFoldCard/PlaneSlider (the in-place received-letters panel's own visuals) are Animated-
+// timer-driven and already covered by their own component-level tests — irrelevant to what this
+// file tests, which is whether ThrowHomeScreen wires the in-place inbox mode correctly (mode
+// toggle, BottomNav hide/chip-row show crossfade, contact-scoped letters, Throw Back plumbing).
+let mockLetterFoldCardProps: any;
+jest.mock('../../../components/throw/inbox/LetterFoldCard', () => ({
+  LetterFoldCard: (props: any) => {
+    mockLetterFoldCardProps = props;
+    const { Text } = require('react-native');
+    return require('react').createElement(Text, { testID: 'letter-fold-card' }, props.stage);
+  },
+}));
+
+let mockPlaneSliderProps: any;
+jest.mock('../../../components/throw/inbox/PlaneSlider', () => ({
+  PlaneSlider: (props: any) => {
+    mockPlaneSliderProps = props;
+    const { Text } = require('react-native');
+    return require('react').createElement(Text, { testID: 'plane-slider' }, props.contactName);
+  },
+}));
+
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseThrow = useThrow as jest.Mock;
 const mockUseThrowAlerts = useThrowAlerts as jest.Mock;
@@ -121,6 +143,8 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
     streakFor: () => 0,
     sendThrow: jest.fn(),
     uploadPhoto: jest.fn(),
+    inbox: [],
+    deleteThrow: jest.fn().mockResolvedValue({ error: null }),
   });
   mockUseThrowAlerts.mockReturnValue({ createAlert });
   mockUseGameStats.mockReturnValue({ statsFor: () => ({ totalPoints: 0 }) });
@@ -139,7 +163,7 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
 
 async function renderScreen() {
   await renderWithSafeArea(
-    <ThrowHomeScreen onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenInbox={noop} onOpenSettings={noop} />,
+    <ThrowHomeScreen onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenSettings={noop} onThrowBack={noop} />,
   );
 }
 
@@ -670,5 +694,172 @@ describe('ThrowHomeScreen story post-capture confirmation', () => {
     expect(postStory).not.toHaveBeenCalled();
     expect(screen.getByTestId('story-capture')).toBeTruthy();
     expect(screen.queryByTestId('folding-letter')).toBeNull();
+  });
+});
+
+describe('ThrowHomeScreen in-place received-letters panel', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFoldingLetterProps = undefined;
+    mockCarouselProps = undefined;
+    mockLetterFoldCardProps = undefined;
+    mockPlaneSliderProps = undefined;
+  });
+
+  function letter(overrides: { id: string; counterpartId: string; createdAt: string }) {
+    return {
+      senderId: overrides.counterpartId,
+      recipientId: MY_ID,
+      counterpartName: 'Priya',
+      counterpartAvatarUrl: null,
+      direction: 'received' as const,
+      messageText: 'Hello there',
+      strokes: null,
+      penColor: null,
+      photoUrls: [] as string[],
+      senderCity: 'Pune',
+      senderCountry: 'IN',
+      senderLatitude: 18.5,
+      senderLongitude: 73.8,
+      recipientCity: 'Mumbai',
+      recipientCountry: 'IN',
+      recipientLatitude: 19.07,
+      recipientLongitude: 72.87,
+      distanceMiles: 100,
+      status: 'thrown' as const,
+      readAt: null,
+      repliedToThrowId: null,
+      ...overrides,
+    };
+  }
+
+  function setupMocksWithInbox(inboxLetters: ReturnType<typeof letter>[]) {
+    setupMocks();
+    mockUseThrow.mockReturnValue({
+      myLocation: { city: 'Mumbai', country: 'IN', latitude: 19.07, longitude: 72.87 },
+      myName: 'Myself',
+      myAvatarUrl: null,
+      friends: [FRIEND],
+      unreadCount: 0,
+      streakFor: () => 0,
+      sendThrow: jest.fn(),
+      uploadPhoto: jest.fn(),
+      inbox: inboxLetters,
+      deleteThrow: jest.fn().mockResolvedValue({ error: null }),
+    });
+  }
+
+  it("opens the in-place panel from FoldingLetter's own inbox icon, hiding it and BottomNav, and showing the chip row in its place", async () => {
+    setupMocks();
+    await renderScreen();
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    expect(typeof mockFoldingLetterProps.onOpenInbox).toBe('function');
+    expect(screen.getByTestId('bottom-nav-wrap').props.pointerEvents).toBe('box-none');
+
+    // Contacts default to "Myself" — select the actual friend first (index 1, same convention as
+    // the story tests above) so the panel has someone real to scope letters to.
+    await act(async () => {
+      mockCarouselProps.onChangeIndex(1);
+    });
+    await act(async () => {
+      mockFoldingLetterProps.onOpenInbox();
+    });
+
+    expect(screen.queryByTestId('folding-letter')).toBeNull();
+    expect(screen.getByTestId('letter-fold-card')).toBeTruthy();
+    expect(screen.getByTestId('plane-slider')).toBeTruthy();
+    expect(mockPlaneSliderProps.contactName).toBe(FRIEND.name);
+    expect(screen.getByTestId('bottom-nav-wrap').props.pointerEvents).toBe('none');
+  });
+
+  it("scopes the panel to only the selected contact's own letters", async () => {
+    setupMocksWithInbox([
+      letter({ id: 'l-other', counterpartId: 'someone-else', createdAt: new Date().toISOString() }),
+      letter({ id: 'l-friend', counterpartId: FRIEND.userId, createdAt: new Date().toISOString() }),
+    ]);
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onChangeIndex(1);
+    });
+    await act(async () => {
+      mockFoldingLetterProps.onOpenInbox();
+    });
+
+    expect(mockPlaneSliderProps.chips).toHaveLength(1);
+    expect(mockPlaneSliderProps.chips[0].id).toBe('l-friend');
+  });
+
+  it('closes the panel via the back button, restoring FoldingLetter and BottomNav', async () => {
+    setupMocks();
+    await renderScreen();
+    await act(async () => {
+      mockFoldingLetterProps.onOpenInbox();
+    });
+    expect(screen.getByTestId('letter-fold-card')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('inbox-back-btn'));
+    });
+
+    expect(screen.queryByTestId('letter-fold-card')).toBeNull();
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    expect(screen.getByTestId('bottom-nav-wrap').props.pointerEvents).toBe('box-none');
+  });
+
+  it('routes Throw Back through the onThrowBack prop and closes the panel', async () => {
+    const onThrowBack = jest.fn();
+    setupMocksWithInbox([letter({ id: 'l1', counterpartId: FRIEND.userId, createdAt: new Date().toISOString() })]);
+    await renderWithSafeArea(
+      <ThrowHomeScreen onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenSettings={noop} onThrowBack={onThrowBack} />,
+    );
+
+    await act(async () => {
+      mockCarouselProps.onChangeIndex(1);
+    });
+    await act(async () => {
+      mockFoldingLetterProps.onOpenInbox();
+    });
+    // activeLetter is derived synchronously from the (already-filtered) letters list — no need to
+    // wait out the arrival's own flight/fold timers for onThrowBack to already be wired.
+    expect(typeof mockLetterFoldCardProps.onThrowBack).toBe('function');
+
+    await act(async () => {
+      mockLetterFoldCardProps.onThrowBack();
+    });
+
+    expect(onThrowBack).toHaveBeenCalledWith(FRIEND.userId, 'l1');
+    expect(screen.queryByTestId('letter-fold-card')).toBeNull();
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+  });
+
+  it('deletes the active letter through deleteThrow when the chip row reports a delete', async () => {
+    const deleteThrow = jest.fn().mockResolvedValue({ error: null });
+    setupMocks();
+    mockUseThrow.mockReturnValue({
+      myLocation: { city: 'Mumbai', country: 'IN', latitude: 19.07, longitude: 72.87 },
+      myName: 'Myself',
+      myAvatarUrl: null,
+      friends: [FRIEND],
+      unreadCount: 0,
+      streakFor: () => 0,
+      sendThrow: jest.fn(),
+      uploadPhoto: jest.fn(),
+      inbox: [letter({ id: 'l1', counterpartId: FRIEND.userId, createdAt: new Date().toISOString() })],
+      deleteThrow,
+    });
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onChangeIndex(1);
+    });
+    await act(async () => {
+      mockFoldingLetterProps.onOpenInbox();
+    });
+    await act(async () => {
+      mockPlaneSliderProps.onDelete();
+    });
+
+    expect(deleteThrow).toHaveBeenCalledWith('l1');
   });
 });
