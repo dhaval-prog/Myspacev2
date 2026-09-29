@@ -30,11 +30,11 @@ const DEFAULT_CENTER: [number, number] = [73.939097, 18.520358]; // Mapbox wants
 const DEFAULT_ZOOM = 16.26;
 const DEFAULT_BEARING = -9.6;
 const DEFAULT_PITCH = 76.5;
-// How far a single-point focus zooms in, and how steeply it's pitched — picked per explicit user
-// request against live screenshots of this exact style. Mapbox GL JS's own default maxPitch is
-// already 85 (unlike MapLibre's 60), so no extra construction option is needed to allow it.
-const FOCUS_ZOOM = 17;
-const FOCUS_PITCH = 70;
+// The focused-contact camera (a contact, including self, selected) now matches the default camera
+// exactly, per explicit user request — the view shouldn't change when a contact is selected.
+const FOCUS_ZOOM = DEFAULT_ZOOM;
+const FOCUS_PITCH = DEFAULT_PITCH;
+const FOCUS_BEARING = DEFAULT_BEARING;
 // Pixels of *bottom* padding applied to the focus camera — see `applyTarget`'s comment. With no
 // padding, `center` always renders at the exact vertical middle of the viewport (confirmed
 // directly via `map.project(map.getCenter())`, not assumed). Top padding would push it down (the
@@ -84,6 +84,7 @@ function applyTarget(map: mapboxgl.Map, target: Target) {
       center: [target.point.longitude, target.point.latitude],
       zoom: FOCUS_ZOOM,
       pitch: FOCUS_PITCH,
+      bearing: FOCUS_BEARING,
       padding: { top: 0, bottom: FOCUS_PADDING_BOTTOM, left: 0, right: 0 },
     });
   }
