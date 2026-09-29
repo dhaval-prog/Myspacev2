@@ -32,6 +32,13 @@ interface LetterFoldCardProps {
   isEmpty: boolean;
   emptyName: string;
   scale: number;
+  /** Independent vertical scale for the card's own height (and everything measured off it —
+   * panelH, the ruled-lines/signature vertical placement) — defaults to `scale`. Callers with more
+   * available height than width (the in-place received-letters panel, whose slot is much taller
+   * than this card's own near-square 354:330 design ratio) pass a taller value here so the card
+   * fills that height the way FoldingLetter's own plain flex:1 paper does, without also blowing up
+   * the width past its slot's own margins — `scale` alone stays driving width, fonts, and padding. */
+  heightScale?: number;
   reduceMotion: boolean;
   onThrowBack?: () => void;
 }
@@ -88,10 +95,11 @@ function NoseFlap({ rotate, side, scale }: { rotate: Animated.AnimatedInterpolat
  * "sheet" (wings + nose flaps) shown in between. Purely reactive to the `stage` prop the screen's
  * own state machine drives — see ThrowInboxScreen for the timer chain between stages.
  */
-export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, reduceMotion, onThrowBack }: LetterFoldCardProps) {
+export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heightScale, reduceMotion, onThrowBack }: LetterFoldCardProps) {
+  const vScale = heightScale ?? scale;
   const w = s(inboxLayout.letter.w, scale);
-  const h = s(inboxLayout.letter.h, scale);
-  const panelH = s(inboxLayout.letter.panelH, scale);
+  const h = s(inboxLayout.letter.h, vScale);
+  const panelH = s(inboxLayout.letter.panelH, vScale);
 
   const folded = stage !== 'open';
   const sheetOn = stage === 'landed' || stage === 'wings' || stage === 'corners';
@@ -169,20 +177,38 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, reduc
     }
 
     // ----- tri-fold panels -----
-    const topDelay = folded ? LAG : 0;
-    const botDelay = folded ? 0 : LAG;
-    later(() => Animated.timing(topRotateX, { toValue: folded ? -180 : 0, duration: dur ?? D, easing: FOLD_EASING, useNativeDriver: true }).start(), topDelay);
-    later(() => Animated.timing(botRotateX, { toValue: folded ? 180 : 0, duration: dur ?? D, easing: FOLD_EASING, useNativeDriver: true }).start(), botDelay);
-    later(() => {
-      topFrontOpacity.setValue(folded ? 0 : 1);
-      topBackOpacity.setValue(folded ? 1 : 0);
-    }, topDelay + HALF);
-    later(() => {
-      botFrontOpacity.setValue(folded ? 0 : 1);
-      botBackOpacity.setValue(folded ? 1 : 0);
-    }, botDelay + HALF);
-    Animated.timing(topShade, { toValue: folded ? 0.3 : 0, duration: dur ?? 500, useNativeDriver: true }).start();
-    Animated.timing(botShade, { toValue: folded ? 0.3 : 0, duration: dur ?? 500, useNativeDriver: true }).start();
+    // Entering 'open' always reveals the panels instantly (setValue, not Animated.timing) — per
+    // explicit request, the plane-landing arrival no longer plays the tri-fold unfold flourish at
+    // all (see useInboxArrival's own play(), which now jumps straight from 'flying' to 'open' with
+    // no intervening 'landed'/'wings'/'corners'/'expand' stages), so there is nothing left for this
+    // effect to still be animating toward by the time 'open' is reached. Leaving 'open' (folded
+    // true — the close-and-swap-letter animation, still used when picking a different chip or
+    // deleting) keeps its own animated fold exactly as before.
+    if (stage === 'open') {
+      topRotateX.setValue(0);
+      botRotateX.setValue(0);
+      topFrontOpacity.setValue(1);
+      topBackOpacity.setValue(0);
+      botFrontOpacity.setValue(1);
+      botBackOpacity.setValue(0);
+      topShade.setValue(0);
+      botShade.setValue(0);
+    } else {
+      const topDelay = folded ? LAG : 0;
+      const botDelay = folded ? 0 : LAG;
+      later(() => Animated.timing(topRotateX, { toValue: folded ? -180 : 0, duration: dur ?? D, easing: FOLD_EASING, useNativeDriver: true }).start(), topDelay);
+      later(() => Animated.timing(botRotateX, { toValue: folded ? 180 : 0, duration: dur ?? D, easing: FOLD_EASING, useNativeDriver: true }).start(), botDelay);
+      later(() => {
+        topFrontOpacity.setValue(folded ? 0 : 1);
+        topBackOpacity.setValue(folded ? 1 : 0);
+      }, topDelay + HALF);
+      later(() => {
+        botFrontOpacity.setValue(folded ? 0 : 1);
+        botBackOpacity.setValue(folded ? 1 : 0);
+      }, botDelay + HALF);
+      Animated.timing(topShade, { toValue: folded ? 0.3 : 0, duration: dur ?? 500, useNativeDriver: true }).start();
+      Animated.timing(botShade, { toValue: folded ? 0.3 : 0, duration: dur ?? 500, useNativeDriver: true }).start();
+    }
 
     // ----- envelope sheet: wings + nose flaps -----
     sheetOpacity.setValue(sheetOn ? 1 : 0);
@@ -229,10 +255,10 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, reduc
       {/* Middle panel — static, always visible, the tri-fold's own hinge anchor. */}
       <View style={[styles.midPanel, { top: panelH, height: panelH, width: w }]}>
         <View style={{ position: 'absolute', left: 0, top: -panelH, width: w, height: h }}>
-          <RuledLines scale={scale} />
+          <RuledLines scale={scale} vScale={vScale} />
           <HeaderRow letter={L} scale={scale} />
           <BodyText body={L.body} scale={scale} />
-          <SignatureRow letter={L} scale={scale} />
+          <SignatureRow letter={L} scale={scale} vScale={vScale} />
         </View>
       </View>
 
@@ -280,10 +306,10 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, reduc
         ]}
       >
         <View style={{ position: 'absolute', left: 0, top: -panelH * 2, width: w, height: h }}>
-          <RuledLines scale={scale} />
+          <RuledLines scale={scale} vScale={vScale} />
           <View style={{ height: s(64, scale) }} />
           <BodyText body={L.body} scale={scale} />
-          <SignatureRow letter={L} scale={scale} />
+          <SignatureRow letter={L} scale={scale} vScale={vScale} />
         </View>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: botShade }]} />
       </Animated.View>
@@ -332,7 +358,7 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, reduc
         ]}
       >
         <View style={{ position: 'absolute', left: 0, top: 0, width: w, height: h }}>
-          <RuledLines scale={scale} />
+          <RuledLines scale={scale} vScale={vScale} />
           <HeaderRow letter={L} scale={scale} />
           <BodyText body={L.body} scale={scale} />
         </View>
@@ -404,11 +430,15 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, reduc
   );
 }
 
-function RuledLines({ scale }: { scale: number }) {
-  const lineGap = s(34, scale);
-  const count = Math.ceil(s(inboxLayout.letter.panelH * 2.5, scale) / lineGap);
+// `scale` still governs the horizontal margins (matching HeaderRow/BodyText's own horizontal
+// padding), but `vScale` drives everything vertical — the top/bottom insets and the line spacing
+// — so the ruled area actually fills the card's own (independently scaled) height instead of
+// leaving blank space below the last line whenever vScale runs taller than scale.
+function RuledLines({ scale, vScale }: { scale: number; vScale: number }) {
+  const lineGap = s(34, vScale);
+  const count = Math.ceil(s(inboxLayout.letter.panelH * 2.5, vScale) / lineGap);
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', left: s(24, scale), right: s(24, scale), top: s(108, scale), bottom: s(62, scale), overflow: 'hidden' }}>
+    <View pointerEvents="none" style={{ position: 'absolute', left: s(24, scale), right: s(24, scale), top: s(108, vScale), bottom: s(62, vScale), overflow: 'hidden' }}>
       {Array.from({ length: count }).map((_, i) => (
         <View key={i} style={{ position: 'absolute', top: i * lineGap, left: 0, right: 0, height: 1, backgroundColor: inboxColor.ruleLine }} />
       ))}
@@ -438,9 +468,11 @@ function BodyText({ body, scale }: { body: string; scale: number }) {
   );
 }
 
-function SignatureRow({ letter, scale }: { letter: LetterCardData; scale: number }) {
+function SignatureRow({ letter, scale, vScale }: { letter: LetterCardData; scale: number; vScale: number }) {
+  // `bottom` needs vScale, not scale, to stay a small offset from the card's own (independently
+  // scaled) bottom edge rather than drifting away from it whenever vScale runs taller than scale.
   return (
-    <View style={{ position: 'absolute', left: s(24, scale), right: s(24, scale), bottom: s(20, scale), flexDirection: 'row', justifyContent: 'space-between' }}>
+    <View style={{ position: 'absolute', left: s(24, scale), right: s(24, scale), bottom: s(20, vScale), flexDirection: 'row', justifyContent: 'space-between' }}>
       <Text style={[styles.sig, { fontSize: s(22, scale) }]}>{letter.sig}</Text>
       <Text style={[styles.mono, { fontSize: s(10.5, scale) }]}>{letter.count}</Text>
     </View>

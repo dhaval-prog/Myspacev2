@@ -116,12 +116,12 @@ export function useInboxArrival(opts: UseInboxArrivalOptions) {
         if (r < 1) {
           rafRef.current = requestAnimationFrame(step);
         } else {
+          // Straight to the fully-open paper the instant the plane lands — no intervening
+          // envelope/tri-fold "unfolding" flourish any more, per explicit request. LetterFoldCard's
+          // own panel-fold effect reveals 'open' instantly (setValue, not Animated.timing) whenever
+          // it's entered this way, so nothing else needs to change to make this read as instant.
           setPlane(null);
-          setStageBoth('landed');
-          later(() => setStageBoth('wings'), 40);
-          later(() => setStageBoth('corners'), 560);
-          later(() => setStageBoth('expand'), 1060);
-          later(() => setStageBoth('open'), 1520);
+          setStageBoth('open');
         }
       };
       rafRef.current = requestAnimationFrame(step);

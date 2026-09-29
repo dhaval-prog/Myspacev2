@@ -71,8 +71,11 @@ const THROW_CENTER_ZONE = 0.5;
 const MAX_BANK_DX = 90;
 // How many px of horizontal drag maps to one recipient step — reported live via
 // onContactDragOffset as a fractional step count, so the caller can move (and clamp) the
-// selection continuously as the drag progresses rather than waiting for release.
-const CONTACT_DRAG_SPACING = 70;
+// selection continuously as the drag progresses rather than waiting for release. Exported so any
+// other gesture driving the same onContactDragStart/Offset/End trio (e.g. ThrowHomeScreen's own
+// flick-to-switch-contact gesture on the in-place received-letters panel) feels identical rather
+// than picking its own, possibly mismatched, drag-to-step ratio.
+export const CONTACT_DRAG_SPACING = 70;
 // On launch, the plane's own local flourish is a straight vertical translate-and-fade off the
 // top of the screen — the whole window height comfortably clears the compose card's position
 // and the header pill above it on any device, and since it's fading to 0 opacity at the same
