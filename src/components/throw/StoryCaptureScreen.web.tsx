@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Icon } from '../Icon';
 import { throwRadius } from '../../theme/throwTokens';
@@ -7,6 +7,14 @@ import type { StoryMediaType } from '../../types/story';
 
 const HOLD_THRESHOLD_MS = 220;
 const MAX_VIDEO_MS = 15000;
+
+// Purely cosmetic polish on top of the existing capture flow — see the native sibling's own
+// comment on the same constants (no change to tap/hold thresholds, recording behavior, or
+// gestures above/below).
+const ENTER_MS = 220;
+const SHUTTER_PRESS_SCALE = 0.88;
+const SHUTTER_SCALE_MS = 110;
+const FLASH_MS = 160;
 
 // Same thresholds/spacing FoldingLetter's own writing-phase contact flick uses (see its
 // CONTACT_FLICK_CAPTURE_DX/RATIO/CONTACT_DRAG_SPACING, and its raw-DOM-listener web path below) —
@@ -80,6 +88,19 @@ export function StoryCaptureScreen({
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canRecordVideo = videoMimeRef.current !== null || pickSupportedVideoMimeType() !== null;
+
+  const enterOpacity = useRef(new Animated.Value(0)).current;
+  const enterScale = useRef(new Animated.Value(0.96)).current;
+  const shutterScale = useRef(new Animated.Value(1)).current;
+  const flashOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(enterOpacity, { toValue: 1, duration: ENTER_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(enterScale, { toValue: 1, duration: ENTER_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     videoMimeRef.current = pickSupportedVideoMimeType();
@@ -173,6 +194,8 @@ export function StoryCaptureScreen({
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || video.videoWidth === 0) return;
+    flashOpacity.setValue(1);
+    Animated.timing(flashOpacity, { toValue: 0, duration: FLASH_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext('2d')?.drawImage(video, 0, 0);
@@ -213,6 +236,7 @@ export function StoryCaptureScreen({
   };
 
   const onShutterPressIn = () => {
+    Animated.timing(shutterScale, { toValue: SHUTTER_PRESS_SCALE, duration: SHUTTER_SCALE_MS, useNativeDriver: true }).start();
     if (!canRecordVideo) return;
     holdTimerRef.current = setTimeout(() => {
       holdTimerRef.current = null;
@@ -221,6 +245,7 @@ export function StoryCaptureScreen({
   };
 
   const onShutterPressOut = () => {
+    Animated.timing(shutterScale, { toValue: 1, duration: SHUTTER_SCALE_MS, useNativeDriver: true }).start();
     if (holdTimerRef.current) {
       clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
@@ -254,7 +279,10 @@ export function StoryCaptureScreen({
   }
 
   return (
-    <View ref={wrapRef} style={styles.screen}>
+    <Animated.View
+      ref={wrapRef}
+      style={[styles.screen, { opacity: enterOpacity, transform: [{ scale: enterScale }] }]}
+    >
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video ref={videoRef} autoPlay playsInline muted style={webVideoStyle} />
       <canvas ref={canvasRef} style={{ display: 'none' }} />
@@ -293,16 +321,20 @@ export function StoryCaptureScreen({
           accessibilityRole="button"
           accessibilityLabel={canRecordVideo ? 'Hold to record video, tap for a photo' : 'Take a photo'}
         >
-          <View style={[styles.shutterOuter, recording && styles.shutterOuterRecording]}>
-            <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
-          </View>
+          <Animated.View style={{ transform: [{ scale: shutterScale }] }}>
+            <View style={[styles.shutterOuter, recording && styles.shutterOuterRecording]}>
+              <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
+            </View>
+          </Animated.View>
         </Pressable>
 
         <View style={styles.galleryBtn} />
       </View>
 
       {recording && <Text style={styles.recordingHint}>Recording… release to stop</Text>}
-    </View>
+
+      <Animated.View pointerEvents="none" style={[styles.flash, { opacity: flashOpacity }]} />
+    </Animated.View>
   );
 }
 
@@ -368,6 +400,7 @@ const styles = StyleSheet.create({
   shutterInner: { width: SHUTTER_SIZE - 14, height: SHUTTER_SIZE - 14, borderRadius: (SHUTTER_SIZE - 14) / 2, backgroundColor: '#FFFFFF' },
   shutterInnerRecording: { borderRadius: 8, backgroundColor: '#FF3B30' },
   recordingHint: { position: 'absolute', bottom: 140, alignSelf: 'center', color: '#FFFFFF', fontSize: 13 },
+  flash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF' },
   permissionWrap: {
     flex: 1,
     backgroundColor: '#000000',
