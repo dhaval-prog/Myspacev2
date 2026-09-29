@@ -3,6 +3,7 @@ import { Animated, Easing, Image, PanResponder, Platform, Pressable, StyleSheet,
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Icon } from '../Icon';
 import { throwColor, throwNightColor, throwRadius } from '../../theme/throwTokens';
+import { noSelect } from '../../theme/webStyles';
 import type { ThrowStory } from '../../types/story';
 
 // Where a single status photo currently lives — the whole point of this component is animating a
@@ -53,13 +54,6 @@ const DELETE_FLIGHT_EXTRA_PX = 240;
 const DELETE_COMMIT_EASING = Easing.bezier(0.5, 0, 0.8, 0.4);
 
 const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
-
-// Web only — same Mobile Safari text-selection/callout workaround ContactStoryStack has always
-// used (see git history / CardStack.tsx's own noSelect for the drag-gesture original). React's
-// inline-style vendor-prefix convention capitalizes the prefix itself (`WebkitFoo`, matching
-// `element.style.WebkitFoo`) — confirmed directly via the browser's own console warning when this
-// was still lowercase-first (`webkitUserSelect` → "did you mean WebkitUserSelect?").
-const noSelect: Record<string, unknown> = { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' };
 
 function StoryVideoMedia({ uri }: { uri: string }) {
   const player = useVideoPlayer(uri, (p) => {
