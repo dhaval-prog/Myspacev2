@@ -49,4 +49,15 @@ export interface PaperPlaneStageProps {
   onProgress?: (p: PaperPlaneProgress) => void;
   /** WebGL/GL context creation or engine setup failed — caller should fall back gracefully. */
   onError?: (err: unknown) => void;
+  /**
+   * Fires once the engine is actually constructed and the handle's imperative methods will take
+   * effect. Engine setup is asynchronous on both platforms (web: waits for a ResizeObserver's
+   * first non-zero layout; native: waits for GLView's onContextCreate), so a caller that needs an
+   * initial pose the instant this mounts (e.g. seeking straight to an already-folded plane,
+   * rather than only reacting to a later user gesture) — as opposed to FoldingLetter's own usage,
+   * where the first real seek() naturally comes later from user interaction — needs this to know
+   * when calling seek()/holdReady() etc. will actually do anything, instead of silently no-op'ing
+   * against a still-null engine.
+   */
+  onReady?: () => void;
 }
