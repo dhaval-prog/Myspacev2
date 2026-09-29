@@ -24,14 +24,12 @@ const DEFAULT_REGION: Region = { ...DEFAULT_CENTER, latitudeDelta: 0.006, longit
 // just a readable "it's getting farther away" cue.
 const PLANE_MAX_SIZE = 44;
 const PLANE_MIN_SIZE = 16;
-// How far a single-point focus zooms in, and how steeply it's pitched — matching the web map's
-// current FOCUS_ZOOM 17 / FOCUS_PITCH 70 (the two aren't directly comparable units — this delta is
-// a region-size approximation of that same framing, not a converted value; this map stays on
-// react-native-maps/Apple+Google Maps rather than Mapbox, which the web version switched to this
-// round — no native SDK swap requested or made here). Reverts to an earlier round's own
-// zoom-17 pairing now that the web zoom is back to 17.
+// The focused-contact camera (a contact, including self, selected) now matches the default camera
+// exactly, per explicit user request — the view shouldn't change when a contact is selected.
 const FOCUS_DELTA = { latitudeDelta: 0.006, longitudeDelta: 0.006 };
-const FOCUS_PITCH = 70;
+const FOCUS_PITCH = DEFAULT_PITCH;
+const FOCUS_ZOOM = DEFAULT_ZOOM;
+const FOCUS_HEADING = DEFAULT_HEADING;
 
 function pointsKey(points: { latitude: number; longitude: number }[] | null | undefined): string {
   return points ? points.map((p) => `${p.latitude.toFixed(3)},${p.longitude.toFixed(3)}`).join('|') : '';
@@ -80,9 +78,9 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       edgePadding: { top: 80, right: 60, bottom: 80, left: 60 },
       animated: false,
     });
-    // fitToCoordinates re-derives the camera from the coordinate bounds, which resets pitch back
-    // to 0 — reassert it every time a positioning call could have clobbered it.
-    mapRef.current?.setCamera({ pitch: FOCUS_PITCH });
+    // fitToCoordinates re-derives the camera from the coordinate bounds, which resets pitch/heading
+    // back to 0 — reassert them every time a positioning call could have clobbered it.
+    mapRef.current?.setCamera({ pitch: FOCUS_PITCH, heading: FOCUS_HEADING });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey, mapReady]);
 
@@ -91,7 +89,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     if (fitPoints && fitPoints.length > 0) return;
     if (!focus) return;
     mapRef.current?.animateToRegion({ latitude: focus.latitude, longitude: focus.longitude, ...FOCUS_DELTA }, 0);
-    mapRef.current?.setCamera({ pitch: FOCUS_PITCH });
+    mapRef.current?.setCamera({ pitch: FOCUS_PITCH, heading: FOCUS_HEADING });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey, fitKey, mapReady]);
 
@@ -106,12 +104,12 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       initialRegion={focus ? { ...focus, ...FOCUS_DELTA } : DEFAULT_REGION}
       initialCamera={
         focus
-          ? { center: focus, pitch: FOCUS_PITCH, heading: 0, zoom: 17 }
+          ? { center: focus, pitch: FOCUS_PITCH, heading: FOCUS_HEADING, zoom: FOCUS_ZOOM }
           : { center: DEFAULT_CENTER, pitch: DEFAULT_PITCH, heading: DEFAULT_HEADING, zoom: DEFAULT_ZOOM }
       }
       onMapReady={() => {
         setMapReady(true);
-        if (focus) mapRef.current?.setCamera({ pitch: FOCUS_PITCH });
+        if (focus) mapRef.current?.setCamera({ pitch: FOCUS_PITCH, heading: FOCUS_HEADING });
       }}
       // Lets Apple Maps (iOS) render its own automatic 3D building extrusion at this close,
       // pitched-by-default framing — no separate opt-in beyond allowing the gesture/camera;
