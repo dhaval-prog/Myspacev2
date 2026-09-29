@@ -15,7 +15,7 @@ const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
  * texture the way native needs (there's no `document`/`Image` to hand a plain URL to).
  */
 export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStageProps>(function PaperPlaneStage(
-  { onPhase, onProgress, onError, onReady },
+  { onPhase, onProgress, onError },
   ref,
 ) {
   const engineRef = useRef<ReturnType<typeof createPaperPlane> | null>(null);
@@ -83,7 +83,6 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
         onError,
         afterRender: () => gl.endFrameEXP(),
       });
-      onReady?.();
     } catch (err) {
       onError?.(err);
     }

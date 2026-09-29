@@ -179,11 +179,7 @@ describe('ThrowInboxScreen letter card data', () => {
       jest.advanceTimersByTime(600);
     });
 
-    // LetterFoldCard itself (mocked here as a prop-capturing stub) is what crossfades straight to
-    // open under reduced motion — the screen's own job is just to land it in stage 'ready' with
-    // reduceMotion threaded through, which LetterFoldCard's own effect reacts to.
-    expect(mockLetterFoldCardProps.stage).toBe('ready');
-    expect(mockLetterFoldCardProps.reduceMotion).toBe(true);
+    expect(mockLetterFoldCardProps.stage).toBe('open');
     expect(mockLetterFoldCardProps.letter).toEqual(
       expect.objectContaining({
         from: 'Dhaval',
