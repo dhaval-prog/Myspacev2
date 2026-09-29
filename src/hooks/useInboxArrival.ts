@@ -76,9 +76,12 @@ export function useInboxArrival(opts: UseInboxArrivalOptions) {
 
   const foldAway = (then: () => void) => {
     if (stageRef.current === 'open' && !reduceMotion) {
-      setStageBoth('folding');
-      later(() => setStageBoth('shrink'), 720);
-      later(then, 1060);
+      // A plain opacity fade for the currently-open letter — see LetterFoldCard's own 'fadeOut'
+      // handling (FADE_MS there — keep the two in sync), which keeps the panels in their already-
+      // open state and only fades the outer opacity, instead of the fold-closed-then-shrink-away
+      // flourish ThrowInboxScreen's own standalone arrival flow still drives via 'folding'/'shrink'.
+      setStageBoth('fadeOut');
+      later(then, 260);
     } else {
       then();
     }
