@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Polygon } from 'react-native-svg';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { AutoplayVideoFill } from '../../AutoplayVideoFill';
 import { inboxColor, inboxLayout } from '../../../theme/throwInboxTokens';
 
 export type LetterStage =
@@ -463,18 +463,32 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
       {/* The "Media"/"Text" toggle's own polaroid-framed photo/video — a plain paper-colored
           overlay covering the whole card, cross-faded in via opacity alone, so it occludes the
           written body underneath instead of needing to separately fade three duplicated copies of
-          that body (one per tri-fold panel face — see their own comments above). Only reachable
-          once the letter is genuinely open and actually has attachments. */}
+          that body (one per tri-fold panel face — see their own comments above). Sized to nearly
+          fill the card's own width/height (per explicit request it should read as "covering the
+          letter", not a small floating print) and docked toward the top, leaving the card's own
+          plain paper-colored margin below it for the button row (see throwBackWrap) rather than
+          floating centered over wherever that row happens to sit. Only reachable once the letter
+          is genuinely open and actually has attachments. */}
       {stage === 'open' && L.photoUrls.length > 0 && (
         <Animated.View
           pointerEvents={mediaMode ? 'box-none' : 'none'}
-          style={[styles.mediaOverlay, { width: w, height: h, borderRadius: s(24, scale), opacity: mediaOpacity }]}
+          style={[styles.mediaOverlay, { width: w, height: h, borderRadius: s(24, scale), opacity: mediaOpacity, paddingTop: s(26, vScale) }]}
         >
-          <PolaroidMedia uri={L.photoUrls[mediaIndex]} scale={scale} />
-          {L.photoUrls.length > 1 && (
+          <PolaroidMedia uri={L.photoUrls[mediaIndex]} scale={scale} frameW={w - s(40, scale)} />
+        </Animated.View>
+      )}
+
+      {stage === 'open' && onThrowBack && (
+        // `bottom` needs vScale, not scale — same reasoning as SignatureRow's own bottom offset —
+        // so this stays a small gap above the card's own (independently scaled) bottom edge. A
+        // plain column (Next above Throw Back/Text, both anchored to this same bottom offset)
+        // rather than nesting Next inside the media overlay above, so its position stays fixed
+        // regardless of how tall the polaroid itself renders (see mediaOverlay's own comment).
+        <View pointerEvents="box-none" style={[styles.throwBackOuter, { bottom: s(14, vScale), gap: s(10, scale) }]}>
+          {mediaMode && L.photoUrls.length > 1 && (
             <Pressable
               onPress={() => setMediaIndex((i) => (i + 1) % L.photoUrls.length)}
-              style={[styles.nextBtn, { marginTop: s(14, scale), paddingHorizontal: s(16, scale), paddingVertical: s(9, scale), borderRadius: s(14, scale) }]}
+              style={[styles.nextBtn, { paddingHorizontal: s(16, scale), paddingVertical: s(9, scale), borderRadius: s(14, scale) }]}
               accessibilityRole="button"
               accessibilityLabel="Next photo or video"
             >
@@ -483,29 +497,24 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
               </Text>
             </Pressable>
           )}
-        </Animated.View>
-      )}
-
-      {stage === 'open' && onThrowBack && (
-        // `bottom` needs vScale, not scale — same reasoning as SignatureRow's own bottom offset —
-        // so this stays a small gap above the card's own (independently scaled) bottom edge.
-        <View pointerEvents="box-none" style={[styles.throwBackWrap, { bottom: s(14, vScale), gap: s(10, scale) }]}>
-          <Text onPress={onThrowBack} style={[styles.throwBackBtn, { fontSize: s(12.5, scale), paddingHorizontal: s(14, scale), paddingVertical: s(8, scale), borderRadius: s(14, scale) }]}>
-            Throw Back
-          </Text>
-          {/* Locked (no onPress, dimmed) rather than hidden when the letter has no attachments —
-              per explicit request — so its presence itself says "this letter has no media"
-              instead of the row just quietly having one fewer button. */}
-          <Text
-            onPress={L.photoUrls.length > 0 ? toggleMediaMode : undefined}
-            style={[
-              styles.mediaBtn,
-              { fontSize: s(12.5, scale), paddingHorizontal: s(14, scale), paddingVertical: s(8, scale), borderRadius: s(14, scale) },
-              L.photoUrls.length === 0 && styles.mediaBtnLocked,
-            ]}
-          >
-            {mediaMode ? 'Text' : 'Media'}
-          </Text>
+          <View style={[styles.throwBackWrap, { gap: s(10, scale) }]}>
+            <Text onPress={onThrowBack} style={[styles.throwBackBtn, { fontSize: s(12.5, scale), paddingHorizontal: s(14, scale), paddingVertical: s(8, scale), borderRadius: s(14, scale) }]}>
+              Throw Back
+            </Text>
+            {/* Locked (no onPress, dimmed) rather than hidden when the letter has no attachments —
+                per explicit request — so its presence itself says "this letter has no media"
+                instead of the row just quietly having one fewer button. */}
+            <Text
+              onPress={L.photoUrls.length > 0 ? toggleMediaMode : undefined}
+              style={[
+                styles.mediaBtn,
+                { fontSize: s(12.5, scale), paddingHorizontal: s(14, scale), paddingVertical: s(8, scale), borderRadius: s(14, scale) },
+                L.photoUrls.length === 0 && styles.mediaBtnLocked,
+              ]}
+            >
+              {mediaMode ? 'Text' : 'Media'}
+            </Text>
+          </View>
         </View>
       )}
     </Animated.View>
@@ -513,12 +522,13 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
 }
 
 /** A single polaroid-framed attachment — a white print border with the classic thicker bottom
- * margin, tilted slightly for a hand-placed, candid feel. Video vs photo is told apart by file
- * extension (see isVideoUrl) since a letter's own photoUrls carry no separate media-type field. */
-function PolaroidMedia({ uri, scale }: { uri: string; scale: number }) {
-  const frameW = s(200, scale);
-  const pad = s(14, scale);
-  const padBottom = s(46, scale);
+ * margin, tilted slightly for a hand-placed, candid feel, sized to fill nearly the whole card so
+ * it reads as "covering the letter" per explicit request, rather than a small floating print.
+ * Video vs photo is told apart by file extension (see isVideoUrl) since a letter's own photoUrls
+ * carry no separate media-type field. */
+function PolaroidMedia({ uri, scale, frameW }: { uri: string; scale: number; frameW: number }) {
+  const pad = s(16, scale);
+  const padBottom = s(44, scale);
   const photoSize = frameW - pad * 2;
   return (
     <View
@@ -528,22 +538,10 @@ function PolaroidMedia({ uri, scale }: { uri: string; scale: number }) {
       ]}
     >
       <View style={[styles.polaroidPhotoBox, { width: photoSize, height: photoSize }]}>
-        {isVideoUrl(uri) ? <PolaroidVideo uri={uri} /> : <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
+        {isVideoUrl(uri) ? <AutoplayVideoFill uri={uri} /> : <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
       </View>
     </View>
   );
-}
-
-/** Muted, looping, autoplaying — same treatment ContactStoryStack's own StoryVideoMedia gives a
- * story's video, just inside this polaroid frame instead of a full-bleed story card. */
-function PolaroidVideo({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = true;
-    p.muted = true;
-    p.play();
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <VideoView player={player as any} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} pointerEvents="none" />;
 }
 
 function isVideoUrl(url: string): boolean {
@@ -633,7 +631,8 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontFamily: 'Figtree_800ExtraBold', color: inboxColor.ink },
   emptySub: { fontFamily: 'DMMono_500Medium', letterSpacing: 1.4, color: inboxColor.muted },
-  throwBackWrap: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  throwBackOuter: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  throwBackWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   throwBackBtn: {
     fontFamily: 'Figtree_700Bold',
     color: '#FFFFFF',
@@ -647,7 +646,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   mediaBtnLocked: { color: inboxColor.muted, opacity: 0.5 },
-  mediaOverlay: { position: 'absolute', left: 0, top: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: inboxColor.paper },
+  mediaOverlay: { position: 'absolute', left: 0, top: 0, alignItems: 'center', justifyContent: 'flex-start', backgroundColor: inboxColor.paper },
   polaroidFrame: {
     backgroundColor: '#FFFFFF',
     transform: [{ rotate: '-3deg' }],

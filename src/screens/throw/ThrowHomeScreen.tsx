@@ -125,7 +125,7 @@ export function ThrowHomeScreen({
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const myId = user?.id ?? null;
-  const { myLocation, myName, myAvatarUrl, friends, unreadCount, streakFor, sendThrow, uploadPhoto, inbox, deleteThrow } = useThrow();
+  const { myLocation, myName, myAvatarUrl, friends, unreadCount, unreadCountFor, streakFor, sendThrow, uploadPhoto, inbox, deleteThrow, markRead } = useThrow();
   const { createAlert, alerts, deleteAlert } = useThrowAlerts();
   const { statsFor } = useGameStats();
   const { storiesByUser, storyCountFor, postStory, markViewed, deleteStory } = useThrowStories();
@@ -419,6 +419,9 @@ export function ThrowHomeScreen({
     landingPoint: inboxLandingPoint,
     belowOrigin: inboxBelowOrigin,
     deleteThrow: handleInboxDelete,
+    // Self-reminders aren't real throws (see handleInboxDelete's own comment) — mark_throw_read
+    // would just fail against an alert id, so this only ever runs for a real friend's letters.
+    markRead: isSelfSelected ? undefined : markRead,
   });
   const handleOpenInbox = () => setInboxMode(true);
   const handleCloseInbox = () => setInboxMode(false);
@@ -847,6 +850,7 @@ export function ThrowHomeScreen({
                 storyModeAvatarCount={isStoryMode ? openAvatarCount : undefined}
                 storyModePulseSignal={openAvatarPulseSignal}
                 liveOffset={contactDragLiveOffset ?? undefined}
+                unreadCountFor={unreadCountFor}
               />
             </View>
           ))}

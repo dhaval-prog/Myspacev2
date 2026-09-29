@@ -76,7 +76,12 @@ function letter(overrides: Partial<ThrowLetter> & { id: string; counterpartId: s
 }
 
 function setupMocks(inbox: ThrowLetter[], deleteThrow = jest.fn().mockResolvedValue({ error: null })) {
-  mockUseThrow.mockReturnValue({ inbox, deleteThrow });
+  mockUseThrow.mockReturnValue({
+    inbox,
+    deleteThrow,
+    markRead: jest.fn().mockResolvedValue(undefined),
+    unreadCountFor: (counterpartId: string) => inbox.filter((l) => l.counterpartId === counterpartId && l.status === 'thrown').length,
+  });
   mockUseThrowColorMode.mockReturnValue({ mapIsDay: true });
   mockUseReducedMotion.mockReturnValue(true); // avoids depending on the rAF-driven flight timeline
   return deleteThrow;

@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { Icon } from '../Icon';
+import { AutoplayVideoFill } from '../AutoplayVideoFill';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 import type { StoryMediaType } from '../../types/story';
 
@@ -12,16 +12,6 @@ const MAX_TILT_DEG = 8;
 // Used only until the real measurement below resolves, or as a last resort if flightTargetY is
 // never given at all — same fallback ContactStoryStack's own flight distance has.
 const DEFAULT_FLIGHT_DISTANCE = 260;
-
-function PreviewVideo({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = true;
-    p.muted = true;
-    p.play();
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <VideoView player={player as any} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} pointerEvents="none" />;
-}
 
 interface StoryPreviewScreenProps {
   localUri: string;
@@ -89,7 +79,7 @@ export function StoryPreviewScreen({ localUri, mediaType, flightTargetY, onCance
         {mediaType === 'photo' ? (
           <Image source={{ uri: localUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         ) : (
-          <PreviewVideo uri={localUri} />
+          <AutoplayVideoFill uri={localUri} />
         )}
       </Animated.View>
 

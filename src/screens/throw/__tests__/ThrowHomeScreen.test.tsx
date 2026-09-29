@@ -140,11 +140,13 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
     myAvatarUrl: null,
     friends: [FRIEND],
     unreadCount: 0,
+    unreadCountFor: () => 0,
     streakFor: () => 0,
     sendThrow: jest.fn(),
     uploadPhoto: jest.fn(),
     inbox: [],
     deleteThrow: jest.fn().mockResolvedValue({ error: null }),
+    markRead: jest.fn().mockResolvedValue(undefined),
   });
   mockUseThrowAlerts.mockReturnValue({ createAlert, alerts: [], deleteAlert: jest.fn().mockResolvedValue({ error: null }) });
   mockUseGameStats.mockReturnValue({ statsFor: () => ({ totalPoints: 0 }) });
@@ -739,11 +741,13 @@ describe('ThrowHomeScreen in-place received-letters panel', () => {
       myAvatarUrl: null,
       friends: [FRIEND],
       unreadCount: 0,
+      unreadCountFor: () => 0,
       streakFor: () => 0,
       sendThrow: jest.fn(),
       uploadPhoto: jest.fn(),
       inbox: inboxLetters,
       deleteThrow: jest.fn().mockResolvedValue({ error: null }),
+      markRead: jest.fn().mockResolvedValue(undefined),
     });
   }
 
@@ -854,11 +858,13 @@ describe('ThrowHomeScreen in-place received-letters panel', () => {
       myAvatarUrl: null,
       friends: [FRIEND],
       unreadCount: 0,
+      unreadCountFor: () => 0,
       streakFor: () => 0,
       sendThrow: jest.fn(),
       uploadPhoto: jest.fn(),
       inbox: [letter({ id: 'l1', counterpartId: FRIEND.userId, createdAt: new Date().toISOString() })],
       deleteThrow,
+      markRead: jest.fn().mockResolvedValue(undefined),
     });
     await renderScreen();
 
