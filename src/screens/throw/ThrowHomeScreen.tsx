@@ -70,7 +70,10 @@ interface ThrowHomeScreenProps {
   onOpenExpenses: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
-  onOpenInbox: () => void;
+  /** Opens the inbox, pre-selecting whichever contact is currently on screen — see the wiring
+   * below, which closes over `selectedFriendId` so FoldingLetter's own zero-arg inbox button
+   * doesn't need to know about it. */
+  onOpenInbox: (contactId?: string) => void;
   onOpenSettings: () => void;
   /** Set when arriving here via "Throw Back" — recipient is fixed, carousel is hidden. */
   lockedRecipient?: { friendUserId: string; repliedToThrowId: string } | null;
@@ -701,7 +704,7 @@ export function ThrowHomeScreen({
                   onLaunched={handleLaunched}
                   throwLabel={isSelfSelected ? 'Swipe up to set alert' : lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
                   onOpenAddFriend={onOpenAddFriend}
-                  onOpenInbox={onOpenInbox}
+                  onOpenInbox={() => onOpenInbox(selectedFriend.userId)}
                   unreadCount={unreadCount}
                   onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}
                   onContactDragOffset={!lockedRecipient && !selfLocked ? handleContactDragOffset : undefined}
