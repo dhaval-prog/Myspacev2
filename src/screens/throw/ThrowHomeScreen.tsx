@@ -3,7 +3,7 @@ import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, u
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel, CAROUSEL_HEIGHT } from '../../components/throw/RecipientCarousel';
-import { FoldingLetter } from '../../components/throw/FoldingLetter';
+import { FoldingLetter, CONTACT_DRAG_SPACING } from '../../components/throw/FoldingLetter';
 import type { FoldingLetterHandle } from '../../components/throw/FoldingLetter';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { GlassSurface } from '../../components/friends/GlassSurface';
@@ -35,6 +35,12 @@ import type { StoryMediaType } from '../../types/story';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 
 const BACK_ICON = 'M15 18l-6-6 6-6';
+
+// The in-place received-letters panel's own flick-to-switch-contact gesture — same capture
+// thresholds as FoldingLetter's own CONTACT_FLICK_CAPTURE_DX/RATIO (not imported, since those are
+// private to that module, but kept numerically identical so the gesture feel matches exactly).
+const INBOX_FLICK_CAPTURE_DX = 20;
+const INBOX_FLICK_CAPTURE_RATIO = 1.7;
 
 /** What's currently covering the screen for the story flow — capture (camera/gallery), the preview
  * step (a captured/picked photo or short video, awaiting the explicit post confirmation), or the
@@ -203,7 +209,16 @@ export function ThrowHomeScreen({
   // once landed always agree on where things are, with no cross-tree window measurement needed.
   const [inboxAreaSize, setInboxAreaSize] = useState({ width: 0, height: 0 });
   const inboxScale = inboxAreaSize.width > 0 ? inboxAreaSize.width / inboxLayout.letter.w : 1;
-  const inboxCardHeight = inboxLayout.letter.h * inboxScale;
+  // The card's own height scales independently of its width (see LetterFoldCard's own
+  // heightScale prop) — filling the whole available height the same way FoldingLetter's own
+  // plain flex:1 paper does, instead of being capped at whatever inboxScale's width-derived ratio
+  // happens to produce (which used to leave this card noticeably shorter than the compose letter).
+  const inboxHeightScale = inboxAreaSize.height > 0 ? inboxAreaSize.height / inboxLayout.letter.h : inboxScale;
+  const inboxCardHeight = inboxAreaSize.height > 0 ? inboxAreaSize.height : inboxLayout.letter.h * inboxScale;
+  // A separate, larger scale for the bottom plane-chip row, kept independent of inboxScale (the
+  // letter card's own width-derived scale) so the chips read at roughly the same size as
+  // FoldingLetter's own bottom-controls row instead of shrinking down to match the card.
+  const inboxChipScale = inboxScale * 1.35;
   const inboxLandingPoint: Point = { x: inboxAreaSize.width / 2, y: inboxCardHeight / 2 };
   const inboxBelowOrigin: Point = { x: inboxLandingPoint.x, y: inboxCardHeight + 120 * inboxScale };
   const inboxLetterAreaRef = useRef<View>(null);
@@ -536,6 +551,90 @@ export function ThrowHomeScreen({
     setContactDragLiveOffset(null);
   };
 
+  // Flicking any received letter left/right switches to the next/previous contact and shows
+  // *their* received letters — same left→next/right→previous convention, and the exact same
+  // underlying handleContactDragStart/Offset/End machinery (see CONTACT_DRAG_SPACING), as flicking
+  // the still-open compose letter already uses (see FoldingLetter's own contact-flick gesture) —
+  // just captured here instead, since the in-place inbox panel has no FoldingLetter mounted to
+  // drive it from. A ref (not the handlers themselves) is what the gesture callbacks below read,
+  // since PanResponder.create only runs once — see FoldingLetter's own `latest` ref for the same
+  // "closures go stale otherwise" reasoning.
+  const inboxFlickLatest = useRef({ handleContactDragStart, handleContactDragOffset, handleContactDragEnd });
+  inboxFlickLatest.current = { handleContactDragStart, handleContactDragOffset, handleContactDragEnd };
+  const inboxFlickPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponderCapture: (_e, g) =>
+        Math.abs(g.dx) > INBOX_FLICK_CAPTURE_DX && Math.abs(g.dx) > Math.abs(g.dy) * INBOX_FLICK_CAPTURE_RATIO,
+      onPanResponderGrant: () => inboxFlickLatest.current.handleContactDragStart(),
+      // Negated — matches FoldingLetter's own open-paper flick convention (left flicks forward to
+      // the next contact, right flicks back to the previous one).
+      onPanResponderMove: (_, g) => inboxFlickLatest.current.handleContactDragOffset(-g.dx / CONTACT_DRAG_SPACING),
+      onPanResponderRelease: () => inboxFlickLatest.current.handleContactDragEnd(),
+      onPanResponderTerminate: () => inboxFlickLatest.current.handleContactDragEnd(),
+    }),
+  ).current;
+  // Same RN-Web PanResponder move-tracking unreliability FoldingLetter's own contact flick (and
+  // the reminder-peek gesture above) already work around once a gesture is claimed mid-touch via
+  // move-capture — raw DOM listeners on web, the real PanResponder above on native.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !inboxMode) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const node = inboxLetterAreaRef.current as any as HTMLElement | null;
+    if (!node) return;
+    const getPoint = (e: MouseEvent | TouchEvent): { x: number; y: number } | null => {
+      if ('touches' in e) {
+        const t = e.touches[0];
+        return t ? { x: t.clientX, y: t.clientY } : null;
+      }
+      return { x: e.clientX, y: e.clientY };
+    };
+    let start: { x: number; y: number } | null = null;
+    let captured = false;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      start = getPoint(e);
+      captured = false;
+    };
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (!start) return;
+      const p = getPoint(e);
+      if (!p) return;
+      const dx = p.x - start.x;
+      const dy = p.y - start.y;
+      if (!captured) {
+        if (Math.abs(dx) > INBOX_FLICK_CAPTURE_DX && Math.abs(dx) > Math.abs(dy) * INBOX_FLICK_CAPTURE_RATIO) {
+          captured = true;
+          inboxFlickLatest.current.handleContactDragStart();
+        } else {
+          return;
+        }
+      }
+      inboxFlickLatest.current.handleContactDragOffset(-dx / CONTACT_DRAG_SPACING);
+    };
+    const onUp = () => {
+      start = null;
+      if (captured) {
+        captured = false;
+        inboxFlickLatest.current.handleContactDragEnd();
+      }
+    };
+    node.addEventListener('mousedown', onDown);
+    node.addEventListener('touchstart', onDown, { passive: true });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchend', onUp);
+    return () => {
+      node.removeEventListener('mousedown', onDown);
+      node.removeEventListener('touchstart', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
+    };
+  }, [inboxMode]);
+
   const pins: ThrowMapPin[] = useMemo(() => {
     const list: ThrowMapPin[] = [];
     for (const f of friendsWithLocation) {
@@ -768,6 +867,7 @@ export function ThrowHomeScreen({
                   ref={inboxLetterAreaRef}
                   style={{ flex: 1 }}
                   onLayout={(e) => setInboxAreaSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+                  {...(Platform.OS !== 'web' ? inboxFlickPanResponder.panHandlers : null)}
                 >
                   <Pressable
                     testID="inbox-back-btn"
@@ -813,6 +913,7 @@ export function ThrowHomeScreen({
                     isEmpty={inboxArrival.isEmpty}
                     emptyName={selectedFriend.name}
                     scale={inboxScale}
+                    heightScale={inboxHeightScale}
                     reduceMotion={reduceMotion}
                     onThrowBack={inboxArrival.activeLetter ? handleInboxThrowBack : undefined}
                   />
@@ -928,7 +1029,7 @@ export function ThrowHomeScreen({
             chips={inboxArrival.chips}
             activeIndex={inboxArrival.activeLetterIdx}
             contactName={selectedFriend.name}
-            scale={inboxScale}
+            scale={inboxChipScale}
             busy={inboxArrival.busy}
             canReplay={inboxArrival.canReplay}
             onSelectChip={handleInboxSelectChip}
