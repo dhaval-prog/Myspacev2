@@ -23,7 +23,7 @@ interface ThrowScreenProps {
 
 type SubScreen =
   | { name: 'home'; lockedRecipient?: { friendUserId: string; repliedToThrowId: string } }
-  | { name: 'inbox' }
+  | { name: 'inbox'; initialContactId?: string }
   | { name: 'letter'; throwId: string }
   | { name: 'settings' };
 
@@ -61,7 +61,7 @@ function ThrowNavigator({
         onOpenExpenses={onOpenExpenses}
         onOpenChats={onOpenChats}
         onOpenAddFriend={onOpenAddFriend}
-        onOpenInbox={() => setScreen({ name: 'inbox' })}
+        onOpenInbox={(contactId) => setScreen({ name: 'inbox', initialContactId: contactId })}
         onOpenSettings={() => setScreen({ name: 'settings' })}
         lockedRecipient={screen.lockedRecipient}
       />
@@ -73,7 +73,13 @@ function ThrowNavigator({
   }
 
   if (screen.name === 'inbox') {
-    return <ThrowInboxScreen onBack={() => setScreen({ name: 'home' })} onOpenLetter={(throwId) => setScreen({ name: 'letter', throwId })} />;
+    return (
+      <ThrowInboxScreen
+        onBack={() => setScreen({ name: 'home' })}
+        initialContactId={screen.initialContactId}
+        onThrowBack={(counterpartUserId, repliedToThrowId) => setScreen({ name: 'home', lockedRecipient: { friendUserId: counterpartUserId, repliedToThrowId } })}
+      />
+    );
   }
 
   if (screen.name === 'letter') {
