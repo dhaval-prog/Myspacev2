@@ -190,6 +190,7 @@ export function useInboxArrival(opts: UseInboxArrivalOptions) {
 
   const cardData: LetterCardData | null = activeLetter
     ? {
+        id: activeLetter.id,
         from: contactName,
         date: formatLetterDate(activeLetter.createdAt).date,
         place: activeLetter.senderCity.toUpperCase(),
@@ -197,6 +198,7 @@ export function useInboxArrival(opts: UseInboxArrivalOptions) {
         body: bodyForLetter(activeLetter),
         sig: `— ${contactName.charAt(0)}.`,
         count: `${activeLetterIdx + 1} / ${visibleLetters.length}`,
+        photoUrls: activeLetter.photoUrls,
       }
     : null;
 
