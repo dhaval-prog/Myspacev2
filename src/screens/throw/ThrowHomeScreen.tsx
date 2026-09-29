@@ -86,12 +86,11 @@ interface ThrowHomeScreenProps {
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
   onOpenSettings: () => void;
-  /** Set when arriving here via "Throw Back" — recipient is fixed, carousel is hidden. */
+  /** Set when arriving here via "Throw Back" — recipient is fixed, carousel is hidden. Only ever
+   * set from ThrowInboxScreen/ThrowLetterDetailScreen's own separate Throw Back buttons — the
+   * in-place received-letters panel's own Throw Back (see isInboxMode below) just closes the
+   * panel and lands on the already-selected contact's normal, unlocked compose letter instead. */
   lockedRecipient?: { friendUserId: string; repliedToThrowId: string } | null;
-  /** "Throw Back" tapped from the in-place received-letters panel (see isInboxMode below) — same
-   * nav ThrowInboxScreen/ThrowLetterDetailScreen's own "Throw Back" already drives, routing back
-   * to compose with this contact locked in as the recipient. */
-  onThrowBack: (counterpartUserId: string, repliedToThrowId: string) => void;
 }
 
 /**
@@ -109,7 +108,6 @@ export function ThrowHomeScreen({
   onOpenAddFriend,
   onOpenSettings,
   lockedRecipient,
-  onThrowBack,
 }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
   // Where the selected contact's own ring sits on screen, vertically — the recipient carousel's
@@ -379,11 +377,6 @@ export function ThrowHomeScreen({
   });
   const handleOpenInbox = () => setInboxMode(true);
   const handleCloseInbox = () => setInboxMode(false);
-  const handleInboxThrowBack = () => {
-    if (!selectedFriend || !inboxArrival.activeLetter) return;
-    setInboxMode(false);
-    onThrowBack(selectedFriend.userId, inboxArrival.activeLetter.id);
-  };
   const handleInboxSelectChip = async (index: number, originScreen: { x: number; y: number }) => {
     const local = await toLocalInboxPoint(originScreen);
     inboxArrival.handleSelectChip(index, local);
@@ -933,7 +926,12 @@ export function ThrowHomeScreen({
                     scale={inboxScale}
                     heightScale={inboxHeightScale}
                     reduceMotion={reduceMotion}
-                    onThrowBack={inboxArrival.activeLetter ? handleInboxThrowBack : undefined}
+                    // Just closes the panel, landing on the already-selected contact's own normal
+                    // (unlocked) compose letter — same as the back button, not a locked "replying
+                    // to" flow — per explicit request; the `onThrowBack` prop (which drives that
+                    // locked flow elsewhere) is only for ThrowInboxScreen/ThrowLetterDetailScreen's
+                    // own separate Throw Back buttons, not this in-place panel's.
+                    onThrowBack={inboxArrival.activeLetter ? handleCloseInbox : undefined}
                   />
                 </View>
               ) : (
@@ -1054,6 +1052,7 @@ export function ThrowHomeScreen({
             onSelectChip={handleInboxSelectChip}
             onReplay={inboxArrival.handleReplay}
             onDelete={inboxArrival.handleDelete}
+            compact
           />
         )}
       </Animated.View>

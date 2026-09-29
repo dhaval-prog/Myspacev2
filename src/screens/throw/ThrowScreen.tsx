@@ -63,7 +63,6 @@ function ThrowNavigator({
         onOpenAddFriend={onOpenAddFriend}
         onOpenSettings={() => setScreen({ name: 'settings' })}
         lockedRecipient={screen.lockedRecipient}
-        onThrowBack={(counterpartUserId, repliedToThrowId) => setScreen({ name: 'home', lockedRecipient: { friendUserId: counterpartUserId, repliedToThrowId } })}
       />
     );
   }

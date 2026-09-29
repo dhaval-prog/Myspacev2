@@ -162,9 +162,7 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
 }
 
 async function renderScreen() {
-  await renderWithSafeArea(
-    <ThrowHomeScreen onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenSettings={noop} onThrowBack={noop} />,
-  );
+  await renderWithSafeArea(<ThrowHomeScreen onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenSettings={noop} />);
 }
 
 describe('ThrowHomeScreen self-reminder contact lock', () => {
@@ -807,12 +805,9 @@ describe('ThrowHomeScreen in-place received-letters panel', () => {
     expect(screen.getByTestId('bottom-nav-wrap').props.pointerEvents).toBe('box-none');
   });
 
-  it('routes Throw Back through the onThrowBack prop and closes the panel', async () => {
-    const onThrowBack = jest.fn();
+  it('Throw Back just closes the panel, landing on the same contact\'s normal unlocked letter', async () => {
     setupMocksWithInbox([letter({ id: 'l1', counterpartId: FRIEND.userId, createdAt: new Date().toISOString() })]);
-    await renderWithSafeArea(
-      <ThrowHomeScreen onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenSettings={noop} onThrowBack={onThrowBack} />,
-    );
+    await renderScreen();
 
     await act(async () => {
       mockCarouselProps.onChangeIndex(1);
@@ -828,9 +823,11 @@ describe('ThrowHomeScreen in-place received-letters panel', () => {
       mockLetterFoldCardProps.onThrowBack();
     });
 
-    expect(onThrowBack).toHaveBeenCalledWith(FRIEND.userId, 'l1');
     expect(screen.queryByTestId('letter-fold-card')).toBeNull();
     expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    // Not locked — no lockedRecipient means FoldingLetter isn't told to fall back to "Swipe up to
+    // throw back", it keeps the ordinary throw label.
+    expect(mockFoldingLetterProps.throwLabel).toBe('Swipe up to throw');
   });
 
   it('deletes the active letter through deleteThrow when the chip row reports a delete', async () => {

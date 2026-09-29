@@ -21,6 +21,12 @@ interface PlaneSliderProps {
   onSelectChip: (index: number, originScreen: { x: number; y: number }) => void;
   onReplay: () => void;
   onDelete: () => void;
+  /** Hides the "LETTERS FROM X · N" header row and its Replay button, and moves each chip's own
+   * day label inside its own box (white text once active/armed-to-delete, black otherwise)
+   * instead of rendering it as a separate line below — per explicit request, scoped to
+   * ThrowHomeScreen's own in-place panel. Defaults to the original header-plus-below-box-label
+   * look, which ThrowInboxScreen's own standalone screen keeps unchanged. */
+  compact?: boolean;
 }
 
 const s = (n: number, scale: number) => n * scale;
@@ -159,7 +165,7 @@ function useActiveChipGesture(opts: { enabled: boolean; onArm: () => void; onDra
  * the letter count + Replay button, and the active chip's delete gesture (see
  * `useActiveChipGesture`) with its bin + ghost chip + haptics.
  */
-export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canReplay, onSelectChip, onReplay, onDelete }: PlaneSliderProps) {
+export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canReplay, onSelectChip, onReplay, onDelete, compact = false }: PlaneSliderProps) {
   const [armed, setArmed] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [dropping, setDropping] = useState(false);
@@ -216,21 +222,23 @@ export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canR
 
   return (
     <View style={{ gap: s(10, scale) }}>
-      <View style={[styles.headerRow, { paddingHorizontal: s(24, scale) }]}>
-        <Text style={[styles.mono, { fontSize: s(10.5, scale), letterSpacing: 1.4 }]}>
-          LETTERS FROM {contactName.toUpperCase()} · {chips.length}
-        </Text>
-        <Pressable
-          onPress={canReplay ? onReplay : undefined}
-          disabled={!canReplay}
-          style={[styles.replayBtn, { height: s(28, scale), paddingHorizontal: s(12, scale), borderRadius: s(14, scale), opacity: canReplay ? 1 : 0.4 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Replay arrival"
-        >
-          <Icon path={REPLAY_ICON} size={s(12, scale)} color={inboxColor.ink} strokeWidth={2.4} />
-          <Text style={[styles.replayText, { fontSize: s(12, scale) }]}>Replay</Text>
-        </Pressable>
-      </View>
+      {!compact && (
+        <View style={[styles.headerRow, { paddingHorizontal: s(24, scale) }]}>
+          <Text style={[styles.mono, { fontSize: s(10.5, scale), letterSpacing: 1.4 }]}>
+            LETTERS FROM {contactName.toUpperCase()} · {chips.length}
+          </Text>
+          <Pressable
+            onPress={canReplay ? onReplay : undefined}
+            disabled={!canReplay}
+            style={[styles.replayBtn, { height: s(28, scale), paddingHorizontal: s(12, scale), borderRadius: s(14, scale), opacity: canReplay ? 1 : 0.4 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Replay arrival"
+          >
+            <Icon path={REPLAY_ICON} size={s(12, scale)} color={inboxColor.ink} strokeWidth={2.4} />
+            <Text style={[styles.replayText, { fontSize: s(12, scale) }]}>Replay</Text>
+          </Pressable>
+        </View>
+      )}
 
       <ScrollView
         horizontal
@@ -246,9 +254,16 @@ export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canR
           const variant = armedHere ? 'delete' : active ? 'active' : 'default';
           const bg = armedHere ? inboxColor.deleteRed : active ? inboxColor.accentBlue : inboxColor.paper;
           const labelColor = armedHere ? inboxColor.deleteRed : active ? inboxColor.accentBlue : '#555555';
+          // Inline (compact) labels sit ON the chip's own colored box instead of matching its hue
+          // below — white reads on the active/armed box's blue or red fill, black on the idle
+          // box's cream fill.
+          const inlineLabelColor = armedHere || active ? '#FFFFFF' : '#171717';
           const chipBox = (
             <View style={[styles.chip, { width: s(52, scale), height: s(52, scale), borderRadius: s(16, scale), backgroundColor: bg }]}>
-              <LetterPlaneGlyph size={s(28, scale)} variant={variant} tiltDeg={-14} />
+              <LetterPlaneGlyph size={s(compact ? 21 : 28, scale)} variant={variant} tiltDeg={-14} />
+              {compact && (
+                <Text style={[styles.mono, styles.chipInlineLabel, { fontSize: s(7.5, scale), color: inlineLabelColor }]}>{c.short}</Text>
+              )}
             </View>
           );
           if (active) {
@@ -262,10 +277,10 @@ export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canR
                 {...gesture.panHandlers}
                 accessibilityRole="button"
                 accessibilityLabel={c.a11yLabel}
-                style={{ alignItems: 'center', gap: s(5, scale), opacity: armedHere ? 0.2 : 1, minWidth: 44, minHeight: 44 }}
+                style={{ alignItems: 'center', gap: compact ? 0 : s(5, scale), opacity: armedHere ? 0.2 : 1, minWidth: 44, minHeight: 44 }}
               >
                 {chipBox}
-                <Text style={[styles.mono, { fontSize: s(9, scale), color: labelColor }]}>{c.short}</Text>
+                {!compact && <Text style={[styles.mono, { fontSize: s(9, scale), color: labelColor }]}>{c.short}</Text>}
               </View>
             );
           }
@@ -279,16 +294,16 @@ export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canR
               accessibilityRole="button"
               accessibilityLabel={c.a11yLabel}
               hitSlop={4}
-              style={{ alignItems: 'center', gap: s(5, scale), minWidth: 44, minHeight: 44 }}
+              style={{ alignItems: 'center', gap: compact ? 0 : s(5, scale), minWidth: 44, minHeight: 44 }}
             >
               {chipBox}
-              <Text style={[styles.mono, { fontSize: s(9, scale), color: labelColor }]}>{c.short}</Text>
+              {!compact && <Text style={[styles.mono, { fontSize: s(9, scale), color: labelColor }]}>{c.short}</Text>}
             </Pressable>
           );
         })}
       </ScrollView>
 
-      <View pointerEvents="none" style={[styles.binWrap, { opacity: armed ? 1 : 0, gap: s(8, scale), top: s(106, scale) }]}>
+      <View pointerEvents="none" style={[styles.binWrap, { opacity: armed ? 1 : 0, gap: s(8, scale), top: s(compact ? 62 : 106, scale) }]}>
         <Text style={[styles.mono, { fontSize: s(10, scale), letterSpacing: 1.4, color: over ? inboxColor.deleteRed : '#333333' }]}>{bottomLabel}</Text>
         <View
           style={[
@@ -307,7 +322,7 @@ export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canR
       </View>
 
       {armed && (
-        <View pointerEvents="none" style={[styles.dragCapture, { top: s(-56, scale), height: s(220, scale) }]}>
+        <View pointerEvents="none" style={[styles.dragCapture, { top: s(compact ? -16 : -56, scale), height: s(220, scale) }]}>
           <View
             style={[
               styles.ghost,
@@ -335,6 +350,7 @@ const styles = StyleSheet.create({
   replayBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,.75)' },
   replayText: { fontFamily: 'Figtree_700Bold', color: inboxColor.ink },
   chip: { alignItems: 'center', justifyContent: 'center' },
+  chipInlineLabel: { marginTop: 2, letterSpacing: 0.3 },
   binWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   bin: { alignItems: 'center', justifyContent: 'center' },
   dragCapture: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
