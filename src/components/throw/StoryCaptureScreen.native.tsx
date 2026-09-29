@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { Icon } from '../Icon';
@@ -12,6 +12,16 @@ import type { StoryMediaType } from '../../types/story';
 // gestures sharing one control by how long/far it's gone, not a separate button each.
 const HOLD_THRESHOLD_MS = 220;
 const MAX_VIDEO_SECONDS = 15;
+
+// Purely cosmetic polish on top of the existing capture flow — no change to the tap/hold
+// thresholds, recording behavior, or gestures above/below. A soft fade+scale-in on mount (rather
+// than the camera just appearing instantly) reads as it being smoothly summoned into the letter
+// card, not popped into place; the shutter's own press-scale gives the button real weight; the
+// brief white flash on a photo capture mimics an actual shutter flash.
+const ENTER_MS = 220;
+const SHUTTER_PRESS_SCALE = 0.88;
+const SHUTTER_SCALE_MS = 110;
+const FLASH_MS = 160;
 
 // Same thresholds/spacing FoldingLetter's own writing-phase contact flick uses (see its
 // CONTACT_FLICK_CAPTURE_DX/RATIO/CONTACT_DRAG_SPACING) — this camera fills the same "open letter"
@@ -63,6 +73,19 @@ export function StoryCaptureScreen({
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isRecordingRef = useRef(false);
 
+  const enterOpacity = useRef(new Animated.Value(0)).current;
+  const enterScale = useRef(new Animated.Value(0.96)).current;
+  const shutterScale = useRef(new Animated.Value(1)).current;
+  const flashOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(enterOpacity, { toValue: 1, duration: ENTER_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(enterScale, { toValue: 1, duration: ENTER_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Read inside the PanResponder's callbacks without needing to rebuild it (and drop mid-gesture
   // capture state) whenever a prop identity changes.
   const latest = useRef({ onContactDragStart, onContactDragOffset });
@@ -107,6 +130,8 @@ export function StoryCaptureScreen({
   }, []);
 
   const takePhoto = async () => {
+    flashOpacity.setValue(1);
+    Animated.timing(flashOpacity, { toValue: 0, duration: FLASH_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
     const pic = await cameraRef.current?.takePictureAsync();
     if (pic?.uri) onCaptured(pic.uri, 'photo');
   };
@@ -128,6 +153,7 @@ export function StoryCaptureScreen({
   };
 
   const onShutterPressIn = () => {
+    Animated.timing(shutterScale, { toValue: SHUTTER_PRESS_SCALE, duration: SHUTTER_SCALE_MS, useNativeDriver: true }).start();
     holdTimerRef.current = setTimeout(() => {
       holdTimerRef.current = null;
       startRecording();
@@ -135,6 +161,7 @@ export function StoryCaptureScreen({
   };
 
   const onShutterPressOut = () => {
+    Animated.timing(shutterScale, { toValue: 1, duration: SHUTTER_SCALE_MS, useNativeDriver: true }).start();
     if (holdTimerRef.current) {
       clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
@@ -168,7 +195,10 @@ export function StoryCaptureScreen({
   }
 
   return (
-    <View style={styles.screen} {...contactPanResponder.panHandlers}>
+    <Animated.View
+      style={[styles.screen, { opacity: enterOpacity, transform: [{ scale: enterScale }] }]}
+      {...contactPanResponder.panHandlers}
+    >
       <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={facing} mode={mode} videoQuality="720p" />
 
       <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close camera">
@@ -205,16 +235,20 @@ export function StoryCaptureScreen({
           accessibilityRole="button"
           accessibilityLabel="Hold to record video, tap for a photo"
         >
-          <View style={[styles.shutterOuter, recording && styles.shutterOuterRecording]}>
-            <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
-          </View>
+          <Animated.View style={{ transform: [{ scale: shutterScale }] }}>
+            <View style={[styles.shutterOuter, recording && styles.shutterOuterRecording]}>
+              <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
+            </View>
+          </Animated.View>
         </Pressable>
 
         <View style={styles.galleryBtn} />
       </View>
 
       {recording && <Text style={styles.recordingHint}>Recording… release to stop</Text>}
-    </View>
+
+      <Animated.View pointerEvents="none" style={[styles.flash, { opacity: flashOpacity }]} />
+    </Animated.View>
   );
 }
 
@@ -280,6 +314,7 @@ const styles = StyleSheet.create({
   shutterInner: { width: SHUTTER_SIZE - 14, height: SHUTTER_SIZE - 14, borderRadius: (SHUTTER_SIZE - 14) / 2, backgroundColor: '#FFFFFF' },
   shutterInnerRecording: { borderRadius: 8, backgroundColor: '#FF3B30' },
   recordingHint: { position: 'absolute', bottom: 140, alignSelf: 'center', color: '#FFFFFF', fontSize: 13 },
+  flash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF' },
   permissionWrap: {
     flex: 1,
     backgroundColor: '#000000',
