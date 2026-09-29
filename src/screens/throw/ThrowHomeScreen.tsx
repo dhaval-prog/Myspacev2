@@ -880,16 +880,24 @@ export function ThrowHomeScreen({
                   onLayout={(e) => setInboxAreaSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
                   {...(Platform.OS !== 'web' ? inboxFlickPanResponder.panHandlers : null)}
                 >
-                  <Pressable
-                    testID="inbox-back-btn"
-                    onPress={handleCloseInbox}
-                    hitSlop={10}
-                    accessibilityRole="button"
-                    accessibilityLabel="Back to letter"
-                    style={styles.inboxBackBtn}
-                  >
-                    <Icon path={BACK_ICON} size={20} color={throwColor.ink} strokeWidth={2.4} />
-                  </Pressable>
+                  {/* Only shown once there's genuinely no other way out of the panel — once a
+                      letter is showing, "Throw Back" (see LetterFoldCard's own onThrowBack below)
+                      already does the exact same thing (just closes the panel), so this back
+                      chevron would be pure redundant chrome per explicit request. The true empty
+                      state (no letters from this contact at all) never renders a Throw Back
+                      button, so it still needs its own way back. */}
+                  {inboxArrival.isEmpty && (
+                    <Pressable
+                      testID="inbox-back-btn"
+                      onPress={handleCloseInbox}
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel="Back to letter"
+                      style={styles.inboxBackBtn}
+                    >
+                      <Icon path={BACK_ICON} size={20} color={throwColor.ink} strokeWidth={2.4} />
+                    </Pressable>
+                  )}
                   {inboxArrival.plane && (
                     <>
                       <View

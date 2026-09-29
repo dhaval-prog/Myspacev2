@@ -4,6 +4,7 @@ import { FriendAvatar } from '../friends/FriendAvatar';
 import { StoryRing } from './StoryRing';
 import { AddStoryButton } from './AddStoryButton';
 import { throwColor, throwFont, throwNightColor } from '../../theme/throwTokens';
+import { noSelect } from '../../theme/webStyles';
 import type { ThrowFriend } from '../../types/throw';
 
 const ITEM_SPACING = 92;
@@ -240,7 +241,7 @@ export function RecipientCarousel({
   const addStoryTransform = onAddStory ? itemTransform(-1) : null;
 
   return (
-    <View style={styles.wrap} {...panResponder.panHandlers}>
+    <View style={[styles.wrap, noSelect]} {...panResponder.panHandlers}>
       <View style={styles.strip}>
         {onAddStory && addStoryTransform && (
           <Animated.View

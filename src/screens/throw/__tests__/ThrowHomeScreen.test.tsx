@@ -805,6 +805,21 @@ describe('ThrowHomeScreen in-place received-letters panel', () => {
     expect(screen.getByTestId('bottom-nav-wrap').props.pointerEvents).toBe('box-none');
   });
 
+  it('hides the back button once a letter is showing — Throw Back is the only way back by then', async () => {
+    setupMocksWithInbox([letter({ id: 'l1', counterpartId: FRIEND.userId, createdAt: new Date().toISOString() })]);
+    await renderScreen();
+
+    await act(async () => {
+      mockCarouselProps.onChangeIndex(1);
+    });
+    await act(async () => {
+      mockFoldingLetterProps.onOpenInbox();
+    });
+
+    expect(screen.queryByTestId('inbox-back-btn')).toBeNull();
+    expect(typeof mockLetterFoldCardProps.onThrowBack).toBe('function');
+  });
+
   it('Throw Back just closes the panel, landing on the same contact\'s normal unlocked letter', async () => {
     setupMocksWithInbox([letter({ id: 'l1', counterpartId: FRIEND.userId, createdAt: new Date().toISOString() })]);
     await renderScreen();

@@ -3,6 +3,7 @@ import { PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, Vibrat
 import { Icon } from '../../Icon';
 import { LetterPlaneGlyph } from './LetterPlaneGlyph';
 import { inboxColor } from '../../../theme/throwInboxTokens';
+import { noSelect } from '../../../theme/webStyles';
 
 export interface PlaneSliderChip {
   id: string;
@@ -221,7 +222,7 @@ export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canR
   const bottomLabel = over ? 'RELEASE TO DELETE' : 'DRAG DOWN TO DELETE';
 
   return (
-    <View style={{ gap: s(10, scale) }}>
+    <View style={[{ gap: s(10, scale) }, noSelect]}>
       {!compact && (
         <View style={[styles.headerRow, { paddingHorizontal: s(24, scale) }]}>
           <Text style={[styles.mono, { fontSize: s(10.5, scale), letterSpacing: 1.4 }]}>
