@@ -29,7 +29,6 @@ export function LocationPinGlyph({ label, isSelf, selected, dimmed, isNight }: L
           styles.dot,
           isSelf ? styles.dotSelf : styles.dotFriend,
           selected && styles.dotSelected,
-          selected && isNight && styles.dotSelectedNight,
         ]}
       />
       <Text style={[styles.label, isSelf && styles.labelSelf, selected && styles.labelSelected]} numberOfLines={1}>
@@ -88,8 +87,9 @@ const styles = StyleSheet.create({
   dot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: throwColor.paper },
   dotSelf: { backgroundColor: throwColor.pinSelf },
   dotFriend: { backgroundColor: throwColor.pinFriend },
-  dotSelected: { width: 14, height: 14, borderRadius: 7 },
-  dotSelectedNight: { backgroundColor: '#FFFFFF' },
+  // The active/selected pin's own dot — always the same blue as its ring/glow, day or night
+  // (per explicit request), overriding whichever base clay/ink color dotSelf/dotFriend set above.
+  dotSelected: { width: 14, height: 14, borderRadius: 7, backgroundColor: throwColor.activeBlue },
   label: {
     marginTop: 4,
     fontFamily: throwFont.ui600,
@@ -102,5 +102,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   labelSelf: { color: throwColor.clayDeep, fontFamily: throwFont.ui700 },
-  labelSelected: { color: throwColor.clayDeep, fontFamily: throwFont.ui700 },
+  // Same blue as the selected dot/ring — overrides labelSelf's clay color when both apply (array
+  // order below puts this last), per explicit request.
+  labelSelected: { color: throwColor.activeBlue, fontFamily: throwFont.ui700 },
 });

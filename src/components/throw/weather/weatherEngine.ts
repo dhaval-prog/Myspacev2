@@ -15,7 +15,7 @@ import { sunConfigForHour } from './sunConfig';
 export interface WeatherEngineOptions {
   width: number;
   height: number;
-  /** 0–1 of height treated as sky above the pitched map (stars, moon, shooting stars). */
+  /** 0–1 of height treated as sky above the pitched map (stars, shooting stars). */
   horizon?: number;
   maxDpr?: number;
 }
@@ -144,24 +144,16 @@ function frame(t){
   // dim sky
   if(L.dim>.005){ ctx.fillStyle=`rgba(5,8,16,${L.dim})`; ctx.fillRect(0,0,W,H); }
 
-  // ----- clear: moon, stars, shooting star, motes
+  // ----- clear: stars, shooting star, motes (no moon — removed per explicit request)
   if(L.stars>.01){
     const a=L.stars;
     ctx.save(); ctx.globalCompositeOperation='lighter';
-    const mx=318,my=86;
-    let g=ctx.createRadialGradient(mx,my,0,mx,my,150); g.addColorStop(0,`rgba(190,205,240,${.22*a})`); g.addColorStop(1,'rgba(190,205,240,0)'); ctx.fillStyle=g; ctx.fillRect(mx-150,my-150,300,300);
     for(const s of stars){ const tw=.55+.45*Math.sin(t/1000*s.tw+s.ph); const fade=clamp(1-(s.y-HZ+20)/80,0,1);
       ctx.globalAlpha=a*tw*fade*(s.r>1?.95:.7); ctx.drawImage(FLAKE,s.x-s.r*2,s.y-s.r*2,s.r*4,s.r*4); }
     ctx.globalAlpha=1;
-    // moon disc
-    ctx.globalCompositeOperation='source-over';
-    g=ctx.createRadialGradient(mx-4,my-4,2,mx,my,15); g.addColorStop(0,`rgba(250,248,238,${a})`); g.addColorStop(.85,`rgba(222,220,208,${a})`); g.addColorStop(1,`rgba(200,200,190,${a*.9})`);
-    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(mx,my,15,0,7); ctx.fill();
-    ctx.fillStyle=`rgba(150,150,145,${.18*a})`; [[-4,-3,3.2],[5,2,2.4],[-1,6,1.8],[3,-6,1.4]].forEach(([dx,dy,r])=>{ctx.beginPath();ctx.arc(mx+dx,my+dy,r,0,7);ctx.fill();});
-    ctx.globalCompositeOperation='lighter';
-    // moonlight sheen drifting over the map
+    // night sheen drifting over the map
     const sx=W*.5+Math.sin(t/9000)*120, sy=H*.55+Math.cos(t/11000)*90;
-    g=ctx.createRadialGradient(sx,sy,0,sx,sy,300); g.addColorStop(0,`rgba(140,165,230,${.07*a})`); g.addColorStop(1,'rgba(140,165,230,0)'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    let g=ctx.createRadialGradient(sx,sy,0,sx,sy,300); g.addColorStop(0,`rgba(140,165,230,${.07*a})`); g.addColorStop(1,'rgba(140,165,230,0)'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
     // shooting star
     if(!shoot && t>nextShoot && a>.6){ shoot={x:rnd(40,W-80),y:rnd(10,HZ-40),t0:t,vx:rnd(260,380),vy:rnd(70,120)}; }
     if(shoot){ const e=(t-shoot.t0)/1000; if(e>.9){shoot=null;nextShoot=t+rnd(5000,12000);} else {

@@ -14,7 +14,6 @@ import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
 import { WeatherOverlay } from '../../components/throw/weather/WeatherOverlay';
 import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { formatMiles } from '../../utils/geo';
 import { spreadCoincidentPins } from '../../utils/mapProjection';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
@@ -736,22 +735,14 @@ export function ThrowHomeScreen({
           </View>
         )}
 
-        {flight && (
+        {/* Only the self-reminder "Alert set" confirmation shows here — the regular throw-to-a-
+            friend "Your letter has landed" card was removed per explicit request (swiping up to
+            throw should not show a landed-confirmation screen at all). */}
+        {flight?.isAlert && (
           <View style={[styles.flightStatusWrap, { bottom: insets.bottom + 16 + BOTTOM_NAV_CLEARANCE }]}>
             <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.flightStatus}>
-              {flight.isAlert ? (
-                <>
-                  <Text style={styles.flightTitle}>Alert set</Text>
-                  <Text style={styles.flightBody}>{flight.alertScheduleSummary}</Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.flightTitle}>Your letter has landed</Text>
-                  <Text style={styles.flightBody}>
-                    With {flight.letter.counterpartName} in {flight.letter.recipientCity} · {formatMiles(flight.letter.distanceMiles)} away
-                  </Text>
-                </>
-              )}
+              <Text style={styles.flightTitle}>Alert set</Text>
+              <Text style={styles.flightBody}>{flight.alertScheduleSummary}</Text>
             </GlassSurface>
           </View>
         )}
