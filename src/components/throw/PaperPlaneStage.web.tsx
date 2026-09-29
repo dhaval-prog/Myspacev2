@@ -12,7 +12,7 @@ const paperTextureAsset = require('../../../assets/throw/paper-texture.jpg');
  * the RN tree — the same pattern MapCanvas.web.tsx already uses for Leaflet.
  */
 export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStageProps>(function PaperPlaneStage(
-  { onPhase, onProgress, onError },
+  { onPhase, onProgress, onError, onReady },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -74,6 +74,7 @@ export const PaperPlaneStage = forwardRef<PaperPlaneStageHandle, PaperPlaneStage
 
       engine = createPaperPlane({ renderer, texture, width, height, onPhase, onProgress, onError });
       engineRef.current = engine;
+      onReady?.();
     } catch (err) {
       onError?.(err);
     }
