@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
@@ -126,7 +126,7 @@ export function ThrowHomeScreen({
   const { user } = useAuth();
   const myId = user?.id ?? null;
   const { myLocation, myName, myAvatarUrl, friends, unreadCount, streakFor, sendThrow, uploadPhoto, inbox, deleteThrow } = useThrow();
-  const { createAlert } = useThrowAlerts();
+  const { createAlert, alerts, deleteAlert } = useThrowAlerts();
   const { statsFor } = useGameStats();
   const { storiesByUser, storyCountFor, postStory, markViewed, deleteStory } = useThrowStories();
   const [storyFlow, setStoryFlow] = useState<StoryFlow | null>(null);
@@ -361,9 +361,54 @@ export function ThrowHomeScreen({
 
   const selectedIndex = Math.max(0, friendsWithLocation.findIndex((f) => f.userId === selectedFriendId));
   const selectedFriend = friendsWithLocation.find((f) => f.userId === selectedFriendId) ?? null;
-  const inboxContactLetters = useMemo(
-    () => (selectedFriend ? inbox.filter((l) => l.counterpartId === selectedFriend.userId) : []),
-    [inbox, selectedFriend],
+  const isSelfSelected = !!selectedFriend && selectedFriend.userId === myId;
+  // "Myself" never has real received letters (you can't throw one to yourself the normal way —
+  // see handleThrow's own self branch, which calls createAlert instead of sendThrow) — so this
+  // panel would always show the empty state for that contact otherwise. Per explicit request, it
+  // shows your own self-reminders instead, reusing the exact same letter-card presentation (the
+  // shape here mirrors handleThrow's own local alertLetter construction below, used for the
+  // send-flight animation) — falling back to the real empty state only once there are no alerts
+  // either.
+  const inboxContactLetters = useMemo(() => {
+    if (!selectedFriend) return [];
+    if (isSelfSelected) {
+      return alerts.map(
+        (a): ThrowLetter => ({
+          id: a.id,
+          senderId: myId ?? '',
+          recipientId: myId ?? '',
+          counterpartId: myId ?? '',
+          counterpartName: myName,
+          counterpartAvatarUrl: myAvatarUrl,
+          direction: 'received',
+          messageText: a.messageText,
+          strokes: a.strokes,
+          penColor: a.penColor,
+          photoUrls: [],
+          senderCity: myLocation?.city ?? '',
+          senderCountry: myLocation?.country ?? '',
+          senderLatitude: myLocation?.latitude ?? 0,
+          senderLongitude: myLocation?.longitude ?? 0,
+          recipientCity: myLocation?.city ?? '',
+          recipientCountry: myLocation?.country ?? '',
+          recipientLatitude: myLocation?.latitude ?? 0,
+          recipientLongitude: myLocation?.longitude ?? 0,
+          distanceMiles: 0,
+          status: 'thrown',
+          createdAt: a.nextTriggerAt,
+          readAt: null,
+          repliedToThrowId: null,
+        }),
+      );
+    }
+    return inbox.filter((l) => l.counterpartId === selectedFriend.userId);
+  }, [inbox, selectedFriend, isSelfSelected, alerts, myId, myName, myAvatarUrl, myLocation]);
+  // Self-reminders live in a separate table/RPC (throw_alerts, not throws) — deleting one from
+  // this panel has to route to deleteAlert instead of deleteThrow, or it'd call delete_throw with
+  // an alert id that RPC has never heard of.
+  const handleInboxDelete = useCallback(
+    (id: string) => (isSelfSelected ? deleteAlert(id) : deleteThrow(id)),
+    [isSelfSelected, deleteAlert, deleteThrow],
   );
   const inboxArrival = useInboxArrival({
     enabled: inboxMode,
@@ -373,7 +418,7 @@ export function ThrowHomeScreen({
     scale: inboxScale,
     landingPoint: inboxLandingPoint,
     belowOrigin: inboxBelowOrigin,
-    deleteThrow,
+    deleteThrow: handleInboxDelete,
   });
   const handleOpenInbox = () => setInboxMode(true);
   const handleCloseInbox = () => setInboxMode(false);
@@ -381,7 +426,6 @@ export function ThrowHomeScreen({
     const local = await toLocalInboxPoint(originScreen);
     inboxArrival.handleSelectChip(index, local);
   };
-  const isSelfSelected = !!selectedFriend && selectedFriend.userId === myId;
   // Only meaningful while self is actually selected — switching to a friend first (before ever
   // touching the schedule/text) is always allowed; this only blocks switching *away* once a
   // reminder is actually in progress.
@@ -1061,6 +1105,7 @@ export function ThrowHomeScreen({
             onReplay={inboxArrival.handleReplay}
             onDelete={inboxArrival.handleDelete}
             compact
+            bottomInset={insets.bottom}
           />
         )}
       </Animated.View>

@@ -146,7 +146,7 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
     inbox: [],
     deleteThrow: jest.fn().mockResolvedValue({ error: null }),
   });
-  mockUseThrowAlerts.mockReturnValue({ createAlert });
+  mockUseThrowAlerts.mockReturnValue({ createAlert, alerts: [], deleteAlert: jest.fn().mockResolvedValue({ error: null }) });
   mockUseGameStats.mockReturnValue({ statsFor: () => ({ totalPoints: 0 }) });
   mockUseThrowColorMode.mockReturnValue({ mode: 'auto', isDay: true, autoIsDay: true, setMode: jest.fn(), mapMode: 'auto', mapIsDay: true, setMapMode: jest.fn() });
   mockUseThrowStories.mockReturnValue({
@@ -873,5 +873,44 @@ describe('ThrowHomeScreen in-place received-letters panel', () => {
     });
 
     expect(deleteThrow).toHaveBeenCalledWith('l1');
+  });
+
+  it("shows Myself's own self-reminder alerts as received letters, and deletes route to deleteAlert", async () => {
+    const deleteAlert = jest.fn().mockResolvedValue({ error: null });
+    setupMocks();
+    mockUseThrowAlerts.mockReturnValue({
+      createAlert: jest.fn(),
+      alerts: [
+        {
+          id: 'alert-1',
+          messageText: 'Drink water',
+          strokes: null,
+          penColor: '#2346C8',
+          recurrence: 'everyday',
+          daysOfWeek: [],
+          dayOfMonth: null,
+          hour: 9,
+          minute: 0,
+          nextTriggerAt: new Date().toISOString(),
+          active: true,
+        },
+      ],
+      deleteAlert,
+    });
+    // Myself is selected by default (index 0) — no onChangeIndex needed.
+    await renderScreen();
+    await act(async () => {
+      mockFoldingLetterProps.onOpenInbox();
+    });
+
+    expect(mockLetterFoldCardProps.isEmpty).toBe(false);
+    expect(mockLetterFoldCardProps.letter?.body).toBe('Drink water');
+    expect(mockPlaneSliderProps.chips).toHaveLength(1);
+
+    await act(async () => {
+      mockPlaneSliderProps.onDelete();
+    });
+
+    expect(deleteAlert).toHaveBeenCalledWith('alert-1');
   });
 });

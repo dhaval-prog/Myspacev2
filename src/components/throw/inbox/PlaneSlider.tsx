@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, Vibration, View } from 'react-native';
 import { Icon } from '../../Icon';
 import { LetterPlaneGlyph } from './LetterPlaneGlyph';
+import { ConfirmDialog } from '../../ConfirmDialog';
 import { inboxColor } from '../../../theme/throwInboxTokens';
 import { noSelect } from '../../../theme/webStyles';
 
@@ -22,12 +23,20 @@ interface PlaneSliderProps {
   onSelectChip: (index: number, originScreen: { x: number; y: number }) => void;
   onReplay: () => void;
   onDelete: () => void;
-  /** Hides the "LETTERS FROM X · N" header row and its Replay button, and moves each chip's own
-   * day label inside its own box (white text once active/armed-to-delete, black otherwise)
-   * instead of rendering it as a separate line below — per explicit request, scoped to
-   * ThrowHomeScreen's own in-place panel. Defaults to the original header-plus-below-box-label
-   * look, which ThrowInboxScreen's own standalone screen keeps unchanged. */
+  /** Hides the "LETTERS FROM X · N" header row and its Replay button, moves each chip's own day
+   * label inside its own box (white text once active/armed-to-delete, black otherwise) instead of
+   * rendering it as a separate line below, and swaps the delete gesture's own drag-to-bin flow for
+   * a plain long-press-then-confirm popup (see ConfirmDialog below) — per explicit request, all
+   * scoped to ThrowHomeScreen's own in-place panel. Defaults to the original header-plus-below-
+   * box-label-plus-drag-to-bin look, which ThrowInboxScreen's own standalone screen keeps
+   * unchanged. */
   compact?: boolean;
+  /** Extra bottom clearance (the device's own safe-area inset, e.g. the home indicator) — only
+   * applied in `compact` mode, which floats flush against the real screen bottom the same way
+   * BottomNav's own dock does (and already gives itself this same clearance internally); ignored
+   * otherwise, since ThrowInboxScreen's own usage is positioned from the top, not anchored to the
+   * bottom edge. Per explicit request that the row not crowd the screen's bottom edge. */
+  bottomInset?: number;
 }
 
 const s = (n: number, scale: number) => n * scale;
@@ -163,24 +172,43 @@ function useActiveChipGesture(opts: { enabled: boolean; onArm: () => void; onDra
 
 /**
  * The bottom row — a horizontal scroll-snap strip of plane chips (newest-first), a header with
- * the letter count + Replay button, and the active chip's delete gesture (see
- * `useActiveChipGesture`) with its bin + ghost chip + haptics.
+ * the letter count + Replay button, and the active chip's own long-press-to-arm delete gesture
+ * (see `useActiveChipGesture`), which then either drags to a bin (the default look) or opens a
+ * plain Delete/Cancel confirm popup (`compact`) — both with the same haptics.
  */
-export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canReplay, onSelectChip, onReplay, onDelete, compact = false }: PlaneSliderProps) {
+export function PlaneSlider({
+  chips,
+  activeIndex,
+  contactName,
+  scale,
+  busy,
+  canReplay,
+  onSelectChip,
+  onReplay,
+  onDelete,
+  compact = false,
+  bottomInset = 0,
+}: PlaneSliderProps) {
   const [armed, setArmed] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [dropping, setDropping] = useState(false);
+  // Compact mode's own delete flow (see ConfirmDialog below) — a plain long-press-then-confirm
+  // instead of the drag-to-bin gesture ThrowInboxScreen's own standalone screen still uses (see
+  // `compact`'s own doc comment), per explicit request.
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const chipRefs = useRef(new Map<string, View>()).current;
 
-  // A committed delete leaves `armed` (and so the bin/dimmed-chip/"RELEASE TO DELETE" label) up
-  // indefinitely otherwise — nothing else in this component ever turns it back off. The screen
-  // that owns the real data removes the deleted letter and lands on whatever's next a beat later
-  // (see ThrowInboxScreen's own handleDelete), which is exactly the moment this should reset:
-  // once the chip row itself reflects the delete, the drag gesture chrome should be gone too.
+  // A committed delete leaves `armed` (and so the bin/dimmed-chip/"RELEASE TO DELETE" label, or
+  // compact mode's own confirm dialog) up indefinitely otherwise — nothing else in this component
+  // ever turns it back off. The screen that owns the real data removes the deleted letter and
+  // lands on whatever's next a beat later (see ThrowInboxScreen's own handleDelete), which is
+  // exactly the moment this should reset: once the chip row itself reflects the delete, the
+  // delete-gesture chrome should be gone too.
   useEffect(() => {
     setArmed(false);
     setDragY(0);
     setDropping(false);
+    setConfirmOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex, chips.length]);
 
@@ -194,19 +222,36 @@ export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canR
     enabled: !busy,
     onArm: () => {
       vibrate(12);
-      setDragY(0);
-      setDropping(false);
       setArmed(true);
-    },
-    onDragChange: setDragY,
-    onRelease: (finalDragY) => {
-      if (finalDragY > DEL) commitDelete();
-      else {
-        setArmed(false);
+      if (compact) {
+        setConfirmOpen(true);
+      } else {
         setDragY(0);
+        setDropping(false);
       }
     },
+    // Compact mode's own gesture never drags anywhere (see ConfirmDialog below) — these are
+    // effectively no-ops there, left wired only so useActiveChipGesture doesn't need two shapes.
+    onDragChange: compact ? () => {} : setDragY,
+    onRelease: compact
+      ? () => {}
+      : (finalDragY) => {
+          if (finalDragY > DEL) commitDelete();
+          else {
+            setArmed(false);
+            setDragY(0);
+          }
+        },
   });
+
+  const handleConfirmDelete = () => {
+    setConfirmOpen(false);
+    commitDelete();
+  };
+  const handleCancelDelete = () => {
+    setConfirmOpen(false);
+    setArmed(false);
+  };
 
   const onChipTap = (index: number, id: string) => {
     if (busy || index === activeIndex) return;
@@ -222,7 +267,7 @@ export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canR
   const bottomLabel = over ? 'RELEASE TO DELETE' : 'DRAG DOWN TO DELETE';
 
   return (
-    <View style={[{ gap: s(10, scale) }, noSelect]}>
+    <View style={[{ gap: s(10, scale), paddingBottom: compact ? Math.max(bottomInset, 12) : 0 }, noSelect]}>
       {!compact && (
         <View style={[styles.headerRow, { paddingHorizontal: s(24, scale) }]}>
           <Text style={[styles.mono, { fontSize: s(10.5, scale), letterSpacing: 1.4 }]}>
@@ -278,7 +323,7 @@ export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canR
                 {...gesture.panHandlers}
                 accessibilityRole="button"
                 accessibilityLabel={c.a11yLabel}
-                style={{ alignItems: 'center', gap: compact ? 0 : s(5, scale), opacity: armedHere ? 0.2 : 1, minWidth: 44, minHeight: 44 }}
+                style={{ alignItems: 'center', gap: compact ? 0 : s(5, scale), opacity: armedHere && !compact ? 0.2 : 1, minWidth: 44, minHeight: 44 }}
               >
                 {chipBox}
                 {!compact && <Text style={[styles.mono, { fontSize: s(9, scale), color: labelColor }]}>{c.short}</Text>}
@@ -304,26 +349,28 @@ export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canR
         })}
       </ScrollView>
 
-      <View pointerEvents="none" style={[styles.binWrap, { opacity: armed ? 1 : 0, gap: s(8, scale), top: s(compact ? 62 : 106, scale) }]}>
-        <Text style={[styles.mono, { fontSize: s(10, scale), letterSpacing: 1.4, color: over ? inboxColor.deleteRed : '#333333' }]}>{bottomLabel}</Text>
-        <View
-          style={[
-            styles.bin,
-            {
-              width: s(58, scale),
-              height: s(58, scale),
-              borderRadius: s(29, scale),
-              backgroundColor: over ? inboxColor.deleteRed : inboxColor.binDark,
-              transform: [{ scale: over ? 1.15 : 1 }],
-            },
-          ]}
-        >
-          <Icon path={TRASH_ICON} size={s(24, scale)} color="#FFFFFF" strokeWidth={1.8} />
+      {!compact && (
+        <View pointerEvents="none" style={[styles.binWrap, { opacity: armed ? 1 : 0, gap: s(8, scale), top: s(106, scale) }]}>
+          <Text style={[styles.mono, { fontSize: s(10, scale), letterSpacing: 1.4, color: over ? inboxColor.deleteRed : '#333333' }]}>{bottomLabel}</Text>
+          <View
+            style={[
+              styles.bin,
+              {
+                width: s(58, scale),
+                height: s(58, scale),
+                borderRadius: s(29, scale),
+                backgroundColor: over ? inboxColor.deleteRed : inboxColor.binDark,
+                transform: [{ scale: over ? 1.15 : 1 }],
+              },
+            ]}
+          >
+            <Icon path={TRASH_ICON} size={s(24, scale)} color="#FFFFFF" strokeWidth={1.8} />
+          </View>
         </View>
-      </View>
+      )}
 
-      {armed && (
-        <View pointerEvents="none" style={[styles.dragCapture, { top: s(compact ? -16 : -56, scale), height: s(220, scale) }]}>
+      {!compact && armed && (
+        <View pointerEvents="none" style={[styles.dragCapture, { top: s(-56, scale), height: s(220, scale) }]}>
           <View
             style={[
               styles.ghost,
@@ -340,6 +387,19 @@ export function PlaneSlider({ chips, activeIndex, contactName, scale, busy, canR
             <LetterPlaneGlyph size={s(28, scale)} variant="delete" tiltDeg={-14} />
           </View>
         </View>
+      )}
+
+      {compact && (
+        <ConfirmDialog
+          visible={confirmOpen}
+          title="Delete this letter?"
+          message="This can't be undone."
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          destructive
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
       )}
     </View>
   );
