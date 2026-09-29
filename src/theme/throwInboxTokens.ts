@@ -1,10 +1,11 @@
 /**
- * Received Letters (Throw inbox) design tokens — ported from the design handoff's
- * `assets/tokens.json` ("Letters Arrival v2"), with `paper` and `inkBlue` overridden to match
- * the Throw compose letter's own colors exactly (`throwColor.paper` #FBF6EC and LetterCanvas's
- * `INK_BLUE` #4A55B0) per explicit request that the received letter read as the same paper/ink
- * as the one you write on. The rest of the handoff's own palette (accent blue, delete red, etc.)
- * is kept as-is.
+ * Received Letters (Throw inbox) design tokens — ported verbatim from the design handoff's
+ * `assets/tokens.json` ("Letters Arrival v2"). Deliberately its own token set, not merged into
+ * `throwTokens.ts`: this screen's palette (paper `#FBF8F1`, ink-blue handwriting `#2346C8`,
+ * accent blue `#2F6BFF`) is close to but distinct from the rest of Throw's own tokens (e.g.
+ * `throwColor.paper` is `#FBF6EC`, `throwColor.activeBlue` is `#3D7BFF`) — the handoff is the
+ * single source of truth for this screen's exact look, so its own hex values are kept exact
+ * rather than reconciled with the neighboring palette.
  *
  * `layout` coordinates are all in the handoff's 390×844 reference frame — every consumer scales
  * them by the actual container size (see ThrowInboxScreen's own `SCALE`).
@@ -12,14 +13,14 @@
 
 export const inboxColor = {
   ink: '#111111',
-  paper: '#FBF6EC',
+  paper: '#FBF8F1',
   paperBack: '#F3EEE3',
   paperBack2: '#EFE9DC',
   flap: '#E7DFCF',
   mapBg: '#EDEDEA',
   accentBlue: '#2F6BFF',
-  inkBlue: '#4A55B0',
-  ruleLine: 'rgba(17,17,17,0.07)',
+  inkBlue: '#2346C8',
+  ruleLine: 'rgba(47,107,255,0.10)',
   deleteRed: '#FF3B30',
   muted: '#8A8A8A',
   binDark: 'rgba(17,17,17,0.78)',

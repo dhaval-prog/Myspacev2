@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { ContactsRail, type ContactRailItem } from '../../components/throw/inbox/ContactsRail';
-import { LetterFoldCard, type LetterCardData, type LetterFoldCardHandle, type LetterStage } from '../../components/throw/inbox/LetterFoldCard';
+import { LetterFoldCard, type LetterCardData, type LetterStage } from '../../components/throw/inbox/LetterFoldCard';
 import { LetterPlaneGlyph } from '../../components/throw/inbox/LetterPlaneGlyph';
 import { PlaneSlider, type PlaneSliderChip } from '../../components/throw/inbox/PlaneSlider';
 import { InboxMap } from '../../components/throw/inbox/InboxMap';
@@ -69,12 +69,11 @@ const s = (n: number, scale: number) => n * scale;
 
 /**
  * The Received Letters screen — opens from the "Throw inbox" icon on the letter. Letters arrive
- * as paper planes (a 2D bezier-flight sprite, see `plane` state below) and land folded, at rest;
- * from there the user drags UP on the letter to unfold it — the same real WebGL paper-fold engine
- * (see LetterFoldCard) and gesture the Throw compose screen uses to fold its own letter, just
- * driven from the opposite end of the timeline. `play()` drives the flight and hands off to
- * LetterFoldCard once landed; `foldAway()` asks the currently-open letter to fold itself closed
- * (LetterFoldCard's own `closeIfOpen`) before switching/replaying/deleting.
+ * as paper planes, unfold, and sit on a real map at their sent-from location. See the design
+ * handoff (`handoff_letters_arrival/`) this was built against for the full animation spec; the
+ * state machine below (`play`/`foldAway`/stage timer chain) is a direct port of its own
+ * `Component` class, driving `LetterFoldCard`'s stage prop and this screen's own plane-flight/
+ * map-camera state in lockstep.
  */
 export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: ThrowInboxScreenProps) {
   const insets = useSafeAreaInsets();
@@ -104,11 +103,9 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
   });
   const [activeLetterIdx, setActiveLetterIdx] = useState(0);
   const [stage, setStage] = useState<LetterStage>('hidden');
-  const [isLetterOpen, setIsLetterOpen] = useState(false);
   const [plane, setPlane] = useState<{ x: number; y: number; rot: number; scale: number; shadowX: number; shadowY: number } | null>(null);
 
   const stageRef = useRef<LetterStage>('hidden');
-  const cardRef = useRef<LetterFoldCardHandle>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const rafRef = useRef<number | undefined>(undefined);
   const containerRef = useRef<View>(null);
@@ -126,16 +123,16 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
     timers.current = [];
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
   };
-  const busy = () => stageRef.current === 'flying';
+  const busy = () => !(stageRef.current === 'open' || stageRef.current === 'hidden' || stageRef.current === 'empty');
 
-  // Folds the current letter closed first (a no-op if it's already closed, or hasn't been
-  // rendered yet) — LetterFoldCard owns that animation itself now, driven by the same drag-to-
-  // open gesture the user has, so switching/replaying/deleting just asks it to settle closed
-  // rather than this screen scripting a separate fold-away timeline.
   const foldAway = (then: () => void) => {
-    const p = cardRef.current?.closeIfOpen();
-    if (p) p.then(then);
-    else then();
+    if (stageRef.current === 'open' && !reduceMotion) {
+      setStageBoth('folding');
+      later(() => setStageBoth('shrink'), 720);
+      later(then, 1060);
+    } else {
+      then();
+    }
   };
 
   const LAND: Point = { x: s(inboxLayout.landingPoint.x, scale), y: s(inboxLayout.landingPoint.y, scale) };
@@ -145,9 +142,7 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
     if (reduceMotion) {
       setSelectedContactIdx(ci);
       setActiveLetterIdx(idx);
-      // LetterFoldCard's own reduced-motion effect crossfades straight to the readable open
-      // letter the moment it sees stage 'ready' — no drag, no flight.
-      setStageBoth('ready');
+      setStageBoth('open');
       return;
     }
     const fly = () => {
@@ -177,9 +172,11 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
           rafRef.current = requestAnimationFrame(step);
         } else {
           setPlane(null);
-          // Lands folded, at rest — LetterFoldCard mounts its own WebGL fold stage and waits for
-          // the user's own drag-up-to-open gesture instead of auto-unfolding on a timer.
-          setStageBoth('ready');
+          setStageBoth('landed');
+          later(() => setStageBoth('wings'), 40);
+          later(() => setStageBoth('corners'), 560);
+          later(() => setStageBoth('expand'), 1060);
+          later(() => setStageBoth('open'), 1520);
         }
       };
       rafRef.current = requestAnimationFrame(step);
@@ -226,18 +223,7 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
   };
 
   const handleReplay = () => {
-    if (isLetterOpen) play(selectedContactIdx, activeLetterIdx, null);
-  };
-
-  // A clearly horizontal flick on the open letter switches contacts — left moves to the next
-  // (right-hand) contact on the rail, right moves to the previous (left-hand) one, matching
-  // FoldingLetter's own reversed-from-the-folded-plane convention for its still-open paper's own
-  // contact-flick gesture. Clamped, not wrapping, like every other contact-switch path here.
-  const handleFlick = (direction: 'left' | 'right') => {
-    if (busy()) return;
-    const next = selectedContactIdx + (direction === 'left' ? 1 : -1);
-    if (next < 0 || next >= contacts.length) return;
-    selectContact(next);
+    if (stageRef.current === 'open') play(selectedContactIdx, activeLetterIdx, null);
   };
 
   const handleDelete = () => {
@@ -246,7 +232,6 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
     if (!letter) return;
     clear();
     setStageBoth('trash');
-    setIsLetterOpen(false);
     void deleteThrow(letter.id);
     later(() => {
       setLocallyDeletedIds((prev) => new Set(prev).add(letter.id));
@@ -273,9 +258,6 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
         body: bodyFor(activeLetter),
         sig: `— ${currentContact.name.charAt(0)}.`,
         count: `${activeLetterIdx + 1} / ${currentLetters.length}`,
-        strokes: activeLetter.strokes,
-        messageText: activeLetter.messageText,
-        photoUri: activeLetter.photoUrls[0] ?? null,
       }
     : null;
 
@@ -320,17 +302,13 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
 
       <View style={[styles.absTop, { top: topOffset(inboxLayout.letter.y), left: s(inboxLayout.letter.x, scale), alignItems: 'flex-start' }]}>
         <LetterFoldCard
-          ref={cardRef}
           stage={stage}
           letter={cardData}
           isEmpty={stage === 'empty'}
           emptyName={currentContact?.name ?? ''}
           scale={scale}
           reduceMotion={reduceMotion}
-          isNight={!mapIsDay}
           onThrowBack={currentContact && activeLetter ? () => onThrowBack(currentContact.id, activeLetter.id) : undefined}
-          onOpenChange={setIsLetterOpen}
-          onFlick={handleFlick}
         />
       </View>
 
@@ -349,21 +327,21 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
         </>
       )}
 
-      <View style={[styles.absTop, { bottom: Math.max(insets.bottom, s(20, scale)) }]}>
+      <View style={[styles.absTop, { top: topOffset(inboxLayout.chipRowY) }]}>
         <PlaneSlider
           chips={chips}
           activeIndex={activeLetterIdx}
           contactName={currentContact?.name ?? ''}
           scale={scale}
           busy={busy()}
-          canReplay={isLetterOpen}
+          canReplay={stage === 'open'}
           onSelectChip={handleSelectChip}
           onReplay={handleReplay}
           onDelete={handleDelete}
         />
       </View>
 
-      {contacts.length === 0 && !isLetterOpen && (
+      {contacts.length === 0 && stage !== 'open' && (
         <View pointerEvents="none" style={styles.noLettersHint}>
           <Text style={styles.noLettersText}>No letters yet — once someone throws you one, it'll fly in here.</Text>
         </View>
