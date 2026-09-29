@@ -222,6 +222,7 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
 
   const cardData: LetterCardData | null = activeLetter && currentContact
     ? {
+        id: activeLetter.id,
         from: currentContact.name,
         date: formatLetterDate(activeLetter.createdAt).date,
         place: activeLetter.senderCity.toUpperCase(),
@@ -229,6 +230,7 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
         body: bodyForLetter(activeLetter),
         sig: `— ${currentContact.name.charAt(0)}.`,
         count: `${activeLetterIdx + 1} / ${currentLetters.length}`,
+        photoUrls: activeLetter.photoUrls,
       }
     : null;
 

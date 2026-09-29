@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../theme';
+import { noSelect } from '../theme/webStyles';
 
 interface ConfirmDialogProps {
   visible: boolean;
@@ -41,7 +42,7 @@ export function ConfirmDialog({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.wrap}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessibilityRole="button" accessibilityLabel="Dismiss" />
-        <View style={styles.card}>
+        <View style={[styles.card, noSelect]}>
           <Text style={[typography.detailTitle, styles.title]}>{title}</Text>
           <Text style={[typography.body, styles.message]}>{message}</Text>
           {primaryLabel && onPrimary && (

@@ -4,9 +4,9 @@ import Svg, { Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import { Icon } from '../Icon';
 import { throwColor, throwRadius } from '../../theme/throwTokens';
+import { noSelect } from '../../theme/webStyles';
 import type { StoryMediaType } from '../../types/story';
 
-const HOLD_THRESHOLD_MS = 220;
 const MAX_VIDEO_MS = 15000;
 
 // Purely cosmetic polish on top of the existing capture flow — see the native sibling's own
@@ -17,14 +17,17 @@ const SHUTTER_PRESS_SCALE = 0.88;
 const SHUTTER_SCALE_MS = 110;
 const FLASH_MS = 160;
 const SHUTTER_SIZE = 74;
+// The dedicated record-toggle button beside the shutter (see onRecordTogglePress) — same size as
+// the gallery/close/flip round buttons, smaller than the shutter since it's a secondary control.
+const RECORD_SIZE = 44;
 // Closing now flies the whole camera up and shrinks it into the status contact's own avatar
 // ring — see the native sibling's own comment on these same constants.
 const CLOSE_FLIGHT_MS = 480;
 const CLOSE_MIN_SCALE = 0.12;
 const DEFAULT_CLOSE_FLIGHT_DISTANCE = 260;
-// A thin ring drawn just outside the shutter, filling clockwise over the 15s cap while recording
-// — same as the native sibling's own ring (see its comment).
-const RING_SIZE = SHUTTER_SIZE + 16;
+// A thin ring drawn just outside the record button, filling clockwise over the 15s cap while
+// recording — same as the native sibling's own ring (see its comment).
+const RING_SIZE = RECORD_SIZE + 16;
 const RING_THICKNESS = 3;
 const RING_RADIUS = (RING_SIZE - RING_THICKNESS) / 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -95,7 +98,6 @@ export function StoryCaptureScreen({
   const chunksRef = useRef<BlobPart[]>([]);
   const videoMimeRef = useRef<string | null>(null);
   const maxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isRecordingRef = useRef(false);
   const wrapRef = useRef<View>(null);
   // Read inside the raw DOM listeners below without needing to re-attach them (and drop mid-
@@ -175,7 +177,6 @@ export function StoryCaptureScreen({
 
   useEffect(
     () => () => {
-      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
       if (maxDurationTimerRef.current) clearTimeout(maxDurationTimerRef.current);
     },
     [],
@@ -289,24 +290,25 @@ export function StoryCaptureScreen({
     recorderRef.current?.stop();
   };
 
-  const onShutterPressIn = () => {
-    Animated.timing(shutterScale, { toValue: SHUTTER_PRESS_SCALE, duration: SHUTTER_SCALE_MS, useNativeDriver: true }).start();
-    if (!canRecordVideo) return;
-    holdTimerRef.current = setTimeout(() => {
-      holdTimerRef.current = null;
-      startRecording();
-    }, HOLD_THRESHOLD_MS);
+  const onShutterPress = () => {
+    Animated.sequence([
+      Animated.timing(shutterScale, { toValue: SHUTTER_PRESS_SCALE, duration: SHUTTER_SCALE_MS, useNativeDriver: true }),
+      Animated.timing(shutterScale, { toValue: 1, duration: SHUTTER_SCALE_MS, useNativeDriver: true }),
+    ]).start();
+    takePhoto();
   };
 
-  const onShutterPressOut = () => {
-    Animated.timing(shutterScale, { toValue: 1, duration: SHUTTER_SCALE_MS, useNativeDriver: true }).start();
-    if (holdTimerRef.current) {
-      clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-      takePhoto();
-      return;
-    }
-    stopRecording();
+  // A plain tap toggle — press once to start (up to MAX_VIDEO_MS, which auto-stops it), press the
+  // same button again to stop early — replacing the previous hold-to-record/release-to-stop
+  // gesture, which depended on the browser reliably firing onPressIn *and* a later onPressOut for
+  // the same continuous touch. That's exactly the kind of long, held touch Mobile Safari's own
+  // long-press-to-select-text callout also keys off, and the two were visibly racing each other on
+  // a real device (recording silently never starting) — a toggle only needs two ordinary taps, so
+  // there's no held touch for the OS gesture to ever contest it with (see noSelect below either
+  // way, to remove that callout for good regardless of exactly how a touch lands).
+  const onRecordTogglePress = () => {
+    if (recording) stopRecording();
+    else startRecording();
   };
 
   const pickFromLibrary = async () => {
@@ -336,7 +338,7 @@ export function StoryCaptureScreen({
     <Animated.View
       ref={wrapRef}
       onLayout={onLayout}
-      style={[styles.screen, { opacity: enterOpacity, transform: [{ translateY: closeFlightY }, { scale: enterScale }] }]}
+      style={[styles.screen, noSelect, { opacity: enterOpacity, transform: [{ translateY: closeFlightY }, { scale: enterScale }] }]}
     >
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video ref={videoRef} autoPlay playsInline muted style={webVideoStyle} />
@@ -370,44 +372,53 @@ export function StoryCaptureScreen({
           <Icon path={GALLERY_ICON} size={22} color="#FFFFFF" strokeWidth={1.8} />
         </Pressable>
 
-        <Pressable
-          onPressIn={onShutterPressIn}
-          onPressOut={onShutterPressOut}
-          accessibilityRole="button"
-          accessibilityLabel={canRecordVideo ? 'Hold to record video, tap for a photo' : 'Take a photo'}
-        >
-          <View style={styles.shutterWrap}>
-            {recording && (
-              <Svg width={RING_SIZE} height={RING_SIZE} style={[styles.ringSvg]}>
-                <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} stroke="rgba(255,255,255,.25)" strokeWidth={RING_THICKNESS} fill="none" />
-                <AnimatedCircle
-                  cx={RING_SIZE / 2}
-                  cy={RING_SIZE / 2}
-                  r={RING_RADIUS}
-                  stroke="#FF3B30"
-                  strokeWidth={RING_THICKNESS}
-                  fill="none"
-                  strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
-                  strokeDashoffset={recordProgress.interpolate({ inputRange: [0, 1], outputRange: [RING_CIRCUMFERENCE, 0] })}
-                  strokeLinecap="round"
-                  rotation="-90"
-                  originX={RING_SIZE / 2}
-                  originY={RING_SIZE / 2}
-                />
-              </Svg>
-            )}
+        <View style={styles.shutterGroup}>
+          <Pressable onPress={onShutterPress} disabled={recording} accessibilityRole="button" accessibilityLabel="Take a photo">
             <Animated.View style={{ transform: [{ scale: shutterScale }] }}>
-              <View style={[styles.shutterOuter, recording && styles.shutterOuterRecording]}>
-                <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
+              <View style={styles.shutterOuter}>
+                <View style={styles.shutterInner} />
               </View>
             </Animated.View>
-          </View>
-        </Pressable>
+          </Pressable>
+
+          <Pressable
+            onPress={onRecordTogglePress}
+            disabled={!canRecordVideo}
+            accessibilityRole="button"
+            accessibilityLabel={recording ? 'Stop recording' : 'Record a video'}
+            style={{ opacity: canRecordVideo ? 1 : 0.35 }}
+          >
+            <View style={styles.recordWrap}>
+              {recording && (
+                <Svg width={RING_SIZE} height={RING_SIZE} style={[styles.ringSvg]}>
+                  <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} stroke="rgba(255,255,255,.25)" strokeWidth={RING_THICKNESS} fill="none" />
+                  <AnimatedCircle
+                    cx={RING_SIZE / 2}
+                    cy={RING_SIZE / 2}
+                    r={RING_RADIUS}
+                    stroke="#FF3B30"
+                    strokeWidth={RING_THICKNESS}
+                    fill="none"
+                    strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+                    strokeDashoffset={recordProgress.interpolate({ inputRange: [0, 1], outputRange: [RING_CIRCUMFERENCE, 0] })}
+                    strokeLinecap="round"
+                    rotation="-90"
+                    originX={RING_SIZE / 2}
+                    originY={RING_SIZE / 2}
+                  />
+                </Svg>
+              )}
+              <View style={[styles.recordOuter, recording && styles.recordOuterActive]}>
+                <View style={[styles.recordInner, recording && styles.recordInnerActive]} />
+              </View>
+            </View>
+          </Pressable>
+        </View>
 
         <View style={styles.galleryBtn} />
       </View>
 
-      {recording && <Text style={styles.recordingHint}>Recording… release to stop</Text>}
+      {recording && <Text style={styles.recordingHint}>Recording… tap to stop</Text>}
 
       <Animated.View pointerEvents="none" style={[styles.flash, { opacity: flashOpacity }]} />
     </Animated.View>
@@ -465,7 +476,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shutterWrap: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
+  shutterGroup: { flexDirection: 'row', alignItems: 'center', gap: 18 },
   ringSvg: { position: 'absolute' },
   shutterOuter: {
     width: SHUTTER_SIZE,
@@ -476,9 +487,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shutterOuterRecording: { borderColor: '#FF3B30' },
   shutterInner: { width: SHUTTER_SIZE - 14, height: SHUTTER_SIZE - 14, borderRadius: (SHUTTER_SIZE - 14) / 2, backgroundColor: '#FFFFFF' },
-  shutterInnerRecording: { borderRadius: 8, backgroundColor: '#FF3B30' },
+  recordWrap: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
+  recordOuter: {
+    width: RECORD_SIZE,
+    height: RECORD_SIZE,
+    borderRadius: RECORD_SIZE / 2,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordOuterActive: { borderColor: '#FF3B30' },
+  recordInner: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FF3B30' },
+  recordInnerActive: { width: 18, height: 18, borderRadius: 5 },
   recordingHint: { position: 'absolute', bottom: 140, alignSelf: 'center', color: '#FFFFFF', fontSize: 13 },
   flash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF' },
   permissionWrap: {
