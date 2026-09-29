@@ -168,11 +168,11 @@ interface ContactStoryStackProps {
   /** Fired whenever the avatar should do its own little scale pulse (a photo just landed in the
    * letter, or one just flew back into it). */
   onPulseAvatar?: () => void;
-  /** Fired the instant a delete empties the letter completely (nothing left in the avatar either)
-   * — the parent's cue to leave story mode immediately rather than let this render its own
-   * "Status deleted / Bring them back" placeholder. Never fires for a swipe-up-to-return (that
-   * just parks the photo back in the avatar, not gone), only for the delete gesture. */
-  onAllDeleted?: () => void;
+  /** Fired the instant the letter becomes empty — whether the last card was deleted or just
+   * swiped back up into the avatar — so the parent can leave story mode immediately and show the
+   * compose letter instead of this component's own "Tap X's status to open" / "Status deleted"
+   * placeholder. */
+  onLetterEmptied?: () => void;
 }
 
 /**
@@ -182,8 +182,9 @@ interface ContactStoryStackProps {
  * gone": tapping the contact's avatar drops whatever's still there into the letter one at a time;
  * swiping the top card up sends it back into the avatar; long-pressing then dragging down (own
  * stories only) deletes it. The parent otherwise only leaves story mode when the user picks a
- * different contact — except when a delete empties the stack completely, which hands control
- * straight back to the parent (see onAllDeleted) instead of showing an empty placeholder here.
+ * different contact — except the instant the letter itself empties out (by either of those last
+ * two gestures), which hands control straight back to the parent (see onLetterEmptied) instead of
+ * showing an empty placeholder here.
  */
 export function ContactStoryStack({
   stories,
@@ -197,10 +198,10 @@ export function ContactStoryStack({
   onDeleteStory,
   onAvatarCountChange,
   onPulseAvatar,
-  onAllDeleted,
+  onLetterEmptied,
 }: ContactStoryStackProps) {
-  const onAllDeletedRef = useRef(onAllDeleted);
-  onAllDeletedRef.current = onAllDeleted;
+  const onLetterEmptiedRef = useRef(onLetterEmptied);
+  onLetterEmptiedRef.current = onLetterEmptied;
   const [locations, setLocationsState] = useState<Map<string, PhotoLocation>>(() => new Map(stories.map((s) => [s.id, 'avatar' as PhotoLocation])));
   const locationsRef = useRef(locations);
   locationsRef.current = locations;
@@ -342,12 +343,11 @@ export function ContactStoryStack({
     ]).start(() => {
       animsRef.current.delete(id);
       setLocation(id, 'avatar');
-      setLetterOrder((prev) => {
-        const next = prev.filter((x) => x !== id);
-        next.forEach((otherId, idx) => settleCard(otherId, idx));
-        return next;
-      });
+      const next = letterOrderRef.current.filter((x) => x !== id);
+      next.forEach((otherId, idx) => settleCard(otherId, idx));
+      setLetterOrder(next);
       onPulseAvatarRef.current?.();
+      if (next.length === 0) onLetterEmptiedRef.current?.();
     });
   };
   const springBackTop = (id: string) => {
@@ -397,10 +397,7 @@ export function ContactStoryStack({
       const next = letterOrderRef.current.filter((x) => x !== id);
       next.forEach((otherId, idx) => settleCard(otherId, idx));
       setLetterOrder(next);
-      if (next.length === 0) {
-        const stillInAvatar = stories.some((s) => (locationsRef.current.get(s.id) ?? 'avatar') === 'avatar');
-        if (!stillInAvatar) onAllDeletedRef.current?.();
-      }
+      if (next.length === 0) onLetterEmptiedRef.current?.();
     });
   };
 

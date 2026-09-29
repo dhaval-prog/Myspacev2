@@ -9,10 +9,16 @@ import { LocationPinGlyph } from './LocationPin';
 import { PaperPlane } from './PaperPlane';
 import type { ThrowMapProps } from './throwMapTypes';
 
-// A whole-world-ish default before there's anything to focus on — not literally the whole globe
-// (MapView clamps oddly past ~170°), just wide enough to read as "the world" rather than a random
-// close-up.
-const WORLD_REGION: Region = { latitude: 15, longitude: 10, latitudeDelta: 140, longitudeDelta: 140 };
+// The map's own starting camera, before there's anything to focus on — matches the web map's own
+// default (same center/zoom/bearing/pitch, picked per explicit user request), not a generic
+// whole-world fallback.
+const DEFAULT_CENTER = { latitude: 18.520358, longitude: 73.939097 };
+const DEFAULT_ZOOM = 16.26;
+// react-native-maps' `heading` is 0-360° clockwise from north (unlike the web map's signed
+// Mapbox `bearing`) — -9.6° is the same rotation as 350.4°.
+const DEFAULT_HEADING = 350.4;
+const DEFAULT_PITCH = 76.5;
+const DEFAULT_REGION: Region = { ...DEFAULT_CENTER, latitudeDelta: 0.006, longitudeDelta: 0.006 };
 // The flying plane's size range — large right after launch, small on approach (see
 // `planeSizeForProgress`). City-level data doesn't warrant a literal 3D perspective projection,
 // just a readable "it's getting farther away" cue.
@@ -97,11 +103,11 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     <MapView
       ref={mapRef}
       style={StyleSheet.absoluteFill}
-      initialRegion={focus ? { ...focus, ...FOCUS_DELTA } : WORLD_REGION}
+      initialRegion={focus ? { ...focus, ...FOCUS_DELTA } : DEFAULT_REGION}
       initialCamera={
         focus
           ? { center: focus, pitch: FOCUS_PITCH, heading: 0, zoom: 17 }
-          : { center: { latitude: WORLD_REGION.latitude, longitude: WORLD_REGION.longitude }, pitch: 0, heading: 0, zoom: 2 }
+          : { center: DEFAULT_CENTER, pitch: DEFAULT_PITCH, heading: DEFAULT_HEADING, zoom: DEFAULT_ZOOM }
       }
       onMapReady={() => {
         setMapReady(true);

@@ -24,9 +24,12 @@ const MAPBOX_STYLE_URL = process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL ?? 'mapbox://s
 const PLANE_MAX_SIZE = 44;
 const PLANE_MIN_SIZE = 16;
 
-// A whole-world-ish default before there's anything to focus on.
-const WORLD_CENTER: [number, number] = [10, 15]; // Mapbox wants [lng, lat]
-const WORLD_ZOOM = 2;
+// The map's own starting camera, before any contact focus/fit ever applies — picked per explicit
+// user request against a live view of this exact style, not a generic whole-world fallback.
+const DEFAULT_CENTER: [number, number] = [73.939097, 18.520358]; // Mapbox wants [lng, lat]
+const DEFAULT_ZOOM = 16.26;
+const DEFAULT_BEARING = -9.6;
+const DEFAULT_PITCH = 76.5;
 // How far a single-point focus zooms in, and how steeply it's pitched — picked per explicit user
 // request against live screenshots of this exact style. Mapbox GL JS's own default maxPitch is
 // already 85 (unlike MapLibre's 60), so no extra construction option is needed to allow it.
@@ -170,9 +173,10 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: MAPBOX_STYLE_URL,
-      center: WORLD_CENTER,
-      zoom: WORLD_ZOOM,
-      pitch: 0,
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      bearing: DEFAULT_BEARING,
+      pitch: DEFAULT_PITCH,
       // A plain boolean here (unlike MapLibre's `{compact: true}` object) — the compact behavior
       // is a separate AttributionControl added manually right below instead.
       attributionControl: false,
