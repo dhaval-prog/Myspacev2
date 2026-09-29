@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import { Icon } from '../Icon';
 import { throwRadius } from '../../theme/throwTokens';
@@ -12,9 +13,17 @@ const MAX_VIDEO_MS = 15000;
 // comment on the same constants (no change to tap/hold thresholds, recording behavior, or
 // gestures above/below).
 const ENTER_MS = 220;
+const EXIT_MS = 200;
 const SHUTTER_PRESS_SCALE = 0.88;
 const SHUTTER_SCALE_MS = 110;
 const FLASH_MS = 160;
+const SHUTTER_SIZE = 74;
+// A thin ring drawn just outside the shutter, filling clockwise over the 15s cap while recording
+// — same as the native sibling's own ring (see its comment).
+const RING_SIZE = SHUTTER_SIZE + 16;
+const RING_THICKNESS = 3;
+const RING_RADIUS = (RING_SIZE - RING_THICKNESS) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 // Same thresholds/spacing FoldingLetter's own writing-phase contact flick uses (see its
 // CONTACT_FLICK_CAPTURE_DX/RATIO/CONTACT_DRAG_SPACING, and its raw-DOM-listener web path below) —
@@ -27,6 +36,8 @@ const CONTACT_DRAG_SPACING = 70;
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 const FLIP_ICON = 'M4 4v5h5 M20 20v-5h-5 M4 9a8 8 0 0114-4.9L20 9 M20 15a8 8 0 01-14 4.9L4 15';
 const GALLERY_ICON = 'M4 8h4l1.6-2.5h4.8L16 8h4v11H4z M12 11.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 function pickSupportedVideoMimeType(): string | null {
   if (typeof MediaRecorder === 'undefined') return null;
@@ -93,6 +104,8 @@ export function StoryCaptureScreen({
   const enterScale = useRef(new Animated.Value(0.96)).current;
   const shutterScale = useRef(new Animated.Value(1)).current;
   const flashOpacity = useRef(new Animated.Value(0)).current;
+  const recordProgress = useRef(new Animated.Value(0)).current;
+  const closingRef = useRef(false);
 
   useEffect(() => {
     Animated.parallel([
@@ -101,6 +114,16 @@ export function StoryCaptureScreen({
     ]).start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Mirrors the enter animation in reverse — see the native sibling's own comment.
+  const handleClose = () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    Animated.parallel([
+      Animated.timing(enterOpacity, { toValue: 0, duration: EXIT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.timing(enterScale, { toValue: 0.96, duration: EXIT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+    ]).start(() => onClose());
+  };
 
   useEffect(() => {
     videoMimeRef.current = pickSupportedVideoMimeType();
@@ -225,6 +248,8 @@ export function StoryCaptureScreen({
     recorder.start();
     isRecordingRef.current = true;
     setRecording(true);
+    recordProgress.setValue(0);
+    Animated.timing(recordProgress, { toValue: 1, duration: MAX_VIDEO_MS, easing: Easing.linear, useNativeDriver: false }).start();
     maxDurationTimerRef.current = setTimeout(() => stopRecording(), MAX_VIDEO_MS);
   };
 
@@ -232,6 +257,8 @@ export function StoryCaptureScreen({
     if (!isRecordingRef.current) return;
     isRecordingRef.current = false;
     setRecording(false);
+    recordProgress.stopAnimation();
+    recordProgress.setValue(0);
     recorderRef.current?.stop();
   };
 
@@ -287,7 +314,7 @@ export function StoryCaptureScreen({
       <video ref={videoRef} autoPlay playsInline muted style={webVideoStyle} />
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close camera">
+      <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close camera">
         <Icon path={CLOSE_ICON} size={22} color="#FFFFFF" strokeWidth={2.2} />
       </Pressable>
 
@@ -321,11 +348,32 @@ export function StoryCaptureScreen({
           accessibilityRole="button"
           accessibilityLabel={canRecordVideo ? 'Hold to record video, tap for a photo' : 'Take a photo'}
         >
-          <Animated.View style={{ transform: [{ scale: shutterScale }] }}>
-            <View style={[styles.shutterOuter, recording && styles.shutterOuterRecording]}>
-              <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
-            </View>
-          </Animated.View>
+          <View style={styles.shutterWrap}>
+            {recording && (
+              <Svg width={RING_SIZE} height={RING_SIZE} style={[styles.ringSvg]}>
+                <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} stroke="rgba(255,255,255,.25)" strokeWidth={RING_THICKNESS} fill="none" />
+                <AnimatedCircle
+                  cx={RING_SIZE / 2}
+                  cy={RING_SIZE / 2}
+                  r={RING_RADIUS}
+                  stroke="#FF3B30"
+                  strokeWidth={RING_THICKNESS}
+                  fill="none"
+                  strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+                  strokeDashoffset={recordProgress.interpolate({ inputRange: [0, 1], outputRange: [RING_CIRCUMFERENCE, 0] })}
+                  strokeLinecap="round"
+                  rotation="-90"
+                  originX={RING_SIZE / 2}
+                  originY={RING_SIZE / 2}
+                />
+              </Svg>
+            )}
+            <Animated.View style={{ transform: [{ scale: shutterScale }] }}>
+              <View style={[styles.shutterOuter, recording && styles.shutterOuterRecording]}>
+                <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
+              </View>
+            </Animated.View>
+          </View>
         </Pressable>
 
         <View style={styles.galleryBtn} />
@@ -339,8 +387,6 @@ export function StoryCaptureScreen({
 }
 
 const webVideoStyle: React.CSSProperties = { width: '100%', height: '100%', objectFit: 'cover' };
-
-const SHUTTER_SIZE = 74;
 
 const styles = StyleSheet.create({
   // Rounded + clipped to match the same paper-card slot this fills (see ContactStoryStack's own
@@ -387,6 +433,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  shutterWrap: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
+  ringSvg: { position: 'absolute' },
   shutterOuter: {
     width: SHUTTER_SIZE,
     height: SHUTTER_SIZE,
