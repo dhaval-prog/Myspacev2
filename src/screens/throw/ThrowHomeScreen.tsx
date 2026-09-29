@@ -13,6 +13,13 @@ import { StoryPreviewScreen } from '../../components/throw/StoryPreviewScreen';
 import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
 import { WeatherOverlay } from '../../components/throw/weather/WeatherOverlay';
 import { BottomNav } from '../../components/BottomNav';
+import { Icon } from '../../components/Icon';
+import { LetterFoldCard } from '../../components/throw/inbox/LetterFoldCard';
+import { LetterPlaneGlyph } from '../../components/throw/inbox/LetterPlaneGlyph';
+import { PlaneSlider } from '../../components/throw/inbox/PlaneSlider';
+import { inboxLayout } from '../../theme/throwInboxTokens';
+import { useInboxArrival } from '../../hooks/useInboxArrival';
+import type { Point } from '../../utils/lettersArrivalMath';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { spreadCoincidentPins } from '../../utils/mapProjection';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
@@ -26,6 +33,8 @@ import { formatAlertSchedule } from '../../utils/throwAlerts';
 import type { AlertSchedule, StrokePath, ThrowLetter } from '../../types/throw';
 import type { StoryMediaType } from '../../types/story';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
+
+const BACK_ICON = 'M15 18l-6-6 6-6';
 
 /** What's currently covering the screen for the story flow — capture (camera/gallery), the preview
  * step (a captured/picked photo or short video, awaiting the explicit post confirmation), or the
@@ -70,13 +79,13 @@ interface ThrowHomeScreenProps {
   onOpenExpenses: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
-  /** Opens the inbox, pre-selecting whichever contact is currently on screen — see the wiring
-   * below, which closes over `selectedFriendId` so FoldingLetter's own zero-arg inbox button
-   * doesn't need to know about it. */
-  onOpenInbox: (contactId?: string) => void;
   onOpenSettings: () => void;
   /** Set when arriving here via "Throw Back" — recipient is fixed, carousel is hidden. */
   lockedRecipient?: { friendUserId: string; repliedToThrowId: string } | null;
+  /** "Throw Back" tapped from the in-place received-letters panel (see isInboxMode below) — same
+   * nav ThrowInboxScreen/ThrowLetterDetailScreen's own "Throw Back" already drives, routing back
+   * to compose with this contact locked in as the recipient. */
+  onThrowBack: (counterpartUserId: string, repliedToThrowId: string) => void;
 }
 
 /**
@@ -92,9 +101,9 @@ export function ThrowHomeScreen({
   onOpenExpenses,
   onOpenChats,
   onOpenAddFriend,
-  onOpenInbox,
   onOpenSettings,
   lockedRecipient,
+  onThrowBack,
 }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
   // Where the selected contact's own ring sits on screen, vertically — the recipient carousel's
@@ -112,7 +121,7 @@ export function ThrowHomeScreen({
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const myId = user?.id ?? null;
-  const { myLocation, myName, myAvatarUrl, friends, unreadCount, streakFor, sendThrow, uploadPhoto } = useThrow();
+  const { myLocation, myName, myAvatarUrl, friends, unreadCount, streakFor, sendThrow, uploadPhoto, inbox, deleteThrow } = useThrow();
   const { createAlert } = useThrowAlerts();
   const { statsFor } = useGameStats();
   const { storiesByUser, storyCountFor, postStory, markViewed, deleteStory } = useThrowStories();
@@ -171,6 +180,39 @@ export function ThrowHomeScreen({
     const hidden = value > 0.5;
     setChromeHidden((prev) => (prev === hidden ? prev : hidden));
   };
+
+  // The in-place received-letters panel (see isInboxMode below) — tapping FoldingLetter's own
+  // inbox icon no longer navigates to a separate screen; it swaps the letter card's own content
+  // for the arrival panel right here, the same crossfade every other card-mode swap above already
+  // gets (see cardMode/cardModeFade). BottomNav hides in lockstep — same fade+slide-down chrome
+  // mechanism `handleFoldProgress` already drives, just fired from a discrete toggle (Animated.timing)
+  // instead of a live drag — while the plane-chip row fades/slides in from that exact same spot at
+  // the same time, using its own Animated.Value so the two can cross-fade independently rather than
+  // being strict opposites of one one shared value (relevant once BottomNav's own fold-driven hide
+  // and inbox mode could ever be true "at once" mid-transition).
+  const [inboxMode, setInboxMode] = useState(false);
+  const inboxChromeOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(chromeOpacity, { toValue: inboxMode ? 0 : 1, duration: 280, useNativeDriver: false }).start();
+    Animated.timing(inboxChromeOpacity, { toValue: inboxMode ? 1 : 0, duration: 280, useNativeDriver: false }).start();
+    setChromeHidden(inboxMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inboxMode]);
+  // The letter area's own measured box — the arrival panel (plane flight + LetterFoldCard) is laid
+  // out purely in these local coordinates, so the plane's flight path and the card it "becomes"
+  // once landed always agree on where things are, with no cross-tree window measurement needed.
+  const [inboxAreaSize, setInboxAreaSize] = useState({ width: 0, height: 0 });
+  const inboxScale = inboxAreaSize.width > 0 ? inboxAreaSize.width / inboxLayout.letter.w : 1;
+  const inboxCardHeight = inboxLayout.letter.h * inboxScale;
+  const inboxLandingPoint: Point = { x: inboxAreaSize.width / 2, y: inboxCardHeight / 2 };
+  const inboxBelowOrigin: Point = { x: inboxLandingPoint.x, y: inboxCardHeight + 120 * inboxScale };
+  const inboxLetterAreaRef = useRef<View>(null);
+  const toLocalInboxPoint = (windowPoint: { x: number; y: number }): Promise<Point> =>
+    new Promise((resolve) => {
+      const node = inboxLetterAreaRef.current;
+      if (!node) return resolve(windowPoint);
+      node.measureInWindow((cx, cy) => resolve({ x: windowPoint.x - cx, y: windowPoint.y - cy }));
+    });
 
   // The self-reminder sheet's collapsed peek strip (see FoldingLetter's onReminderPeekChange) is
   // rendered here, not inside FoldingLetter itself — it needs to reach the real screen bottom,
@@ -297,6 +339,31 @@ export function ThrowHomeScreen({
 
   const selectedIndex = Math.max(0, friendsWithLocation.findIndex((f) => f.userId === selectedFriendId));
   const selectedFriend = friendsWithLocation.find((f) => f.userId === selectedFriendId) ?? null;
+  const inboxContactLetters = useMemo(
+    () => (selectedFriend ? inbox.filter((l) => l.counterpartId === selectedFriend.userId) : []),
+    [inbox, selectedFriend],
+  );
+  const inboxArrival = useInboxArrival({
+    enabled: inboxMode,
+    letters: inboxContactLetters,
+    contactName: selectedFriend?.name ?? '',
+    reduceMotion,
+    scale: inboxScale,
+    landingPoint: inboxLandingPoint,
+    belowOrigin: inboxBelowOrigin,
+    deleteThrow,
+  });
+  const handleOpenInbox = () => setInboxMode(true);
+  const handleCloseInbox = () => setInboxMode(false);
+  const handleInboxThrowBack = () => {
+    if (!selectedFriend || !inboxArrival.activeLetter) return;
+    setInboxMode(false);
+    onThrowBack(selectedFriend.userId, inboxArrival.activeLetter.id);
+  };
+  const handleInboxSelectChip = async (index: number, originScreen: { x: number; y: number }) => {
+    const local = await toLocalInboxPoint(originScreen);
+    inboxArrival.handleSelectChip(index, local);
+  };
   const isSelfSelected = !!selectedFriend && selectedFriend.userId === myId;
   // Only meaningful while self is actually selected — switching to a friend first (before ever
   // touching the schedule/text) is always allowed; this only blocks switching *away* once a
@@ -318,16 +385,18 @@ export function ThrowHomeScreen({
   // the whole "post a story" pipeline reads as one continuous place rather than capture alone
   // being inline and confirm popping up separately.
   const isPreviewMode = storyFlow?.name === 'preview';
-  // Which of the four things the letter card is currently showing — a single source of truth so
+  // Which of the five things the letter card is currently showing — a single source of truth so
   // every transition between any two of them (not just entering/leaving story mode) gets the same
   // smooth crossfade below, instead of only some pairs of states doing so.
-  const cardMode: 'capture' | 'preview' | 'story' | 'letter' = isCaptureMode
+  const cardMode: 'capture' | 'preview' | 'story' | 'inbox' | 'letter' = isCaptureMode
     ? 'capture'
     : isPreviewMode
       ? 'preview'
       : isStoryMode
         ? 'story'
-        : 'letter';
+        : inboxMode
+          ? 'inbox'
+          : 'letter';
 
   // FoldingLetter's onReminderPeekChange prop itself goes undefined the instant the user flicks
   // away from "Myself" (see its own conditional below) — a no-op prop can't tell this screen's own
@@ -694,6 +763,60 @@ export function ThrowHomeScreen({
                   // to open" placeholder on screen.
                   onLetterEmptied={() => setStoryView(null)}
                 />
+              ) : inboxMode ? (
+                <View
+                  ref={inboxLetterAreaRef}
+                  style={{ flex: 1 }}
+                  onLayout={(e) => setInboxAreaSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+                >
+                  <Pressable
+                    testID="inbox-back-btn"
+                    onPress={handleCloseInbox}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back to letter"
+                    style={styles.inboxBackBtn}
+                  >
+                    <Icon path={BACK_ICON} size={20} color={throwColor.ink} strokeWidth={2.4} />
+                  </Pressable>
+                  {inboxArrival.plane && (
+                    <>
+                      <View
+                        pointerEvents="none"
+                        style={[
+                          styles.inboxPlaneShadow,
+                          {
+                            left: inboxArrival.plane.shadowX - 23 * inboxScale,
+                            top: inboxArrival.plane.shadowY - 6 * inboxScale,
+                            width: 46 * inboxScale,
+                            height: 12 * inboxScale,
+                            borderRadius: 6 * inboxScale,
+                          },
+                        ]}
+                      />
+                      <View
+                        pointerEvents="none"
+                        style={{
+                          position: 'absolute',
+                          left: inboxArrival.plane.x - 32 * inboxScale,
+                          top: inboxArrival.plane.y - 32 * inboxScale,
+                          transform: [{ rotate: `${inboxArrival.plane.rot}deg` }, { scale: inboxArrival.plane.scale }],
+                        }}
+                      >
+                        <LetterPlaneGlyph size={64 * inboxScale} variant="default" />
+                      </View>
+                    </>
+                  )}
+                  <LetterFoldCard
+                    stage={inboxArrival.stage}
+                    letter={inboxArrival.cardData}
+                    isEmpty={inboxArrival.isEmpty}
+                    emptyName={selectedFriend.name}
+                    scale={inboxScale}
+                    reduceMotion={reduceMotion}
+                    onThrowBack={inboxArrival.activeLetter ? handleInboxThrowBack : undefined}
+                  />
+                </View>
               ) : (
                 <FoldingLetter
                   ref={foldingLetterRef}
@@ -704,7 +827,7 @@ export function ThrowHomeScreen({
                   onLaunched={handleLaunched}
                   throwLabel={isSelfSelected ? 'Swipe up to set alert' : lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
                   onOpenAddFriend={onOpenAddFriend}
-                  onOpenInbox={() => onOpenInbox(selectedFriend.userId)}
+                  onOpenInbox={handleOpenInbox}
                   unreadCount={unreadCount}
                   onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}
                   onContactDragOffset={!lockedRecipient && !selfLocked ? handleContactDragOffset : undefined}
@@ -790,6 +913,31 @@ export function ThrowHomeScreen({
         />
       </Animated.View>
 
+      {/* The plane-chip row fades/slides in from the exact same spot BottomNav just faded/slid out
+          of — same clearance value, same crossfade duration, opposite Animated.Value — so the two
+          read as one continuous swap rather than a hide-then-a-different-show. */}
+      <Animated.View
+        style={[
+          styles.bottomNavWrap,
+          { opacity: inboxChromeOpacity, transform: [{ translateY: inboxChromeOpacity.interpolate({ inputRange: [0, 1], outputRange: [BOTTOM_NAV_CLEARANCE, 0] }) }] },
+        ]}
+        pointerEvents={inboxMode ? 'box-none' : 'none'}
+      >
+        {selectedFriend && (
+          <PlaneSlider
+            chips={inboxArrival.chips}
+            activeIndex={inboxArrival.activeLetterIdx}
+            contactName={selectedFriend.name}
+            scale={inboxScale}
+            busy={inboxArrival.busy}
+            canReplay={inboxArrival.canReplay}
+            onSelectChip={handleInboxSelectChip}
+            onReplay={inboxArrival.handleReplay}
+            onDelete={inboxArrival.handleDelete}
+          />
+        )}
+      </Animated.View>
+
       {storyFlow?.name === 'trim' && (
         // Same reasoning as the preview step's own onCancel above — backing out of trimming a
         // picked long video should reopen the camera, not drop to Own Contact's letter.
@@ -835,6 +983,19 @@ const styles = StyleSheet.create({
     top: '32%',
   },
   letterCardContent: { flex: 1 },
+  inboxBackBtn: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,.7)',
+    zIndex: 1,
+  },
+  inboxPlaneShadow: { position: 'absolute', backgroundColor: 'rgba(0,0,0,.18)' },
   // The self-reminder sheet's collapsed stand-in (see onReminderPeekChange) — a small "Remind me"
   // button, not a bare drag handle, pinned near the actual screen bottom (unlike letterCard,
   // which sits well short of it) so it reads as belonging to the whole screen, not just this
