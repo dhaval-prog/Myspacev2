@@ -52,6 +52,14 @@ export interface ThrowRow {
   replied_to_throw_id: string | null;
   deleted_by_sender: boolean;
   deleted_by_recipient: boolean;
+  /** The sender's own optional attached reminder request (see ThrowLetter's own alertSchedule) —
+   * null unless they set one via the Bell icon. */
+  alert_recurrence_type: AlertRecurrence | null;
+  alert_days_of_week: number[] | null;
+  alert_day_of_month: number | null;
+  alert_hour: number | null;
+  alert_minute: number | null;
+  alert_confirmed: boolean;
 }
 
 /** Client-shaped letter, with the counterpart's display name resolved and a direction flag. */
@@ -84,6 +92,11 @@ export interface ThrowLetter {
   createdAt: string;
   readAt: string | null;
   repliedToThrowId: string | null;
+  /** The sender's own optional attached reminder request — null unless they set one via the Bell
+   * icon when composing this letter. The recipient sees a Confirm button on it (see LetterFoldCard)
+   * until alertConfirmed is true, at which point they have their own throw_alerts row for it. */
+  alertSchedule: AlertSchedule | null;
+  alertConfirmed: boolean;
 }
 
 /** A friend merged with their Throw location, if they've set one. */
@@ -103,6 +116,9 @@ export interface ComposeDraft {
   photoUrls: string[];
   /** Index-aligned with photoUrls — omit (or leave every entry null) when nothing needs trimming. */
   photoTrims?: (MediaTrim | null)[];
+  /** An optional reminder request to attach to this letter — omit (or null) for an ordinary letter
+   * with nothing attached. See ThrowLetter's own alertSchedule for what happens once sent. */
+  alertSchedule?: AlertSchedule | null;
 }
 
 export type AlertRecurrence = 'once' | 'everyday' | 'weekly' | 'monthly';

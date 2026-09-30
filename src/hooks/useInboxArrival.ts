@@ -216,6 +216,8 @@ export function useInboxArrival(opts: UseInboxArrivalOptions) {
         count: `${activeLetterIdx + 1} / ${visibleLetters.length}`,
         photoUrls: activeLetter.photoUrls,
         photoTrims: activeLetter.photoTrims,
+        alertSchedule: activeLetter.alertSchedule,
+        alertConfirmed: activeLetter.alertConfirmed,
       }
     : null;
 
@@ -223,6 +225,7 @@ export function useInboxArrival(opts: UseInboxArrivalOptions) {
     id: l.id,
     short: formatLetterDate(l.createdAt).short,
     a11yLabel: `Letter from ${contactName}, ${formatLetterDate(l.createdAt).short}, ${l.senderCity}`,
+    unread: l.status === 'thrown',
   }));
 
   return {

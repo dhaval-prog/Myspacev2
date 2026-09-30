@@ -2,7 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useFriends } from './FriendsContext';
-import type { ComposeDraft, MediaTrim, ThrowFriend, ThrowLetter, ThrowLocation, ThrowRow } from '../types/throw';
+import { computeNextTrigger } from '../utils/throwAlerts';
+import type { AlertSchedule, ComposeDraft, MediaTrim, ThrowFriend, ThrowLetter, ThrowLocation, ThrowRow } from '../types/throw';
 
 function warn(action: string, error: { message: string } | null) {
   if (error) console.warn(`[Throw] ${action} failed:`, error.message);
@@ -84,6 +85,17 @@ function toLetter(row: ThrowRow, myId: string, nameFor: (userId: string) => stri
     createdAt: row.created_at,
     readAt: row.read_at,
     repliedToThrowId: row.replied_to_throw_id,
+    alertSchedule:
+      row.alert_recurrence_type != null
+        ? {
+            recurrence: row.alert_recurrence_type,
+            hour: row.alert_hour ?? 0,
+            minute: row.alert_minute ?? 0,
+            daysOfWeek: row.alert_days_of_week ?? [],
+            dayOfMonth: row.alert_day_of_month ?? 1,
+          }
+        : null,
+    alertConfirmed: row.alert_confirmed,
   };
 }
 
@@ -118,6 +130,9 @@ interface ThrowContextValue {
   /** Removes a letter from my own view (inbox or sent list, whichever it's in) — the other
    * party's copy is untouched until they delete it too. */
   deleteThrow: (throwId: string) => Promise<{ error: string | null }>;
+  /** Confirms a received letter's own attached reminder request — creates a real throw_alerts row
+   * for me at the given schedule and marks the letter's request confirmed, atomically. */
+  confirmThrowAlert: (throwId: string, schedule: AlertSchedule) => Promise<{ error: string | null }>;
   refresh: () => Promise<void>;
 }
 
@@ -253,6 +268,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
       // Sent as null altogether (not two arrays of all-null) whenever nothing needs trimming, so a
       // draft with no video attachments doesn't grow the row for no reason.
       const hasAnyTrim = draft.photoTrims?.some((t) => t != null) ?? false;
+      const alertSchedule = draft.alertSchedule ?? null;
       const { data, error } = await supabase.rpc('send_throw', {
         p_recipient_id: draft.recipientId,
         p_message_text: draft.messageText,
@@ -262,6 +278,11 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
         p_photo_urls: draft.photoUrls.length > 0 ? draft.photoUrls : null,
         p_photo_trim_start_ms: hasAnyTrim ? draft.photoUrls.map((_, i) => draft.photoTrims?.[i]?.startMs ?? null) : null,
         p_photo_trim_end_ms: hasAnyTrim ? draft.photoUrls.map((_, i) => draft.photoTrims?.[i]?.endMs ?? null) : null,
+        p_alert_recurrence_type: alertSchedule?.recurrence ?? null,
+        p_alert_days_of_week: alertSchedule?.recurrence === 'weekly' ? alertSchedule.daysOfWeek : null,
+        p_alert_day_of_month: alertSchedule?.recurrence === 'monthly' ? alertSchedule.dayOfMonth : null,
+        p_alert_hour: alertSchedule?.hour ?? null,
+        p_alert_minute: alertSchedule?.minute ?? null,
       });
       if (error) return { error: error.message };
       // Surfaces the letter in Orbit's Chats too — a small system note in the sender/recipient's
@@ -320,6 +341,22 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     [refresh],
   );
 
+  // Confirms a letter's own attached reminder request (see ThrowLetter's own alertSchedule) —
+  // the RPC itself does the actual work (inserting the recipient's real throw_alerts row and
+  // marking this throw confirmed, atomically), this just supplies the one thing that has to be
+  // computed client-side: the same next_trigger_at math a self-reminder's own createAlert already
+  // uses, so a confirmed letter's alert behaves identically to one you scheduled for yourself.
+  const confirmThrowAlert = useCallback(
+    async (throwId: string, schedule: AlertSchedule): Promise<{ error: string | null }> => {
+      const nextTrigger = computeNextTrigger(schedule);
+      const { error } = await supabase.rpc('confirm_throw_alert', { p_throw_id: throwId, p_next_trigger_at: nextTrigger.toISOString() });
+      if (error) return { error: error.message };
+      await refresh();
+      return { error: null };
+    },
+    [refresh],
+  );
+
   const letters = useMemo(() => rows.map((r) => toLetter(r, myId ?? '', nameFor, avatarFor)), [rows, myId, nameFor, avatarFor]);
   const inbox = useMemo(() => letters.filter((l) => l.direction === 'received'), [letters]);
   const unreadCount = useMemo(() => inbox.filter((l) => l.status === 'thrown').length, [inbox]);
@@ -351,6 +388,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     uploadPhoto,
     markRead,
     deleteThrow,
+    confirmThrowAlert,
     refresh,
   };
   return <ThrowContext.Provider value={value}>{children}</ThrowContext.Provider>;
