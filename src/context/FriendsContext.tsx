@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { DirectMessage, Friend, FriendProfile, FriendRequest, MatchRelationship } from '../types/friends';
 import type { ChatGroup, GroupMessage, GroupPoll } from '../types/groups';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
@@ -211,6 +211,10 @@ interface FriendsContextValue {
   isTyping: (connectionId: string) => boolean;
   /** Call on every composer keystroke — broadcasts "typing", auto-clears after a pause. */
   notifyTyping: (connectionId: string) => void;
+  /** Call once, on the Chats/Friends screen's own mount — arms the per-friend typing-indicator
+   * realtime channels (see the typing-channels effect below), which otherwise stay off so a
+   * session that never opens Chat never pays for N realtime subscriptions it can't see. */
+  markChatSurfaceActive: () => void;
 
   goHome: () => void;
   goAdd: () => void;
@@ -301,6 +305,15 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const [focusedConnectionId, setFocusedConnectionId] = useState<string | null>(null);
   const [messageRows, setMessageRows] = useState<MessageRow[]>([]);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  // False until the Chats/Friends screen actually mounts once this session (see
+  // markChatSurfaceActive, called from FriendsScreen's own mount effect) — this provider is
+  // mounted for the whole app's lifetime (so its unread badges etc. work from any screen), but the
+  // per-friend typing-indicator channels below are only ever rendered on the Chats list/a thread,
+  // so there's no reason to pay for N realtime subscriptions before the user has ever opened Chat.
+  const [chatSurfaceActive, setChatSurfaceActive] = useState(false);
+  // Stable identity — the caller (FriendsScreen) puts this in a mount-only effect's own dependency
+  // array, so a fresh function reference every render would re-fire that effect constantly.
+  const markChatSurfaceActive = useCallback(() => setChatSurfaceActive(true), []);
 
   const [groupRows, setGroupRows] = useState<GroupRow[]>([]);
   const [groupMemberRows, setGroupMemberRows] = useState<GroupMemberRow[]>([]);
@@ -569,9 +582,12 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
 
   // Live typing presence — one broadcast channel per accepted connection,
   // both sides listen and send on it. Ephemeral (not persisted), unlike
-  // the unread-count tracking above.
+  // the unread-count tracking above. Gated on chatSurfaceActive (see its own doc comment) — these
+  // are the only realtime channels this provider opens whose *count* scales with friend count, so
+  // deferring them until Chat is actually opened once is what keeps a session that never visits
+  // Chat from paying for N realtime subscriptions at every app launch.
   useEffect(() => {
-    if (!userId || !isSupabaseConfigured || friends.length === 0) return;
+    if (!userId || !isSupabaseConfigured || friends.length === 0 || !chatSurfaceActive) return;
     const channels: ReturnType<typeof supabase.channel>[] = [];
     for (const f of friends) {
       const channel = supabase.channel(`typing-${f.connectionId}`);
@@ -596,7 +612,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
       for (const timer of Object.values(typingTimersRef.current)) clearTimeout(timer);
       typingTimersRef.current = {};
     };
-  }, [userId, friends]);
+  }, [userId, friends, chatSurfaceActive]);
 
   const isTyping = (connectionId: string) => typingConnectionIds.has(connectionId);
 
@@ -1376,6 +1392,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     isOnline,
     isTyping,
     notifyTyping,
+    markChatSurfaceActive,
     goHome,
     goAdd,
     goScan,
