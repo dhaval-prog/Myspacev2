@@ -668,11 +668,14 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
       )}
 
       {stage === 'open' && onThrowBack && !mediaMode && (
-        // `bottom` needs vScale, not scale — same reasoning as SignatureRow's own bottom offset —
-        // so this stays a small gap above the card's own (independently scaled) bottom edge. Only
-        // the text side shows this row at all — media mode's own flip/prev/next glass buttons
-        // (above) replace it entirely rather than layering on top of it.
-        <View pointerEvents="box-none" style={[styles.throwBackOuter, { bottom: s(14, vScale), gap: s(10, scale) }]}>
+        // `bottom` needs vScale, not scale, same reasoning as SignatureRow's own bottom offset —
+        // but pushed well clear of it (56 vs. SignatureRow's own 20) rather than sharing roughly
+        // the same band: this row's own 48px-tall glass buttons otherwise visually collided with
+        // the signature/count line sitting just above the card's bottom edge, especially once a
+        // third button (Confirm) made the row read as crowded against it. Only the text side shows
+        // this row at all — media mode's own flip/prev/next glass buttons (above) replace it
+        // entirely rather than layering on top of it.
+        <View pointerEvents="box-none" style={[styles.throwBackOuter, { bottom: s(56, vScale), gap: s(10, scale) }]}>
           <View style={[styles.throwBackWrap, { gap: s(12, scale) }]}>
             <GlassIconButton onPress={onThrowBack} label="Reply" scale={scale} accessibilityLabel="Reply" tintColor="rgba(47,107,255,.55)" />
             {/* The sender's own attached reminder request (see LetterCardData's own alertSchedule)
