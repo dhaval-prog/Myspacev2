@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useFriends } from './FriendsContext';
-import type { ComposeDraft, ThrowFriend, ThrowLetter, ThrowLocation, ThrowRow } from '../types/throw';
+import type { ComposeDraft, MediaTrim, ThrowFriend, ThrowLetter, ThrowLocation, ThrowRow } from '../types/throw';
 
 function warn(action: string, error: { message: string } | null) {
   if (error) console.warn(`[Throw] ${action} failed:`, error.message);
@@ -43,9 +43,21 @@ function extFromBlob(localUri: string, mimeType: string): string {
   return match ? match[1].toLowerCase() : 'jpg';
 }
 
+/** Zips the row's two parallel trim-ms arrays back into one array of nullable {startMs,endMs}
+ * objects, index-aligned with photoUrls (padding/truncating defensively — a row inserted before
+ * this feature shipped, or a future mismatch, should never crash the mapper). */
+function toPhotoTrims(photoUrls: string[], startMs: number[] | null, endMs: number[] | null): (MediaTrim | null)[] {
+  return photoUrls.map((_, i) => {
+    const s = startMs?.[i];
+    const e = endMs?.[i];
+    return s != null && e != null ? { startMs: s, endMs: e } : null;
+  });
+}
+
 function toLetter(row: ThrowRow, myId: string, nameFor: (userId: string) => string, avatarFor: (userId: string) => string | null): ThrowLetter {
   const direction: 'sent' | 'received' = row.sender_id === myId ? 'sent' : 'received';
   const counterpartId = direction === 'sent' ? row.recipient_id : row.sender_id;
+  const photoUrls = row.photo_urls ?? (row.photo_url ? [row.photo_url] : []);
   return {
     id: row.id,
     senderId: row.sender_id,
@@ -57,7 +69,8 @@ function toLetter(row: ThrowRow, myId: string, nameFor: (userId: string) => stri
     messageText: row.message_text,
     strokes: row.strokes,
     penColor: row.pen_color,
-    photoUrls: row.photo_urls ?? (row.photo_url ? [row.photo_url] : []),
+    photoUrls,
+    photoTrims: toPhotoTrims(photoUrls, row.photo_trim_start_ms, row.photo_trim_end_ms),
     senderCity: row.sender_city,
     senderCountry: row.sender_country,
     senderLatitude: row.sender_latitude,
@@ -235,6 +248,11 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
 
   const sendThrow = useCallback(
     async (draft: ComposeDraft) => {
+      // Two parallel integer[] columns, index-aligned with photo_urls (same convention the table
+      // already uses for photo_urls itself) — null entries mean "no trim" for that attachment.
+      // Sent as null altogether (not two arrays of all-null) whenever nothing needs trimming, so a
+      // draft with no video attachments doesn't grow the row for no reason.
+      const hasAnyTrim = draft.photoTrims?.some((t) => t != null) ?? false;
       const { data, error } = await supabase.rpc('send_throw', {
         p_recipient_id: draft.recipientId,
         p_message_text: draft.messageText,
@@ -242,6 +260,8 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
         p_pen_color: draft.penColor,
         p_replied_to_throw_id: draft.repliedToThrowId ?? null,
         p_photo_urls: draft.photoUrls.length > 0 ? draft.photoUrls : null,
+        p_photo_trim_start_ms: hasAnyTrim ? draft.photoUrls.map((_, i) => draft.photoTrims?.[i]?.startMs ?? null) : null,
+        p_photo_trim_end_ms: hasAnyTrim ? draft.photoUrls.map((_, i) => draft.photoTrims?.[i]?.endMs ?? null) : null,
       });
       if (error) return { error: error.message };
       // Surfaces the letter in Orbit's Chats too — a small system note in the sender/recipient's

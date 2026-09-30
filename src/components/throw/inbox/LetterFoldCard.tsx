@@ -5,6 +5,8 @@ import { Icon } from '../../Icon';
 import { GlassSurface } from '../../friends/GlassSurface';
 import { AutoplayVideoFill } from '../../AutoplayVideoFill';
 import { inboxColor, inboxLayout } from '../../../theme/throwInboxTokens';
+import { formatClockMs } from '../../../utils/formatClock';
+import type { MediaTrim } from '../../../types/throw';
 
 const CHEVRON_LEFT_ICON = 'M15 18l-6-6 6-6';
 const CHEVRON_RIGHT_ICON = 'M9 18l6-6-6-6';
@@ -54,6 +56,9 @@ export interface LetterCardData {
    * text-only letter, which locks the media-viewer entry point below (see LetterFoldCard's own
    * "View attached photos or videos" glass button, beside Reply). */
   photoUrls: string[];
+  /** Index-aligned with photoUrls — null entries mean "no trim" (a photo, or a video that was
+   * already within the 15s cap). */
+  photoTrims: (MediaTrim | null)[];
 }
 
 interface LetterFoldCardProps {
@@ -146,12 +151,20 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
   const [mediaMode, setMediaMode] = useState(false);
   const [mediaIndex, setMediaIndex] = useState(0);
   const mediaOpacity = useRef(new Animated.Value(0)).current;
+  // The while-viewing seconds guide for whichever attachment is currently showing — reset on
+  // every index change so switching attachments never briefly shows the previous one's numbers.
+  const [mediaElapsedMs, setMediaElapsedMs] = useState(0);
+  const [mediaDurationMs, setMediaDurationMs] = useState(0);
   useEffect(() => {
     setMediaMode(false);
     setMediaIndex(0);
     mediaOpacity.setValue(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [letter?.id]);
+  useEffect(() => {
+    setMediaElapsedMs(0);
+    setMediaDurationMs(0);
+  }, [mediaIndex]);
   const toggleMediaMode = () => {
     const next = !mediaMode;
     if (next) setMediaIndex(0);
@@ -389,7 +402,7 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
     );
   }
 
-  const L = letter ?? { id: '', from: '', date: '', place: '', distance: '', body: '', sig: '', count: '', photoUrls: [] };
+  const L = letter ?? { id: '', from: '', date: '', place: '', distance: '', body: '', sig: '', count: '', photoUrls: [], photoTrims: [] };
 
   return (
     <Animated.View pointerEvents="none" style={[{ width: w, height: h }, outerStyle]}>
@@ -576,9 +589,22 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
           {...mediaPanResponder.panHandlers}
         >
           {isVideoUrl(L.photoUrls[mediaIndex]) ? (
-            <AutoplayVideoFill uri={L.photoUrls[mediaIndex]} />
+            <AutoplayVideoFill
+              uri={L.photoUrls[mediaIndex]}
+              trimStartMs={L.photoTrims[mediaIndex]?.startMs}
+              trimEndMs={L.photoTrims[mediaIndex]?.endMs}
+              onTimeUpdate={(cur, dur) => {
+                setMediaElapsedMs(cur);
+                setMediaDurationMs(dur);
+              }}
+            />
           ) : (
             <Image source={{ uri: L.photoUrls[mediaIndex] }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          )}
+          {isVideoUrl(L.photoUrls[mediaIndex]) && mediaDurationMs > 0 && (
+            <Text style={[styles.videoClock, { fontSize: s(12, scale), top: s(14, vScale), paddingHorizontal: s(9, scale), paddingVertical: s(3, scale), borderRadius: s(14, scale) }]}>
+              {formatClockMs(mediaElapsedMs)} / {formatClockMs(mediaDurationMs)}
+            </Text>
           )}
 
           <GlassIconButton
@@ -786,4 +812,11 @@ const styles = StyleSheet.create({
   throwBackWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   mediaOverlay: { position: 'absolute', left: 0, top: 0, backgroundColor: '#000000', overflow: 'hidden' },
   glassBtn: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,.4)' },
+  videoClock: {
+    position: 'absolute',
+    alignSelf: 'center',
+    color: '#FFFFFF',
+    fontFamily: 'Figtree_700Bold',
+    backgroundColor: 'rgba(0,0,0,.4)',
+  },
 });

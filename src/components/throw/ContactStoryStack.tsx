@@ -4,6 +4,7 @@ import { Icon } from '../Icon';
 import { AutoplayVideoFill } from '../AutoplayVideoFill';
 import { throwColor, throwNightColor, throwRadius } from '../../theme/throwTokens';
 import { noSelect } from '../../theme/webStyles';
+import { formatClockMs } from '../../utils/formatClock';
 import type { ThrowStory } from '../../types/story';
 
 // Where a single status photo currently lives — the whole point of this component is animating a
@@ -55,7 +56,13 @@ const DELETE_COMMIT_EASING = Easing.bezier(0.5, 0, 0.8, 0.4);
 
 const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 
-function StoryMedia({ story, testID }: { story: ThrowStory; testID?: string }) {
+/** `active` (only the front, interactive card) gates the while-viewing seconds guide — background
+ * cards in the stack don't need their own ticking clock, and skipping onTimeUpdate there avoids
+ * driving state updates for videos nobody's actually watching yet. */
+function StoryMedia({ story, testID, active }: { story: ThrowStory; testID?: string; active?: boolean }) {
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [durationMs, setDurationMs] = useState(0);
+
   if (story.mediaType === 'photo') {
     // pointerEvents="none" — react-native-web's Image renders a plain <img>, natively draggable
     // by browsers by default; without this, a drag starting over it triggers the browser's own
@@ -66,7 +73,21 @@ function StoryMedia({ story, testID }: { story: ThrowStory; testID?: string }) {
       </View>
     );
   }
-  return <AutoplayVideoFill uri={story.mediaUrl} />;
+  return (
+    <>
+      <AutoplayVideoFill
+        uri={story.mediaUrl}
+        trimStartMs={story.trimStartMs ?? undefined}
+        trimEndMs={story.trimEndMs ?? undefined}
+        onTimeUpdate={active ? (cur, dur) => { setElapsedMs(cur); setDurationMs(dur); } : undefined}
+      />
+      {active && durationMs > 0 && (
+        <Text style={styles.videoClock}>
+          {formatClockMs(elapsedMs)} / {formatClockMs(durationMs)}
+        </Text>
+      )}
+    </>
+  );
 }
 
 interface CardAnim {
@@ -641,7 +662,7 @@ export function ContactStoryStack({
           },
         ]}
       >
-        <StoryMedia story={story} testID={idx === 0 ? 'contact-story-image' : undefined} />
+        <StoryMedia story={story} testID={idx === 0 ? 'contact-story-image' : undefined} active={idx === 0} />
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim, { opacity: anim.dim }]} />
       </Animated.View>
     );
@@ -693,6 +714,18 @@ const styles = StyleSheet.create({
     ...throwColor.shadowSoft,
   },
   dim: { backgroundColor: 'rgba(0,0,0,.28)' },
+  videoClock: {
+    position: 'absolute',
+    top: 14,
+    alignSelf: 'center',
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Figtree_700Bold',
+    backgroundColor: 'rgba(0,0,0,.4)',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
   emptyWrap: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',

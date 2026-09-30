@@ -215,6 +215,7 @@ export function useInboxArrival(opts: UseInboxArrivalOptions) {
         sig: `— ${contactName.charAt(0)}.`,
         count: `${activeLetterIdx + 1} / ${visibleLetters.length}`,
         photoUrls: activeLetter.photoUrls,
+        photoTrims: activeLetter.photoTrims,
       }
     : null;
 

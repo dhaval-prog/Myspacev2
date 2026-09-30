@@ -253,6 +253,7 @@ export function ThrowInboxScreen({ onBack, onThrowBack, initialContactId }: Thro
         sig: `— ${currentContact.name.charAt(0)}.`,
         count: `${activeLetterIdx + 1} / ${currentLetters.length}`,
         photoUrls: activeLetter.photoUrls,
+        photoTrims: activeLetter.photoTrims,
       }
     : null;
 

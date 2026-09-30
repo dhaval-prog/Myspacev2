@@ -59,6 +59,7 @@ function letter(overrides: Partial<ThrowLetter> & { id: string; counterpartId: s
     strokes: null,
     penColor: null,
     photoUrls: [],
+    photoTrims: [],
     senderCity: 'Pune',
     senderCountry: 'IN',
     senderLatitude: 18.5,

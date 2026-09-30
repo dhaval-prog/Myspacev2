@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { Icon } from '../Icon';
 import { throwRadius } from '../../theme/throwTokens';
+import { formatClockMs } from '../../utils/formatClock';
 import type { StoryMediaType } from '../../types/story';
 
 const MAX_VIDEO_SECONDS = 15;
@@ -106,6 +107,10 @@ export function StoryCaptureScreen({
   const [facing, setFacing] = useState<CameraType>('back');
   const [mode, setMode] = useState<'picture' | 'video'>('picture');
   const [recording, setRecording] = useState(false);
+  // The recording countdown's own guide — "0:07 / 0:15" — see the web sibling's own copy of this
+  // same pattern (a plain interval, not read off recordProgress itself).
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cameraRef = useRef<CameraView>(null);
   const isRecordingRef = useRef(false);
 
@@ -200,6 +205,13 @@ export function StoryCaptureScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(
+    () => () => {
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+    },
+    [],
+  );
+
   const takePhoto = async () => {
     flashOpacity.setValue(1);
     Animated.timing(flashOpacity, { toValue: 0, duration: FLASH_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
@@ -212,6 +224,9 @@ export function StoryCaptureScreen({
     setRecording(true);
     recordProgress.setValue(0);
     Animated.timing(recordProgress, { toValue: 1, duration: MAX_VIDEO_SECONDS * 1000, easing: Easing.linear, useNativeDriver: false }).start();
+    const t0 = Date.now();
+    setElapsedMs(0);
+    elapsedTimerRef.current = setInterval(() => setElapsedMs(Math.min(MAX_VIDEO_SECONDS * 1000, Date.now() - t0)), 200);
     try {
       // Resolves once stopRecording() is called (see onShutterPress) or the 15s cap is hit —
       // either way the result is already within the cap, so it never needs the trim screen.
@@ -222,6 +237,11 @@ export function StoryCaptureScreen({
       setRecording(false);
       recordProgress.stopAnimation();
       recordProgress.setValue(0);
+      if (elapsedTimerRef.current) {
+        clearInterval(elapsedTimerRef.current);
+        elapsedTimerRef.current = null;
+      }
+      setElapsedMs(0);
     }
   };
 
@@ -359,7 +379,11 @@ export function StoryCaptureScreen({
         <View style={styles.galleryBtn} />
       </View>
 
-      {recording && <Text style={styles.recordingHint}>Recording… tap to stop</Text>}
+      {recording && (
+        <Text style={styles.recordingHint}>
+          {formatClockMs(elapsedMs)} / {formatClockMs(MAX_VIDEO_SECONDS * 1000)} · tap to stop
+        </Text>
+      )}
 
       <Animated.View pointerEvents="none" style={[styles.flash, { opacity: flashOpacity }]} />
     </Animated.View>
@@ -437,7 +461,18 @@ const styles = StyleSheet.create({
   modeToggle: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   modeText: { fontFamily: 'Figtree_700Bold', fontSize: 12, letterSpacing: 1, color: 'rgba(255,255,255,.55)' },
   modeTextActive: { color: '#FFD60A' },
-  recordingHint: { position: 'absolute', bottom: 150, alignSelf: 'center', color: '#FFFFFF', fontSize: 13 },
+  recordingHint: {
+    position: 'absolute',
+    bottom: 150,
+    alignSelf: 'center',
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'Figtree_700Bold',
+    backgroundColor: 'rgba(0,0,0,.4)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
   flash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF' },
   permissionWrap: {
     flex: 1,
