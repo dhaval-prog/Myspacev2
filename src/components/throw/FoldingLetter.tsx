@@ -49,6 +49,9 @@ const PLAY_ICON = 'M8 5v14l11-7z';
 // Same glyph as HomeScreen/ChatsListScreen's own QR icon — reused here so this row reads as the
 // same action, not a Throw-specific reinterpretation.
 const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
+// A standard bell glyph — self-reminder mode's own bottom-row slot (replacing Add Friend there,
+// which has nothing to do with a letter to yourself) opens the reminder-schedule sheet directly.
+const BELL_ICON = 'M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6.5H4c.5-1 2-2.5 2-6.5z M9.5 18.5a2.5 2.5 0 0 0 5 0';
 // Feather Icons' "award" glyph — the leaderboard-points badge, moved here from ThrowHomeScreen's
 // header now that the badge itself lives in the paper's top-right corner instead.
 const POINTS_ICON = 'M12 15a7 7 0 100-14 7 7 0 000 14z M8.21 13.89L7 23l5-3 5 3-1.21-9.12';
@@ -1107,15 +1110,30 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           }
         </Pressable>
 
-        <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
-          {({ pressed }) => (
-            <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
-                <Icon path={QR_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
-              </BottomIconSurface>
-            </View>
-          )}
-        </Pressable>
+        {selfReminderMode ? (
+          // A letter to yourself has no one to add as a friend — this slot opens the reminder
+          // sheet directly instead (it otherwise only auto-opens once, the first time the fold
+          // completes with something written; see reminderState's own doc comment).
+          <Pressable onPress={() => setReminderState('open')} accessibilityRole="button" accessibilityLabel="Set reminder time">
+            {({ pressed }) => (
+              <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+                  <Icon path={BELL_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
+                </BottomIconSurface>
+              </View>
+            )}
+          </Pressable>
+        ) : (
+          <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
+            {({ pressed }) => (
+              <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+                  <Icon path={QR_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
+                </BottomIconSurface>
+              </View>
+            )}
+          </Pressable>
+        )}
 
         <Pressable onPress={onOpenInbox} accessibilityRole="button" accessibilityLabel="Inbox">
           {({ pressed }) => (

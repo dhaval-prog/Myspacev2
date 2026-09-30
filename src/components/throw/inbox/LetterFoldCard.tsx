@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Polygon } from 'react-native-svg';
+import Svg, { Polygon } from 'react-native-svg';
 import { Icon } from '../../Icon';
 import { GlassSurface } from '../../friends/GlassSurface';
 import { AutoplayVideoFill } from '../../AutoplayVideoFill';
@@ -17,6 +17,9 @@ const FLIP_ICON = 'M4 4v5h5 M20 20v-5h-5 M4 9a8 8 0 0114-4.9L20 9 M20 15a8 8 0 0
 // A standard "reply" glyph — an arrow curving up-and-left into a horizontal bar — rather than
 // reusing the paper-plane "throw"/send icon, which already means something different elsewhere.
 const REPLY_ICON = 'M9 14L4 9l5-5 M20 20v-7a4 4 0 00-4-4H4';
+// A standard "image" glyph — rounded frame, sun, mountain line — replacing the previous flower
+// glyph per explicit request for a more literal photo icon.
+const IMAGE_ICON = 'M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2z M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M21 15l-5-5L5 21';
 const VOLUME_ICON = 'M11 5L6 9H2v6h4l5 4V5z M15.5 8.5a5 5 0 0 1 0 7 M18.5 5.5a9 9 0 0 1 0 13';
 const VOLUME_MUTED_ICON = 'M11 5L6 9H2v6h4l5 4V5z M22.5 9.5l-6 6 M16.5 9.5l6 6';
 
@@ -660,13 +663,13 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
         // (above) replace it entirely rather than layering on top of it.
         <View pointerEvents="box-none" style={[styles.throwBackOuter, { bottom: s(14, vScale), gap: s(10, scale) }]}>
           <View style={[styles.throwBackWrap, { gap: s(12, scale) }]}>
-            <GlassIconButton onPress={onThrowBack} path={REPLY_ICON} scale={scale} accessibilityLabel="Reply" tintColor="rgba(47,107,255,.55)" />
+            <GlassIconButton onPress={onThrowBack} label="Reply" scale={scale} accessibilityLabel="Reply" tintColor="rgba(47,107,255,.55)" />
             {/* Locked (no onPress, dimmed) rather than hidden when the letter has no attachments —
                 per explicit request — so its presence itself says "this letter has no media"
                 instead of the row just quietly having one fewer button. */}
             <GlassIconButton
               onPress={L.photoUrls.length > 0 ? toggleMediaMode : undefined}
-              icon={<MediaGalleryIcon size={s(22, scale)} />}
+              path={IMAGE_ICON}
               scale={scale}
               accessibilityLabel="View attached photos or videos"
               disabled={L.photoUrls.length === 0}
@@ -684,13 +687,13 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
  * reinventing a background/border treatment. Medium-sized (not the smaller size these used to be)
  * per explicit request. `tintColor` lets the text-side entry points (sitting on plain paper, not a
  * photo) use Throw's own accent blue instead of the neutral dark glass the on-photo controls use,
- * which would otherwise all but disappear against the paper background. Takes either `path` (drawn
- * via the shared stroke-based Icon component) or a pre-built `icon` node (MediaGalleryIcon's own
- * multi-shape flower glyph doesn't fit that single-stroke-path model). */
+ * which would otherwise all but disappear against the paper background. Takes `path` (drawn via
+ * the shared stroke-based Icon component) for a circular icon button, or `label` for a wider
+ * rounded-pill text button (e.g. "Reply") using the same glass chrome. */
 function GlassIconButton({
   onPress,
   path,
-  icon,
+  label,
   scale,
   accessibilityLabel,
   disabled,
@@ -699,7 +702,7 @@ function GlassIconButton({
 }: {
   onPress?: () => void;
   path?: string;
-  icon?: React.ReactNode;
+  label?: string;
   scale: number;
   accessibilityLabel: string;
   disabled?: boolean;
@@ -708,34 +711,25 @@ function GlassIconButton({
   tintColor?: string;
 }) {
   const size = s(48, scale);
+  if (label) {
+    return (
+      <Pressable onPress={disabled ? undefined : onPress} accessibilityRole="button" accessibilityLabel={accessibilityLabel} style={style}>
+        <GlassSurface
+          tint="dark"
+          tintColor={tintColor}
+          style={[styles.glassBtn, { height: size, borderRadius: size / 2, paddingHorizontal: s(22, scale), opacity: disabled ? 0.4 : 1 }]}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: s(15, scale), fontWeight: '600' }}>{label}</Text>
+        </GlassSurface>
+      </Pressable>
+    );
+  }
   return (
     <Pressable onPress={disabled ? undefined : onPress} accessibilityRole="button" accessibilityLabel={accessibilityLabel} style={style}>
       <GlassSurface tint="dark" tintColor={tintColor} style={[styles.glassBtn, { width: size, height: size, borderRadius: size / 2, opacity: disabled ? 0.4 : 1 }]}>
-        {icon ?? <Icon path={path!} size={s(21, scale)} color="#FFFFFF" strokeWidth={2.2} />}
+        <Icon path={path!} size={s(21, scale)} color="#FFFFFF" strokeWidth={2.2} />
       </GlassSurface>
     </Pressable>
-  );
-}
-
-/** A simple flower/pinwheel glyph (six petals ringed around a center) standing in for a photo-
- * gallery icon — matches the shape of a reference screenshot (the iOS Photos app icon) rather than
- * the plain photo-frame glyph this used to be, per explicit request. Built directly with react-
- * native-svg (not the shared stroke-based Icon component, which only draws a single Path) since a
- * flower reads better as filled petal shapes than as line art. */
-function MediaGalleryIcon({ size, color = '#FFFFFF' }: { size: number; color?: string }) {
-  const cx = 12;
-  const cy = 12;
-  const petalR = 4.6;
-  const dist = 4.3;
-  const angles = [90, 150, 210, 270, 330, 30];
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      {angles.map((deg) => {
-        const rad = (deg * Math.PI) / 180;
-        return <Circle key={deg} cx={cx + dist * Math.cos(rad)} cy={cy + dist * Math.sin(rad)} r={petalR} fill={color} opacity={0.92} />;
-      })}
-      <Circle cx={cx} cy={cy} r={petalR * 0.7} fill={color} />
-    </Svg>
   );
 }
 

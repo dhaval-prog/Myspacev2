@@ -795,6 +795,12 @@ describe('ThrowHomeScreen in-place received-letters panel', () => {
   it('closes the panel via the back button, restoring FoldingLetter and BottomNav', async () => {
     setupMocks();
     await renderScreen();
+    // Self defaults to no scheduled alerts, which now keeps the compose paper up instead of
+    // opening an empty panel — select the actual friend first, same convention as the sibling
+    // "opens the in-place panel" test above, so there's something to open and then close.
+    await act(async () => {
+      mockCarouselProps.onChangeIndex(1);
+    });
     await act(async () => {
       mockFoldingLetterProps.onOpenInbox();
     });
