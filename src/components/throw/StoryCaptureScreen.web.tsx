@@ -3,7 +3,7 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import Svg, { Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import { Icon } from '../Icon';
-import { throwColor, throwRadius } from '../../theme/throwTokens';
+import { throwRadius } from '../../theme/throwTokens';
 import { noSelect } from '../../theme/webStyles';
 import type { StoryMediaType } from '../../types/story';
 
@@ -17,17 +17,14 @@ const SHUTTER_PRESS_SCALE = 0.88;
 const SHUTTER_SCALE_MS = 110;
 const FLASH_MS = 160;
 const SHUTTER_SIZE = 74;
-// The dedicated record-toggle button beside the shutter (see onRecordTogglePress) — same size as
-// the gallery/close/flip round buttons, smaller than the shutter since it's a secondary control.
-const RECORD_SIZE = 44;
 // Closing now flies the whole camera up and shrinks it into the status contact's own avatar
 // ring — see the native sibling's own comment on these same constants.
 const CLOSE_FLIGHT_MS = 480;
 const CLOSE_MIN_SCALE = 0.12;
 const DEFAULT_CLOSE_FLIGHT_DISTANCE = 260;
-// A thin ring drawn just outside the record button, filling clockwise over the 15s cap while
+// A thin ring drawn just outside the shutter button, filling clockwise over the 15s cap while
 // recording — same as the native sibling's own ring (see its comment).
-const RING_SIZE = RECORD_SIZE + 16;
+const RING_SIZE = SHUTTER_SIZE + 16;
 const RING_THICKNESS = 3;
 const RING_RADIUS = (RING_SIZE - RING_THICKNESS) / 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -41,7 +38,9 @@ const CONTACT_FLICK_CAPTURE_RATIO = 1.7;
 const CONTACT_DRAG_SPACING = 70;
 
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
-const FLIP_ICON = 'M4 4v5h5 M20 20v-5h-5 M4 9a8 8 0 0114-4.9L20 9 M20 15a8 8 0 01-14 4.9L4 15';
+// A plain circular "flip camera" glyph (two arcs + arrowheads forming a full loop) — replaces the
+// previous single-squiggle version per explicit request, matching a reference screenshot.
+const FLIP_ICON = 'M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0114.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0020.49 15';
 const GALLERY_ICON = 'M4 8h4l1.6-2.5h4.8L16 8h4v11H4z M12 11.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -109,6 +108,7 @@ export function StoryCaptureScreen({
 
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const [recording, setRecording] = useState(false);
+  const [captureMode, setCaptureMode] = useState<'photo' | 'video'>('photo');
   const [error, setError] = useState<string | null>(null);
   const canRecordVideo = videoMimeRef.current !== null || pickSupportedVideoMimeType() !== null;
 
@@ -163,7 +163,16 @@ export function StoryCaptureScreen({
           return;
         }
         streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          // Setting `srcObject` alone leaves Mobile Safari showing its own big centered "tap to
+          // play" overlay instead of actually playing — the `autoplay` HTML attribute isn't
+          // reliably honored for a stream assigned this way after mount. Calling `.play()`
+          // directly starts it for real; the promise it returns rejects harmlessly if the stream
+          // hasn't attached yet (a rapid facingMode flip beating the previous stream's teardown),
+          // which is already covered by this same effect re-running.
+          videoRef.current.play().catch(() => {});
+        }
       } catch {
         setError('Camera access is needed to post a story.');
       }
@@ -290,23 +299,21 @@ export function StoryCaptureScreen({
     recorderRef.current?.stop();
   };
 
+  // One shutter button whose action depends on the VIDEO/PHOTO toggle beside it — take a photo
+  // immediately in photo mode, or start/stop a recording in video mode (a plain tap toggle: press
+  // once to start, up to MAX_VIDEO_MS which auto-stops it, press the same button again to stop
+  // early — not a hold-to-record gesture, which depended on the browser reliably firing onPressIn
+  // *and* a later onPressOut for the same continuous touch, exactly the kind of held touch Mobile
+  // Safari's own long-press-to-select-text callout also keys off; see noSelect below either way).
   const onShutterPress = () => {
     Animated.sequence([
       Animated.timing(shutterScale, { toValue: SHUTTER_PRESS_SCALE, duration: SHUTTER_SCALE_MS, useNativeDriver: true }),
       Animated.timing(shutterScale, { toValue: 1, duration: SHUTTER_SCALE_MS, useNativeDriver: true }),
     ]).start();
-    takePhoto();
-  };
-
-  // A plain tap toggle — press once to start (up to MAX_VIDEO_MS, which auto-stops it), press the
-  // same button again to stop early — replacing the previous hold-to-record/release-to-stop
-  // gesture, which depended on the browser reliably firing onPressIn *and* a later onPressOut for
-  // the same continuous touch. That's exactly the kind of long, held touch Mobile Safari's own
-  // long-press-to-select-text callout also keys off, and the two were visibly racing each other on
-  // a real device (recording silently never starting) — a toggle only needs two ordinary taps, so
-  // there's no held touch for the OS gesture to ever contest it with (see noSelect below either
-  // way, to remove that callout for good regardless of exactly how a touch lands).
-  const onRecordTogglePress = () => {
+    if (captureMode === 'photo') {
+      takePhoto();
+      return;
+    }
     if (recording) stopRecording();
     else startRecording();
   };
@@ -356,7 +363,7 @@ export function StoryCaptureScreen({
           accessibilityRole="button"
           accessibilityLabel="Flip camera"
         >
-          <Icon path={FLIP_ICON} size={22} color="#FFFFFF" strokeWidth={2} />
+          <Icon path={FLIP_ICON} size={20} color="#FFFFFF" strokeWidth={2} />
         </Pressable>
       )}
 
@@ -372,23 +379,9 @@ export function StoryCaptureScreen({
           <Icon path={GALLERY_ICON} size={22} color="#FFFFFF" strokeWidth={1.8} />
         </Pressable>
 
-        <View style={styles.shutterGroup}>
-          <Pressable onPress={onShutterPress} disabled={recording} accessibilityRole="button" accessibilityLabel="Take a photo">
-            <Animated.View style={{ transform: [{ scale: shutterScale }] }}>
-              <View style={styles.shutterOuter}>
-                <View style={styles.shutterInner} />
-              </View>
-            </Animated.View>
-          </Pressable>
-
-          <Pressable
-            onPress={onRecordTogglePress}
-            disabled={!canRecordVideo}
-            accessibilityRole="button"
-            accessibilityLabel={recording ? 'Stop recording' : 'Record a video'}
-            style={{ opacity: canRecordVideo ? 1 : 0.35 }}
-          >
-            <View style={styles.recordWrap}>
+        <View style={styles.shutterColumn}>
+          <Pressable onPress={onShutterPress} accessibilityRole="button" accessibilityLabel={captureMode === 'photo' ? 'Take a photo' : recording ? 'Stop recording' : 'Record a video'}>
+            <Animated.View style={{ width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center', transform: [{ scale: shutterScale }] }}>
               {recording && (
                 <Svg width={RING_SIZE} height={RING_SIZE} style={[styles.ringSvg]}>
                   <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} stroke="rgba(255,255,255,.25)" strokeWidth={RING_THICKNESS} fill="none" />
@@ -408,11 +401,27 @@ export function StoryCaptureScreen({
                   />
                 </Svg>
               )}
-              <View style={[styles.recordOuter, recording && styles.recordOuterActive]}>
-                <View style={[styles.recordInner, recording && styles.recordInnerActive]} />
+              <View style={[styles.shutterOuter, captureMode === 'video' && styles.shutterOuterVideo]}>
+                <View style={[styles.shutterInner, captureMode === 'video' && styles.shutterInnerVideo, recording && styles.shutterInnerRecording]} />
               </View>
-            </View>
+            </Animated.View>
           </Pressable>
+
+          {/* The VIDEO/PHOTO segmented toggle — replaces the previous separate record button
+              beside the shutter (per explicit request, matching a reference screenshot): one
+              shutter button now does either job, its own color/shape reflecting whichever mode is
+              selected here instead of two visually distinct buttons side by side. Locked out
+              entirely while actively recording (can't switch modes mid-recording), and "VIDEO"
+              itself stays dimmed/non-interactive wherever this browser can't record video at all
+              (see canRecordVideo) — tap-for-photo still always works either way. */}
+          <View style={styles.modeToggle}>
+            <Pressable onPress={() => setCaptureMode('video')} disabled={recording || !canRecordVideo} hitSlop={6}>
+              <Text style={[styles.modeText, captureMode === 'video' && styles.modeTextActive, !canRecordVideo && styles.modeTextDisabled]}>VIDEO</Text>
+            </Pressable>
+            <Pressable onPress={() => setCaptureMode('photo')} disabled={recording} hitSlop={6}>
+              <Text style={[styles.modeText, captureMode === 'photo' && styles.modeTextActive]}>PHOTO</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.galleryBtn} />
@@ -450,11 +459,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    // Plain, same as closeBtn — no accent border, per explicit request matching a reference
+    // screenshot (a colored ring here read as an unrelated "active/selected" signal).
     backgroundColor: 'rgba(0,0,0,.4)',
-    // Same blue accent Throw's active/selected chrome already uses elsewhere — see the native
-    // sibling's own comment.
-    borderWidth: 1.5,
-    borderColor: throwColor.activeBlue,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -476,7 +483,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shutterGroup: { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  shutterColumn: { alignItems: 'center', gap: 10 },
   ringSvg: { position: 'absolute' },
   shutterOuter: {
     width: SHUTTER_SIZE,
@@ -488,20 +495,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   shutterInner: { width: SHUTTER_SIZE - 14, height: SHUTTER_SIZE - 14, borderRadius: (SHUTTER_SIZE - 14) / 2, backgroundColor: '#FFFFFF' },
-  recordWrap: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
-  recordOuter: {
-    width: RECORD_SIZE,
-    height: RECORD_SIZE,
-    borderRadius: RECORD_SIZE / 2,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recordOuterActive: { borderColor: '#FF3B30' },
-  recordInner: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FF3B30' },
-  recordInnerActive: { width: 18, height: 18, borderRadius: 5 },
-  recordingHint: { position: 'absolute', bottom: 140, alignSelf: 'center', color: '#FFFFFF', fontSize: 13 },
+  // Video mode's own idle look — a solid red disc instead of white, the same shutter button just
+  // recolored rather than a visually distinct second button (see onShutterPress's own comment).
+  shutterOuterVideo: { borderColor: '#FF3B30' },
+  shutterInnerVideo: { backgroundColor: '#FF3B30' },
+  // While actually recording, the inner disc becomes a rounded "stop" square — same affordance
+  // the previous dedicated record button gave, just carried over onto this one button now.
+  shutterInnerRecording: { width: SHUTTER_SIZE - 30, height: SHUTTER_SIZE - 30, borderRadius: 6 },
+  modeToggle: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  modeText: { fontFamily: 'Figtree_700Bold', fontSize: 12, letterSpacing: 1, color: 'rgba(255,255,255,.55)' },
+  modeTextActive: { color: '#FFD60A' },
+  modeTextDisabled: { opacity: 0.4 },
+  recordingHint: { position: 'absolute', bottom: 150, alignSelf: 'center', color: '#FFFFFF', fontSize: 13 },
   flash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF' },
   permissionWrap: {
     flex: 1,
