@@ -1144,14 +1144,29 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             recipient gets a Confirm button on it and only then actually gets an alert. The whole
             circle (not just the glyph) turns solid red once active for this letter — self mode
             once actually confirmed, friend mode the moment the Bell is tapped (see
-            bellActive below) — so the icon itself shows whether this letter carries a reminder. */}
+            bellActive below) — so the icon itself shows whether this letter carries a reminder.
+            Tapping an already-active friend reminder again deselects it entirely instead of
+            reopening the sheet, per explicit request, so the letter goes back to sendable as
+            plain text without the reminder-confirmed gate (see reminderGateOk above). Self mode
+            has no such toggle — the whole letter *is* the reminder there, so there's nothing to
+            opt back out of short of abandoning the draft (see clearReminderDraft). */}
         <Pressable
           onPress={() => {
-            if (!selfReminderMode && friendAlertSchedule === null) setFriendAlertSchedule(DEFAULT_FRIEND_ALERT_SCHEDULE);
+            if (selfReminderMode) {
+              setReminderState('open');
+              return;
+            }
+            if (friendAlertSchedule !== null) {
+              setFriendAlertSchedule(null);
+              setReminderConfirmed(false);
+              setReminderState('closed');
+              return;
+            }
+            setFriendAlertSchedule(DEFAULT_FRIEND_ALERT_SCHEDULE);
             setReminderState('open');
           }}
           accessibilityRole="button"
-          accessibilityLabel="Set reminder time"
+          accessibilityLabel={!selfReminderMode && friendAlertSchedule !== null ? 'Remove reminder' : 'Set reminder time'}
         >
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>

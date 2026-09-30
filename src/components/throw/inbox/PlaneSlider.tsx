@@ -3,6 +3,7 @@ import { PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, Vibrat
 import { Icon } from '../../Icon';
 import { LetterPlaneGlyph } from './LetterPlaneGlyph';
 import { ConfirmDialog } from '../../ConfirmDialog';
+import { GlassSurface } from '../../friends/GlassSurface';
 import { inboxColor } from '../../../theme/throwInboxTokens';
 import { noSelect } from '../../../theme/webStyles';
 
@@ -311,25 +312,31 @@ export function PlaneSlider({
           // below — white reads on the armed/unread box's red or blue fill, black on the read
           // box's white fill.
           const inlineLabelColor = armedHere || c.unread ? '#FFFFFF' : '#171717';
-          const chipBox = (
-            <View
-              style={[
-                styles.chip,
-                {
-                  width: s(52, scale),
-                  height: s(52, scale),
-                  borderRadius: s(16, scale),
-                  backgroundColor: bg,
-                  borderWidth: active && !armedHere ? 2 : 0,
-                  borderColor: inboxColor.ink,
-                },
-              ]}
-            >
+          // The selected chip's own box (never the armed/delete one) turns into frosted glass —
+          // a light-blue border instead of the plain dark ink ring, and a blurred glass fill
+          // instead of the flat read/unread color every other chip still uses — per explicit
+          // request, so "this one's selected" reads as its own distinct chrome rather than just an
+          // outline on the same solid box.
+          const selectedGlass = active && !armedHere;
+          const chipSize = { width: s(52, scale), height: s(52, scale), borderRadius: s(16, scale) };
+          const chipGlyph = (
+            <>
               <LetterPlaneGlyph size={s(compact ? 21 : 28, scale)} variant={variant} tiltDeg={-14} />
               {compact && (
                 <Text style={[styles.mono, styles.chipInlineLabel, { fontSize: s(7.5, scale), color: inlineLabelColor }]}>{c.short}</Text>
               )}
-            </View>
+            </>
+          );
+          const chipBox = selectedGlass ? (
+            <GlassSurface
+              tint="light"
+              tintColor={c.unread ? 'rgba(47,107,255,.35)' : 'rgba(255,255,255,.5)'}
+              style={[styles.chip, chipSize, { borderWidth: 2, borderColor: inboxColor.activeBorder }]}
+            >
+              {chipGlyph}
+            </GlassSurface>
+          ) : (
+            <View style={[styles.chip, chipSize, { backgroundColor: bg }]}>{chipGlyph}</View>
           );
           if (active) {
             return (
