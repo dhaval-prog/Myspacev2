@@ -20,7 +20,6 @@ const GROUP_ICON = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8
 // reinterpretation.
 const THROW_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
 const ADD_FRIEND_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
-const THROW_INBOX_ICON = 'M3 11h5l1.8 2.8h4.4L16 11h5 M3 11V5h18v6 M3 11v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7';
 // Same dice glyph used everywhere else Games is a destination — reused here so this reads as the
 // same destination, not a Chats-specific reinterpretation.
 const GAMES_ICON = 'M4 4h16v16H4z M8 8h.01 M16 8h.01 M8 16h.01 M16 16h.01 M12 12h.01';
@@ -33,14 +32,12 @@ interface ChatsListScreenProps {
   /** Opens Throw — both the bottom nav dock's Throw tab and the pinned row below the list
    * (which replaces the old "back to Friends" button there). */
   onOpenThrow: () => void;
-  /** Opens Throw straight to its inbox — also in the pinned row. */
-  onOpenThrowInbox: () => void;
   /** Opens the Games hub — also in the pinned row. */
   onOpenGames: () => void;
 }
 
 /** Chats (6p-6) — only accepted friends get a thread here. */
-export function ChatsListScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenThrowInbox, onOpenGames }: ChatsListScreenProps) {
+export function ChatsListScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenGames }: ChatsListScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friends, sentRequests, goAdd, openChat, lastMessageFor, isUnread, unreadCountFor, isOnline, isTyping, groups, goCreateGroup, openGroupChat, lastGroupMessageFor } =
@@ -181,9 +178,6 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenThr
         </Pressable>
         <Pressable onPress={goAdd} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Add a friend">
           <Icon path={ADD_FRIEND_ICON} color={colors.textPrimary} size={18} strokeWidth={1.8} />
-        </Pressable>
-        <Pressable onPress={onOpenThrowInbox} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Throw inbox">
-          <Icon path={THROW_INBOX_ICON} color={colors.textPrimary} size={18} strokeWidth={1.8} />
         </Pressable>
         <Pressable onPress={onOpenGames} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Games">
           <Icon path={GAMES_ICON} color={colors.textPrimary} size={18} strokeWidth={1.8} />

@@ -6,7 +6,6 @@ import { ThrowWeatherProvider } from '../../context/ThrowWeatherContext';
 import { throwColor } from '../../theme/throwTokens';
 import { ThrowLocationSetupScreen } from './ThrowLocationSetupScreen';
 import { ThrowHomeScreen } from './ThrowHomeScreen';
-import { ThrowInboxScreen } from './ThrowInboxScreen';
 import { ThrowLetterDetailScreen } from './ThrowLetterDetailScreen';
 import { ThrowSettingsScreen } from './ThrowSettingsScreen';
 
@@ -16,14 +15,10 @@ interface ThrowScreenProps {
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
   initialThrowId?: string;
-  /** Opens straight to the inbox instead of the compose map — used when arriving here via the
-   * "Throw inbox" shortcut on Orbit's Chats list rather than the usual Throw entry point. */
-  initialScreen?: 'inbox';
 }
 
 type SubScreen =
   | { name: 'home'; lockedRecipient?: { friendUserId: string; repliedToThrowId: string } }
-  | { name: 'inbox'; initialContactId?: string }
   | { name: 'letter'; throwId: string }
   | { name: 'settings' };
 
@@ -33,19 +28,15 @@ function ThrowNavigator({
   onOpenChats,
   onOpenAddFriend,
   initialThrowId,
-  initialScreen,
 }: {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
   initialThrowId?: string;
-  initialScreen?: 'inbox';
 }) {
   const { loading, myLocation } = useThrow();
-  const [screen, setScreen] = useState<SubScreen>(() =>
-    initialThrowId ? { name: 'letter', throwId: initialThrowId } : initialScreen === 'inbox' ? { name: 'inbox' } : { name: 'home' },
-  );
+  const [screen, setScreen] = useState<SubScreen>(() => (initialThrowId ? { name: 'letter', throwId: initialThrowId } : { name: 'home' }));
 
   if (loading) {
     return <View style={{ flex: 1, backgroundColor: throwColor.screenBg }} />;
@@ -71,21 +62,11 @@ function ThrowNavigator({
     return <ThrowSettingsScreen onBack={() => setScreen({ name: 'home' })} />;
   }
 
-  if (screen.name === 'inbox') {
-    return (
-      <ThrowInboxScreen
-        onBack={() => setScreen({ name: 'home' })}
-        initialContactId={screen.initialContactId}
-        onThrowBack={(counterpartUserId, repliedToThrowId) => setScreen({ name: 'home', lockedRecipient: { friendUserId: counterpartUserId, repliedToThrowId } })}
-      />
-    );
-  }
-
   if (screen.name === 'letter') {
     return (
       <ThrowLetterDetailScreen
         throwId={screen.throwId}
-        onBack={() => setScreen({ name: 'inbox' })}
+        onBack={() => setScreen({ name: 'home' })}
         onThrowBack={(counterpartUserId, repliedToThrowId) => setScreen({ name: 'home', lockedRecipient: { friendUserId: counterpartUserId, repliedToThrowId } })}
       />
     );
@@ -94,7 +75,7 @@ function ThrowNavigator({
   return null;
 }
 
-export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFriend, initialThrowId, initialScreen }: ThrowScreenProps) {
+export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFriend, initialThrowId }: ThrowScreenProps) {
   return (
     <ThrowProvider>
       <ThrowStoriesProvider>
@@ -105,7 +86,6 @@ export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFrie
             onOpenChats={onOpenChats}
             onOpenAddFriend={onOpenAddFriend}
             initialThrowId={initialThrowId}
-            initialScreen={initialScreen}
           />
         </ThrowWeatherProvider>
       </ThrowStoriesProvider>

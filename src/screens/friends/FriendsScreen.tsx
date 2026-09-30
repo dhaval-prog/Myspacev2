@@ -16,8 +16,6 @@ interface FriendsScreenProps {
   onOpenExpenses: () => void;
   /** Opens Throw — both the bottom nav dock's Throw tab and the Chats list's pinned row. */
   onOpenThrow: () => void;
-  /** Opens Throw straight to its inbox — also surfaced from the Chats list's pinned row. */
-  onOpenThrowInbox: () => void;
   /** Opens the Games hub — also surfaced from the Chats list's pinned row. */
   onOpenGames: () => void;
 }
@@ -25,7 +23,7 @@ interface FriendsScreenProps {
 /** The Friends & chat feature: friend requests and direct messaging, and every screen it opens.
  * There's no standalone "Friends home" page any more — the Chats list (with its "Add a friend"
  * pinned icon) is the whole feature's landing point now. */
-export function FriendsScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenThrowInbox, onOpenGames }: FriendsScreenProps) {
+export function FriendsScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenGames }: FriendsScreenProps) {
   const { page } = useFriends();
   switch (page) {
     case 'add':
@@ -46,13 +44,7 @@ export function FriendsScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenThrow
       return <GroupChatScreen />;
     default:
       return (
-        <ChatsListScreen
-          onHome={onHome}
-          onOpenExpenses={onOpenExpenses}
-          onOpenThrow={onOpenThrow}
-          onOpenThrowInbox={onOpenThrowInbox}
-          onOpenGames={onOpenGames}
-        />
+        <ChatsListScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} onOpenGames={onOpenGames} />
       );
   }
 }
