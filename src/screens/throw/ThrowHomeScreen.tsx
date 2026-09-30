@@ -424,7 +424,14 @@ export function ThrowHomeScreen({
     // would just fail against an alert id, so this only ever runs for a real friend's letters.
     markRead: isSelfSelected ? undefined : markRead,
   });
-  const handleOpenInbox = () => setInboxMode(true);
+  // Self-reminders with nothing scheduled yet stay on the compose paper instead of switching to
+  // the in-place panel just to immediately show its own "No letters yet" placeholder — per
+  // explicit request. Friends keep the old behavior (their empty panel is itself useful, showing
+  // where a letter will land once one arrives).
+  const handleOpenInbox = () => {
+    if (isSelfSelected && inboxContactLetters.length === 0) return;
+    setInboxMode(true);
+  };
   const handleCloseInbox = () => setInboxMode(false);
   const handleInboxSelectChip = async (index: number, originScreen: { x: number; y: number }) => {
     const local = await toLocalInboxPoint(originScreen);
