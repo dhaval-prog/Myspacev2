@@ -251,12 +251,19 @@ function BottomIconSurface({
   tintColor,
   style,
   children,
+  active,
 }: {
   isNight?: boolean;
   tintColor: string;
   style: StyleProp<ViewStyle>;
   children: React.ReactNode;
+  /** Solid red circle instead of the usual glass/night tint — the Bell's own "this letter carries
+   * a reminder" state (see its own call site), which needs to read as a color change on the
+   * circle itself, not just the glyph inside it, per explicit request. Overrides both the day
+   * glass tint and the night skin's own solid fill. */
+  active?: boolean;
 }) {
+  if (active) return <View style={[style, styles.iconSurfaceActive]}>{children}</View>;
   if (isNight) return <View style={[style, styles.iconSurfaceNight]}>{children}</View>;
   return (
     <GlassSurface tint="light" tintColor={tintColor} style={style}>
@@ -521,6 +528,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     isNight,
     selfReminderMode,
     reminderConfirmed,
+    friendAlertSchedule,
   });
   latest.current = {
     disabled,
@@ -539,6 +547,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     isNight,
     selfReminderMode,
     reminderConfirmed,
+    friendAlertSchedule,
   };
 
   // The folded plane's baked texture only carries the first attached *photo* — see
@@ -919,8 +928,12 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             // springs back, same as any other release that doesn't clear the launch thresholds.
             // A self-reminder additionally can't be thrown until its time has actually been
             // confirmed via the sheet's own "Done" button (see reminderConfirmed) — an untouched
-            // popup that was just dismissed by swiping past it isn't a confirmed reminder.
-            const reminderGateOk = !latest.current.selfReminderMode || latest.current.reminderConfirmed;
+            // popup that was just dismissed by swiping past it isn't a confirmed reminder. An
+            // ordinary letter to a friend gets the exact same gate once its own Bell has been
+            // tapped (friendAlertSchedule no longer null, see the Bell Pressable) — per explicit
+            // request, an "active" (red) reminder can't be thrown away unconfirmed either.
+            const reminderActive = latest.current.selfReminderMode || latest.current.friendAlertSchedule !== null;
+            const reminderGateOk = !reminderActive || latest.current.reminderConfirmed;
             if (swipedUp && latest.current.hasContent && reminderGateOk) {
               latest.current.launch();
             } else {
@@ -1128,9 +1141,10 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             per explicit request. A self-reminder opens its mandatory schedule sheet (unchanged);
             an ordinary letter to a friend opens the same sheet for an *optional* reminder request
             that rides along with the letter (see FoldingLetterContent's own alertSchedule) — the
-            recipient gets a Confirm button on it and only then actually gets an alert. Turns red
-            once a schedule is actually set/confirmed for this letter, so the icon itself shows
-            whether this letter carries a reminder. */}
+            recipient gets a Confirm button on it and only then actually gets an alert. The whole
+            circle (not just the glyph) turns solid red once active for this letter — self mode
+            once actually confirmed, friend mode the moment the Bell is tapped (see
+            bellActive below) — so the icon itself shows whether this letter carries a reminder. */}
         <Pressable
           onPress={() => {
             if (!selfReminderMode && friendAlertSchedule === null) setFriendAlertSchedule(DEFAULT_FRIEND_ALERT_SCHEDULE);
@@ -1141,11 +1155,16 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         >
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+              <BottomIconSurface
+                isNight={isNight}
+                tintColor={throwGlass.tintWaterBlue}
+                active={selfReminderMode ? reminderConfirmed : friendAlertSchedule !== null}
+                style={[styles.roundBtn, roundBtnDynamicStyle]}
+              >
                 <Icon
                   path={BELL_ICON}
                   size={25 * bottomRowScale}
-                  color={(selfReminderMode ? reminderConfirmed : friendAlertSchedule !== null) ? '#FF3B30' : isNight ? throwNightColor.iconColor : throwColor.ink}
+                  color={(selfReminderMode ? reminderConfirmed : friendAlertSchedule !== null) ? '#FFFFFF' : isNight ? throwNightColor.iconColor : throwColor.ink}
                   strokeWidth={1.8}
                 />
               </BottomIconSurface>
@@ -1196,7 +1215,11 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
 
       {phase === 'ready' && (
         <Text style={[styles.readyHint, isNight && styles.readyHintNight]}>
-          {!hasContent ? 'Write something first' : selfReminderMode && !reminderConfirmed ? 'Set a reminder time first' : throwLabel}
+          {!hasContent
+            ? 'Write something first'
+            : (selfReminderMode || friendAlertSchedule !== null) && !reminderConfirmed
+              ? 'Set a reminder time first'
+              : throwLabel}
         </Text>
       )}
       {voice.recording && <Text style={[styles.readyHint, isNight && styles.readyHintNight]}>Listening…</Text>}
@@ -1222,14 +1245,18 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           to a friend uses its own local friendAlertSchedule instead (see its own doc comment) —
           the sheet itself is otherwise identical either way. */}
       <BottomSheet visible={reminderState === 'open'} onClose={() => setReminderState('peek')}>
-        <Text style={styles.scheduleModalTitle}>Remind me</Text>
+        <Text style={styles.scheduleModalTitle}>Reminder</Text>
         <AlertScheduleHeader
           schedule={selfReminderMode ? alertSchedule! : friendAlertSchedule ?? DEFAULT_FRIEND_ALERT_SCHEDULE}
           onChange={selfReminderMode ? onAlertScheduleChange! : setFriendAlertSchedule}
         />
         <Pressable
           onPress={() => {
-            if (selfReminderMode) setReminderConfirmed(true);
+            // Confirms the throw gate for both modes now (see reminderGateOk in the release
+            // handler above) — a friend letter's reminder is optional, but once its Bell has been
+            // tapped (making friendAlertSchedule non-null), the letter can't be thrown until this
+            // is actually confirmed, same as a self-reminder always could not.
+            setReminderConfirmed(true);
             setReminderState('peek');
           }}
           accessibilityRole="button"
@@ -1334,6 +1361,7 @@ const styles = StyleSheet.create({
   // BottomIconSurface). Layered on top of whatever size style (roundBtn/micBtn) is already
   // passed in, so it only ever overrides backgroundColor.
   iconSurfaceNight: { backgroundColor: throwNightColor.iconBg, alignItems: 'center', justifyContent: 'center' },
+  iconSurfaceActive: { backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' },
   // A "photos pasted onto the letter" look — a horizontal row of small white-bordered thumbnails
   // near the top of the paper, scrollable once there are more than fit. Spans most of the paper's
   // width rather than sitting in one corner, since there can be several now — LetterCanvas

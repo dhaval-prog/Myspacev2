@@ -57,9 +57,6 @@ const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 // web sibling's own copy of this constant).
 const FLIP_ICON = 'M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0114.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0020.49 15';
 const GALLERY_ICON = 'M4 8h4l1.6-2.5h4.8L16 8h4v11H4z M12 11.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z';
-// A person-plus glyph — the Status camera's own "add a friend instead" entry point (see
-// onOpenAddFriend below; see the web sibling's own copy of this constant).
-const ADD_FRIEND_ICON = 'M9 11a4 4 0 100-8 4 4 0 000 8z M2 21v-1a6 6 0 016-6h2a6 6 0 016 6v1 M19 8v6 M22 11h-6';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -83,11 +80,6 @@ interface StoryCaptureScreenProps {
    * the same destination StoryPreviewScreen's "Add to status" flies a confirmed photo to, per
    * explicit request. Falls back to a fixed distance if omitted. */
   flightTargetY?: number;
-  /** Shows a small "Add a friend" pill above the shutter, offering that as an alternative to
-   * posting a status — present only for the actual Status/add-story camera (see ThrowHomeScreen's
-   * own usage); omitted for FoldingLetter's own reuse of this same screen to attach a photo to a
-   * letter, where adding a friend makes no sense mid-compose. */
-  onOpenAddFriend?: () => void;
 }
 
 /** Camera for posting a Throw story, filling the same letter-card slot FoldingLetter/
@@ -109,7 +101,6 @@ export function StoryCaptureScreen({
   onContactDragOffset,
   onContactDragEnd,
   flightTargetY,
-  onOpenAddFriend,
 }: StoryCaptureScreenProps) {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
@@ -330,13 +321,6 @@ export function StoryCaptureScreen({
         </Pressable>
       )}
 
-      {!recording && onOpenAddFriend && (
-        <Pressable onPress={onOpenAddFriend} hitSlop={8} style={styles.addFriendBtn} accessibilityRole="button" accessibilityLabel="Add a friend instead">
-          <Icon path={ADD_FRIEND_ICON} size={16} color="#FFFFFF" strokeWidth={2} />
-          <Text style={styles.addFriendText}>Add Friend</Text>
-        </Pressable>
-      )}
-
       <View style={styles.bottomRow}>
         <Pressable
           onPress={pickFromLibrary}
@@ -437,21 +421,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addFriendBtn: {
-    position: 'absolute',
-    top: 12,
-    left: '50%',
-    marginLeft: -52,
-    width: 104,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,.4)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  addFriendText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
   bottomRow: {
     position: 'absolute',
     bottom: 16,
