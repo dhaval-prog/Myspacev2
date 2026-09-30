@@ -186,47 +186,28 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     });
     setRows(visibleRows);
 
+    const friendIds = fsFriends.map((f) => f.userId);
+    if (friendIds.length > 0) {
+      const { data: locRows, error: locErr } = await supabase
+        .from('throw_profiles')
+        .select('user_id,city,country,latitude,longitude')
+        .in('user_id', friendIds);
+      warn('load friend locations', locErr);
+      const map: Record<string, ThrowLocation> = {};
+      for (const r of (locRows as { user_id: string; city: string; country: string; latitude: number; longitude: number }[] | null) ?? []) {
+        map[r.user_id] = { city: r.city, country: r.country, latitude: r.latitude, longitude: r.longitude };
+      }
+      setFriendLocations(map);
+    } else {
+      setFriendLocations({});
+    }
     hasLoadedRef.current = true;
     setLoading(false);
-  }, [myId]);
+  }, [myId, fsFriends]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
-
-  // Friend locations load on their own, independent of the refresh above — `fsFriends` is a new
-  // array reference (from FriendsContext's own useMemo) any time connection/profile data changes
-  // for any reason, not just when who's actually a friend changes, and putting it directly in
-  // refresh's own dependency array used to re-run that entire 4-query batch every single time,
-  // duplicating the same location/throws/streaks/profile fetch for no new information. Keying this
-  // off the actual *set* of friend ids (not the array's identity) means this only re-fetches when
-  // someone was genuinely added or removed.
-  const friendIdsKey = useMemo(() => fsFriends.map((f) => f.userId).sort().join(','), [fsFriends]);
-  useEffect(() => {
-    if (!myId) return;
-    const friendIds = friendIdsKey ? friendIdsKey.split(',') : [];
-    if (friendIds.length === 0) {
-      setFriendLocations({});
-      return;
-    }
-    let cancelled = false;
-    supabase
-      .from('throw_profiles')
-      .select('user_id,city,country,latitude,longitude')
-      .in('user_id', friendIds)
-      .then(({ data, error }) => {
-        warn('load friend locations', error);
-        if (cancelled) return;
-        const map: Record<string, ThrowLocation> = {};
-        for (const r of (data as { user_id: string; city: string; country: string; latitude: number; longitude: number }[] | null) ?? []) {
-          map[r.user_id] = { city: r.city, country: r.country, latitude: r.latitude, longitude: r.longitude };
-        }
-        setFriendLocations(map);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [myId, friendIdsKey]);
 
   useEffect(() => {
     if (!myId) return;

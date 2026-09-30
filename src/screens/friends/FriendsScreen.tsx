@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useFriends } from '../../context/FriendsContext';
 import { AddFriendScreen } from './AddFriendScreen';
 import { FriendsScannerScreen } from './FriendsScannerScreen';
@@ -26,12 +26,7 @@ interface FriendsScreenProps {
  * There's no standalone "Friends home" page any more — the Chats list (with its "Add a friend"
  * pinned icon) is the whole feature's landing point now. */
 export function FriendsScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenThrowInbox, onOpenGames }: FriendsScreenProps) {
-  const { page, markChatSurfaceActive } = useFriends();
-  // Arms the per-friend typing-indicator realtime channels (see FriendsContext's own doc comment)
-  // — this screen mounting at all is the signal that Chat has actually been opened this session.
-  useEffect(() => {
-    markChatSurfaceActive();
-  }, [markChatSurfaceActive]);
+  const { page } = useFriends();
   switch (page) {
     case 'add':
       return <AddFriendScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} />;

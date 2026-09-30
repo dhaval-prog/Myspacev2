@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { useFonts } from '@expo-google-fonts/figtree';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
-import { colors, fontsToLoad, deferredFontsToLoad } from './src/theme';
+import { colors, fontsToLoad } from './src/theme';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { NotificationsProvider } from './src/context/NotificationsContext';
 import { FriendsProvider, useFriends } from './src/context/FriendsContext';
@@ -182,13 +182,6 @@ function RootNavigator() {
 
 export default function App() {
   const [fontsLoaded] = useFonts(fontsToLoad);
-  // Loaded in the background, not awaited — see fonts.ts's own comment on why blocking the whole
-  // app's first paint on the Games hub's font weights (unused by every other screen, including
-  // Throw, the actual landing point) was wasted startup time. Its own loaded flag is intentionally
-  // unused here; GamesDashboardScreen/GamesScreen/TriviaGameScreen aren't reachable before this
-  // resolves anyway (there's no deep link straight to them), so by the time anyone gets there it's
-  // already done.
-  useFonts(deferredFontsToLoad);
   // Plays once right after the native (static) launch screen hands off,
   // over the real app underneath — see LaunchIntro for why this can't
   // live in the native launch screen itself (it can only ever be static).
