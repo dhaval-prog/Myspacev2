@@ -152,6 +152,15 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [, forceRender] = useState(0);
+  // Mapbox GL JS is a large library, and this style renders real 3D buildings/terrain at a steep
+  // pitch — both take a visible moment to download/initialize/settle on first load. Rather than a
+  // blank map-shaped hole (or an abrupt pop once tiles suddenly appear), the container starts
+  // transparent and fades in only once the map is genuinely idle (style loaded, camera settled, no
+  // tiles still in flight) — ThrowHomeScreen's own ThrowGlassBackdrop already sits behind this
+  // whole screen, so what shows through during that gap is the same branded gradient the rest of
+  // Throw already uses, not an empty void. Costs nothing extra to ship (no placeholder image/
+  // component of its own) and never looks "wrong", just briefly quiet.
+  const [ready, setReady] = useState(false);
 
   // The map's own day/night/auto preference (see ThrowColorModeContext) — independent of the
   // letter's own paper/plane color preference, and (per explicit request) user-controllable in
@@ -186,6 +195,11 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     const rerender = () => forceRender((n) => n + 1);
     map.on('move', rerender);
     map.on('zoom', rerender);
+    // Fires once the style is loaded, the camera has settled, and every tile currently in view has
+    // arrived — the first point at which showing the real map actually looks finished rather than
+    // half-populated. `.once` — this only ever gates the initial reveal, not every later idle
+    // moment (panning/zooming afterward stays exactly as responsive as before).
+    map.once('idle', () => setReady(true));
     map.on('style.load', () => {
       // Defensive, not just tidy: this runs against a style this app doesn't own (edited in
       // Mapbox Studio), so a future rename/removal of the "basemap" import should degrade to
@@ -272,7 +286,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0, opacity: ready ? 1 : 0, transition: 'opacity 320ms ease-out' }} />
 
       {pins.map((pin) => {
         const pos = project(pin.latitude, pin.longitude);
