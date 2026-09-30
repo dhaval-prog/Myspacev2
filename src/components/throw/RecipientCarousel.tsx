@@ -112,11 +112,12 @@ interface RecipientCarouselProps {
 
 /** The status-letter-stack's own small count badge — top-right of the avatar, matching the
  * interaction spec's reference (hidden rather than showing "0", since an empty avatar already
- * reads via the ring turning grey). */
-function AvatarCountBadge({ count, isNight }: { count: number; isNight?: boolean }) {
+ * reads via the ring turning grey). Always a plain white-bordered blue circle regardless of
+ * day/night skin — see countBadge's own comment. */
+function AvatarCountBadge({ count }: { count: number; isNight?: boolean }) {
   if (count <= 0) return null;
   return (
-    <View style={[styles.countBadge, isNight && styles.countBadgeNight]}>
+    <View style={styles.countBadge}>
       <Text style={styles.countBadgeText}>{count}</Text>
     </View>
   );
@@ -367,12 +368,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     borderRadius: 11,
     backgroundColor: throwColor.activeBlue,
-    borderWidth: 2,
-    borderColor: throwColor.paper,
+    // Always a plain white ring (not the day/night paper tone) so it reads clearly as a border
+    // sitting on top of — and overlapping — the ring/avatar underneath it, in both skins.
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  countBadgeNight: { borderColor: throwNightColor.ink },
   countBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
   // Taller than before (108 → 130) to fit the bigger avatar/pulse ring plus both text lines
   // without clipping against `overflow: hidden`.
