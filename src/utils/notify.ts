@@ -18,7 +18,7 @@ export async function notifySelf(
   dedupeKey: string,
   title: string,
   body: string,
-  entity?: { type: 'card' | 'connection' | 'throw'; id: string },
+  entity?: { type: 'card' | 'connection' | 'throw' | 'story'; id: string },
 ): Promise<void> {
   const { data } = await supabase.from('user_settings').select('notification_prefs').eq('user_id', userId).maybeSingle();
   const prefs = (data?.notification_prefs ?? null) as Record<string, { inApp?: boolean }> | null;
@@ -37,6 +37,10 @@ export type NotificationTarget =
   | { screen: 'expenses'; cardId: string }
   | { screen: 'friends'; connectionId: string }
   | { screen: 'throw'; throwId: string }
+  /** Selects that contact's row in Throw — a status post has no "open this exact past story" deep
+   * link in the app to jump to instead, so landing on the poster's own contact is as specific as
+   * this gets. */
+  | { screen: 'throw'; focusContactId: string }
   | { screen: 'default' };
 
 /** Where tapping a notification should take you — falls back to Throw (the app's landing point)
@@ -45,5 +49,6 @@ export function targetForNotification(n: AppNotification): NotificationTarget {
   if (n.entityType === 'card' && n.entityId) return { screen: 'expenses', cardId: n.entityId };
   if (n.entityType === 'connection' && n.entityId) return { screen: 'friends', connectionId: n.entityId };
   if (n.entityType === 'throw' && n.entityId) return { screen: 'throw', throwId: n.entityId };
+  if (n.entityType === 'story' && n.entityId) return { screen: 'throw', focusContactId: n.entityId };
   return { screen: 'default' };
 }

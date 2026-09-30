@@ -29,8 +29,11 @@ interface NotificationsSheetProps {
  * Pending friend requests (received and sent, i.e. not yet accepted) live here too, as actionable
  * rows above the regular list, rather than requiring a trip to a separate Friends page. */
 export function NotificationsSheet({ visible, onClose, onNavigate }: NotificationsSheetProps) {
-  const { notifications, unreadCount, acknowledge, clearAll } = useNotifications();
+  const { notifications: allNotifications, unreadCount, acknowledge, clearAll } = useNotifications();
   const { receivedRequests, sentRequests, acceptRequest, declineRequest, cancelRequest } = useFriends();
+  // This sheet is the quick "what's new" glance — once read, a notification drops out of it
+  // rather than sticking around (that's NotificationsScreen's own job, as the full history).
+  const notifications = allNotifications.filter((n) => !n.read);
 
   const handlePress = (n: AppNotification) => {
     acknowledge(n.id);

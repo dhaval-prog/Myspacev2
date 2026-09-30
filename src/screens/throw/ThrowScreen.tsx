@@ -14,7 +14,9 @@ interface ThrowScreenProps {
   onOpenExpenses: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
+  onOpenNotifications: () => void;
   initialThrowId?: string;
+  initialFocusContactId?: string;
 }
 
 type SubScreen =
@@ -27,13 +29,17 @@ function ThrowNavigator({
   onOpenExpenses,
   onOpenChats,
   onOpenAddFriend,
+  onOpenNotifications,
   initialThrowId,
+  initialFocusContactId,
 }: {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
+  onOpenNotifications: () => void;
   initialThrowId?: string;
+  initialFocusContactId?: string;
 }) {
   const { loading, myLocation } = useThrow();
   const [screen, setScreen] = useState<SubScreen>(() => (initialThrowId ? { name: 'letter', throwId: initialThrowId } : { name: 'home' }));
@@ -52,8 +58,10 @@ function ThrowNavigator({
         onOpenExpenses={onOpenExpenses}
         onOpenChats={onOpenChats}
         onOpenAddFriend={onOpenAddFriend}
+        onOpenNotifications={onOpenNotifications}
         onOpenSettings={() => setScreen({ name: 'settings' })}
         lockedRecipient={screen.lockedRecipient}
+        initialFocusContactId={initialFocusContactId}
       />
     );
   }
@@ -75,7 +83,7 @@ function ThrowNavigator({
   return null;
 }
 
-export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFriend, initialThrowId }: ThrowScreenProps) {
+export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFriend, onOpenNotifications, initialThrowId, initialFocusContactId }: ThrowScreenProps) {
   return (
     <ThrowProvider>
       <ThrowStoriesProvider>
@@ -85,7 +93,9 @@ export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFrie
             onOpenExpenses={onOpenExpenses}
             onOpenChats={onOpenChats}
             onOpenAddFriend={onOpenAddFriend}
+            onOpenNotifications={onOpenNotifications}
             initialThrowId={initialThrowId}
+            initialFocusContactId={initialFocusContactId}
           />
         </ThrowWeatherProvider>
       </ThrowStoriesProvider>
