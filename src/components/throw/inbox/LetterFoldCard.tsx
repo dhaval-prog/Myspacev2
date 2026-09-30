@@ -1,8 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Polygon } from 'react-native-svg';
+import { Icon } from '../../Icon';
+import { GlassSurface } from '../../friends/GlassSurface';
 import { AutoplayVideoFill } from '../../AutoplayVideoFill';
 import { inboxColor, inboxLayout } from '../../../theme/throwInboxTokens';
+
+const CHEVRON_LEFT_ICON = 'M15 18l-6-6 6-6';
+const CHEVRON_RIGHT_ICON = 'M9 18l6-6-6-6';
+// Two circular arrows — the same "flip/switch view" glyph StoryCaptureScreen's own camera-flip
+// button uses, reused here for "flip back to the written text" rather than inventing a second
+// visually-unrelated icon for the same "swap what you're looking at" idea.
+const FLIP_ICON = 'M4 4v5h5 M20 20v-5h-5 M4 9a8 8 0 0114-4.9L20 9 M20 15a8 8 0 01-14 4.9L4 15';
+const MEDIA_ICON = 'M4 5h16v14H4z M8.5 11a1.8 1.8 0 100-3.6 1.8 1.8 0 000 3.6z M4 17l5-5 4 4 4-4 3 3';
 
 export type LetterStage =
   | 'hidden'
@@ -31,8 +41,8 @@ export interface LetterCardData {
   sig: string;
   count: string;
   /** Every photo/video attached to this letter, in the order they were sent — empty for a
-   * text-only letter, which locks the media-viewer toggle below (see LetterFoldCard's own
-   * onThrowBack-adjacent "Media" button). */
+   * text-only letter, which locks the media-viewer entry point below (see LetterFoldCard's own
+   * "View attached photos or videos" glass button, beside Reply). */
   photoUrls: string[];
 }
 
@@ -119,7 +129,7 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
   const wingsOpen = stage !== 'landed';
   const flat = stage === 'corners';
 
-  // The "Media"/"Text" toggle beside Throw Back — fades a polaroid-framed photo/video in over the
+  // The media viewer's own open/closed state — fades a full-bleed photo/video cover in over the
   // written body instead of replacing it in place, so the card's own silhouette never jumps. Reset
   // whenever the underlying letter itself changes (a different chip, a delete landing on the next
   // one) so a stale toggle never carries over onto an unrelated letter.
@@ -460,60 +470,74 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
         </Animated.View>
       </Animated.View>
 
-      {/* The "Media"/"Text" toggle's own polaroid-framed photo/video — a plain paper-colored
-          overlay covering the whole card, cross-faded in via opacity alone, so it occludes the
-          written body underneath instead of needing to separately fade three duplicated copies of
-          that body (one per tri-fold panel face — see their own comments above). Sized to nearly
-          fill the card's own width/height (per explicit request it should read as "covering the
-          letter", not a small floating print) and docked toward the top, leaving the card's own
-          plain paper-colored margin below it for the button row (see throwBackWrap) rather than
-          floating centered over wherever that row happens to sit. Only reachable once the letter
-          is genuinely open and actually has attachments. */}
+      {/* The media viewer — a full-bleed photo/video cover clipped to the card's own shape, the
+          same treatment ContactStoryStack gives a posted status, rather than a small floating
+          polaroid print. Cross-faded in via opacity alone so it occludes the written body
+          underneath instead of needing to separately fade three duplicated copies of that body
+          (one per tri-fold panel face — see their own comments above). Only reachable once the
+          letter is genuinely open and actually has attachments. No Throw Back/Reply button lives
+          on top of it — per explicit request that only belongs on the text side — its own flip
+          icon (top-right) is the sole way back to text. */}
       {stage === 'open' && L.photoUrls.length > 0 && (
         <Animated.View
           pointerEvents={mediaMode ? 'box-none' : 'none'}
-          style={[styles.mediaOverlay, { width: w, height: h, borderRadius: s(24, scale), opacity: mediaOpacity, paddingTop: s(26, vScale) }]}
+          style={[styles.mediaOverlay, { width: w, height: h, borderRadius: s(24, scale), opacity: mediaOpacity }]}
         >
-          <PolaroidMedia uri={L.photoUrls[mediaIndex]} scale={scale} frameW={w - s(40, scale)} />
+          {isVideoUrl(L.photoUrls[mediaIndex]) ? (
+            <AutoplayVideoFill uri={L.photoUrls[mediaIndex]} />
+          ) : (
+            <Image source={{ uri: L.photoUrls[mediaIndex] }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          )}
+
+          <GlassIconButton
+            onPress={toggleMediaMode}
+            path={FLIP_ICON}
+            scale={scale}
+            accessibilityLabel="Flip back to letter text"
+            style={{ position: 'absolute', top: s(14, vScale), right: s(14, scale) }}
+          />
+          {L.photoUrls.length > 1 && (
+            <>
+              <GlassIconButton
+                onPress={() => setMediaIndex((i) => (i - 1 + L.photoUrls.length) % L.photoUrls.length)}
+                path={CHEVRON_LEFT_ICON}
+                scale={scale}
+                accessibilityLabel="Previous photo or video"
+                style={{ position: 'absolute', bottom: s(14, vScale), left: s(14, scale) }}
+              />
+              <GlassIconButton
+                onPress={() => setMediaIndex((i) => (i + 1) % L.photoUrls.length)}
+                path={CHEVRON_RIGHT_ICON}
+                scale={scale}
+                accessibilityLabel="Next photo or video"
+                style={{ position: 'absolute', bottom: s(14, vScale), right: s(14, scale) }}
+              />
+            </>
+          )}
         </Animated.View>
       )}
 
-      {stage === 'open' && onThrowBack && (
+      {stage === 'open' && onThrowBack && !mediaMode && (
         // `bottom` needs vScale, not scale — same reasoning as SignatureRow's own bottom offset —
-        // so this stays a small gap above the card's own (independently scaled) bottom edge. A
-        // plain column (Next above Throw Back/Text, both anchored to this same bottom offset)
-        // rather than nesting Next inside the media overlay above, so its position stays fixed
-        // regardless of how tall the polaroid itself renders (see mediaOverlay's own comment).
+        // so this stays a small gap above the card's own (independently scaled) bottom edge. Only
+        // the text side shows this row at all — media mode's own flip/prev/next glass buttons
+        // (above) replace it entirely rather than layering on top of it.
         <View pointerEvents="box-none" style={[styles.throwBackOuter, { bottom: s(14, vScale), gap: s(10, scale) }]}>
-          {mediaMode && L.photoUrls.length > 1 && (
-            <Pressable
-              onPress={() => setMediaIndex((i) => (i + 1) % L.photoUrls.length)}
-              style={[styles.nextBtn, { paddingHorizontal: s(16, scale), paddingVertical: s(9, scale), borderRadius: s(14, scale) }]}
-              accessibilityRole="button"
-              accessibilityLabel="Next photo or video"
-            >
-              <Text style={[styles.nextBtnText, { fontSize: s(12.5, scale) }]}>
-                Next ({mediaIndex + 1}/{L.photoUrls.length})
-              </Text>
-            </Pressable>
-          )}
           <View style={[styles.throwBackWrap, { gap: s(10, scale) }]}>
             <Text onPress={onThrowBack} style={[styles.throwBackBtn, { fontSize: s(12.5, scale), paddingHorizontal: s(14, scale), paddingVertical: s(8, scale), borderRadius: s(14, scale) }]}>
-              Throw Back
+              Reply
             </Text>
             {/* Locked (no onPress, dimmed) rather than hidden when the letter has no attachments —
                 per explicit request — so its presence itself says "this letter has no media"
                 instead of the row just quietly having one fewer button. */}
-            <Text
+            <GlassIconButton
               onPress={L.photoUrls.length > 0 ? toggleMediaMode : undefined}
-              style={[
-                styles.mediaBtn,
-                { fontSize: s(12.5, scale), paddingHorizontal: s(14, scale), paddingVertical: s(8, scale), borderRadius: s(14, scale) },
-                L.photoUrls.length === 0 && styles.mediaBtnLocked,
-              ]}
-            >
-              {mediaMode ? 'Text' : 'Media'}
-            </Text>
+              path={MEDIA_ICON}
+              scale={scale}
+              accessibilityLabel="View attached photos or videos"
+              disabled={L.photoUrls.length === 0}
+              tintColor="rgba(47,107,255,.55)"
+            />
           </View>
         </View>
       )}
@@ -521,26 +545,36 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
   );
 }
 
-/** A single polaroid-framed attachment — a white print border with the classic thicker bottom
- * margin, tilted slightly for a hand-placed, candid feel, sized to fill nearly the whole card so
- * it reads as "covering the letter" per explicit request, rather than a small floating print.
- * Video vs photo is told apart by file extension (see isVideoUrl) since a letter's own photoUrls
- * carry no separate media-type field. */
-function PolaroidMedia({ uri, scale, frameW }: { uri: string; scale: number; frameW: number }) {
-  const pad = s(16, scale);
-  const padBottom = s(44, scale);
-  const photoSize = frameW - pad * 2;
+/** A small round frosted-glass button — every icon control the media viewer and its "View media"
+ * entry point use, so they read as one consistent chrome family instead of each reinventing a
+ * background/border treatment. `tintColor` lets the text-side "View media" entry point (sitting
+ * on plain paper, not a photo) use Throw's own accent blue instead of the neutral dark glass the
+ * on-photo controls use, which would otherwise all but disappear against the paper background. */
+function GlassIconButton({
+  onPress,
+  path,
+  scale,
+  accessibilityLabel,
+  disabled,
+  style,
+  tintColor = 'rgba(0,0,0,.32)',
+}: {
+  onPress?: () => void;
+  path: string;
+  scale: number;
+  accessibilityLabel: string;
+  disabled?: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  style?: any;
+  tintColor?: string;
+}) {
+  const size = s(38, scale);
   return (
-    <View
-      style={[
-        styles.polaroidFrame,
-        { width: frameW, paddingTop: pad, paddingHorizontal: pad, paddingBottom: padBottom, borderRadius: s(4, scale) },
-      ]}
-    >
-      <View style={[styles.polaroidPhotoBox, { width: photoSize, height: photoSize }]}>
-        {isVideoUrl(uri) ? <AutoplayVideoFill uri={uri} /> : <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
-      </View>
-    </View>
+    <Pressable onPress={disabled ? undefined : onPress} accessibilityRole="button" accessibilityLabel={accessibilityLabel} style={style}>
+      <GlassSurface tint="dark" tintColor={tintColor} style={[styles.glassBtn, { width: size, height: size, borderRadius: size / 2, opacity: disabled ? 0.4 : 1 }]}>
+        <Icon path={path} size={s(17, scale)} color="#FFFFFF" strokeWidth={2.2} />
+      </GlassSurface>
+    </Pressable>
   );
 }
 
@@ -639,24 +673,6 @@ const styles = StyleSheet.create({
     backgroundColor: inboxColor.accentBlue,
     overflow: 'hidden',
   },
-  mediaBtn: {
-    fontFamily: 'Figtree_700Bold',
-    color: inboxColor.ink,
-    backgroundColor: 'rgba(255,255,255,.8)',
-    overflow: 'hidden',
-  },
-  mediaBtnLocked: { color: inboxColor.muted, opacity: 0.5 },
-  mediaOverlay: { position: 'absolute', left: 0, top: 0, alignItems: 'center', justifyContent: 'flex-start', backgroundColor: inboxColor.paper },
-  polaroidFrame: {
-    backgroundColor: '#FFFFFF',
-    transform: [{ rotate: '-3deg' }],
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  polaroidPhotoBox: { backgroundColor: '#000000', overflow: 'hidden' },
-  nextBtn: { backgroundColor: inboxColor.accentBlue },
-  nextBtnText: { fontFamily: 'Figtree_700Bold', color: '#FFFFFF' },
+  mediaOverlay: { position: 'absolute', left: 0, top: 0, backgroundColor: '#000000', overflow: 'hidden' },
+  glassBtn: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,.4)' },
 });
