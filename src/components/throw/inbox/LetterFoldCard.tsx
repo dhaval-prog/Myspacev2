@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Polygon } from 'react-native-svg';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Image, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Polygon } from 'react-native-svg';
 import { Icon } from '../../Icon';
 import { GlassSurface } from '../../friends/GlassSurface';
 import { AutoplayVideoFill } from '../../AutoplayVideoFill';
@@ -12,7 +12,17 @@ const CHEVRON_RIGHT_ICON = 'M9 18l6-6-6-6';
 // button uses, reused here for "flip back to the written text" rather than inventing a second
 // visually-unrelated icon for the same "swap what you're looking at" idea.
 const FLIP_ICON = 'M4 4v5h5 M20 20v-5h-5 M4 9a8 8 0 0114-4.9L20 9 M20 15a8 8 0 01-14 4.9L4 15';
-const MEDIA_ICON = 'M4 5h16v14H4z M8.5 11a1.8 1.8 0 100-3.6 1.8 1.8 0 000 3.6z M4 17l5-5 4 4 4-4 3 3';
+// A standard "reply" glyph — an arrow curving up-and-left into a horizontal bar — rather than
+// reusing the paper-plane "throw"/send icon, which already means something different elsewhere.
+const REPLY_ICON = 'M9 14L4 9l5-5 M20 20v-7a4 4 0 00-4-4H4';
+
+// A flick up/down over the open photo/video moves to the next/previous attachment — same
+// threshold-and-velocity commit convention ContactStoryStack's own swipe-up-to-return gesture
+// uses (see its own long comment on why release-based measurement, not a live-following drag,
+// sidesteps react-native-web's PanResponder move-event bug entirely: only the two endpoints are
+// ever read, never anything in between).
+const SWIPE_COMMIT_DISTANCE = 40;
+const SWIPE_COMMIT_VELOCITY = 0.5;
 
 export type LetterStage =
   | 'hidden'
@@ -148,6 +158,86 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
     setMediaMode(next);
     Animated.timing(mediaOpacity, { toValue: next ? 1 : 0, duration: 220, useNativeDriver: true }).start();
   };
+
+  // Flick up/down over the open photo/video to move to the next/previous attachment — see
+  // SWIPE_COMMIT_DISTANCE/VELOCITY's own comment on why this only ever reads a gesture's start and
+  // end points, never anything continuous in between. `latest` lets the web listeners below (bound
+  // once) always see the current photoUrls length without needing to re-bind on every letter/index
+  // change — the same pattern FoldingLetter/StoryCaptureScreen's own web gesture paths use.
+  const mediaWrapRef = useRef<View>(null);
+  const swipeStartRef = useRef<{ y: number; t: number } | null>(null);
+  const latest = useRef({ count: 0 });
+  latest.current.count = letter?.photoUrls.length ?? 0;
+
+  // `velocity` is px/ms either way — computed by hand for the web listeners below (dy/dt over the
+  // gesture's own start/end timestamps), or read directly off PanResponder's own gestureState.vy
+  // for native (already the same unit, no reconstruction needed).
+  const commitSwipe = (dy: number, velocity: number) => {
+    const n = latest.current.count;
+    if (n < 2) return;
+    if (dy < -SWIPE_COMMIT_DISTANCE || velocity < -SWIPE_COMMIT_VELOCITY) {
+      setMediaIndex((i) => (i + 1) % n);
+    } else if (dy > SWIPE_COMMIT_DISTANCE || velocity > SWIPE_COMMIT_VELOCITY) {
+      setMediaIndex((i) => (i - 1 + n) % n);
+    }
+  };
+
+  // The media overlay below is only ever mounted once the letter is actually open and has
+  // attachments (see its own conditional render) — binding this effect at mount time (an empty
+  // dep array) would run before that node exists at all on the very first render and then never
+  // retry, since nothing else would ever re-run it. Depending on that same mount condition instead
+  // re-binds (finding the now-real node) every time it flips true, and tears down when it flips
+  // back false (a different letter, or this one closing).
+  const mediaOverlayMounted = stage === 'open' && (letter?.photoUrls.length ?? 0) > 0;
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !mediaOverlayMounted) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const node = mediaWrapRef.current as any as HTMLElement | null;
+    if (!node) return;
+    const getY = (e: MouseEvent | TouchEvent): number | null => {
+      if ('touches' in e && e.touches[0]) return e.touches[0].clientY;
+      if ('changedTouches' in e && e.changedTouches[0]) return e.changedTouches[0].clientY;
+      if ('clientY' in e) return e.clientY;
+      return null;
+    };
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const y = getY(e);
+      if (y != null) swipeStartRef.current = { y, t: Date.now() };
+    };
+    const onUp = (e: MouseEvent | TouchEvent) => {
+      const start = swipeStartRef.current;
+      swipeStartRef.current = null;
+      if (!start) return;
+      const y = getY(e);
+      if (y == null) return;
+      const dy = y - start.y;
+      const dt = Date.now() - start.t;
+      commitSwipe(dy, dt > 0 ? dy / dt : 0);
+    };
+    node.addEventListener('mousedown', onDown);
+    node.addEventListener('touchstart', onDown, { passive: true });
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchend', onUp);
+    return () => {
+      node.removeEventListener('mousedown', onDown);
+      node.removeEventListener('touchstart', onDown);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaOverlayMounted]);
+
+  const mediaPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => Platform.OS !== 'web' && latest.current.count > 1,
+        onMoveShouldSetPanResponder: (_, g) => Platform.OS !== 'web' && latest.current.count > 1 && Math.abs(g.dy) > 12,
+        onPanResponderRelease: (_, g) => commitSwipe(g.dy, g.vy),
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   const letterScale = useRef(new Animated.Value(0.3)).current;
   const letterRotate = useRef(new Animated.Value(-10)).current;
@@ -480,8 +570,10 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
           icon (top-right) is the sole way back to text. */}
       {stage === 'open' && L.photoUrls.length > 0 && (
         <Animated.View
+          ref={mediaWrapRef}
           pointerEvents={mediaMode ? 'box-none' : 'none'}
           style={[styles.mediaOverlay, { width: w, height: h, borderRadius: s(24, scale), opacity: mediaOpacity }]}
+          {...mediaPanResponder.panHandlers}
         >
           {isVideoUrl(L.photoUrls[mediaIndex]) ? (
             <AutoplayVideoFill uri={L.photoUrls[mediaIndex]} />
@@ -523,16 +615,14 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
         // the text side shows this row at all — media mode's own flip/prev/next glass buttons
         // (above) replace it entirely rather than layering on top of it.
         <View pointerEvents="box-none" style={[styles.throwBackOuter, { bottom: s(14, vScale), gap: s(10, scale) }]}>
-          <View style={[styles.throwBackWrap, { gap: s(10, scale) }]}>
-            <Text onPress={onThrowBack} style={[styles.throwBackBtn, { fontSize: s(12.5, scale), paddingHorizontal: s(14, scale), paddingVertical: s(8, scale), borderRadius: s(14, scale) }]}>
-              Reply
-            </Text>
+          <View style={[styles.throwBackWrap, { gap: s(12, scale) }]}>
+            <GlassIconButton onPress={onThrowBack} path={REPLY_ICON} scale={scale} accessibilityLabel="Reply" tintColor="rgba(47,107,255,.55)" />
             {/* Locked (no onPress, dimmed) rather than hidden when the letter has no attachments —
                 per explicit request — so its presence itself says "this letter has no media"
                 instead of the row just quietly having one fewer button. */}
             <GlassIconButton
               onPress={L.photoUrls.length > 0 ? toggleMediaMode : undefined}
-              path={MEDIA_ICON}
+              icon={<MediaGalleryIcon size={s(22, scale)} />}
               scale={scale}
               accessibilityLabel="View attached photos or videos"
               disabled={L.photoUrls.length === 0}
@@ -545,14 +635,18 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
   );
 }
 
-/** A small round frosted-glass button — every icon control the media viewer and its "View media"
- * entry point use, so they read as one consistent chrome family instead of each reinventing a
- * background/border treatment. `tintColor` lets the text-side "View media" entry point (sitting
- * on plain paper, not a photo) use Throw's own accent blue instead of the neutral dark glass the
- * on-photo controls use, which would otherwise all but disappear against the paper background. */
+/** A small round frosted-glass button — every icon control the media viewer and its "View media"/
+ * "Reply" entry points use, so they read as one consistent chrome family instead of each
+ * reinventing a background/border treatment. Medium-sized (not the smaller size these used to be)
+ * per explicit request. `tintColor` lets the text-side entry points (sitting on plain paper, not a
+ * photo) use Throw's own accent blue instead of the neutral dark glass the on-photo controls use,
+ * which would otherwise all but disappear against the paper background. Takes either `path` (drawn
+ * via the shared stroke-based Icon component) or a pre-built `icon` node (MediaGalleryIcon's own
+ * multi-shape flower glyph doesn't fit that single-stroke-path model). */
 function GlassIconButton({
   onPress,
   path,
+  icon,
   scale,
   accessibilityLabel,
   disabled,
@@ -560,7 +654,8 @@ function GlassIconButton({
   tintColor = 'rgba(0,0,0,.32)',
 }: {
   onPress?: () => void;
-  path: string;
+  path?: string;
+  icon?: React.ReactNode;
   scale: number;
   accessibilityLabel: string;
   disabled?: boolean;
@@ -568,13 +663,35 @@ function GlassIconButton({
   style?: any;
   tintColor?: string;
 }) {
-  const size = s(38, scale);
+  const size = s(48, scale);
   return (
     <Pressable onPress={disabled ? undefined : onPress} accessibilityRole="button" accessibilityLabel={accessibilityLabel} style={style}>
       <GlassSurface tint="dark" tintColor={tintColor} style={[styles.glassBtn, { width: size, height: size, borderRadius: size / 2, opacity: disabled ? 0.4 : 1 }]}>
-        <Icon path={path} size={s(17, scale)} color="#FFFFFF" strokeWidth={2.2} />
+        {icon ?? <Icon path={path!} size={s(21, scale)} color="#FFFFFF" strokeWidth={2.2} />}
       </GlassSurface>
     </Pressable>
+  );
+}
+
+/** A simple flower/pinwheel glyph (six petals ringed around a center) standing in for a photo-
+ * gallery icon — matches the shape of a reference screenshot (the iOS Photos app icon) rather than
+ * the plain photo-frame glyph this used to be, per explicit request. Built directly with react-
+ * native-svg (not the shared stroke-based Icon component, which only draws a single Path) since a
+ * flower reads better as filled petal shapes than as line art. */
+function MediaGalleryIcon({ size, color = '#FFFFFF' }: { size: number; color?: string }) {
+  const cx = 12;
+  const cy = 12;
+  const petalR = 4.6;
+  const dist = 4.3;
+  const angles = [90, 150, 210, 270, 330, 30];
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      {angles.map((deg) => {
+        const rad = (deg * Math.PI) / 180;
+        return <Circle key={deg} cx={cx + dist * Math.cos(rad)} cy={cy + dist * Math.sin(rad)} r={petalR} fill={color} opacity={0.92} />;
+      })}
+      <Circle cx={cx} cy={cy} r={petalR * 0.7} fill={color} />
+    </Svg>
   );
 }
 
@@ -667,12 +784,6 @@ const styles = StyleSheet.create({
   emptySub: { fontFamily: 'DMMono_500Medium', letterSpacing: 1.4, color: inboxColor.muted },
   throwBackOuter: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   throwBackWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  throwBackBtn: {
-    fontFamily: 'Figtree_700Bold',
-    color: '#FFFFFF',
-    backgroundColor: inboxColor.accentBlue,
-    overflow: 'hidden',
-  },
   mediaOverlay: { position: 'absolute', left: 0, top: 0, backgroundColor: '#000000', overflow: 'hidden' },
   glassBtn: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,.4)' },
 });
