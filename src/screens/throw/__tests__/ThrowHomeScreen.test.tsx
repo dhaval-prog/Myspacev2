@@ -920,3 +920,90 @@ describe('ThrowHomeScreen in-place received-letters panel', () => {
     expect(deleteAlert).toHaveBeenCalledWith('alert-1');
   });
 });
+
+describe('ThrowHomeScreen contact-flick drag (single-step cap)', () => {
+  const FRIEND_A = { userId: 'friend-a', name: 'Ann', avatarUrl: null, location: { city: 'Pune', country: 'IN', latitude: 18.5, longitude: 73.8 } };
+  const FRIEND_B = { userId: 'friend-b', name: 'Ben', avatarUrl: null, location: { city: 'Delhi', country: 'IN', latitude: 28.6, longitude: 77.2 } };
+  const FRIEND_C = { userId: 'friend-c', name: 'Cara', avatarUrl: null, location: { city: 'Goa', country: 'IN', latitude: 15.5, longitude: 73.8 } };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFoldingLetterProps = undefined;
+    mockCarouselProps = undefined;
+    mockThrowMapProps = undefined;
+  });
+
+  function setupWithThreeFriends() {
+    mockUseAuth.mockReturnValue({ user: { id: MY_ID } });
+    mockUseThrow.mockReturnValue({
+      myLocation: { city: 'Mumbai', country: 'IN', latitude: 19.07, longitude: 72.87 },
+      myName: 'Myself',
+      myAvatarUrl: null,
+      friends: [FRIEND_A, FRIEND_B, FRIEND_C],
+      unreadCount: 0,
+      unreadCountFor: () => 0,
+      streakFor: () => 0,
+      sendThrow: jest.fn(),
+      uploadPhoto: jest.fn(),
+      inbox: [],
+      deleteThrow: jest.fn().mockResolvedValue({ error: null }),
+      markRead: jest.fn().mockResolvedValue(undefined),
+    });
+    mockUseThrowAlerts.mockReturnValue({ createAlert: jest.fn().mockResolvedValue({ error: null }), alerts: [], deleteAlert: jest.fn().mockResolvedValue({ error: null }) });
+    mockUseGameStats.mockReturnValue({ statsFor: () => ({ totalPoints: 0 }) });
+    mockUseThrowColorMode.mockReturnValue({ mode: 'auto', isDay: true, autoIsDay: true, setMode: jest.fn(), mapMode: 'auto', mapIsDay: true, setMapMode: jest.fn() });
+    mockUseThrowStories.mockReturnValue({
+      loading: false,
+      storiesByUser: {},
+      storyCountFor: () => 0,
+      postStory: jest.fn().mockResolvedValue({ error: null }),
+      markViewed: jest.fn(),
+      deleteStory: jest.fn().mockResolvedValue({ error: null }),
+      refresh: jest.fn(),
+    });
+  }
+
+  it('a single flick only ever moves the selection one contact over, never more, however far the drag measured', async () => {
+    setupWithThreeFriends();
+    await renderScreen();
+    // Myself (index 0) is selected by default.
+    expect(mockFoldingLetterProps.recipientName).toBe('Myself');
+
+    // A fast flick's raw pixel distance can translate to a steps value well past 1 (see
+    // CONTACT_DRAG_SPACING) — this simulates exactly that (3 full steps' worth of drag) and
+    // asserts the selection still only lands one contact over, on Ann (index 1), not Cara (index 3).
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(3);
+      mockFoldingLetterProps.onContactDragEnd();
+    });
+
+    expect(mockFoldingLetterProps.recipientName).toBe(FRIEND_A.name);
+  });
+
+  it('a flick the other way also only moves one contact, starting from a friend already selected', async () => {
+    setupWithThreeFriends();
+    await renderScreen();
+
+    // Move to Cara (index 3) first via three separate, deliberate single-step flicks — each one
+    // its own gesture, which is the only way multiple contacts over should ever be reachable.
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        mockFoldingLetterProps.onContactDragStart();
+        mockFoldingLetterProps.onContactDragOffset(1);
+        mockFoldingLetterProps.onContactDragEnd();
+      });
+    }
+    expect(mockFoldingLetterProps.recipientName).toBe(FRIEND_C.name);
+
+    // Now flick hard back the other way (steps well past -1) — should land one contact back
+    // (Ben), not jump all the way past Ann/Myself.
+    await act(async () => {
+      mockFoldingLetterProps.onContactDragStart();
+      mockFoldingLetterProps.onContactDragOffset(-3);
+      mockFoldingLetterProps.onContactDragEnd();
+    });
+
+    expect(mockFoldingLetterProps.recipientName).toBe(FRIEND_B.name);
+  });
+});
