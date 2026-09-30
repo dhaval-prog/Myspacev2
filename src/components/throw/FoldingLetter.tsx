@@ -283,8 +283,9 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris' | 'photoTrims'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
   const [mediaItems, setMediaItems] = useState<PickedMedia[]>([]);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
-  // Takes over this whole card in place of the writing paper while active — see the early-return
-  // branch near the bottom of this component's render. Reuses the exact same in-app capture screen
+  // Shows an opaque overlay on top of the writing paper while active — see the overlay rendered
+  // near the bottom of this component's render (never an early return that unmounts the paper;
+  // see that overlay's own doc comment for why). Reuses the exact same in-app capture screen
   // Status uses (15s cap, VIDEO/PHOTO toggle, recording countdown) instead of PhotoAttachSheet's
   // old OS-native-camera path, so a letter's own recorded video gets the same guide/cap a status
   // video already has.
@@ -973,48 +974,6 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   const canvasOpacity = progress.interpolate({ inputRange: [0, 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
   const stageOpacity = progress.interpolate({ inputRange: [0, 0.2], outputRange: [0, 1], extrapolate: 'clamp' });
 
-  // Takes over this whole card in place of the writing paper — see PhotoAttachSheet's own
-  // onOpenCamera and letterCaptureMode's own comment above. A plain early return (every hook above
-  // is still called unconditionally on every render either way, so this is safe) rather than
-  // threading a third visual mode through the fold/throw/contact-drag gesture tree below, which
-  // has no notion of "the paper isn't showing right now" and isn't worth teaching one for what's
-  // otherwise a completely separate, self-contained screen.
-  if (letterCaptureMode) {
-    return (
-      <View style={styles.wrap}>
-        <StoryCaptureScreen
-          onClose={() => setLetterCaptureMode(false)}
-          onCaptured={(uri, mediaType) => {
-            setMediaItems((prev) => [...prev, { uri, isVideo: mediaType === 'video' }]);
-            setLetterCaptureMode(false);
-          }}
-          onPickedLongVideo={(uri, durationMs) => {
-            setLetterCaptureMode(false);
-            setTrimQueue((prev) => [...prev, { uri, durationMs }]);
-          }}
-        />
-      </View>
-    );
-  }
-
-  // One trim screen at a time, queued — see trimQueue's own comment above.
-  if (trimQueue.length > 0) {
-    const current = trimQueue[0];
-    return (
-      <View style={styles.wrap}>
-        <StoryTrimScreen
-          localUri={current.uri}
-          durationMs={current.durationMs}
-          onCancel={() => setTrimQueue((prev) => prev.slice(1))}
-          onConfirm={(trim) => {
-            setMediaItems((prev) => [...prev, { uri: current.uri, isVideo: true, trim }]);
-            setTrimQueue((prev) => prev.slice(1));
-          }}
-        />
-      </View>
-    );
-  }
-
   return (
     <View ref={wrapRef} style={styles.wrap}>
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
@@ -1238,6 +1197,45 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             <Text style={styles.scheduleModalDoneText}>Done</Text>
           </Pressable>
         </BottomSheet>
+      )}
+
+      {/* Rendered as an opaque overlay on top of the writing paper (never as an early return that
+          replaces it) — the paper's own LetterCanvas is an uncontrolled text input that only ever
+          seeds its initial text on mount, and the web-only raw DOM fold/flick gesture listeners
+          above are bound once to paperAreaRef's actual node, not re-bound on every render. Either
+          one being unmounted-then-remounted here (which an early return did) silently discarded
+          whatever the user had already typed and left the fold gesture permanently dead for the
+          rest of this card's lifetime, since a fresh node's mousedown/touchstart events don't reach
+          those old listeners any more. An overlay never tears the paper down at all, so neither
+          survival mechanism is needed — see letterCaptureMode/trimQueue's own doc comments above. */}
+      {letterCaptureMode && (
+        <View style={StyleSheet.absoluteFill}>
+          <StoryCaptureScreen
+            onClose={() => setLetterCaptureMode(false)}
+            onCaptured={(uri, mediaType) => {
+              setMediaItems((prev) => [...prev, { uri, isVideo: mediaType === 'video' }]);
+              setLetterCaptureMode(false);
+            }}
+            onPickedLongVideo={(uri, durationMs) => {
+              setLetterCaptureMode(false);
+              setTrimQueue((prev) => [...prev, { uri, durationMs }]);
+            }}
+          />
+        </View>
+      )}
+      {/* One trim screen at a time, queued — see trimQueue's own comment above. */}
+      {trimQueue.length > 0 && (
+        <View style={StyleSheet.absoluteFill}>
+          <StoryTrimScreen
+            localUri={trimQueue[0].uri}
+            durationMs={trimQueue[0].durationMs}
+            onCancel={() => setTrimQueue((prev) => prev.slice(1))}
+            onConfirm={(trim) => {
+              setMediaItems((prev) => [...prev, { uri: trimQueue[0].uri, isVideo: true, trim }]);
+              setTrimQueue((prev) => prev.slice(1));
+            }}
+          />
+        </View>
       )}
     </View>
   );
