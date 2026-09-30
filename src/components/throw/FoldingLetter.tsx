@@ -21,6 +21,8 @@ import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
 import { PhotoAttachSheet } from './PhotoAttachSheet';
 import type { PickedMedia } from './PhotoAttachSheet';
+import { StoryCaptureScreen } from './StoryCaptureScreen';
+import { StoryTrimScreen } from './StoryTrimScreen';
 import { BottomSheet } from '../expenses/BottomSheet';
 import { AlertScheduleHeader } from './AlertScheduleHeader';
 import { GlassSurface } from '../friends/GlassSurface';
@@ -29,7 +31,11 @@ import { throwColor, throwFont, throwGlass, throwNightColor, throwRadius } from 
 import { useVoiceToText } from '../../hooks/useVoiceToText';
 import type { LetterCanvasHandle } from './LetterCanvas';
 import type { PaperPlaneStageHandle } from './paperPlaneTypes';
-import type { AlertSchedule, StrokePath } from '../../types/throw';
+import type { AlertSchedule, MediaTrim, StrokePath } from '../../types/throw';
+
+// Same cap the in-app capture screen itself enforces while recording — a library-picked video
+// over this needs the trim screen before it can be attached (see the trim-queue state below).
+const LETTER_MAX_VIDEO_MS = 15000;
 
 const PHOTO_ICON = 'M4 8h4l1.6-2.5h4.8L16 8h4v11H4z M12 11.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z';
 const MIC_ICON = 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z M6 11a6 6 0 0 0 12 0 M12 19v3 M9.5 22h5';
@@ -118,6 +124,8 @@ interface FoldingLetterContent {
   /** Every locally-picked photo (camera or library), not yet uploaded — the parent uploads each
    * one and resolves their public URLs as part of actually sending the throw. */
   photoUris: string[];
+  /** Index-aligned with photoUris — null entries mean "no trim". */
+  photoTrims: (MediaTrim | null)[];
 }
 
 interface FoldingLetterProps {
@@ -272,9 +280,20 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   ref,
 ) {
   const [phase, setPhase] = useState<Phase>('writing');
-  const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
+  const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris' | 'photoTrims'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
   const [mediaItems, setMediaItems] = useState<PickedMedia[]>([]);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
+  // Takes over this whole card in place of the writing paper while active — see the early-return
+  // branch near the bottom of this component's render. Reuses the exact same in-app capture screen
+  // Status uses (15s cap, VIDEO/PHOTO toggle, recording countdown) instead of PhotoAttachSheet's
+  // old OS-native-camera path, so a letter's own recorded video gets the same guide/cap a status
+  // video already has.
+  const [letterCaptureMode, setLetterCaptureMode] = useState(false);
+  // A library-picked video over LETTER_MAX_VIDEO_MS needs the trim screen before it can be
+  // attached — queued (not just one at a time inline) since the library picker allows multi-select
+  // and more than one picked video could be over the cap at once; each is trimmed in turn before
+  // the next one's screen appears.
+  const [trimQueue, setTrimQueue] = useState<{ uri: string; durationMs: number }[]>([]);
   // For a self-reminder (alertSchedule/onAlertScheduleChange present), the timer+repeat picker
   // pops up the moment the fold first completes (phase reaches 'ready') with something actually
   // written/attached — 'closed' whenever there's nothing to show (writing, or an empty letter);
@@ -444,7 +463,8 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
       ]).start(() => resolve());
     });
     const photoUris = mediaItems.map((m) => m.uri);
-    const [{ error: err }] = await Promise.all([onThrow({ ...content, photoUris }), liftOff]);
+    const photoTrims = mediaItems.map((m) => m.trim ?? null);
+    const [{ error: err }] = await Promise.all([onThrow({ ...content, photoUris, photoTrims }), liftOff]);
 
     if (err) {
       setError(err);
@@ -953,6 +973,48 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   const canvasOpacity = progress.interpolate({ inputRange: [0, 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
   const stageOpacity = progress.interpolate({ inputRange: [0, 0.2], outputRange: [0, 1], extrapolate: 'clamp' });
 
+  // Takes over this whole card in place of the writing paper — see PhotoAttachSheet's own
+  // onOpenCamera and letterCaptureMode's own comment above. A plain early return (every hook above
+  // is still called unconditionally on every render either way, so this is safe) rather than
+  // threading a third visual mode through the fold/throw/contact-drag gesture tree below, which
+  // has no notion of "the paper isn't showing right now" and isn't worth teaching one for what's
+  // otherwise a completely separate, self-contained screen.
+  if (letterCaptureMode) {
+    return (
+      <View style={styles.wrap}>
+        <StoryCaptureScreen
+          onClose={() => setLetterCaptureMode(false)}
+          onCaptured={(uri, mediaType) => {
+            setMediaItems((prev) => [...prev, { uri, isVideo: mediaType === 'video' }]);
+            setLetterCaptureMode(false);
+          }}
+          onPickedLongVideo={(uri, durationMs) => {
+            setLetterCaptureMode(false);
+            setTrimQueue((prev) => [...prev, { uri, durationMs }]);
+          }}
+        />
+      </View>
+    );
+  }
+
+  // One trim screen at a time, queued — see trimQueue's own comment above.
+  if (trimQueue.length > 0) {
+    const current = trimQueue[0];
+    return (
+      <View style={styles.wrap}>
+        <StoryTrimScreen
+          localUri={current.uri}
+          durationMs={current.durationMs}
+          onCancel={() => setTrimQueue((prev) => prev.slice(1))}
+          onConfirm={(trim) => {
+            setMediaItems((prev) => [...prev, { uri: current.uri, isVideo: true, trim }]);
+            setTrimQueue((prev) => prev.slice(1));
+          }}
+        />
+      </View>
+    );
+  }
+
   return (
     <View ref={wrapRef} style={styles.wrap}>
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
@@ -1145,7 +1207,20 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
       {voice.recording && <Text style={[styles.readyHint, isNight && styles.readyHintNight]}>Listening…</Text>}
       {(error || voice.error) && <Text style={styles.error}>{error ?? voice.error}</Text>}
 
-      <PhotoAttachSheet visible={photoSheetOpen} onClose={() => setPhotoSheetOpen(false)} onPicked={(items) => setMediaItems((prev) => [...prev, ...items])} />
+      <PhotoAttachSheet
+        visible={photoSheetOpen}
+        onClose={() => setPhotoSheetOpen(false)}
+        onOpenCamera={() => setLetterCaptureMode(true)}
+        onPicked={(items) => {
+          // Split off any library-picked video over the 15s cap into the trim queue instead of
+          // attaching it as-is — everything else (photos, and videos already within the cap) goes
+          // straight onto the letter, same as before.
+          const overCap = items.filter((m) => m.isVideo && (m.durationMs ?? 0) > LETTER_MAX_VIDEO_MS);
+          const fine = items.filter((m) => !overCap.includes(m));
+          if (fine.length > 0) setMediaItems((prev) => [...prev, ...fine]);
+          if (overCap.length > 0) setTrimQueue((prev) => [...prev, ...overCap.map((m) => ({ uri: m.uri, durationMs: m.durationMs ?? 0 }))]);
+        }}
+      />
 
       {alertSchedule && onAlertScheduleChange && (
         <BottomSheet visible={reminderState === 'open'} onClose={() => setReminderState('peek')}>

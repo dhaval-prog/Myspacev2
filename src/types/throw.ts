@@ -14,6 +14,14 @@ export interface ThrowLocation {
 
 export type ThrowStatus = 'thrown' | 'read' | 'replied';
 
+/** A watch-time trim window into a video attachment — nothing is physically re-encoded (no
+ * ffmpeg/native trim module in this project, same reasoning as story videos' own trim), so this
+ * just tells the player where to start and stop. */
+export interface MediaTrim {
+  startMs: number;
+  endMs: number;
+}
+
 /** Raw shape of a `throws` row, as returned by Supabase. */
 export interface ThrowRow {
   id: string;
@@ -24,6 +32,10 @@ export interface ThrowRow {
   pen_color: string | null;
   photo_url: string | null;
   photo_urls: string[] | null;
+  /** Index-aligned with photo_urls — null entries mean "no trim" (a photo, or a video within the
+   * 15s cap). */
+  photo_trim_start_ms: number[] | null;
+  photo_trim_end_ms: number[] | null;
   sender_city: string;
   sender_country: string;
   sender_latitude: number;
@@ -54,8 +66,11 @@ export interface ThrowLetter {
   messageText: string | null;
   strokes: StrokePath[] | null;
   penColor: string | null;
-  /** Every photo attached to this letter, in the order they were added — may be empty. */
+  /** Every photo/video attached to this letter, in the order they were added — may be empty. */
   photoUrls: string[];
+  /** Index-aligned with photoUrls, always the same length — null entries mean "no trim" (a photo,
+   * or a video within the 15s cap that never needed one). */
+  photoTrims: (MediaTrim | null)[];
   senderCity: string;
   senderCountry: string;
   senderLatitude: number;
@@ -86,6 +101,8 @@ export interface ComposeDraft {
   strokes: StrokePath[] | null;
   penColor: string;
   photoUrls: string[];
+  /** Index-aligned with photoUrls — omit (or leave every entry null) when nothing needs trimming. */
+  photoTrims?: (MediaTrim | null)[];
 }
 
 export type AlertRecurrence = 'once' | 'everyday' | 'weekly' | 'monthly';

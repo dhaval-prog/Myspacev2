@@ -30,7 +30,7 @@ import { useThrowStories } from '../../context/ThrowStoriesContext';
 import { useAuth } from '../../context/AuthContext';
 import { useGameStats } from '../../context/GameStatsContext';
 import { formatAlertSchedule } from '../../utils/throwAlerts';
-import type { AlertSchedule, StrokePath, ThrowLetter } from '../../types/throw';
+import type { AlertSchedule, MediaTrim, StrokePath, ThrowLetter } from '../../types/throw';
 import type { StoryMediaType } from '../../types/story';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 
@@ -385,6 +385,7 @@ export function ThrowHomeScreen({
           strokes: a.strokes,
           penColor: a.penColor,
           photoUrls: [],
+          photoTrims: [],
           senderCity: myLocation?.city ?? '',
           senderCountry: myLocation?.country ?? '',
           senderLatitude: myLocation?.latitude ?? 0,
@@ -730,7 +731,13 @@ export function ThrowHomeScreen({
     setChromeHidden(false);
   };
 
-  const handleThrow = async (content: { messageText: string | null; strokes: StrokePath[] | null; penColor: string; photoUris: string[] }) => {
+  const handleThrow = async (content: {
+    messageText: string | null;
+    strokes: StrokePath[] | null;
+    penColor: string;
+    photoUris: string[];
+    photoTrims: (MediaTrim | null)[];
+  }) => {
     if (!selectedFriend) return { error: 'Pick someone to throw to first.' };
 
     if (isSelfSelected) {
@@ -758,6 +765,7 @@ export function ThrowHomeScreen({
         strokes: content.strokes,
         penColor: content.penColor,
         photoUrls: [],
+        photoTrims: [],
         senderCity: myLocation?.city ?? '',
         senderCountry: myLocation?.country ?? '',
         senderLatitude: myLocation?.latitude ?? 0,
@@ -779,10 +787,14 @@ export function ThrowHomeScreen({
     }
 
     const photoUrls: string[] = [];
-    for (const uri of content.photoUris) {
-      const uploaded = await uploadPhoto(uri);
+    const photoTrims: (MediaTrim | null)[] = [];
+    for (let i = 0; i < content.photoUris.length; i++) {
+      const uploaded = await uploadPhoto(content.photoUris[i]);
       if (uploaded.error) return { error: uploaded.error };
-      if (uploaded.url) photoUrls.push(uploaded.url);
+      if (uploaded.url) {
+        photoUrls.push(uploaded.url);
+        photoTrims.push(content.photoTrims[i] ?? null);
+      }
     }
 
     const { error, letter } = await sendThrow({
@@ -791,6 +803,7 @@ export function ThrowHomeScreen({
       strokes: content.strokes,
       penColor: content.penColor,
       photoUrls,
+      photoTrims,
       repliedToThrowId: lockedRecipient?.repliedToThrowId,
     });
     if (error || !letter) return { error: error ?? 'Could not send — try again.' };

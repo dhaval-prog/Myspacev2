@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 import { Icon } from '../Icon';
@@ -11,49 +11,49 @@ const CAMERA_ICON = 'M4 8h3l1.5-2h7L17 8h3v12H4z M12 11.4a3.4 3.4 0 1 0 0 6.8 3.
 // Highest number of photos/videos the library picker lets someone select in one go — a sane
 // ceiling rather than a hard product requirement.
 const LIBRARY_SELECTION_LIMIT = 10;
-// A phone-recorded video attached to a letter is meant to be a short clip, not a full movie —
-// keeps upload size/time reasonable. 0 would mean "no limit".
-const VIDEO_MAX_DURATION_SECONDS = 60;
 
 export interface PickedMedia {
   uri: string;
   isVideo: boolean;
+  /** The library asset's own reported duration, ms — only meaningful for a video, and only ever
+   * present for a library pick (the in-app capture screen already enforces its own 15s cap, so
+   * anything it hands back never needs this). The caller (FoldingLetter) uses it to decide whether
+   * a picked video needs the trim screen before it can be attached. */
+  durationMs?: number;
+  /** Set only once a video that needed trimming has gone through the trim screen — see
+   * FoldingLetter's own trim-queue handling. Absent for anything that never needed one (a photo,
+   * or a video already within the 15s cap). */
+  trim?: { startMs: number; endMs: number };
 }
 
 interface PhotoAttachSheetProps {
   visible: boolean;
   onClose: () => void;
-  /** One or more picked photos/videos — the camera always hands back exactly one, the library
-   * may hand back several at once (multi-select). Callers append these to their own media list. */
+  /** One or more picked photos/videos from the library — may hand back several at once
+   * (multi-select). The caller appends these to its own media list, after checking each video's
+   * own durationMs against the 15s cap itself. */
   onPicked: (items: PickedMedia[]) => void;
+  /** "Camera" closes this sheet and hands off to the caller's own in-app capture screen (the same
+   * 15s-capped VIDEO/PHOTO toggle Status uses) instead of this component driving the OS's native
+   * camera itself — per explicit request, so a letter's own recorded video gets the same visible
+   * countdown guide and cap a status video already has, rather than the OS camera's own unguided
+   * 60s allowance. */
+  onOpenCamera: () => void;
 }
 
 /** "Photos" / "Camera" chooser for attaching media to a letter — two plain icon buttons side by
  * side (matching the OS's own native photo/camera picker pattern), no title text and no
  * glassmorphism, just a flat icon on a plain circle. "Photos" opens the library (multi-select,
- * photos and videos both, in one picker); "Camera" opens the device camera with both capture
- * modes available at once — the OS's own camera UI supplies the still/video toggle once both
- * media types are permitted, rather than this sheet offering two separate camera actions. Each
- * requests its own permission right before use and fails gracefully (an inline message, not a
- * crash) if denied. */
-export function PhotoAttachSheet({ visible, onClose, onPicked }: PhotoAttachSheetProps) {
+ * photos and videos both, in one picker) directly; "Camera" hands off to the caller's own capture
+ * screen (see onOpenCamera) rather than driving anything itself. Library access requests its own
+ * permission right before use and fails gracefully (an inline message, not a crash) if denied. */
+export function PhotoAttachSheet({ visible, onClose, onPicked, onOpenCamera }: PhotoAttachSheetProps) {
   const [error, setError] = useState<string | null>(null);
 
-  const openCamera = async () => {
+  const openCamera = () => {
     setError(null);
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      setError('Camera access is needed to take a photo or video.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images', 'videos'],
-      quality: 0.7,
-      videoMaxDuration: VIDEO_MAX_DURATION_SECONDS,
-    });
-    if (result.canceled || !result.assets[0]) return;
     onClose();
-    onPicked([{ uri: result.assets[0].uri, isVideo: result.assets[0].type === 'video' }]);
+    onOpenCamera();
   };
 
   const openLibrary = async () => {
@@ -71,7 +71,17 @@ export function PhotoAttachSheet({ visible, onClose, onPicked }: PhotoAttachShee
     });
     if (result.canceled || result.assets.length === 0) return;
     onClose();
-    onPicked(result.assets.map((a) => ({ uri: a.uri, isVideo: a.type === 'video' })));
+    onPicked(
+      result.assets.map((a) => ({
+        uri: a.uri,
+        isVideo: a.type === 'video',
+        // expo-image-picker documents `duration` as milliseconds (and native platforms honor
+        // that), but its web shim hands back the raw HTMLVideoElement.duration, which is
+        // seconds — without this platform-specific conversion, an over-15s gallery video would
+        // silently never trip the trim-screen cap on web.
+        durationMs: a.duration != null ? (Platform.OS === 'web' ? a.duration * 1000 : a.duration) : undefined,
+      }))
+    );
   };
 
   return (

@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Icon } from '../Icon';
 import { throwRadius } from '../../theme/throwTokens';
 import { noSelect } from '../../theme/webStyles';
+import { formatClockMs } from '../../utils/formatClock';
 import type { StoryMediaType } from '../../types/story';
 
 const MAX_VIDEO_MS = 15000;
@@ -109,6 +110,11 @@ export function StoryCaptureScreen({
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const [recording, setRecording] = useState(false);
   const [captureMode, setCaptureMode] = useState<'photo' | 'video'>('photo');
+  // The recording countdown's own guide — "0:07 / 0:15" — ticked on a plain interval rather than
+  // read off recordProgress (an Animated.Value, not meant to be sampled synchronously from JS) so
+  // the two stay visually in lockstep without needing a listener on the animation itself.
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canRecordVideo = videoMimeRef.current !== null || pickSupportedVideoMimeType() !== null;
 
@@ -187,6 +193,7 @@ export function StoryCaptureScreen({
   useEffect(
     () => () => {
       if (maxDurationTimerRef.current) clearTimeout(maxDurationTimerRef.current);
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
     },
     [],
   );
@@ -288,6 +295,9 @@ export function StoryCaptureScreen({
     recordProgress.setValue(0);
     Animated.timing(recordProgress, { toValue: 1, duration: MAX_VIDEO_MS, easing: Easing.linear, useNativeDriver: false }).start();
     maxDurationTimerRef.current = setTimeout(() => stopRecording(), MAX_VIDEO_MS);
+    const t0 = Date.now();
+    setElapsedMs(0);
+    elapsedTimerRef.current = setInterval(() => setElapsedMs(Math.min(MAX_VIDEO_MS, Date.now() - t0)), 200);
   };
 
   const stopRecording = () => {
@@ -296,6 +306,11 @@ export function StoryCaptureScreen({
     setRecording(false);
     recordProgress.stopAnimation();
     recordProgress.setValue(0);
+    if (elapsedTimerRef.current) {
+      clearInterval(elapsedTimerRef.current);
+      elapsedTimerRef.current = null;
+    }
+    setElapsedMs(0);
     recorderRef.current?.stop();
   };
 
@@ -323,8 +338,12 @@ export function StoryCaptureScreen({
     if (result.canceled || result.assets.length === 0) return;
     const asset = result.assets[0];
     const mediaType: StoryMediaType = asset.type === 'video' ? 'video' : 'photo';
-    if (mediaType === 'video' && (asset.duration ?? 0) > MAX_VIDEO_MS) {
-      onPickedLongVideo(asset.uri, asset.duration ?? 0);
+    // expo-image-picker documents `duration` as milliseconds (and native platforms honor that),
+    // but this file only ever runs on web, where its shim hands back the raw
+    // HTMLVideoElement.duration instead — seconds, not ms — so this always needs converting.
+    const durationMs = (asset.duration ?? 0) * 1000;
+    if (mediaType === 'video' && durationMs > MAX_VIDEO_MS) {
+      onPickedLongVideo(asset.uri, durationMs);
       return;
     }
     onCaptured(asset.uri, mediaType);
@@ -427,7 +446,11 @@ export function StoryCaptureScreen({
         <View style={styles.galleryBtn} />
       </View>
 
-      {recording && <Text style={styles.recordingHint}>Recording… tap to stop</Text>}
+      {recording && (
+        <Text style={styles.recordingHint}>
+          {formatClockMs(elapsedMs)} / {formatClockMs(MAX_VIDEO_MS)} · tap to stop
+        </Text>
+      )}
 
       <Animated.View pointerEvents="none" style={[styles.flash, { opacity: flashOpacity }]} />
     </Animated.View>
@@ -506,7 +529,18 @@ const styles = StyleSheet.create({
   modeText: { fontFamily: 'Figtree_700Bold', fontSize: 12, letterSpacing: 1, color: 'rgba(255,255,255,.55)' },
   modeTextActive: { color: '#FFD60A' },
   modeTextDisabled: { opacity: 0.4 },
-  recordingHint: { position: 'absolute', bottom: 150, alignSelf: 'center', color: '#FFFFFF', fontSize: 13 },
+  recordingHint: {
+    position: 'absolute',
+    bottom: 150,
+    alignSelf: 'center',
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'Figtree_700Bold',
+    backgroundColor: 'rgba(0,0,0,.4)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
   flash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF' },
   permissionWrap: {
     flex: 1,
