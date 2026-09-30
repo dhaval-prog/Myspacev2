@@ -574,7 +574,13 @@ export function ThrowHomeScreen({
   const handleContactDragOffset = (steps: number) => {
     const n = friendsWithLocation.length;
     if (n === 0) return;
-    const raw = dragBaseIndexRef.current + steps;
+    // A single drag/flick only ever moves the selection by at most one contact in whichever
+    // direction it's moving — capped here against the index the drag started from, rather than
+    // left proportional to raw drag distance, which let one decisive flick (a fast, longer swipe)
+    // jump two or three contacts at once instead of reading as "one step, that way". Seeing more
+    // than one contact over still just takes another flick, same as paging a carousel.
+    const base = dragBaseIndexRef.current;
+    const raw = Math.max(base - 1, Math.min(base + 1, base + steps));
     setContactDragLiveOffset(Math.max(-1, Math.min(n - 1, raw)));
     // -1 is the virtual "Status" slot, one further left than any real contact (index 0) — tilting/
     // flicking into it always opens the capture flow now, regardless of whether you've already
