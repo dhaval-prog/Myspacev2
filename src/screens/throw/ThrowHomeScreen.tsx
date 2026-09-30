@@ -3,6 +3,7 @@ import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, u
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel, CAROUSEL_HEIGHT } from '../../components/throw/RecipientCarousel';
+import { NotificationCircleButton } from '../../components/throw/NotificationCircleButton';
 import { FoldingLetter, CONTACT_DRAG_SPACING } from '../../components/throw/FoldingLetter';
 import type { FoldingLetterHandle } from '../../components/throw/FoldingLetter';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
@@ -25,6 +26,7 @@ import { spreadCoincidentPins } from '../../utils/mapProjection';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import { useThrowAlerts } from '../../context/ThrowAlertsContext';
+import { useNotifications } from '../../context/NotificationsContext';
 import { useThrowColorMode } from '../../context/ThrowColorModeContext';
 import { useThrowStories } from '../../context/ThrowStoriesContext';
 import { useAuth } from '../../context/AuthContext';
@@ -89,12 +91,17 @@ interface ThrowHomeScreenProps {
   onOpenExpenses: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
+  onOpenNotifications: () => void;
   onOpenSettings: () => void;
   /** Set when arriving here via "Throw Back" — recipient is fixed, carousel is hidden. Only ever
    * set from ThrowInboxScreen/ThrowLetterDetailScreen's own separate Throw Back buttons — the
    * in-place received-letters panel's own Throw Back (see isInboxMode below) just closes the
    * panel and lands on the already-selected contact's normal, unlocked compose letter instead. */
   lockedRecipient?: { friendUserId: string; repliedToThrowId: string } | null;
+  /** Selects this contact on mount — set when arriving here via a "posted a new status"
+   * notification tap (see notify.ts's own 'story' target), which has no specific past story to
+   * deep-link to, just the poster themself. */
+  initialFocusContactId?: string | null;
 }
 
 /**
@@ -110,8 +117,10 @@ export function ThrowHomeScreen({
   onOpenExpenses,
   onOpenChats,
   onOpenAddFriend,
+  onOpenNotifications,
   onOpenSettings,
   lockedRecipient,
+  initialFocusContactId,
 }: ThrowHomeScreenProps) {
   const insets = useSafeAreaInsets();
   // Where the selected contact's own ring sits on screen, vertically — the recipient carousel's
@@ -131,6 +140,7 @@ export function ThrowHomeScreen({
   const myId = user?.id ?? null;
   const { myLocation, myName, myAvatarUrl, friends, unreadCount, unreadCountFor, streakFor, sendThrow, uploadPhoto, inbox, deleteThrow, markRead, confirmThrowAlert } = useThrow();
   const { createAlert, alerts, deleteAlert } = useThrowAlerts();
+  const { unreadCount: notificationsUnreadCount } = useNotifications();
   const { statsFor } = useGameStats();
   const { storiesByUser, storyCountFor, postStory, markViewed, deleteStory } = useThrowStories();
   const [storyFlow, setStoryFlow] = useState<StoryFlow | null>(null);
@@ -153,7 +163,7 @@ export function ThrowHomeScreen({
   // storyView actually changes so a *different* contact never inherits a stale count/ring.
   const [openAvatarCount, setOpenAvatarCount] = useState(0);
   const [openAvatarPulseSignal, setOpenAvatarPulseSignal] = useState(0);
-  const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [selectedFriendId, setSelectedFriendId] = useState<string | null>(initialFocusContactId ?? null);
   const [alertSchedule, setAlertSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
   // Once the user has touched the alert schedule, switching to a different contact is locked
   // (see selfLocked below) — otherwise a stray sideways swipe could yank them away from a
@@ -866,6 +876,16 @@ export function ThrowHomeScreen({
             all the way through the letter/fold/plane-flight lifecycle instead of restarting. */}
         <WeatherOverlay />
 
+        {/* Opens the full notification history (see NotificationsScreen) — sits at the recipient
+            rail's own left edge, outside RecipientCarousel's own animated strip entirely (see
+            NotificationCircleButton's own doc comment for why), so it stays put regardless of
+            where the carousel itself is scrolled to. */}
+        {!inFlight && (
+          <View style={[styles.notificationCircleWrap, { top: insets.top + 16 + (CAROUSEL_HEIGHT - 56) / 2 }]}>
+            <NotificationCircleButton onPress={onOpenNotifications} unreadCount={notificationsUnreadCount} />
+          </View>
+        )}
+
         {!inFlight &&
           (lockedRecipient ? (
             selectedFriend && (
@@ -1206,6 +1226,7 @@ const styles = StyleSheet.create({
   // sibling of mapArea, absolutely pinned to the screen's bottom so it overlaps in front.
   bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
+  notificationCircleWrap: { position: 'absolute', left: 16, zIndex: 1 },
   addFriendOverlay: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   addFriendBtn: {
     flexDirection: 'row',

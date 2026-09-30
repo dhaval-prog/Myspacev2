@@ -8,9 +8,14 @@ export interface AppNotification {
   title: string;
   body: string;
   createdAt: string;
+  read: boolean;
   /** What this notification is about — set server-side so a tap can jump straight to it. */
-  entityType: 'card' | 'connection' | 'throw' | null;
+  entityType: 'card' | 'connection' | 'throw' | 'story' | null;
   entityId: string | null;
+  /** The other person this notification is about (sender, poster, requester) — lets a row render
+   * their real avatar without a separate lookup. Null for notifications with no single
+   * counterpart (budget/split activity, etc). */
+  relatedUserId: string | null;
 }
 
 interface NotificationRow {
@@ -19,8 +24,10 @@ interface NotificationRow {
   title: string;
   body: string;
   created_at: string;
+  read: boolean;
   entity_type: string | null;
   entity_id: string | null;
+  related_user_id: string | null;
 }
 
 function toNotification(row: NotificationRow): AppNotification {
@@ -30,31 +37,36 @@ function toNotification(row: NotificationRow): AppNotification {
     title: row.title,
     body: row.body,
     createdAt: row.created_at,
+    read: row.read,
     entityType: row.entity_type as AppNotification['entityType'],
     entityId: row.entity_id,
+    relatedUserId: row.related_user_id,
   };
 }
 
 interface NotificationsContextValue {
+  /** The signed-in user's full notification history (read and unread), newest first. */
   notifications: AppNotification[];
-  /** Every open notification is by definition unread — one is deleted the moment it's acknowledged. */
   unreadCount: number;
-  /** Reading a notification consumes it: deletes the row, freeing its dedupe key for a future occurrence of the same event. */
+  /** Marks one notification read — it stays in the list (see `notifications`), just without its
+   * unread dot, rather than disappearing the way a delete would. */
   acknowledge: (id: string) => void;
+  /** Marks every notification read at once. */
   clearAll: () => void;
 }
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 
-const MAX_NOTIFICATIONS = 50;
+const MAX_NOTIFICATIONS = 100;
 
 /**
  * Real in-app notification inbox: loads the signed-in user's rows from
  * `public.notifications` and keeps them live via Supabase Realtime, so a
  * notification inserted by another member (a shared budget card's activity
- * ping, say) shows up without a refresh. Each notification appears only once —
- * reading it deletes it (see `acknowledge`) rather than just flagging it
- * read, so the inbox is always exactly "what still needs your attention."
+ * ping, say) shows up without a refresh. Reading one flips its own `read`
+ * column instead of deleting the row, so the full history stays browsable
+ * (see NotificationsScreen's TODAY/EARLIER list) while `unreadCount` still
+ * reflects only what's actually new.
  */
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -70,7 +82,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
     supabase
       .from('notifications')
-      .select('id,category,title,body,created_at,entity_type,entity_id')
+      .select('id,category,title,body,created_at,read,entity_type,entity_id,related_user_id')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(MAX_NOTIFICATIONS)
@@ -94,6 +106,14 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       )
       .on(
         'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          const updated = toNotification(payload.new as NotificationRow);
+          setNotifications((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+        },
+      )
+      .on(
+        'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         (payload) => {
           const gone = payload.old as { id: string };
@@ -109,32 +129,33 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   }, [userId]);
 
   const acknowledge = (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
     if (!isSupabaseConfigured) return;
     supabase
       .from('notifications')
-      .delete()
+      .update({ read: true })
       .eq('id', id)
       .then(({ error }) => {
-        if (error) console.warn('[notifications] failed to delete:', error.message);
+        if (error) console.warn('[notifications] failed to mark read:', error.message);
       });
   };
 
   const clearAll = () => {
     if (!userId) return;
-    setNotifications([]);
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     if (!isSupabaseConfigured) return;
     supabase
       .from('notifications')
-      .delete()
+      .update({ read: true })
       .eq('user_id', userId)
+      .eq('read', false)
       .then(({ error }) => {
-        if (error) console.warn('[notifications] failed to clear all:', error.message);
+        if (error) console.warn('[notifications] failed to mark all read:', error.message);
       });
   };
 
   const value = useMemo<NotificationsContextValue>(
-    () => ({ notifications, unreadCount: notifications.length, acknowledge, clearAll }),
+    () => ({ notifications, unreadCount: notifications.filter((n) => !n.read).length, acknowledge, clearAll }),
     [notifications],
   );
 

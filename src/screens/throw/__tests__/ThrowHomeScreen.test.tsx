@@ -8,6 +8,7 @@ import { useThrowAlerts } from '../../../context/ThrowAlertsContext';
 import { useGameStats } from '../../../context/GameStatsContext';
 import { useThrowColorMode } from '../../../context/ThrowColorModeContext';
 import { useThrowStories } from '../../../context/ThrowStoriesContext';
+import { useNotifications } from '../../../context/NotificationsContext';
 
 jest.mock('../../../context/AuthContext', () => ({ useAuth: jest.fn() }));
 jest.mock('../../../context/ThrowContext', () => ({ useThrow: jest.fn() }));
@@ -15,6 +16,7 @@ jest.mock('../../../context/ThrowAlertsContext', () => ({ useThrowAlerts: jest.f
 jest.mock('../../../context/GameStatsContext', () => ({ useGameStats: jest.fn() }));
 jest.mock('../../../context/ThrowColorModeContext', () => ({ useThrowColorMode: jest.fn() }));
 jest.mock('../../../context/ThrowStoriesContext', () => ({ useThrowStories: jest.fn() }));
+jest.mock('../../../context/NotificationsContext', () => ({ useNotifications: jest.fn() }));
 
 // WeatherOverlay/RainOverlay are a purely visual screen-space effect (Animated loops/canvas,
 // irrelevant to anything under test in this file) — stubbed out the same way ThrowMap is, so tests
@@ -127,6 +129,7 @@ const mockUseThrowAlerts = useThrowAlerts as jest.Mock;
 const mockUseGameStats = useGameStats as jest.Mock;
 const mockUseThrowColorMode = useThrowColorMode as jest.Mock;
 const mockUseThrowStories = useThrowStories as jest.Mock;
+const mockUseNotifications = useNotifications as jest.Mock;
 
 const MY_ID = 'me-1';
 const FRIEND = { userId: 'friend-1', name: 'Priya', avatarUrl: null, location: { city: 'Pune', country: 'IN', latitude: 18.5, longitude: 73.8 } };
@@ -160,11 +163,12 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
     deleteStory: jest.fn().mockResolvedValue({ error: null }),
     refresh: jest.fn(),
   });
+  mockUseNotifications.mockReturnValue({ notifications: [], unreadCount: 0, acknowledge: jest.fn(), clearAll: jest.fn() });
   return createAlert;
 }
 
 async function renderScreen() {
-  await renderWithSafeArea(<ThrowHomeScreen onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenSettings={noop} />);
+  await renderWithSafeArea(<ThrowHomeScreen onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenNotifications={noop} onOpenSettings={noop} />);
 }
 
 describe('ThrowHomeScreen self-reminder contact lock', () => {
