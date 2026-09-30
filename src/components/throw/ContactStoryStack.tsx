@@ -55,11 +55,27 @@ const DELETE_FLIGHT_EXTRA_PX = 240;
 const DELETE_COMMIT_EASING = Easing.bezier(0.5, 0, 0.8, 0.4);
 
 const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
+const VOLUME_ICON = 'M11 5L6 9H2v6h4l5 4V5z M15.5 8.5a5 5 0 0 1 0 7 M18.5 5.5a9 9 0 0 1 0 13';
+const VOLUME_MUTED_ICON = 'M11 5L6 9H2v6h4l5 4V5z M22.5 9.5l-6 6 M16.5 9.5l6 6';
 
 /** `active` (only the front, interactive card) gates the while-viewing seconds guide — background
  * cards in the stack don't need their own ticking clock, and skipping onTimeUpdate there avoids
- * driving state updates for videos nobody's actually watching yet. */
-function StoryMedia({ story, testID, active }: { story: ThrowStory; testID?: string; active?: boolean }) {
+ * driving state updates for videos nobody's actually watching yet. Sound (`muted`/`onToggleMute`)
+ * is likewise only ever shown/wired for the active card — see ContactStoryStack's own `muted`
+ * state doc comment for why it lives one level up instead of being local to this component. */
+function StoryMedia({
+  story,
+  testID,
+  active,
+  muted,
+  onToggleMute,
+}: {
+  story: ThrowStory;
+  testID?: string;
+  active?: boolean;
+  muted?: boolean;
+  onToggleMute?: () => void;
+}) {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
 
@@ -80,11 +96,24 @@ function StoryMedia({ story, testID, active }: { story: ThrowStory; testID?: str
         trimStartMs={story.trimStartMs ?? undefined}
         trimEndMs={story.trimEndMs ?? undefined}
         onTimeUpdate={active ? (cur, dur) => { setElapsedMs(cur); setDurationMs(dur); } : undefined}
+        muted={active ? muted : true}
+        onAutoplayBlocked={active ? onToggleMute : undefined}
       />
       {active && durationMs > 0 && (
         <Text style={styles.videoClock}>
           {formatClockMs(elapsedMs)} / {formatClockMs(durationMs)}
         </Text>
+      )}
+      {active && onToggleMute && (
+        <Pressable
+          onPress={onToggleMute}
+          hitSlop={10}
+          style={styles.muteBtn}
+          accessibilityRole="button"
+          accessibilityLabel={muted ? 'Unmute' : 'Mute'}
+        >
+          <Icon path={muted ? VOLUME_MUTED_ICON : VOLUME_ICON} size={16} color="#FFFFFF" strokeWidth={2} />
+        </Pressable>
       )}
     </>
   );
@@ -207,6 +236,10 @@ export function ContactStoryStack({
 }: ContactStoryStackProps) {
   const onLetterEmptiedRef = useRef(onLetterEmptied);
   onLetterEmptiedRef.current = onLetterEmptied;
+  // Sound defaults on (a story is opened via a direct tap, real user activation) — one flag for
+  // whichever card is currently active/front, not per-story, so a deliberate mute choice carries
+  // over as you flip through a contact's stack instead of resetting to "on" every card.
+  const [muted, setMuted] = useState(false);
   const [locations, setLocationsState] = useState<Map<string, PhotoLocation>>(() => new Map(stories.map((s) => [s.id, 'avatar' as PhotoLocation])));
   const locationsRef = useRef(locations);
   locationsRef.current = locations;
@@ -662,7 +695,13 @@ export function ContactStoryStack({
           },
         ]}
       >
-        <StoryMedia story={story} testID={idx === 0 ? 'contact-story-image' : undefined} active={idx === 0} />
+        <StoryMedia
+          story={story}
+          testID={idx === 0 ? 'contact-story-image' : undefined}
+          active={idx === 0}
+          muted={muted}
+          onToggleMute={idx === 0 && story.mediaType === 'video' ? () => setMuted((m) => !m) : undefined}
+        />
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim, { opacity: anim.dim }]} />
       </Animated.View>
     );
@@ -725,6 +764,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 999,
+  },
+  muteBtn: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(0,0,0,.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyWrap: {
     ...StyleSheet.absoluteFill,

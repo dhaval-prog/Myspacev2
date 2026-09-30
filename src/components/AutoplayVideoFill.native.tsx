@@ -11,13 +11,19 @@ interface AutoplayVideoFillProps {
   /** Fires on expo-video's own `timeUpdate` event (see timeUpdateEventInterval below) with
    * playback position relative to the trim window — see the web sibling's own doc comment. */
   onTimeUpdate?: (currentMs: number, durationMs: number) => void;
+  /** Caller-controlled sound — see the web sibling's own doc comment. Default false (unmuted). */
+  muted?: boolean;
+  /** Unused on native — expo-video's own play() doesn't get silently blocked the way a raw web
+   * `<video>` element's can, so there's nothing to fall back from. Kept for prop-shape parity with
+   * the web sibling so callers can pass it unconditionally. */
+  onAutoplayBlocked?: () => void;
 }
 
-/** A muted, looping, autoplaying video filling its parent — shared by StoryPreviewScreen (before
+/** A looping, autoplaying video filling its parent — shared by StoryPreviewScreen (before
  * posting), ContactStoryStack (a posted status), and LetterFoldCard's own polaroid viewer (a
  * letter's video attachment), so all three render a story/attachment video identically instead of
  * three near-duplicate `useVideoPlayer`/`VideoView` copies drifting out of sync. */
-export function AutoplayVideoFill({ uri, trimStartMs, trimEndMs, onTimeUpdate }: AutoplayVideoFillProps) {
+export function AutoplayVideoFill({ uri, trimStartMs, trimEndMs, onTimeUpdate, muted = false }: AutoplayVideoFillProps) {
   const startSec = (trimStartMs ?? 0) / 1000;
   const endSec = trimEndMs != null ? trimEndMs / 1000 : null;
 
@@ -27,11 +33,15 @@ export function AutoplayVideoFill({ uri, trimStartMs, trimEndMs, onTimeUpdate }:
     // below does instead; native loop is switched off in that case so the two don't fight each
     // other right at the boundary.
     p.loop = endSec == null;
-    p.muted = true;
+    p.muted = muted;
     if (startSec > 0) p.currentTime = startSec;
     p.timeUpdateEventInterval = 0.25;
     p.play();
   });
+
+  useEffect(() => {
+    player.muted = muted;
+  }, [player, muted]);
 
   useEffect(() => {
     if (endSec == null && !onTimeUpdate) return undefined;

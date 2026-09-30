@@ -17,6 +17,8 @@ const FLIP_ICON = 'M4 4v5h5 M20 20v-5h-5 M4 9a8 8 0 0114-4.9L20 9 M20 15a8 8 0 0
 // A standard "reply" glyph — an arrow curving up-and-left into a horizontal bar — rather than
 // reusing the paper-plane "throw"/send icon, which already means something different elsewhere.
 const REPLY_ICON = 'M9 14L4 9l5-5 M20 20v-7a4 4 0 00-4-4H4';
+const VOLUME_ICON = 'M11 5L6 9H2v6h4l5 4V5z M15.5 8.5a5 5 0 0 1 0 7 M18.5 5.5a9 9 0 0 1 0 13';
+const VOLUME_MUTED_ICON = 'M11 5L6 9H2v6h4l5 4V5z M22.5 9.5l-6 6 M16.5 9.5l6 6';
 
 // A flick up/down over the open photo/video moves to the next/previous attachment — same
 // threshold-and-velocity commit convention ContactStoryStack's own swipe-up-to-return gesture
@@ -155,6 +157,10 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
   // every index change so switching attachments never briefly shows the previous one's numbers.
   const [mediaElapsedMs, setMediaElapsedMs] = useState(0);
   const [mediaDurationMs, setMediaDurationMs] = useState(0);
+  // Sound defaults on (the viewer only opens via a direct tap, real user activation) — reset per
+  // letter/attachment the same as the clock above, so a mute choice never silently carries over
+  // onto someone else's video.
+  const [mediaMuted, setMediaMuted] = useState(false);
   useEffect(() => {
     setMediaMode(false);
     setMediaIndex(0);
@@ -164,6 +170,7 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
   useEffect(() => {
     setMediaElapsedMs(0);
     setMediaDurationMs(0);
+    setMediaMuted(false);
   }, [mediaIndex]);
   const toggleMediaMode = () => {
     const next = !mediaMode;
@@ -597,6 +604,8 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
                 setMediaElapsedMs(cur);
                 setMediaDurationMs(dur);
               }}
+              muted={mediaMuted}
+              onAutoplayBlocked={() => setMediaMuted(true)}
             />
           ) : (
             <Image source={{ uri: L.photoUrls[mediaIndex] }} style={StyleSheet.absoluteFill} resizeMode="cover" />
@@ -605,6 +614,15 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
             <Text style={[styles.videoClock, { fontSize: s(12, scale), top: s(14, vScale), paddingHorizontal: s(9, scale), paddingVertical: s(3, scale), borderRadius: s(14, scale) }]}>
               {formatClockMs(mediaElapsedMs)} / {formatClockMs(mediaDurationMs)}
             </Text>
+          )}
+          {isVideoUrl(L.photoUrls[mediaIndex]) && (
+            <GlassIconButton
+              onPress={() => setMediaMuted((m) => !m)}
+              path={mediaMuted ? VOLUME_MUTED_ICON : VOLUME_ICON}
+              scale={scale}
+              accessibilityLabel={mediaMuted ? 'Unmute' : 'Mute'}
+              style={{ position: 'absolute', top: s(14, vScale), left: s(14, scale) }}
+            />
           )}
 
           <GlassIconButton

@@ -199,7 +199,17 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     // arrived — the first point at which showing the real map actually looks finished rather than
     // half-populated. `.once` — this only ever gates the initial reveal, not every later idle
     // moment (panning/zooming afterward stays exactly as responsive as before).
-    map.once('idle', () => setReady(true));
+    //
+    // 'idle' can take a genuinely long time on a slow connection/device (steep-pitch 3D buildings
+    // are a lot of tiles), during which the screen behind this map is just ThrowGlassBackdrop's
+    // own soft gradient blobs sitting there with nothing happening — a hard cap means that backdrop
+    // is never shown for longer than this, even in the worst case; 'idle' still wins (and looks
+    // fully finished) whenever it beats the clock, which is the common case.
+    const readyFallback = setTimeout(() => setReady(true), 2200);
+    map.once('idle', () => {
+      clearTimeout(readyFallback);
+      setReady(true);
+    });
     map.on('style.load', () => {
       // Defensive, not just tidy: this runs against a style this app doesn't own (edited in
       // Mapbox Studio), so a future rename/removal of the "basemap" import should degrade to
@@ -236,6 +246,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     }
 
     return () => {
+      clearTimeout(readyFallback);
       resizeObserver?.disconnect();
       map.remove();
       mapRef.current = null;
