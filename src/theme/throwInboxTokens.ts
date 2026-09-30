@@ -24,6 +24,10 @@ export const inboxColor = {
   deleteRed: '#FF3B30',
   muted: '#8A8A8A',
   binDark: 'rgba(17,17,17,0.78)',
+  // The active chip's own border (see PlaneSlider) — a light blue, replacing the plain dark ink
+  // outline per explicit request, so "this is the selected chip" reads as part of the same cool-
+  // blue accent family the unread/active states already use instead of a neutral dark ring.
+  activeBorder: '#7FB2FF',
 } as const;
 
 export const inboxFont = {
