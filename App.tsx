@@ -35,7 +35,7 @@ type Screen =
   | { name: 'gamesHub' }
   | { name: 'games'; initialTab?: 'create' | 'join' }
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
-  | { name: 'throw'; openThrowId?: string; openInbox?: boolean }
+  | { name: 'throw'; openThrowId?: string }
   | { name: 'account' };
 
 function AuthNavigator() {
@@ -123,7 +123,6 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'throw' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenThrow={() => setScreen({ name: 'throw' })}
-        onOpenThrowInbox={() => setScreen({ name: 'throw', openInbox: true })}
         onOpenGames={() => setScreen({ name: 'gamesHub' })}
       />
     );
@@ -141,7 +140,6 @@ function AppNavigator() {
         setScreen({ name: 'friends' });
       }}
       initialThrowId={screen.name === 'throw' ? screen.openThrowId : undefined}
-      initialScreen={screen.name === 'throw' && screen.openInbox ? 'inbox' : undefined}
     />
   );
 }
