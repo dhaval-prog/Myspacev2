@@ -3,7 +3,6 @@ import { PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, Vibrat
 import { Icon } from '../../Icon';
 import { LetterPlaneGlyph } from './LetterPlaneGlyph';
 import { ConfirmDialog } from '../../ConfirmDialog';
-import { GlassSurface } from '../../friends/GlassSurface';
 import { inboxColor } from '../../../theme/throwInboxTokens';
 import { noSelect } from '../../../theme/webStyles';
 
@@ -12,10 +11,6 @@ export interface PlaneSliderChip {
   short: string;
   /** For the accessibility label, e.g. "Letter from Dhaval, Sunday, Lonavala". */
   a11yLabel: string;
-  /** Drives the chip's own plane glyph color — blue while still unread, white once read — per
-   * explicit request, independent of which chip is currently selected (see the variant/bg split
-   * below). */
-  unread: boolean;
 }
 
 interface PlaneSliderProps {
@@ -302,41 +297,20 @@ export function PlaneSlider({
         {chips.map((c, i) => {
           const active = i === activeIndex;
           const armedHere = active && armed;
-          // The chip's own color now reads unread/read status directly (blue vs. white) —
-          // independent of which chip is currently selected, per explicit request. Selection is
-          // conveyed separately via the dark outline below instead of stealing this color.
-          const variant = armedHere ? 'delete' : c.unread ? 'unread' : 'read';
-          const bg = armedHere ? inboxColor.deleteRed : c.unread ? inboxColor.accentBlue : '#FFFFFF';
-          const labelColor = armedHere ? inboxColor.deleteRed : c.unread ? inboxColor.accentBlue : '#555555';
+          const variant = armedHere ? 'delete' : active ? 'active' : 'default';
+          const bg = armedHere ? inboxColor.deleteRed : active ? inboxColor.accentBlue : inboxColor.paper;
+          const labelColor = armedHere ? inboxColor.deleteRed : active ? inboxColor.accentBlue : '#555555';
           // Inline (compact) labels sit ON the chip's own colored box instead of matching its hue
-          // below — white reads on the armed/unread box's red or blue fill, black on the read
-          // box's white fill.
-          const inlineLabelColor = armedHere || c.unread ? '#FFFFFF' : '#171717';
-          // The selected chip's own box (never the armed/delete one) turns into frosted glass —
-          // a light-blue border instead of the plain dark ink ring, and a blurred glass fill
-          // instead of the flat read/unread color every other chip still uses — per explicit
-          // request, so "this one's selected" reads as its own distinct chrome rather than just an
-          // outline on the same solid box.
-          const selectedGlass = active && !armedHere;
-          const chipSize = { width: s(52, scale), height: s(52, scale), borderRadius: s(16, scale) };
-          const chipGlyph = (
-            <>
+          // below — white reads on the active/armed box's blue or red fill, black on the idle
+          // box's cream fill.
+          const inlineLabelColor = armedHere || active ? '#FFFFFF' : '#171717';
+          const chipBox = (
+            <View style={[styles.chip, { width: s(52, scale), height: s(52, scale), borderRadius: s(16, scale), backgroundColor: bg }]}>
               <LetterPlaneGlyph size={s(compact ? 21 : 28, scale)} variant={variant} tiltDeg={-14} />
               {compact && (
                 <Text style={[styles.mono, styles.chipInlineLabel, { fontSize: s(7.5, scale), color: inlineLabelColor }]}>{c.short}</Text>
               )}
-            </>
-          );
-          const chipBox = selectedGlass ? (
-            <GlassSurface
-              tint="light"
-              tintColor={c.unread ? 'rgba(47,107,255,.35)' : 'rgba(255,255,255,.5)'}
-              style={[styles.chip, chipSize, { borderWidth: 2, borderColor: inboxColor.activeBorder }]}
-            >
-              {chipGlyph}
-            </GlassSurface>
-          ) : (
-            <View style={[styles.chip, chipSize, { backgroundColor: bg }]}>{chipGlyph}</View>
+            </View>
           );
           if (active) {
             return (

@@ -225,7 +225,6 @@ export function useInboxArrival(opts: UseInboxArrivalOptions) {
     id: l.id,
     short: formatLetterDate(l.createdAt).short,
     a11yLabel: `Letter from ${contactName}, ${formatLetterDate(l.createdAt).short}, ${l.senderCity}`,
-    unread: l.status === 'thrown',
   }));
 
   return {
