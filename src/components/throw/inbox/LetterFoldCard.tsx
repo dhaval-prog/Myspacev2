@@ -6,7 +6,8 @@ import { GlassSurface } from '../../friends/GlassSurface';
 import { AutoplayVideoFill } from '../../AutoplayVideoFill';
 import { inboxColor, inboxLayout } from '../../../theme/throwInboxTokens';
 import { formatClockMs } from '../../../utils/formatClock';
-import type { MediaTrim } from '../../../types/throw';
+import { formatAlertSchedule } from '../../../utils/throwAlerts';
+import type { AlertSchedule, MediaTrim } from '../../../types/throw';
 
 const CHEVRON_LEFT_ICON = 'M15 18l-6-6 6-6';
 const CHEVRON_RIGHT_ICON = 'M9 18l6-6-6-6';
@@ -64,6 +65,11 @@ export interface LetterCardData {
   /** Index-aligned with photoUrls — null entries mean "no trim" (a photo, or a video that was
    * already within the 15s cap). */
   photoTrims: (MediaTrim | null)[];
+  /** The sender's own optional attached reminder request (see ThrowLetter's own alertSchedule) —
+   * null for an ordinary letter with nothing attached. Shows a Confirm pill beside Reply until
+   * alertConfirmed is true (see onConfirmAlert). */
+  alertSchedule: AlertSchedule | null;
+  alertConfirmed: boolean;
 }
 
 interface LetterFoldCardProps {
@@ -81,6 +87,11 @@ interface LetterFoldCardProps {
   heightScale?: number;
   reduceMotion: boolean;
   onThrowBack?: () => void;
+  /** Confirms this letter's own attached reminder request (see LetterCardData's own alertSchedule)
+   * — present only while there's actually something to confirm; the Confirm pill itself is what
+   * decides whether to show (letter.alertSchedule present && !alertConfirmed), same convention as
+   * onThrowBack. */
+  onConfirmAlert?: () => void;
 }
 
 // ----- timings, ported verbatim from the design handoff's own renderVals() -----
@@ -138,7 +149,7 @@ function NoseFlap({ rotate, side, scale }: { rotate: Animated.AnimatedInterpolat
  * "sheet" (wings + nose flaps) shown in between. Purely reactive to the `stage` prop the screen's
  * own state machine drives — see ThrowInboxScreen for the timer chain between stages.
  */
-export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heightScale, reduceMotion, onThrowBack }: LetterFoldCardProps) {
+export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heightScale, reduceMotion, onThrowBack, onConfirmAlert }: LetterFoldCardProps) {
   const vScale = heightScale ?? scale;
   const w = s(inboxLayout.letter.w, scale);
   const h = s(inboxLayout.letter.h, vScale);
@@ -412,7 +423,7 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
     );
   }
 
-  const L = letter ?? { id: '', from: '', date: '', place: '', distance: '', body: '', sig: '', count: '', photoUrls: [], photoTrims: [] };
+  const L = letter ?? { id: '', from: '', date: '', place: '', distance: '', body: '', sig: '', count: '', photoUrls: [], photoTrims: [], alertSchedule: null, alertConfirmed: false };
 
   return (
     <Animated.View pointerEvents="none" style={[{ width: w, height: h }, outerStyle]}>
@@ -664,6 +675,14 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
         <View pointerEvents="box-none" style={[styles.throwBackOuter, { bottom: s(14, vScale), gap: s(10, scale) }]}>
           <View style={[styles.throwBackWrap, { gap: s(12, scale) }]}>
             <GlassIconButton onPress={onThrowBack} label="Reply" scale={scale} accessibilityLabel="Reply" tintColor="rgba(47,107,255,.55)" />
+            {/* The sender's own attached reminder request (see LetterCardData's own alertSchedule)
+                — only shows once there's actually one to confirm, and disappears once confirmed
+                (same "this letter needs your action" convention as Reply, not a locked/dimmed
+                state like the gallery button below, since a confirmed request has nothing left to
+                do here). */}
+            {L.alertSchedule && !L.alertConfirmed && onConfirmAlert && (
+              <GlassIconButton onPress={onConfirmAlert} label="Confirm" scale={scale} accessibilityLabel={`Confirm reminder, ${formatAlertSchedule(L.alertSchedule)}`} tintColor="rgba(47,169,107,.6)" />
+            )}
             {/* Locked (no onPress, dimmed) rather than hidden when the letter has no attachments —
                 per explicit request — so its presence itself says "this letter has no media"
                 instead of the row just quietly having one fewer button. */}

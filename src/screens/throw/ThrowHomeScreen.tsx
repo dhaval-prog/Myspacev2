@@ -125,7 +125,7 @@ export function ThrowHomeScreen({
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const myId = user?.id ?? null;
-  const { myLocation, myName, myAvatarUrl, friends, unreadCount, unreadCountFor, streakFor, sendThrow, uploadPhoto, inbox, deleteThrow, markRead } = useThrow();
+  const { myLocation, myName, myAvatarUrl, friends, unreadCount, unreadCountFor, streakFor, sendThrow, uploadPhoto, inbox, deleteThrow, markRead, confirmThrowAlert } = useThrow();
   const { createAlert, alerts, deleteAlert } = useThrowAlerts();
   const { statsFor } = useGameStats();
   const { storiesByUser, storyCountFor, postStory, markViewed, deleteStory } = useThrowStories();
@@ -399,6 +399,8 @@ export function ThrowHomeScreen({
           createdAt: a.nextTriggerAt,
           readAt: null,
           repliedToThrowId: null,
+          alertSchedule: null,
+          alertConfirmed: false,
         }),
       );
     }
@@ -433,6 +435,15 @@ export function ThrowHomeScreen({
     setInboxMode(true);
   };
   const handleCloseInbox = () => setInboxMode(false);
+  // Confirms the currently-open letter's own attached reminder request (see LetterFoldCard's own
+  // Confirm pill) — the letter itself always carries the schedule to confirm, so this only ever
+  // needs whichever letter inboxArrival currently has open, not a ThrowLetter passed in.
+  const handleConfirmAlert = async () => {
+    const l = inboxArrival.activeLetter;
+    if (!l?.alertSchedule) return;
+    const { error } = await confirmThrowAlert(l.id, l.alertSchedule);
+    if (error) console.warn('[ThrowHomeScreen] confirm reminder failed:', error);
+  };
   const handleInboxSelectChip = async (index: number, originScreen: { x: number; y: number }) => {
     const local = await toLocalInboxPoint(originScreen);
     inboxArrival.handleSelectChip(index, local);
@@ -750,6 +761,7 @@ export function ThrowHomeScreen({
     penColor: string;
     photoUris: string[];
     photoTrims: (MediaTrim | null)[];
+    alertSchedule: AlertSchedule | null;
   }) => {
     if (!selectedFriend) return { error: 'Pick someone to throw to first.' };
 
@@ -792,6 +804,8 @@ export function ThrowHomeScreen({
         createdAt: now,
         readAt: null,
         repliedToThrowId: null,
+        alertSchedule: null,
+        alertConfirmed: false,
       };
       pendingLaunchRef.current = { letter: alertLetter, isAlert: true, alertScheduleSummary: scheduleSummary };
       setAlertSchedule(DEFAULT_ALERT_SCHEDULE);
@@ -818,6 +832,7 @@ export function ThrowHomeScreen({
       photoUrls,
       photoTrims,
       repliedToThrowId: lockedRecipient?.repliedToThrowId,
+      alertSchedule: content.alertSchedule,
     });
     if (error || !letter) return { error: error ?? 'Could not send — try again.' };
     pendingLaunchRef.current = { letter, isAlert: false };
@@ -914,6 +929,7 @@ export function ThrowHomeScreen({
                   onContactDragOffset={!lockedRecipient && !selfLocked ? handleContactDragOffset : undefined}
                   onContactDragEnd={!lockedRecipient && !selfLocked ? handleContactDragEnd : undefined}
                   flightTargetY={storyFlightTargetY}
+                  onOpenAddFriend={onOpenAddFriend}
                 />
               ) : storyFlow?.name === 'preview' ? (
                 <StoryPreviewScreen
@@ -1014,6 +1030,7 @@ export function ThrowHomeScreen({
                     // locked flow elsewhere) is only for ThrowInboxScreen/ThrowLetterDetailScreen's
                     // own separate Throw Back buttons, not this in-place panel's.
                     onThrowBack={inboxArrival.activeLetter ? handleCloseInbox : undefined}
+                    onConfirmAlert={handleConfirmAlert}
                   />
                 </View>
               ) : (
@@ -1025,7 +1042,6 @@ export function ThrowHomeScreen({
                   onThrow={handleThrow}
                   onLaunched={handleLaunched}
                   throwLabel={isSelfSelected ? 'Swipe up to set alert' : lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
-                  onOpenAddFriend={onOpenAddFriend}
                   onOpenInbox={handleOpenInbox}
                   unreadCount={unreadCount}
                   onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}

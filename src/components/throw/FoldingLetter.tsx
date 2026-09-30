@@ -46,11 +46,9 @@ const X_ICON = 'M6 6l12 12M18 6L6 18';
 // no on-device video-frame decoding here, so this (not a broken <Image>) is what a video chip
 // shows instead of an actual preview frame.
 const PLAY_ICON = 'M8 5v14l11-7z';
-// Same glyph as HomeScreen/ChatsListScreen's own QR icon — reused here so this row reads as the
-// same action, not a Throw-specific reinterpretation.
-const QR_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
-// A standard bell glyph — self-reminder mode's own bottom-row slot (replacing Add Friend there,
-// which has nothing to do with a letter to yourself) opens the reminder-schedule sheet directly.
+// A standard bell glyph — every letter's own bottom-row reminder slot now (replacing Add Friend
+// there, which already has its own entry point elsewhere and has nothing to do with a letter
+// itself) opens the reminder-schedule sheet directly, self or friend alike.
 const BELL_ICON = 'M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6.5H4c.5-1 2-2.5 2-6.5z M9.5 18.5a2.5 2.5 0 0 0 5 0';
 // Feather Icons' "award" glyph — the leaderboard-points badge, moved here from ThrowHomeScreen's
 // header now that the badge itself lives in the paper's top-right corner instead.
@@ -129,7 +127,18 @@ interface FoldingLetterContent {
   photoUris: string[];
   /** Index-aligned with photoUris — null entries mean "no trim". */
   photoTrims: (MediaTrim | null)[];
+  /** An ordinary (non-self) letter's own optional attached reminder request — set via the same
+   * Bell icon/sheet a self-reminder uses, but proposed to the *recipient* instead of scheduling an
+   * alert for the sender. Null unless the sender actually opened the sheet and set one. Always
+   * null for a self-reminder itself, which threads its schedule through alertSchedule/
+   * onAlertScheduleChange instead (see FoldingLetterProps). */
+  alertSchedule: AlertSchedule | null;
 }
+
+// A letter to a friend has no self-reminder schedule of its own to default to (see
+// FoldingLetterProps' own alertSchedule) — this is what the Bell sheet seeds itself with the
+// first time it's opened for one, same shape as ThrowHomeScreen's own DEFAULT_ALERT_SCHEDULE.
+const DEFAULT_FRIEND_ALERT_SCHEDULE: AlertSchedule = { recurrence: 'once', hour: 9, minute: 0, daysOfWeek: [], dayOfMonth: 1 };
 
 interface FoldingLetterProps {
   recipientName: string;
@@ -150,8 +159,6 @@ interface FoldingLetterProps {
    * attention). */
   onLaunched: () => void;
   throwLabel?: string;
-  /** Opens the QR "Add a friend" sheet — its button lives between Voice and Inbox. */
-  onOpenAddFriend: () => void;
   /** Opens the inbox — its button lives in the bottom-controls row below the paper alongside
    * Photo and Voice, rather than in a separate header. */
   onOpenInbox: () => void;
@@ -266,7 +273,6 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     onThrow,
     onLaunched,
     throwLabel = 'Swipe up to throw',
-    onOpenAddFriend,
     onOpenInbox,
     unreadCount,
     onContactDragStart,
@@ -283,7 +289,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   ref,
 ) {
   const [phase, setPhase] = useState<Phase>('writing');
-  const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris' | 'photoTrims'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
+  const [content, setContent] = useState<Omit<FoldingLetterContent, 'photoUris' | 'photoTrims' | 'alertSchedule'>>({ messageText: null, strokes: null, penColor: throwColor.ink });
   const [mediaItems, setMediaItems] = useState<PickedMedia[]>([]);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   // Shows an opaque overlay on top of the writing paper while active — see the overlay rendered
@@ -316,6 +322,12 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   // present) rather than an ordinary letter to a friend — the launch gate above only ever applies
   // to this case.
   const selfReminderMode = !!alertSchedule && !!onAlertScheduleChange;
+  // An ordinary letter's own optional attached reminder request (see FoldingLetterContent's own
+  // doc comment) — null until the sender actually opens the Bell sheet for this letter, seeded
+  // with DEFAULT_FRIEND_ALERT_SCHEDULE the moment they do (see the Bell Pressable below) so a
+  // "Done" tap without touching anything still has a real schedule to send. Only ever read/written
+  // outside selfReminderMode.
+  const [friendAlertSchedule, setFriendAlertSchedule] = useState<AlertSchedule | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paperSize, setPaperSize] = useState({ width: 0, height: 0 });
   // The bottom-controls row's own measured height (via onLayout, below) — used to position it
@@ -468,7 +480,8 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     });
     const photoUris = mediaItems.map((m) => m.uri);
     const photoTrims = mediaItems.map((m) => m.trim ?? null);
-    const [{ error: err }] = await Promise.all([onThrow({ ...content, photoUris, photoTrims }), liftOff]);
+    const alertScheduleForThrow = selfReminderMode ? null : friendAlertSchedule;
+    const [{ error: err }] = await Promise.all([onThrow({ ...content, photoUris, photoTrims, alertSchedule: alertScheduleForThrow }), liftOff]);
 
     if (err) {
       setError(err);
@@ -1110,30 +1123,35 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           }
         </Pressable>
 
-        {selfReminderMode ? (
-          // A letter to yourself has no one to add as a friend — this slot opens the reminder
-          // sheet directly instead (it otherwise only auto-opens once, the first time the fold
-          // completes with something written; see reminderState's own doc comment).
-          <Pressable onPress={() => setReminderState('open')} accessibilityRole="button" accessibilityLabel="Set reminder time">
-            {({ pressed }) => (
-              <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
-                  <Icon path={BELL_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
-                </BottomIconSurface>
-              </View>
-            )}
-          </Pressable>
-        ) : (
-          <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
-            {({ pressed }) => (
-              <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
-                  <Icon path={QR_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
-                </BottomIconSurface>
-              </View>
-            )}
-          </Pressable>
-        )}
+        {/* Bell — every letter's own reminder entry point now, not just a self-reminder's (Add
+            Friend already has its own entry point elsewhere, see ThrowScreen's top-level "+"),
+            per explicit request. A self-reminder opens its mandatory schedule sheet (unchanged);
+            an ordinary letter to a friend opens the same sheet for an *optional* reminder request
+            that rides along with the letter (see FoldingLetterContent's own alertSchedule) — the
+            recipient gets a Confirm button on it and only then actually gets an alert. Turns red
+            once a schedule is actually set/confirmed for this letter, so the icon itself shows
+            whether this letter carries a reminder. */}
+        <Pressable
+          onPress={() => {
+            if (!selfReminderMode && friendAlertSchedule === null) setFriendAlertSchedule(DEFAULT_FRIEND_ALERT_SCHEDULE);
+            setReminderState('open');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Set reminder time"
+        >
+          {({ pressed }) => (
+            <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+              <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
+                <Icon
+                  path={BELL_ICON}
+                  size={25 * bottomRowScale}
+                  color={(selfReminderMode ? reminderConfirmed : friendAlertSchedule !== null) ? '#FF3B30' : isNight ? throwNightColor.iconColor : throwColor.ink}
+                  strokeWidth={1.8}
+                />
+              </BottomIconSurface>
+            </View>
+          )}
+        </Pressable>
 
         <Pressable onPress={onOpenInbox} accessibilityRole="button" accessibilityLabel="Inbox">
           {({ pressed }) => (
@@ -1199,23 +1217,28 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         }}
       />
 
-      {alertSchedule && onAlertScheduleChange && (
-        <BottomSheet visible={reminderState === 'open'} onClose={() => setReminderState('peek')}>
-          <Text style={styles.scheduleModalTitle}>Remind me</Text>
-          <AlertScheduleHeader schedule={alertSchedule} onChange={onAlertScheduleChange} />
-          <Pressable
-            onPress={() => {
-              setReminderConfirmed(true);
-              setReminderState('peek');
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Done setting reminder"
-            style={({ pressed }) => [styles.scheduleModalDone, pressed && styles.roundBtnPressed]}
-          >
-            <Text style={styles.scheduleModalDoneText}>Done</Text>
-          </Pressable>
-        </BottomSheet>
-      )}
+      {/* Self mode threads its schedule through alertSchedule/onAlertScheduleChange (the caller
+          owns that state, since it becomes a real throw_alerts row on throw); an ordinary letter
+          to a friend uses its own local friendAlertSchedule instead (see its own doc comment) —
+          the sheet itself is otherwise identical either way. */}
+      <BottomSheet visible={reminderState === 'open'} onClose={() => setReminderState('peek')}>
+        <Text style={styles.scheduleModalTitle}>Remind me</Text>
+        <AlertScheduleHeader
+          schedule={selfReminderMode ? alertSchedule! : friendAlertSchedule ?? DEFAULT_FRIEND_ALERT_SCHEDULE}
+          onChange={selfReminderMode ? onAlertScheduleChange! : setFriendAlertSchedule}
+        />
+        <Pressable
+          onPress={() => {
+            if (selfReminderMode) setReminderConfirmed(true);
+            setReminderState('peek');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Done setting reminder"
+          style={({ pressed }) => [styles.scheduleModalDone, pressed && styles.roundBtnPressed]}
+        >
+          <Text style={styles.scheduleModalDoneText}>Done</Text>
+        </Pressable>
+      </BottomSheet>
 
       {/* Rendered as an opaque overlay on top of the writing paper (never as an early return that
           replaces it) — the paper's own LetterCanvas is an uncontrolled text input that only ever

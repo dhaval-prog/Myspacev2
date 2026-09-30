@@ -1,7 +1,7 @@
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
 
-export type LetterPlaneVariant = 'default' | 'active' | 'delete';
+export type LetterPlaneVariant = 'default' | 'active' | 'delete' | 'unread' | 'read';
 
 interface LetterPlaneGlyphProps {
   size?: number;
@@ -17,6 +17,12 @@ const FILL: Record<LetterPlaneVariant, { body: string; wing: string; stroke: str
   default: { body: '#FBF8F1', wing: '#E6E0D3', stroke: '#9A958C' },
   active: { body: '#FFFFFF', wing: '#CFDDFF', stroke: '#FFFFFF' },
   delete: { body: '#FFFFFF', wing: '#FFD2CE', stroke: '#FFFFFF' },
+  // Per explicit request: the chip row's own plane reads unread/read status directly, independent
+  // of which chip is currently selected — a solid accent-blue plane (white stroke keeps it legible
+  // even on the selected chip's own blue box) for anything not yet opened, a plain white plane
+  // (matching the read state everywhere else in Throw) once it's been read.
+  unread: { body: '#2F6BFF', wing: '#5C8CFF', stroke: '#FFFFFF' },
+  read: { body: '#FFFFFF', wing: '#E8EEFF', stroke: '#B9C6E6' },
 };
 
 /**
