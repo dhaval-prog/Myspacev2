@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowProvider, useThrow } from '../../context/ThrowContext';
-import { Icon } from '../../components/Icon';
 import { LetterPlaneGlyph } from '../../components/throw/inbox/LetterPlaneGlyph';
 import { MapBackgroundV3 } from '../../components/throw/lettersV3/MapBackgroundV3';
 import { ContactsRowV3 } from '../../components/throw/lettersV3/ContactsRowV3';
@@ -15,12 +14,9 @@ import { useLettersArrivalV3, type V3Contact } from '../../hooks/useLettersArriv
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { v3Color, v3Font, v3Layout } from '../../theme/throwLettersV3Tokens';
 
-const BACK_ICON = 'M15 18l-6-6 6-6';
-
 const s = (n: number, scale: number) => n * scale;
 
 interface ThrowReceivedLettersScreenProps {
-  onBack: () => void;
   /** Reply, after its own fold-away + fly-to-corner exit — the caller lands on the existing Throw
    * compose flow for this contact (no separate "ThrowCompose" route exists in this app; Throw's
    * own screen already composes in place once a contact is focused). */
@@ -29,7 +25,7 @@ interface ThrowReceivedLettersScreenProps {
   initialContactId?: string;
 }
 
-function ReceivedLettersInner({ onBack, onReply, initialContactId }: ThrowReceivedLettersScreenProps) {
+function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLettersScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friends, inbox, deleteThrow, markRead, confirmThrowAlert } = useThrow();
@@ -69,9 +65,6 @@ function ReceivedLettersInner({ onBack, onReply, initialContactId }: ThrowReceiv
   if (contacts.length === 0) {
     return (
       <View style={styles.emptyScreen}>
-        <Pressable onPress={onBack} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back" style={[styles.backBtn, { top: insets.top + 8, left: 18 }]}>
-          <Icon path={BACK_ICON} size={20} color={v3Color.ink} strokeWidth={2.2} />
-        </Pressable>
         <Text style={styles.emptyTitle}>No letters yet</Text>
         <Text style={styles.emptySub}>Letters friends throw you will show up here.</Text>
       </View>
@@ -86,10 +79,6 @@ function ReceivedLettersInner({ onBack, onReply, initialContactId }: ThrowReceiv
       }}
     >
       <MapBackgroundV3 camTarget={arrival.camTarget} pins={arrival.pins} route={arrival.route} scale={scale} />
-
-      <Pressable onPress={onBack} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back" style={[styles.backBtn, { top: topOffset + 8, left: 18 }]}>
-        <Icon path={BACK_ICON} size={20} color={v3Color.ink} strokeWidth={2.2} />
-      </Pressable>
 
       <View style={{ position: 'absolute', left: 0, right: 0, top: topOffset + s(v3Layout.contactsY, scale) }}>
         <ContactsRowV3 contacts={arrival.contactRows} onSelect={arrival.selectContact} scale={scale} />
@@ -182,16 +171,6 @@ export function ThrowReceivedLettersScreen(props: ThrowReceivedLettersScreenProp
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: v3Color.mapBg, overflow: 'hidden' },
-  backBtn: {
-    position: 'absolute',
-    zIndex: 30,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,.75)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   emptyScreen: { flex: 1, backgroundColor: v3Color.mapBg, alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 32 },
   emptyTitle: { fontFamily: v3Font.ui800, fontSize: 18, color: v3Color.ink },
   emptySub: { fontFamily: v3Font.ui400, fontSize: 13.5, color: v3Color.mutedDark, textAlign: 'center' },

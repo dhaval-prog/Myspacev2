@@ -69,12 +69,11 @@ function setupMocks(inbox: ReturnType<typeof letter>[], friends = [FRIEND_A, FRI
 }
 
 async function renderScreen(props: Partial<React.ComponentProps<typeof ThrowReceivedLettersScreen>> = {}) {
-  const onBack = jest.fn();
   const onReply = jest.fn();
   await act(async () => {
-    renderWithSafeArea(<ThrowReceivedLettersScreen onBack={onBack} onReply={onReply} {...props} />);
+    renderWithSafeArea(<ThrowReceivedLettersScreen onReply={onReply} {...props} />);
   });
-  return { onBack, onReply };
+  return { onReply };
 }
 
 describe('ThrowReceivedLettersScreen', () => {
@@ -82,16 +81,11 @@ describe('ThrowReceivedLettersScreen', () => {
     jest.clearAllMocks();
   });
 
-  it('shows the empty state when nobody has sent a letter, and Back works', async () => {
+  it('shows the empty state when nobody has sent a letter', async () => {
     setupMocks([]);
-    const { onBack } = await renderScreen();
+    await renderScreen();
 
     expect(screen.getByText('No letters yet')).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.press(screen.getByLabelText('Back'));
-    });
-    expect(onBack).toHaveBeenCalled();
   });
 
   it('auto-selects the first contact with an unread letter and opens it', async () => {
