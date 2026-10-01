@@ -24,6 +24,7 @@ import { GamesScreen } from './src/screens/games/GamesScreen';
 import { GamesDashboardScreen } from './src/screens/games/GamesDashboardScreen';
 import { TriviaGameScreen } from './src/screens/games/trivia/TriviaGameScreen';
 import { ThrowScreen } from './src/screens/throw/ThrowScreen';
+import { ThrowReceivedLettersScreen } from './src/screens/throw/ThrowReceivedLettersScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -36,6 +37,7 @@ type Screen =
   | { name: 'games'; initialTab?: 'create' | 'join' }
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
   | { name: 'throw'; openThrowId?: string; focusContactId?: string }
+  | { name: 'throwLetters'; contactId?: string }
   | { name: 'account' };
 
 function AuthNavigator() {
@@ -126,6 +128,19 @@ function AppNavigator() {
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenThrow={() => setScreen({ name: 'throw' })}
         onOpenGames={() => setScreen({ name: 'gamesHub' })}
+        onOpenReceivedLetters={() => setScreen({ name: 'throwLetters' })}
+      />
+    );
+  }
+  if (screen.name === 'throwLetters') {
+    return (
+      <ThrowReceivedLettersScreen
+        onBack={() => setScreen({ name: 'friends' })}
+        // Reply lands on Throw's own existing compose flow for that contact — there's no separate
+        // "ThrowCompose" route in this app (Throw already composes in place once a contact is
+        // focused), so this reuses the same `focusContactId` navigation a notification tap uses.
+        onReply={(contactId) => setScreen({ name: 'throw', focusContactId: contactId })}
+        initialContactId={screen.contactId}
       />
     );
   }
