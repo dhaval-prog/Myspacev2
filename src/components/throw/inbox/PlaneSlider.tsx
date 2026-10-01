@@ -397,6 +397,7 @@ export function PlaneSlider({
           confirmLabel="Delete"
           cancelLabel="Cancel"
           destructive
+          glass
           onConfirm={handleConfirmDelete}
           onCancel={handleCancelDelete}
         />

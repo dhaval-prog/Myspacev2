@@ -18,6 +18,8 @@ import { AddFriendCard } from '../../components/throw/AddFriendCard';
 import { BottomNav } from '../../components/BottomNav';
 import { Icon } from '../../components/Icon';
 import { LetterFoldCard } from '../../components/throw/inbox/LetterFoldCard';
+import type { LetterFoldCardHandle } from '../../components/throw/inbox/LetterFoldCard';
+import { LetterActionsRow } from '../../components/throw/inbox/LetterActionsRow';
 import { LetterPlaneGlyph } from '../../components/throw/inbox/LetterPlaneGlyph';
 import { PlaneSlider } from '../../components/throw/inbox/PlaneSlider';
 import { inboxLayout } from '../../theme/throwInboxTokens';
@@ -47,6 +49,14 @@ const BACK_ICON = 'M15 18l-6-6 6-6';
 // private to that module, but kept numerically identical so the gesture feel matches exactly).
 const INBOX_FLICK_CAPTURE_DX = 20;
 const INBOX_FLICK_CAPTURE_RATIO = 1.7;
+
+// The in-place received-letters panel's own Reply/Confirm/photo row (see LetterActionsRow) — a
+// fixed, unscaled height reserved out of the letter area's own box (see inboxCardHeight below) so
+// the row sits below the letter card as a plain sibling instead of floating on top of its written
+// text the way it originally did. Fixed rather than scaled with the letter itself since the row's
+// own 48px glass buttons (see GlassIconButton) don't resize with the card.
+const INBOX_ACTIONS_ROW_HEIGHT = 48;
+const INBOX_ACTIONS_ROW_GAP = 16;
 
 /** Drives the same flick-to-switch-recipient gesture the folded letter card and the in-place
  * inbox panel already use (see CONTACT_DRAG_SPACING/INBOX_FLICK_CAPTURE_*), but for a surface
@@ -342,11 +352,14 @@ export function ThrowHomeScreen({
   const [inboxAreaSize, setInboxAreaSize] = useState({ width: 0, height: 0 });
   const inboxScale = inboxAreaSize.width > 0 ? inboxAreaSize.width / inboxLayout.letter.w : 1;
   // The card's own height scales independently of its width (see LetterFoldCard's own
-  // heightScale prop) — filling the whole available height the same way FoldingLetter's own
-  // plain flex:1 paper does, instead of being capped at whatever inboxScale's width-derived ratio
-  // happens to produce (which used to leave this card noticeably shorter than the compose letter).
-  const inboxHeightScale = inboxAreaSize.height > 0 ? inboxAreaSize.height / inboxLayout.letter.h : inboxScale;
-  const inboxCardHeight = inboxAreaSize.height > 0 ? inboxAreaSize.height : inboxLayout.letter.h * inboxScale;
+  // heightScale prop) — filling the whole available height (minus the Reply/Confirm/photo row's
+  // own reserved band just below it, see INBOX_ACTIONS_ROW_HEIGHT) the same way FoldingLetter's
+  // own plain flex:1 paper does, instead of being capped at whatever inboxScale's width-derived
+  // ratio happens to produce (which used to leave this card noticeably shorter than the compose
+  // letter).
+  const inboxCardAreaHeight = Math.max(0, inboxAreaSize.height - INBOX_ACTIONS_ROW_HEIGHT - INBOX_ACTIONS_ROW_GAP);
+  const inboxHeightScale = inboxCardAreaHeight > 0 ? inboxCardAreaHeight / inboxLayout.letter.h : inboxScale;
+  const inboxCardHeight = inboxCardAreaHeight > 0 ? inboxCardAreaHeight : inboxLayout.letter.h * inboxScale;
   // A separate, larger scale for the bottom plane-chip row, kept independent of inboxScale (the
   // letter card's own width-derived scale) so the chips read at roughly the same size as
   // FoldingLetter's own bottom-controls row instead of shrinking down to match the card.
@@ -376,6 +389,12 @@ export function ThrowHomeScreen({
   // reached imperatively through this ref, since the sheet's own open/peek/closed state lives
   // inside FoldingLetter, which already tracks the phase/content that drives it.
   const foldingLetterRef = useRef<FoldingLetterHandle>(null);
+  // Reaches LetterFoldCard's own photo/video viewer imperatively from the external
+  // LetterActionsRow's photo button — that toggle stays private state inside the card itself
+  // (see LetterFoldCardHandle's own doc comment), and tracks whether it's open here too, since
+  // LetterActionsRow needs to hide itself while the viewer covers the letter.
+  const letterFoldCardRef = useRef<LetterFoldCardHandle>(null);
+  const [inboxMediaMode, setInboxMediaMode] = useState(false);
   const [reminderPeeking, setReminderPeeking] = useState(false);
   // Opening the peek strip back up is either a tap (negligible movement) or an upward drag past
   // this distance/velocity — same threshold shape as BottomSheet's own handle-drag-to-dismiss,
@@ -1240,11 +1259,11 @@ export function ThrowHomeScreen({
                   {...(Platform.OS !== 'web' ? inboxFlickPanResponder.panHandlers : null)}
                 >
                   {/* Only shown once there's genuinely no other way out of the panel — once a
-                      letter is showing, "Throw Back" (see LetterFoldCard's own onThrowBack below)
-                      already does the exact same thing (just closes the panel), so this back
-                      chevron would be pure redundant chrome per explicit request. The true empty
-                      state (no letters from this contact at all) never renders a Throw Back
-                      button, so it still needs its own way back. */}
+                      letter is showing, "Reply" (see LetterActionsRow below) already does the
+                      exact same thing (just closes the panel), so this back chevron would be pure
+                      redundant chrome per explicit request. The true empty state (no letters from
+                      this contact at all) never renders a Reply button, so it still needs its own
+                      way back. */}
                   {inboxArrival.isEmpty && (
                     <Pressable
                       testID="inbox-back-btn"
@@ -1286,6 +1305,7 @@ export function ThrowHomeScreen({
                     </>
                   )}
                   <LetterFoldCard
+                    ref={letterFoldCardRef}
                     stage={inboxArrival.stage}
                     letter={inboxArrival.cardData}
                     isEmpty={inboxArrival.isEmpty}
@@ -1293,14 +1313,27 @@ export function ThrowHomeScreen({
                     scale={inboxScale}
                     heightScale={inboxHeightScale}
                     reduceMotion={reduceMotion}
-                    // Just closes the panel, landing on the already-selected contact's own normal
-                    // (unlocked) compose letter — same as the back button, not a locked "replying
-                    // to" flow — per explicit request; the `onThrowBack` prop (which drives that
-                    // locked flow elsewhere) is only for ThrowInboxScreen/ThrowLetterDetailScreen's
-                    // own separate Throw Back buttons, not this in-place panel's.
-                    onThrowBack={inboxArrival.activeLetter ? handleCloseInbox : undefined}
-                    onConfirmAlert={handleConfirmAlert}
+                    onMediaModeChange={setInboxMediaMode}
                   />
+                  {/* Reply/Confirm/photo — a plain sibling below the card (see inboxCardHeight's
+                      own reserved band for this row), not an overlay on top of its written text
+                      the way this row originally worked, per explicit request. */}
+                  {inboxArrival.stage === 'open' && inboxArrival.activeLetter && !inboxMediaMode && (
+                    <View pointerEvents="box-none" style={[styles.inboxActionsRowWrap, { top: inboxCardHeight + INBOX_ACTIONS_ROW_GAP }]}>
+                      <LetterActionsRow
+                        // Just closes the panel, landing on the already-selected contact's own
+                        // normal (unlocked) compose letter — same as the back button, not a locked
+                        // "replying to" flow — per explicit request.
+                        onThrowBack={handleCloseInbox}
+                        alertSchedule={inboxArrival.cardData?.alertSchedule ?? null}
+                        alertConfirmed={inboxArrival.cardData?.alertConfirmed ?? false}
+                        onConfirmAlert={handleConfirmAlert}
+                        hasMedia={(inboxArrival.cardData?.photoUrls.length ?? 0) > 0}
+                        onTogglePhotos={() => letterFoldCardRef.current?.toggleMedia()}
+                        scale={inboxScale}
+                      />
+                    </View>
+                  )}
                 </View>
               ) : (
                 <FoldingLetter
@@ -1486,6 +1519,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   inboxPlaneShadow: { position: 'absolute', backgroundColor: 'rgba(0,0,0,.18)' },
+  inboxActionsRowWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   // The self-reminder sheet's collapsed stand-in (see onReminderPeekChange) — a small "Remind me"
   // button, not a bare drag handle, pinned near the actual screen bottom (unlike letterCard,
   // which sits well short of it) so it reads as belonging to the whole screen, not just this

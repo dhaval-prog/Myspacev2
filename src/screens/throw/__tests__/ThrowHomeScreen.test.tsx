@@ -30,6 +30,13 @@ jest.mock('../../../context/NotificationsContext', () => ({ useNotifications: je
 // reasoning as expo-video below, so this has to be mocked regardless of what's rendered.
 jest.mock('../../../context/FriendsContext', () => ({ useFriends: jest.fn() }));
 
+// Forces the in-place received-letters arrival (useInboxArrival) straight to its 'open' stage
+// the instant a letter is opened, skipping the real plane-flight animation's own real-time RAF
+// loop (hundreds of ms of actual wall-clock time, not something `act` can fast-forward without
+// fake timers) — none of these tests care about the flight animation itself, only about what's
+// wired once a letter is open.
+jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
+
 // WeatherOverlay/RainOverlay are a purely visual screen-space effect (Animated loops/canvas,
 // irrelevant to anything under test in this file) — stubbed out the same way ThrowMap is, so tests
 // don't need a real ThrowWeatherContext (which itself needs a real, unmocked AuthContext/
@@ -132,6 +139,18 @@ jest.mock('../../../components/throw/inbox/PlaneSlider', () => ({
     mockPlaneSliderProps = props;
     const { Text } = require('react-native');
     return require('react').createElement(Text, { testID: 'plane-slider' }, props.contactName);
+  },
+}));
+
+// The Reply/Confirm/photo row now lives outside LetterFoldCard (see its own doc comment) — mocked
+// the same way so its onThrowBack plumbing stays testable, and so it never pulls in the real
+// GlassIconButton (which the LetterFoldCard mock above doesn't export).
+let mockLetterActionsRowProps: any;
+jest.mock('../../../components/throw/inbox/LetterActionsRow', () => ({
+  LetterActionsRow: (props: any) => {
+    mockLetterActionsRowProps = props;
+    const { Text } = require('react-native');
+    return require('react').createElement(Text, { testID: 'letter-actions-row' }, 'actions');
   },
 }));
 
@@ -881,9 +900,16 @@ describe('ThrowHomeScreen in-place received-letters panel', () => {
     await act(async () => {
       mockFoldingLetterProps.onOpenInbox();
     });
+    // The in-place arrival's own auto-play effect (useInboxArrival) waits a real 400ms before
+    // calling play() for the first time — LetterActionsRow only mounts once that lands the stage
+    // on 'open' (it's gated on that, see ThrowHomeScreen's own render), unlike the old
+    // LetterFoldCard-owned row, which was wired regardless of stage.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    });
 
     expect(screen.queryByTestId('inbox-back-btn')).toBeNull();
-    expect(typeof mockLetterFoldCardProps.onThrowBack).toBe('function');
+    expect(typeof mockLetterActionsRowProps.onThrowBack).toBe('function');
   });
 
   it('Throw Back just closes the panel, landing on the same contact\'s normal unlocked letter', async () => {
@@ -896,12 +922,17 @@ describe('ThrowHomeScreen in-place received-letters panel', () => {
     await act(async () => {
       mockFoldingLetterProps.onOpenInbox();
     });
-    // activeLetter is derived synchronously from the (already-filtered) letters list — no need to
-    // wait out the arrival's own flight/fold timers for onThrowBack to already be wired.
-    expect(typeof mockLetterFoldCardProps.onThrowBack).toBe('function');
+    // The in-place arrival's own auto-play effect (useInboxArrival) waits a real 400ms before
+    // calling play() for the first time — LetterActionsRow only mounts once that lands the stage
+    // on 'open' (it's gated on that, see ThrowHomeScreen's own render), unlike the old
+    // LetterFoldCard-owned row, which was wired regardless of stage.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    });
+    expect(typeof mockLetterActionsRowProps.onThrowBack).toBe('function');
 
     await act(async () => {
-      mockLetterFoldCardProps.onThrowBack();
+      mockLetterActionsRowProps.onThrowBack();
     });
 
     expect(screen.queryByTestId('letter-fold-card')).toBeNull();

@@ -1,12 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Image, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Polygon } from 'react-native-svg';
 import { Icon } from '../../Icon';
 import { GlassSurface } from '../../friends/GlassSurface';
 import { AutoplayVideoFill } from '../../AutoplayVideoFill';
 import { inboxColor, inboxLayout } from '../../../theme/throwInboxTokens';
 import { formatClockMs } from '../../../utils/formatClock';
-import { formatAlertSchedule } from '../../../utils/throwAlerts';
 import type { AlertSchedule, MediaTrim } from '../../../types/throw';
 
 const CHEVRON_LEFT_ICON = 'M15 18l-6-6 6-6';
@@ -66,8 +65,8 @@ export interface LetterCardData {
    * already within the 15s cap). */
   photoTrims: (MediaTrim | null)[];
   /** The sender's own optional attached reminder request (see ThrowLetter's own alertSchedule) —
-   * null for an ordinary letter with nothing attached. Shows a Confirm pill beside Reply until
-   * alertConfirmed is true (see onConfirmAlert). */
+   * null for an ordinary letter with nothing attached. LetterActionsRow (rendered below this card,
+   * not by it) shows a Confirm pill beside Reply from these two fields until alertConfirmed. */
   alertSchedule: AlertSchedule | null;
   alertConfirmed: boolean;
 }
@@ -86,12 +85,17 @@ interface LetterFoldCardProps {
    * the width past its slot's own margins — `scale` alone stays driving width, fonts, and padding. */
   heightScale?: number;
   reduceMotion: boolean;
-  onThrowBack?: () => void;
-  /** Confirms this letter's own attached reminder request (see LetterCardData's own alertSchedule)
-   * — present only while there's actually something to confirm; the Confirm pill itself is what
-   * decides whether to show (letter.alertSchedule present && !alertConfirmed), same convention as
-   * onThrowBack. */
-  onConfirmAlert?: () => void;
+  /** Reports every time the full-bleed photo/video viewer opens or closes — the caller's own
+   * LetterActionsRow (rendered outside this card now, below it rather than overlapping — see its
+   * own doc comment) needs to hide itself while the viewer is up, same as this card's internal
+   * Reply/Confirm/photo row used to gate on `!mediaMode` before it moved out. */
+  onMediaModeChange?: (active: boolean) => void;
+}
+
+export interface LetterFoldCardHandle {
+  /** Opens (or closes) the full-bleed photo/video viewer — the external LetterActionsRow's own
+   * photo button drives this imperatively, since `mediaMode` itself stays private state here. */
+  toggleMedia: () => void;
 }
 
 // ----- timings, ported verbatim from the design handoff's own renderVals() -----
@@ -149,7 +153,10 @@ function NoseFlap({ rotate, side, scale }: { rotate: Animated.AnimatedInterpolat
  * "sheet" (wings + nose flaps) shown in between. Purely reactive to the `stage` prop the screen's
  * own state machine drives — see ThrowInboxScreen for the timer chain between stages.
  */
-export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heightScale, reduceMotion, onThrowBack, onConfirmAlert }: LetterFoldCardProps) {
+export const LetterFoldCard = forwardRef<LetterFoldCardHandle, LetterFoldCardProps>(function LetterFoldCard(
+  { stage, letter, isEmpty, emptyName, scale, heightScale, reduceMotion, onMediaModeChange },
+  ref,
+) {
   const vScale = heightScale ?? scale;
   const w = s(inboxLayout.letter.w, scale);
   const h = s(inboxLayout.letter.h, vScale);
@@ -186,12 +193,17 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
     setMediaDurationMs(0);
     setMediaMuted(false);
   }, [mediaIndex]);
+  useEffect(() => {
+    onMediaModeChange?.(mediaMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaMode]);
   const toggleMediaMode = () => {
     const next = !mediaMode;
     if (next) setMediaIndex(0);
     setMediaMode(next);
     Animated.timing(mediaOpacity, { toValue: next ? 1 : 0, duration: 220, useNativeDriver: true }).start();
   };
+  useImperativeHandle(ref, () => ({ toggleMedia: toggleMediaMode }));
 
   // Flick up/down over the open photo/video to move to the next/previous attachment — see
   // SWIPE_COMMIT_DISTANCE/VELOCITY's own comment on why this only ever reads a gesture's start and
@@ -427,17 +439,36 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
 
   return (
     <Animated.View pointerEvents="none" style={[{ width: w, height: h }, outerStyle]}>
-      {/* Middle panel — static, always visible, the tri-fold's own hinge anchor. */}
-      <View style={[styles.midPanel, { top: panelH, height: panelH, width: w }]}>
-        <View style={{ position: 'absolute', left: 0, top: -panelH, width: w, height: h }}>
+      {stage === 'open' ? (
+        // Once fully unfolded, the tri-fold's own 3-panel slicing below exists purely as a
+        // leftover of the fold animation — each of its 3 fixed panelH-tall windows shows a
+        // non-overlapping slice of the SAME body text, which only ever adds up to a continuous
+        // letter as long as that text fits within 3*panelH; anything longer than that had no 4th
+        // window to show it in, so it just got clipped off (per explicit bug report). This single
+        // plain, scrollable card replaces that slicing entirely for 'open' specifically — nothing
+        // is rotating by this point, so there's no fold geometry left to preserve — letting the
+        // body grow past the card's own height without losing any of it.
+        <View pointerEvents="box-none" style={[styles.openCard, { width: w, height: h, borderRadius: s(24, scale) }]}>
           <RuledLines scale={scale} vScale={vScale} />
           <HeaderRow letter={L} scale={scale} />
-          <BodyText body={L.body} scale={scale} />
+          <ScrollView style={styles.bodyScroll} contentContainerStyle={{ paddingBottom: s(70, vScale) }} showsVerticalScrollIndicator={false}>
+            <BodyText body={L.body} scale={scale} />
+          </ScrollView>
           <SignatureRow letter={L} scale={scale} vScale={vScale} />
         </View>
-      </View>
+      ) : (
+        <>
+          {/* Middle panel — static, always visible, the tri-fold's own hinge anchor. */}
+          <View style={[styles.midPanel, { top: panelH, height: panelH, width: w }]}>
+            <View style={{ position: 'absolute', left: 0, top: -panelH, width: w, height: h }}>
+              <RuledLines scale={scale} vScale={vScale} />
+              <HeaderRow letter={L} scale={scale} />
+              <BodyText body={L.body} scale={scale} />
+              <SignatureRow letter={L} scale={scale} vScale={vScale} />
+            </View>
+          </View>
 
-      {/*
+          {/*
         Bottom/top panels — each rendered as two INDEPENDENT sibling faces (not one face nested
         inside the other's animated parent) with their own directly-computed rotation, rather than
         relying on a static local rotateX(180) on the back face composing with its parent's own
@@ -592,7 +623,9 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
           <View style={[styles.wingFace, { width: w / 2, height: panelH, backgroundColor: inboxColor.paperBack, borderTopRightRadius: s(6, scale), borderBottomRightRadius: s(6, scale) }]} />
           <NoseFlap side="right" scale={scale} rotate={flapR.interpolate({ inputRange: [0, 180], outputRange: ['0deg', '180deg'] })} />
         </Animated.View>
-      </Animated.View>
+        </Animated.View>
+        </>
+      )}
 
       {/* The media viewer — a full-bleed photo/video cover clipped to the card's own shape, the
           same treatment ContactStoryStack gives a posted status, rather than a small floating
@@ -667,52 +700,21 @@ export function LetterFoldCard({ stage, letter, isEmpty, emptyName, scale, heigh
         </Animated.View>
       )}
 
-      {stage === 'open' && onThrowBack && !mediaMode && (
-        // `bottom` needs vScale, not scale, same reasoning as SignatureRow's own bottom offset —
-        // but pushed well clear of it (56 vs. SignatureRow's own 20) rather than sharing roughly
-        // the same band: this row's own 48px-tall glass buttons otherwise visually collided with
-        // the signature/count line sitting just above the card's bottom edge, especially once a
-        // third button (Confirm) made the row read as crowded against it. Only the text side shows
-        // this row at all — media mode's own flip/prev/next glass buttons (above) replace it
-        // entirely rather than layering on top of it.
-        <View pointerEvents="box-none" style={[styles.throwBackOuter, { bottom: s(56, vScale), gap: s(10, scale) }]}>
-          <View style={[styles.throwBackWrap, { gap: s(12, scale) }]}>
-            <GlassIconButton onPress={onThrowBack} label="Reply" scale={scale} accessibilityLabel="Reply" tintColor="rgba(47,107,255,.55)" />
-            {/* The sender's own attached reminder request (see LetterCardData's own alertSchedule)
-                — only shows once there's actually one to confirm, and disappears once confirmed
-                (same "this letter needs your action" convention as Reply, not a locked/dimmed
-                state like the gallery button below, since a confirmed request has nothing left to
-                do here). */}
-            {L.alertSchedule && !L.alertConfirmed && onConfirmAlert && (
-              <GlassIconButton onPress={onConfirmAlert} label="Confirm" scale={scale} accessibilityLabel={`Confirm reminder, ${formatAlertSchedule(L.alertSchedule)}`} tintColor="rgba(47,169,107,.6)" />
-            )}
-            {/* Locked (no onPress, dimmed) rather than hidden when the letter has no attachments —
-                per explicit request — so its presence itself says "this letter has no media"
-                instead of the row just quietly having one fewer button. */}
-            <GlassIconButton
-              onPress={L.photoUrls.length > 0 ? toggleMediaMode : undefined}
-              path={IMAGE_ICON}
-              scale={scale}
-              accessibilityLabel="View attached photos or videos"
-              disabled={L.photoUrls.length === 0}
-              tintColor="rgba(47,107,255,.55)"
-            />
-          </View>
-        </View>
-      )}
     </Animated.View>
   );
-}
+});
 
-/** A small round frosted-glass button — every icon control the media viewer and its "View media"/
- * "Reply" entry points use, so they read as one consistent chrome family instead of each
- * reinventing a background/border treatment. Medium-sized (not the smaller size these used to be)
- * per explicit request. `tintColor` lets the text-side entry points (sitting on plain paper, not a
- * photo) use Throw's own accent blue instead of the neutral dark glass the on-photo controls use,
- * which would otherwise all but disappear against the paper background. Takes `path` (drawn via
- * the shared stroke-based Icon component) for a circular icon button, or `label` for a wider
- * rounded-pill text button (e.g. "Reply") using the same glass chrome. */
-function GlassIconButton({
+/** A small round frosted-glass button — every icon control the media viewer uses, and (via
+ * LetterActionsRow, the Reply/Confirm/photo row rendered below this card now) its own Reply/
+ * Confirm/photo entry points too, so they all read as one consistent chrome family instead of
+ * each reinventing a background/border treatment. Medium-sized (not the smaller size these used
+ * to be) per explicit request. `tintColor` lets the text-side entry points (sitting on plain
+ * paper, not a photo) use Throw's own accent blue instead of the neutral dark glass the on-photo
+ * controls use, which would otherwise all but disappear against the paper background. Takes
+ * `path` (drawn via the shared stroke-based Icon component) for a circular icon button, or
+ * `label` for a wider rounded-pill text button (e.g. "Reply") using the same glass chrome.
+ * Exported for LetterActionsRow's own use, since this card no longer renders that row itself. */
+export function GlassIconButton({
   onPress,
   path,
   label,
@@ -809,6 +811,11 @@ function SignatureRow({ letter, scale, vScale }: { letter: LetterCardData; scale
 }
 
 const styles = StyleSheet.create({
+  // The fully-open letter's own single-card layout (see its own comment above) — replaces the
+  // tri-fold's 3 fixed-height slices once there's no fold animation left to preserve, so body
+  // text longer than they could ever show just scrolls instead of getting clipped.
+  openCard: { backgroundColor: inboxColor.paper, overflow: 'hidden' },
+  bodyScroll: { flex: 1 },
   midPanel: { position: 'absolute', left: 0, right: 0, backgroundColor: inboxColor.paper, overflow: 'hidden' },
   panelFace: { position: 'absolute', left: 0, backgroundColor: inboxColor.paper, overflow: 'hidden', backfaceVisibility: 'hidden' },
   panelBack: { position: 'absolute', left: 0, top: 0, backfaceVisibility: 'hidden', borderRadius: 6 },
@@ -842,8 +849,6 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontFamily: 'Figtree_800ExtraBold', color: inboxColor.ink },
   emptySub: { fontFamily: 'DMMono_500Medium', letterSpacing: 1.4, color: inboxColor.muted },
-  throwBackOuter: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  throwBackWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   mediaOverlay: { position: 'absolute', left: 0, top: 0, backgroundColor: '#000000', overflow: 'hidden' },
   glassBtn: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,.4)' },
   videoClock: {
