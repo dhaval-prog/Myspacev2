@@ -8,13 +8,14 @@ import { ThrowLocationSetupScreen } from './ThrowLocationSetupScreen';
 import { ThrowHomeScreen } from './ThrowHomeScreen';
 import { ThrowLetterDetailScreen } from './ThrowLetterDetailScreen';
 import { ThrowSettingsScreen } from './ThrowSettingsScreen';
+import type { NotificationTarget } from '../../utils/notify';
 
 interface ThrowScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
-  onOpenNotifications: () => void;
+  onNotificationTarget: (target: NotificationTarget) => void;
   initialThrowId?: string;
   initialFocusContactId?: string;
 }
@@ -29,7 +30,7 @@ function ThrowNavigator({
   onOpenExpenses,
   onOpenChats,
   onOpenAddFriend,
-  onOpenNotifications,
+  onNotificationTarget,
   initialThrowId,
   initialFocusContactId,
 }: {
@@ -37,7 +38,7 @@ function ThrowNavigator({
   onOpenExpenses: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
-  onOpenNotifications: () => void;
+  onNotificationTarget: (target: NotificationTarget) => void;
   initialThrowId?: string;
   initialFocusContactId?: string;
 }) {
@@ -58,8 +59,13 @@ function ThrowNavigator({
         onOpenExpenses={onOpenExpenses}
         onOpenChats={onOpenChats}
         onOpenAddFriend={onOpenAddFriend}
-        onOpenNotifications={onOpenNotifications}
         onOpenSettings={() => setScreen({ name: 'settings' })}
+        // "Open this exact letter" is this navigator's own subscreen switch (ThrowHomeScreen has
+        // no notion of it), so it's intercepted right here — anything else (focusing a contact,
+        // or leaving Throw entirely for Expenses/Friends) is ThrowHomeScreen's own concern, passed
+        // straight through.
+        onOpenThrowLetter={(throwId) => setScreen({ name: 'letter', throwId })}
+        onNotificationTarget={onNotificationTarget}
         lockedRecipient={screen.lockedRecipient}
         initialFocusContactId={initialFocusContactId}
       />
@@ -83,7 +89,7 @@ function ThrowNavigator({
   return null;
 }
 
-export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFriend, onOpenNotifications, initialThrowId, initialFocusContactId }: ThrowScreenProps) {
+export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFriend, onNotificationTarget, initialThrowId, initialFocusContactId }: ThrowScreenProps) {
   return (
     <ThrowProvider>
       <ThrowStoriesProvider>
@@ -93,7 +99,7 @@ export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFrie
             onOpenExpenses={onOpenExpenses}
             onOpenChats={onOpenChats}
             onOpenAddFriend={onOpenAddFriend}
-            onOpenNotifications={onOpenNotifications}
+            onNotificationTarget={onNotificationTarget}
             initialThrowId={initialThrowId}
             initialFocusContactId={initialFocusContactId}
           />

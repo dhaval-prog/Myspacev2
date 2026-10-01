@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fontFamily, radius, spacing } from '../theme';
-import { Icon } from '../components/Icon';
-import { FriendAvatar } from '../components/friends/FriendAvatar';
-import { useNotifications, type AppNotification } from '../context/NotificationsContext';
-import { useFriends } from '../context/FriendsContext';
-import { targetForNotification, type NotificationTarget } from '../utils/notify';
+import { colors, fontFamily, radius, spacing } from '../../theme';
+import { Icon } from '../Icon';
+import { FriendAvatar } from '../friends/FriendAvatar';
+import { GlassSurface } from '../friends/GlassSurface';
+import { useNotifications, type AppNotification } from '../../context/NotificationsContext';
+import { useFriends } from '../../context/FriendsContext';
+import { targetForNotification, type NotificationTarget } from '../../utils/notify';
+import { throwGlass, throwRadius } from '../../theme/throwTokens';
 
 const BACK_ICON = 'M15 18l-6-6 6-6';
 const PLUS_ICON = 'M12 5v14M5 12h14';
@@ -57,20 +58,23 @@ function isToday(iso: string): boolean {
   return new Date(iso).toDateString() === new Date().toDateString();
 }
 
-interface NotificationsScreenProps {
-  onBack: () => void;
+interface NotificationsPanelProps {
+  /** Collapses the panel back into the carousel — tapping the Notifications circle again, or
+   * selecting Add Status/a real contact, all route through this same close. */
+  onClose: () => void;
   /** Jumps to whatever this notification is about (a chat, a throw, a contact) — omit to just
    * acknowledge in place. */
   onNavigate?: (target: NotificationTarget) => void;
 }
 
-/** Full-screen notification history — every friend request, throw, chat message, and status post
- * that's come in, grouped by day, filterable by category, built to match a supplied reference
- * design exactly. Reached from Throw's own recipient rail (see RecipientCarousel's own
- * onOpenNotifications), distinct from the smaller quick-glance NotificationsSheet used elsewhere
- * in the app. */
-export function NotificationsScreen({ onBack, onNavigate }: NotificationsScreenProps) {
-  const insets = useSafeAreaInsets();
+/** The notification history — every friend request, throw, chat message, and status post that's
+ * come in, grouped by day, filterable by category, built to match a supplied reference design.
+ * Rendered as a floating glassmorphism card above the map, directly inside ThrowHomeScreen,
+ * instead of pushing to a separate full-screen route — reached from the recipient carousel's own
+ * Notifications slot (see RecipientCarousel's own isNotificationsSelected), which the card stays
+ * open for exactly as long as that slot stays selected. Distinct from the smaller quick-glance
+ * NotificationsSheet used elsewhere in the app. */
+export function NotificationsPanel({ onClose, onNavigate }: NotificationsPanelProps) {
   const { notifications, unreadCount, acknowledge, clearAll } = useNotifications();
   const { friends, receivedRequests, sentRequests, acceptRequest, declineRequest } = useFriends();
   const [filter, setFilter] = useState<Filter>('all');
@@ -102,9 +106,9 @@ export function NotificationsScreen({ onBack, onNavigate }: NotificationsScreenP
     return (
       <Pressable key={n.id} onPress={() => handlePress(n)} accessibilityRole="button" accessibilityLabel={`${n.title} ${n.body}`} style={styles.row}>
         <View style={styles.avatarWrap}>
-          <FriendAvatar userId={n.relatedUserId ?? n.id} name={avatar?.name ?? n.title} avatarUrl={avatar?.avatarUrl} size={48} />
+          <FriendAvatar userId={n.relatedUserId ?? n.id} name={avatar?.name ?? n.title} avatarUrl={avatar?.avatarUrl} size={44} />
           <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-            <Icon path={badge.icon} size={12} color={badge.iconColor} strokeWidth={2.4} />
+            <Icon path={badge.icon} size={11} color={badge.iconColor} strokeWidth={2.4} />
           </View>
         </View>
 
@@ -144,7 +148,7 @@ export function NotificationsScreen({ onBack, onNavigate }: NotificationsScreenP
 
         {n.category === 'status_posted' && (
           <View style={styles.photoThumb}>
-            <Icon path={PHOTO_ICON} size={16} color={colors.textFaint} strokeWidth={1.8} />
+            <Icon path={PHOTO_ICON} size={15} color={colors.textFaint} strokeWidth={1.8} />
             <Text style={styles.photoThumbLabel}>photo</Text>
           </View>
         )}
@@ -155,10 +159,10 @@ export function NotificationsScreen({ onBack, onNavigate }: NotificationsScreenP
   };
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <GlassSurface tint="light" tintColor={throwGlass.tintWaterBlueStrong} style={styles.card}>
       <View style={styles.header}>
-        <Pressable onPress={onBack} hitSlop={8} accessibilityRole="button" accessibilityLabel="Back">
-          <Icon path={BACK_ICON} size={24} color={colors.textPrimary} strokeWidth={2.2} />
+        <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close notifications">
+          <Icon path={BACK_ICON} size={22} color={colors.textPrimary} strokeWidth={2.2} />
         </Pressable>
         <Text style={styles.title}>Notifications</Text>
         {unreadCount > 0 ? (
@@ -187,7 +191,7 @@ export function NotificationsScreen({ onBack, onNavigate }: NotificationsScreenP
         })}
       </ScrollView>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
         {filtered.length === 0 ? (
           <Text style={styles.empty}>You're all caught up.</Text>
         ) : (
@@ -207,44 +211,44 @@ export function NotificationsScreen({ onBack, onNavigate }: NotificationsScreenP
           </>
         )}
       </ScrollView>
-    </View>
+    </GlassSurface>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.white },
+  card: { flex: 1, borderRadius: throwRadius.card, paddingTop: spacing.sm },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.xs,
     paddingBottom: spacing.md,
     gap: spacing.sm,
   },
-  title: { flex: 1, fontFamily: fontFamily.sans800, fontSize: 22, color: colors.textPrimary },
-  markAllRead: { fontFamily: fontFamily.sans600, fontSize: 13.5, color: ACCENT_BLUE },
-  // `width: '100%'` keeps this ScrollView from ever stretching past the screen's own width (it
+  title: { flex: 1, fontFamily: fontFamily.sans800, fontSize: 19, color: colors.textPrimary },
+  markAllRead: { fontFamily: fontFamily.sans600, fontSize: 13, color: ACCENT_BLUE },
+  // `width: '100%'` keeps this ScrollView from ever stretching past the card's own width (it
   // otherwise shrink-wraps to its unclipped content on web) — without it, a too-wide pill row
   // bleeds past the right edge instead of becoming properly horizontally scrollable there.
   filterScroll: { flexGrow: 0, width: '100%' },
   filterRow: { flexDirection: 'row', gap: spacing.xs, paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   filterPill: {
     paddingHorizontal: 12,
-    height: 32,
+    height: 30,
     borderRadius: radius.pill,
-    backgroundColor: colors.pale,
+    backgroundColor: 'rgba(255,255,255,.55)',
     alignItems: 'center',
     justifyContent: 'center',
     // Without this, some WebKit builds shrink these pills below their own text's natural width
-    // once the row's combined content doesn't fit the screen (see filterScroll's own width:100%
-    // comment) — the pill's background shrinks but its one-line Text doesn't wrap, so the label
-    // spills out past its own pill and visually overlaps its neighbor instead of the row simply
-    // scrolling. Pinning flexShrink to 0 keeps every pill at its natural size no matter what.
+    // once the row's combined content doesn't fit the available width — the pill's background
+    // shrinks but its one-line Text doesn't wrap, so the label spills out past its own pill and
+    // visually overlaps its neighbor instead of the row simply scrolling. Pinning flexShrink to 0
+    // keeps every pill at its natural size no matter what.
     flexShrink: 0,
   },
   filterPillActive: { backgroundColor: colors.ink },
-  filterLabel: { fontFamily: fontFamily.sans600, fontSize: 13, color: colors.textPrimary },
+  filterLabel: { fontFamily: fontFamily.sans600, fontSize: 12.5, color: colors.textPrimary },
   filterLabelActive: { color: colors.white },
   sectionLabel: {
     fontFamily: fontFamily.sans600,
@@ -253,9 +257,10 @@ const styles = StyleSheet.create({
     color: colors.textFaint,
     textTransform: 'uppercase',
     paddingHorizontal: spacing.lg,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
+  listContent: { paddingBottom: spacing.lg },
   empty: { fontFamily: fontFamily.sans400, fontSize: 13.5, color: colors.textFaint, textAlign: 'center', paddingVertical: spacing.xl },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   avatarWrap: { position: 'relative' },
@@ -263,9 +268,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -2,
     bottom: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 2,
     borderColor: colors.white,
     alignItems: 'center',
@@ -273,23 +278,23 @@ const styles = StyleSheet.create({
   },
   rowBody: { flex: 1, minWidth: 0, gap: 2 },
   rowLine: { flexWrap: 'wrap' },
-  rowName: { fontFamily: fontFamily.sans700, fontSize: 15, color: colors.textPrimary },
-  rowPhrase: { fontFamily: fontFamily.sans400, fontSize: 15, color: colors.textPrimary },
-  rowPreview: { fontFamily: fontFamily.sans400, fontSize: 13.5, color: colors.textSecondary, marginTop: 2 },
-  rowTime: { fontFamily: fontFamily.sans400, fontSize: 12.5, color: colors.textFaint, marginTop: 2 },
+  rowName: { fontFamily: fontFamily.sans700, fontSize: 14, color: colors.textPrimary },
+  rowPhrase: { fontFamily: fontFamily.sans400, fontSize: 14, color: colors.textPrimary },
+  rowPreview: { fontFamily: fontFamily.sans400, fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  rowTime: { fontFamily: fontFamily.sans400, fontSize: 12, color: colors.textFaint, marginTop: 2 },
   actionsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm },
-  acceptButton: { backgroundColor: colors.ink, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 18 },
-  acceptLabel: { fontFamily: fontFamily.sans700, fontSize: 13.5, color: colors.white },
-  declineButton: { paddingVertical: 8, paddingHorizontal: 4 },
-  declineLabel: { fontFamily: fontFamily.sans600, fontSize: 13.5, color: colors.textSecondary },
+  acceptButton: { backgroundColor: colors.ink, borderRadius: radius.pill, paddingVertical: 7, paddingHorizontal: 16 },
+  acceptLabel: { fontFamily: fontFamily.sans700, fontSize: 13, color: colors.white },
+  declineButton: { paddingVertical: 7, paddingHorizontal: 4 },
+  declineLabel: { fontFamily: fontFamily.sans600, fontSize: 13, color: colors.textSecondary },
   photoThumb: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: 10,
-    backgroundColor: colors.pale,
+    backgroundColor: 'rgba(255,255,255,.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoThumbLabel: { fontFamily: fontFamily.sans400, fontSize: 9.5, color: colors.textFaint, marginTop: 2 },
-  unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: ACCENT_BLUE, marginTop: 6 },
+  photoThumbLabel: { fontFamily: fontFamily.sans400, fontSize: 9, color: colors.textFaint, marginTop: 2 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: ACCENT_BLUE, marginTop: 6 },
 });
