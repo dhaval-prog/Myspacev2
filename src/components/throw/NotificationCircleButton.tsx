@@ -3,7 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../Icon';
 import { throwColor } from '../../theme/throwTokens';
 
-const SIZE = 56;
+// Matches RecipientCarousel's own AVATAR_SIZE (64) so this slot's circle reads as the same
+// diameter as every real contact's avatar, not a visibly smaller stand-in beside them.
+const SIZE = 64;
 const BADGE_SIZE = 20;
 const BELL_ICON = 'M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6.5H4c.5-1 2-2.5 2-6.5z M9.5 18.5a2.5 2.5 0 0 0 5 0';
 

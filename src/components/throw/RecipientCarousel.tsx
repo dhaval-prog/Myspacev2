@@ -276,6 +276,16 @@ export function RecipientCarousel({
               <View style={styles.avatarWrap}>
                 <NotificationCircleButton onPress={onOpenNotifications} unreadCount={notificationsUnreadCount ?? 0} />
               </View>
+              {/* Invisible placeholder reserving the same name+city line height a real contact's
+                  item occupies below its avatar — without it, this slot's shorter content stack
+                  gets centered differently than a real contact's (see the strip's own justifyContent),
+                  landing its circle at a visibly different height. */}
+              <Text style={[styles.name, styles.hiddenPlaceholder]} numberOfLines={1}>
+                {' '}
+              </Text>
+              <Text style={[styles.city, styles.hiddenPlaceholder]} numberOfLines={1}>
+                {' '}
+              </Text>
             </View>
           </Animated.View>
         )}
@@ -291,6 +301,13 @@ export function RecipientCarousel({
                 {isAddStorySelected && <SelectedPulseRing isNight={isNight} />}
                 <AddStoryButton onPress={onAddStory} selected={isAddStorySelected} isNight={isNight} />
               </View>
+              {/* See the notifications slot's own matching placeholder above for why. */}
+              <Text style={[styles.name, styles.hiddenPlaceholder]} numberOfLines={1}>
+                {' '}
+              </Text>
+              <Text style={[styles.city, styles.hiddenPlaceholder]} numberOfLines={1}>
+                {' '}
+              </Text>
             </View>
           </Animated.View>
         )}
@@ -439,4 +456,5 @@ const styles = StyleSheet.create({
   nameSelectedNight: { color: '#FFFFFF', fontFamily: throwFont.ui700 },
   city: { fontFamily: throwFont.ui400, fontSize: 10.5, color: throwColor.inkFaint, marginTop: 1, textAlign: 'center' },
   cityNight: { color: 'rgba(255,255,255,.55)' },
+  hiddenPlaceholder: { opacity: 0 },
 });
