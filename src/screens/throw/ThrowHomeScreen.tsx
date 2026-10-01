@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel, CAROUSEL_HEIGHT } from '../../components/throw/RecipientCarousel';
@@ -13,6 +13,8 @@ import { StoryPreviewScreen } from '../../components/throw/StoryPreviewScreen';
 import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
 import { WeatherOverlay } from '../../components/throw/weather/WeatherOverlay';
 import { NotificationsPanel } from '../../components/throw/NotificationsPanel';
+import { ProfileCard } from '../../components/throw/ProfileCard';
+import { AddFriendCard } from '../../components/throw/AddFriendCard';
 import { BottomNav } from '../../components/BottomNav';
 import { Icon } from '../../components/Icon';
 import { LetterFoldCard } from '../../components/throw/inbox/LetterFoldCard';
@@ -38,10 +40,6 @@ import type { StoryMediaType } from '../../types/story';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 
 const BACK_ICON = 'M15 18l-6-6 6-6';
-// A person-plus glyph — the status contact's own "Add Friend" entry point, sitting above the
-// letter-card slot (see its own render below), distinct from AddStoryButton's plain person+badge
-// (that one opens the camera, not a friend-adding flow).
-const ADD_FRIEND_ICON = 'M9 11a4 4 0 100-8 4 4 0 000 8z M2 21v-1a6 6 0 016-6h2a6 6 0 016 6v1 M19 8v6 M22 11h-6';
 
 // The in-place received-letters panel's own flick-to-switch-contact gesture — same capture
 // thresholds as FoldingLetter's own CONTACT_FLICK_CAPTURE_DX/RATIO (not imported, since those are
@@ -56,6 +54,11 @@ const INBOX_FLICK_CAPTURE_RATIO = 1.7;
  * more than one at a time, so a single piece of state (not three booleans) makes that mutual
  * exclusion structural rather than something every setter has to remember to preserve. */
 type StoryFlow =
+  /** The Profile + Add Friend cards popover (see ProfileCard/AddFriendCard) — the first thing
+   * shown once the Add Status slot is selected, before the camera. Tapping "Add status" inside
+   * ProfileCard moves on to 'capture'; closing the camera comes back here rather than exiting
+   * Add Status mode entirely. */
+  | { name: 'cards' }
   | { name: 'capture' }
   | { name: 'preview'; localUri: string; mediaType: StoryMediaType }
   | { name: 'trim'; localUri: string; durationMs: number };
@@ -91,7 +94,6 @@ const DEFAULT_ALERT_SCHEDULE: AlertSchedule = { recurrence: 'once', hour: 9, min
 interface ThrowHomeScreenProps {
   onOpenExpenses: () => void;
   onOpenChats: () => void;
-  onOpenAddFriend: () => void;
   /** Opens a specific past letter — this screen has no notion of that subscreen itself (see
    * ThrowScreen's own ThrowNavigator), so a notification row deep-linking to one is handed
    * straight up to it. */
@@ -124,7 +126,6 @@ interface ThrowHomeScreenProps {
 export function ThrowHomeScreen({
   onOpenExpenses,
   onOpenChats,
-  onOpenAddFriend,
   onOpenThrowLetter,
   onNotificationTarget,
   onOpenSettings,
@@ -497,10 +498,12 @@ export function ThrowHomeScreen({
   // the whole "post a story" pipeline reads as one continuous place rather than capture alone
   // being inline and confirm popping up separately.
   const isPreviewMode = storyFlow?.name === 'preview';
+  // The Profile + Add Friend cards popover — see StoryFlow's own comment on 'cards'.
+  const isCardsMode = storyFlow?.name === 'cards';
   // Whether the virtual "Status" slot itself (not a real friend) is the current selection — the
-  // status contact's own Add Friend glass pill (see its own render below) is scoped to this,
-  // same condition RecipientCarousel's own isAddStorySelected prop already uses.
-  const isAddStorySelected = storyView?.viaAddSlot === true || isCaptureMode || isPreviewMode;
+  // status contact's own cards/camera (see its own render below) are scoped to this, same
+  // condition RecipientCarousel's own isAddStorySelected prop already uses.
+  const isAddStorySelected = storyView?.viaAddSlot === true || isCaptureMode || isPreviewMode || isCardsMode;
 
   // Tapping/dragging to the Notifications slot again (or while it's already open) closes it —
   // same "tap the active one again to back out" convention the rest of the carousel already uses.
@@ -515,6 +518,13 @@ export function ThrowHomeScreen({
       }
       return next;
     });
+  };
+
+  // The X on either ProfileCard or AddFriendCard: backs all the way out of Add Status mode,
+  // landing back on whichever real contact (or nothing) was selected before — not just one step
+  // back to 'cards' the way the camera's own close does (see its own onClose below).
+  const handleCloseCards = () => {
+    setStoryFlow(null);
   };
 
   // Tapping a row inside the Notifications card: focusing a contact within Throw itself is
@@ -670,7 +680,7 @@ export function ThrowHomeScreen({
     const raw = Math.max(base - 1, Math.min(base + 1, base + steps));
     setContactDragLiveOffset(Math.max(-1, Math.min(n - 1, raw)));
     // -1 is the virtual "Status" slot, one further left than any real contact (index 0) — tilting/
-    // flicking into it always opens the capture flow now, regardless of whether you've already
+    // flicking into it always opens the cards popover now, regardless of whether you've already
     // posted a story today: Status is for adding one, not for viewing what's already there (see
     // isCaptureMode's own comment) — viewing your own existing stories works the same way viewing
     // anyone else's does, by tapping your own already-selected avatar (see handleOpenStory).
@@ -679,7 +689,7 @@ export function ThrowHomeScreen({
       if (statusBoundaryHandledRef.current) return;
       statusBoundaryHandledRef.current = true;
       if (myId) setSelectedFriendId(myId);
-      setStoryFlow({ name: 'capture' });
+      setStoryFlow({ name: 'cards' });
       return;
     }
     setStoryView(null);
@@ -953,13 +963,13 @@ export function ThrowHomeScreen({
                   setIsNotificationsSelected(false);
                   setSelectedFriendId(friendsWithLocation[i]?.userId ?? null);
                 }}
-                disabled={selfLocked || isCaptureMode || isPreviewMode}
+                disabled={selfLocked || isCaptureMode || isPreviewMode || isCardsMode}
                 isNight={!mapIsDay}
                 storyCountFor={storyCountFor}
                 onOpenStory={handleOpenStory}
                 onAddStory={() => {
                   setIsNotificationsSelected(false);
-                  setStoryFlow({ name: 'capture' });
+                  setStoryFlow({ name: 'cards' });
                 }}
                 isAddStorySelected={isAddStorySelected}
                 storyModeAvatarCount={isStoryMode ? openAvatarCount : undefined}
@@ -973,22 +983,29 @@ export function ThrowHomeScreen({
             </View>
           ))}
 
-        {/* The status contact's own "Add Friend" entry point — sits above whatever the letter
-            card slot is currently showing (the camera, the post-capture preview, or eventually
-            the posted story stack), rather than overlaid on top of any one of them, per explicit
-            request. Glassmorphism to match every other Throw control's own chrome instead of the
-            plain dark pill this used to be drawn as inside the camera itself. */}
-        {!inFlight && isAddStorySelected && (
-          <View style={[styles.addFriendOverlay, { top: insets.top + 16 + CAROUSEL_HEIGHT + 8 }]} pointerEvents="box-none">
-            <Pressable onPress={onOpenAddFriend} accessibilityRole="button" accessibilityLabel="Add a friend">
-              {({ pressed }) => (
-                <GlassSurface tint="light" tintColor={throwGlass.tintWaterBlueStrong} style={[styles.addFriendBtn, pressed && styles.addFriendBtnPressed]}>
-                  <Icon path={ADD_FRIEND_ICON} size={16} color={throwColor.ink} strokeWidth={2} />
-                  <Text style={styles.addFriendText}>Add Friend</Text>
-                </GlassSurface>
-              )}
-            </Pressable>
-          </View>
+        {/* The Profile + Add Friend cards popover — the first thing shown once Add Status is
+            selected, before the camera (see StoryFlow's own 'cards' comment). Both cards come and
+            go together; tapping "Add status" inside ProfileCard moves on to the camera, which
+            takes over this exact slot instead (see isCardsMode's own use in letterCard's render
+            condition below) so the two steps never show at once. */}
+        {!inFlight && isCardsMode && (
+          <ScrollView
+            style={[styles.cardsOverlay, { top: insets.top + 16 + CAROUSEL_HEIGHT + 8, bottom: insets.bottom + 16 }]}
+            contentContainerStyle={styles.cardsOverlayContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <ProfileCard
+              name="You"
+              avatarUrl={myAvatarUrl}
+              userId={myId ?? 'me'}
+              city={myLocation?.city ?? null}
+              friendCount={friends.length}
+              hasStatusToday={myId ? storyCountFor(myId) > 0 : false}
+              onAddStatus={() => setStoryFlow({ name: 'capture' })}
+              onClose={handleCloseCards}
+            />
+            <AddFriendCard onClose={handleCloseCards} />
+          </ScrollView>
         )}
 
         {/* The notification history — a floating glassmorphism card above the map instead of a
@@ -1005,7 +1022,7 @@ export function ThrowHomeScreen({
           </View>
         )}
 
-        {!inFlight && selectedFriend && !isNotificationsSelected && (
+        {!inFlight && selectedFriend && !isNotificationsSelected && !isCardsMode && (
           // `bottom` shrinks from its normal BOTTOM_NAV_CLEARANCE-reserved position down to just
           // the safe-area inset as the letter folds, on the same chromeOpacity value that already
           // fades BottomNav out — that reserved clearance exists so the card clears the *visible*
@@ -1031,7 +1048,7 @@ export function ThrowHomeScreen({
             <Animated.View style={[styles.letterCardContent, { opacity: cardModeFade }]}>
               {isCaptureMode ? (
                 <StoryCaptureScreen
-                  onClose={() => setStoryFlow(null)}
+                  onClose={() => setStoryFlow({ name: 'cards' })}
                   onCaptured={handleStoryCaptured}
                   onPickedLongVideo={handleStoryPickedLongVideo}
                   onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}
@@ -1289,18 +1306,9 @@ const styles = StyleSheet.create({
   // sibling of mapArea, absolutely pinned to the screen's bottom so it overlaps in front.
   bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
-  addFriendOverlay: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   notificationsOverlay: { position: 'absolute', left: 16, right: 16 },
-  addFriendBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: 32,
-    paddingHorizontal: 16,
-    borderRadius: throwRadius.pill,
-  },
-  addFriendBtnPressed: { opacity: 0.8 },
-  addFriendText: { fontFamily: throwFont.ui700, fontSize: 12.5, color: throwColor.ink },
+  cardsOverlay: { position: 'absolute', left: 16, right: 16 },
+  cardsOverlayContent: { gap: 12, paddingBottom: 12 },
   replyLine: {
     textAlign: 'center',
     fontFamily: throwFont.ui700,
