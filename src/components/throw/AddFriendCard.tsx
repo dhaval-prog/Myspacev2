@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
-import { GlassSurface } from '../friends/GlassSurface';
-import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 import { useFriends } from '../../context/FriendsContext';
 import {
   fetchNearbySuggestions,
@@ -47,7 +46,7 @@ interface AddFriendCardProps {
 
 /** "Add friend" — search by name/username, or a Suggested Nearby list (real distance from the
  * caller's own Throw location, via the `suggested_nearby_friends`/`search_profiles` RPCs), plus a
- * link to the full invite-code screen. A glassmorphism card, sitting directly below ProfileCard
+ * link to the full invite-code screen. A solid white card, sitting directly below ProfileCard
  * while the recipient carousel's Add Status slot is selected — see ThrowHomeScreen's own
  * isCardsMode for when both show/hide together. */
 export function AddFriendCard({ onOpenAddFriendScreen }: AddFriendCardProps) {
@@ -135,7 +134,7 @@ export function AddFriendCard({ onOpenAddFriendScreen }: AddFriendCardProps) {
   };
 
   return (
-    <GlassSurface tint="light" tintColor={throwGlass.tintWaterBlueStrong} style={styles.card}>
+    <View style={styles.card}>
       <Text style={styles.title}>Add friend</Text>
 
       <View style={styles.searchBox}>
@@ -169,12 +168,15 @@ export function AddFriendCard({ onOpenAddFriendScreen }: AddFriendCardProps) {
         <Icon path={LINK_ICON} size={16} color="#FFFFFF" strokeWidth={2} />
         <Text style={styles.shareLabel}>Share invite link</Text>
       </Pressable>
-    </GlassSurface>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
+    backgroundColor: throwColor.cardBg,
+    borderWidth: 1,
+    borderColor: throwColor.cardBorder,
     borderRadius: throwRadius.card,
     padding: 16,
     gap: 12,
@@ -188,7 +190,7 @@ const styles = StyleSheet.create({
     height: 42,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,.55)',
+    backgroundColor: throwColor.screenBg,
   },
   searchInput: { flex: 1, fontFamily: throwFont.ui400, fontSize: 14, color: throwColor.ink },
   sectionLabel: { fontFamily: throwFont.ui600, fontSize: 11, letterSpacing: 1, color: throwColor.inkFaint, textTransform: 'uppercase' },
@@ -200,7 +202,7 @@ const styles = StyleSheet.create({
   rowName: { fontFamily: throwFont.ui700, fontSize: 14.5, color: throwColor.ink },
   rowMeta: { fontFamily: throwFont.ui400, fontSize: 12.5, color: throwColor.inkFaint },
   addBtn: { height: 32, paddingHorizontal: 16, borderRadius: throwRadius.pill, backgroundColor: throwColor.ink, alignItems: 'center', justifyContent: 'center' },
-  addBtnDisabled: { backgroundColor: 'rgba(255,255,255,.55)' },
+  addBtnDisabled: { backgroundColor: throwColor.screenBg },
   addBtnLabel: { fontFamily: throwFont.ui700, fontSize: 13, color: '#FFFFFF' },
   addBtnLabelDisabled: { color: throwColor.inkFaint },
   shareBtn: {

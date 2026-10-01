@@ -2,8 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
-import { GlassSurface } from '../friends/GlassSurface';
-import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
 
 const PLUS_ICON = 'M12 5v14M5 12h14';
 const CAMERA_ICON = 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z M12 17a4 4 0 100-8 4 4 0 000 8z';
@@ -23,7 +22,7 @@ interface ProfileCardProps {
   onOpenProfile?: () => void;
 }
 
-/** "You" — a glassmorphism card popping over the map the moment the recipient carousel's Add
+/** "You" — a solid white card popping over the map the moment the recipient carousel's Add
  * Status slot is selected, showing who's about to post and how many friends they have, with the
  * actual "Add status" entry point into the camera. Sits directly above the Add Friend card (see
  * AddFriendCard) in the same step; both disappear together the moment the camera opens, and both
@@ -32,7 +31,7 @@ interface ProfileCardProps {
 export function ProfileCard({ name, avatarUrl, userId, city, friendCount, hasStatusToday, onAddStatus, onOpenProfile }: ProfileCardProps) {
   const subtitle = [city, `${friendCount} friend${friendCount === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
   return (
-    <GlassSurface tint="light" tintColor={throwGlass.tintWaterBlueStrong} style={styles.card}>
+    <View style={styles.card}>
       <View style={styles.headerRow}>
         <FriendAvatar userId={userId} name={name} avatarUrl={avatarUrl} size={48} />
         <View style={styles.headerText}>
@@ -61,12 +60,15 @@ export function ProfileCard({ name, avatarUrl, userId, city, friendCount, hasSta
           <Text style={styles.profileLink}>Profile</Text>
         </Pressable>
       </View>
-    </GlassSurface>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
+    backgroundColor: throwColor.cardBg,
+    borderWidth: 1,
+    borderColor: throwColor.cardBorder,
     borderRadius: throwRadius.card,
     padding: 16,
     gap: 16,
