@@ -23,6 +23,9 @@ const ADD_FRIEND_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.
 // Same dice glyph used everywhere else Games is a destination — reused here so this reads as the
 // same destination, not a Chats-specific reinterpretation.
 const GAMES_ICON = 'M4 4h16v16H4z M8 8h.01 M16 8h.01 M8 16h.01 M16 16h.01 M12 12h.01';
+// A plain envelope — distinct from THROW_ICON's own paper-plane glyph (Throw itself), since this
+// opens the Received Letters v3 screen specifically, not Throw's own compose/home screen.
+const RECEIVED_LETTERS_ICON = 'M4 4h16v16H4z M4 4l8 8 8-8';
 
 const STORY_DOT_OVERRIDE = { size: 14, ringWidth: 2.5, ringColor: colors.onlineDotRing };
 
@@ -34,10 +37,12 @@ interface ChatsListScreenProps {
   onOpenThrow: () => void;
   /** Opens the Games hub — also in the pinned row. */
   onOpenGames: () => void;
+  /** Opens the Received Letters v3 screen — also in the pinned row. */
+  onOpenReceivedLetters: () => void;
 }
 
 /** Chats (6p-6) — only accepted friends get a thread here. */
-export function ChatsListScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenGames }: ChatsListScreenProps) {
+export function ChatsListScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenGames, onOpenReceivedLetters }: ChatsListScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friends, sentRequests, goAdd, openChat, lastMessageFor, isUnread, unreadCountFor, isOnline, isTyping, groups, goCreateGroup, openGroupChat, lastGroupMessageFor } =
@@ -182,6 +187,9 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenGam
         <Pressable onPress={onOpenGames} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Games">
           <Icon path={GAMES_ICON} color={colors.textPrimary} size={18} strokeWidth={1.8} />
         </Pressable>
+        <Pressable onPress={onOpenReceivedLetters} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Received letters">
+          <Icon path={RECEIVED_LETTERS_ICON} color={colors.textPrimary} size={18} strokeWidth={1.8} />
+        </Pressable>
       </View>
 
       <BottomNav
@@ -209,7 +217,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 26,
     paddingBottom: spacing.huge,
   },
-  // Three even columns spanning the row's full width, rather than a tight left-aligned cluster.
+  // Even columns spanning the row's full width, rather than a tight left-aligned cluster.
   pinned: {
     flexDirection: 'row',
     justifyContent: 'space-between',
