@@ -51,7 +51,7 @@ function AppNavigator() {
   // Throw is the app's landing point now — no standalone Home screen any more, and Chat no longer
   // doubles as the default either (see navItems.ts's own reordering to Throw/Chat/Pocket).
   const [screen, setScreen] = useState<Screen>({ name: 'throw' });
-  const { openChat, receivedRequests, goRequests, goChats } = useFriends();
+  const { openChat, receivedRequests, goRequests, goChats, goAdd } = useFriends();
 
   const openNotificationTarget = (target: NotificationTarget) => {
     if (target.screen === 'expenses') setScreen({ name: 'expenses', focusCardId: target.cardId });
@@ -135,6 +135,10 @@ function AppNavigator() {
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
       onOpenChats={() => {
         goChats();
+        setScreen({ name: 'friends' });
+      }}
+      onOpenAddFriendScreen={() => {
+        goAdd();
         setScreen({ name: 'friends' });
       }}
       onNotificationTarget={openNotificationTarget}
