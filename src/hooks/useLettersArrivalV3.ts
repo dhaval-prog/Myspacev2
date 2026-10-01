@@ -5,7 +5,7 @@ import { formatAlertPillLabel, compactKm } from '../utils/lettersV3Format';
 import { v3Layout } from '../theme/throwLettersV3Tokens';
 import type { AlertSchedule, ThrowLetter } from '../types/throw';
 
-export type LetterStageV3 = 'hidden' | 'flying' | 'landed' | 'flap' | 'rise' | 'drop' | 'unfold' | 'open' | 'folding' | 'shrink' | 'trash' | 'replyFly' | 'empty';
+export type LetterStageV3 = 'hidden' | 'flying' | 'landed' | 'flap' | 'rise' | 'drop' | 'unfold' | 'open' | 'folding' | 'shrink' | 'trash' | 'empty';
 
 export interface V3Contact {
   id: string;
@@ -63,9 +63,6 @@ interface UseLettersArrivalV3Options {
   deleteThrow: (throwId: string) => Promise<{ error: string | null }>;
   markRead: (throwId: string) => Promise<void>;
   confirmThrowAlert: (throwId: string, schedule: AlertSchedule) => Promise<{ error: string | null }>;
-  /** Fires once the fold-away + fly-to-corner reply exit finishes (1150ms in) — the caller
-   * navigates to compose from here, same timing as the handoff's own `window.location.href` call. */
-  onReply: (contactId: string, letterId: string) => void;
 }
 
 const DEL = 80;
@@ -77,14 +74,14 @@ function unreadCountOf(letters: ThrowLetter[]): number {
 /**
  * The Received Letters v3 screen's own state machine — multi-contact plane-flies-in → envelope →
  * flap-opens → letter-rises-and-drops → unfolds sequence, chip switching, long-press-drag-to-
- * delete, Confirm/alert, and the fold-away-then-fly-to-corner Reply exit. Ported stage-for-stage
- * from the design handoff's own `Component` class (`play`/`selectContact`/`deleteActive`/`reply`/
- * `confirm`) — see that file's own `renderVals()` for the exact state → style mapping every
- * presentational component (LetterCardV3, MapBackgroundV3, ChipsRowV3, ActionRowV3) derives its
- * own Animated values from, the same "hook owns the stage, components own their own Animated
- * interpolation of it" split `useInboxArrival`/`LetterFoldCard` already use for the in-place panel.
+ * delete, and Confirm/alert. Ported stage-for-stage from the design handoff's own `Component` class
+ * (`play`/`selectContact`/`deleteActive`/`confirm`) — see that file's own `renderVals()` for the
+ * exact state → style mapping every presentational component (LetterCardV3, MapBackgroundV3,
+ * ChipsRowV3, ActionRowV3) derives its own Animated values from, the same "hook owns the stage,
+ * components own their own Animated interpolation of it" split `useInboxArrival`/`LetterFoldCard`
+ * already use for the in-place panel.
  */
-export function useLettersArrivalV3({ contacts, initialContactId, reduceMotion, scale, deleteThrow, markRead, confirmThrowAlert, onReply }: UseLettersArrivalV3Options) {
+export function useLettersArrivalV3({ contacts, initialContactId, reduceMotion, scale, deleteThrow, markRead, confirmThrowAlert }: UseLettersArrivalV3Options) {
   const initialIndex = useMemo(() => {
     if (initialContactId) {
       const byId = contacts.findIndex((c) => c.id === initialContactId);
@@ -258,14 +255,6 @@ export function useLettersArrivalV3({ contacts, initialContactId, reduceMotion, 
   const curLetter = curList[activeLetterIdx] ?? null;
   const curContact = contacts[contactIdx] ?? null;
 
-  const reply = () => {
-    if (stageRef.current !== 'open' || !curLetter || !curContact) return;
-    clear();
-    setStageBoth('folding');
-    later(() => setStageBoth('replyFly'), 620);
-    later(() => onReply(curContact.id, curLetter.id), 1150);
-  };
-
   const confirmAlert = async () => {
     if (!curLetter || !curLetter.alertSchedule || stageRef.current !== 'open') return;
     if (confirmedIds.has(curLetter.id) || curLetter.alertConfirmed) return;
@@ -343,7 +332,6 @@ export function useLettersArrivalV3({ contacts, initialContactId, reduceMotion, 
     selectContact,
     selectChip,
     deleteActive,
-    reply,
     confirmAlert,
   };
 }
