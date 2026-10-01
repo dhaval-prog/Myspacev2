@@ -209,6 +209,12 @@ export function RecipientCarousel({
     if (clamped !== selectedIndex || isAddStorySelected) onChangeIndex(clamped);
   };
 
+  // How far left a drag may reach — all the way to the notifications slot (-2) when it's present,
+  // else just the add-story slot (-1), else no further than the first real contact (0). Lets a
+  // flick from a real contact (or from Add Story) carry on into Notifications instead of only
+  // being reachable by tapping it directly.
+  const minDragIndex = onOpenNotifications ? -2 : onAddStory ? -1 : 0;
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -220,19 +226,36 @@ export function RecipientCarousel({
         },
         onPanResponderMove: (_, g) => {
           const raw = grantOffsetRef.current - g.dx / ITEM_SPACING;
-          offset.setValue(Math.max(0, Math.min(maxIndex, raw)));
+          offset.setValue(Math.max(minDragIndex, Math.min(maxIndex, raw)));
         },
         onPanResponderRelease: (_, g) => {
           draggingRef.current = false;
           const raw = grantOffsetRef.current - g.dx / ITEM_SPACING;
-          const nearest = Math.max(0, Math.min(maxIndex, Math.round(raw)));
+          const nearest = Math.max(minDragIndex, Math.min(maxIndex, Math.round(raw)));
+          // Dragging all the way to the notifications slot opens it directly, same as tapping it
+          // — then springs back to wherever the strip actually rests (it isn't a "selection" that
+          // persists like a real contact or Add Story is), so the strip isn't left stranded fully
+          // left once the user comes back from the notifications screen.
+          if (nearest === -2 && onOpenNotifications) {
+            Animated.spring(offset, { toValue: restingIndex, useNativeDriver: false, friction: 8, tension: 60 }).start();
+            onOpenNotifications();
+            return;
+          }
+          // Dragging to the add-story slot selects it exactly like tapping it does — the spring
+          // here is just so it doesn't visually bounce back before the parent's own
+          // isAddStorySelected round-trip takes over via the resting-index effect above.
+          if (nearest === -1 && onAddStory) {
+            Animated.spring(offset, { toValue: -1, useNativeDriver: false, friction: 8, tension: 60 }).start();
+            onAddStory();
+            return;
+          }
           Animated.spring(offset, { toValue: nearest, useNativeDriver: false, friction: 8, tension: 60 }).start();
           // See snapTo's own comment — same "already selectedIndex, but Status is what's showing"
           // case can be reached by dragging the strip back to rest on the same real contact too.
           if (nearest !== selectedIndex || isAddStorySelected) onChangeIndex(nearest);
         },
       }),
-    [disabled, n, maxIndex, selectedIndex, onChangeIndex, offset, isAddStorySelected],
+    [disabled, n, maxIndex, selectedIndex, onChangeIndex, offset, isAddStorySelected, minDragIndex, onOpenNotifications, onAddStory, restingIndex],
   );
 
   if (n === 0) return null;
@@ -284,13 +307,13 @@ export function RecipientCarousel({
               <View style={styles.avatarWrap}>
                 <NotificationCircleButton onPress={onOpenNotifications} unreadCount={notificationsUnreadCount ?? 0} />
               </View>
-              {/* Invisible placeholder reserving the same name+city line height a real contact's
-                  item occupies below its avatar — without it, this slot's shorter content stack
-                  gets centered differently than a real contact's (see the strip's own justifyContent),
-                  landing its circle at a visibly different height. */}
-              <Text style={[styles.name, styles.hiddenPlaceholder]} numberOfLines={1}>
-                {' '}
+              <Text style={[styles.name, styles.utilityLabel, isNight && styles.nameNight]} numberOfLines={1}>
+                Notifications
               </Text>
+              {/* Invisible placeholder reserving the same second-line height a real contact's
+                  city text occupies — without it, this slot's shorter content stack gets centered
+                  differently than a real contact's (see the strip's own justifyContent), landing
+                  its circle at a visibly different height. */}
               <Text style={[styles.city, styles.hiddenPlaceholder]} numberOfLines={1}>
                 {' '}
               </Text>
@@ -309,10 +332,13 @@ export function RecipientCarousel({
                 {isAddStorySelected && <SelectedPulseRing isNight={isNight} />}
                 <AddStoryButton onPress={onAddStory} selected={isAddStorySelected} isNight={isNight} />
               </View>
-              {/* See the notifications slot's own matching placeholder above for why. */}
-              <Text style={[styles.name, styles.hiddenPlaceholder]} numberOfLines={1}>
-                {' '}
+              <Text
+                style={[styles.name, styles.utilityLabel, isNight && styles.nameNight, isAddStorySelected && (isNight ? styles.nameSelectedNight : styles.nameSelected)]}
+                numberOfLines={1}
+              >
+                Add Status
               </Text>
+              {/* See the notifications slot's own matching placeholder above for why. */}
               <Text style={[styles.city, styles.hiddenPlaceholder]} numberOfLines={1}>
                 {' '}
               </Text>
@@ -465,4 +491,8 @@ const styles = StyleSheet.create({
   city: { fontFamily: throwFont.ui400, fontSize: 10.5, color: throwColor.inkFaint, marginTop: 1, textAlign: 'center' },
   cityNight: { color: 'rgba(255,255,255,.55)' },
   hiddenPlaceholder: { opacity: 0 },
+  // "Notifications" is long enough to risk clipping at the regular name size within this strip's
+  // narrow per-item width — sized down a touch so it reliably fits on one line, matching Add
+  // Status's own label (kept at the same size for visual consistency between the two).
+  utilityLabel: { fontSize: 11 },
 });

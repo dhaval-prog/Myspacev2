@@ -236,6 +236,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.pale,
     alignItems: 'center',
     justifyContent: 'center',
+    // Without this, some WebKit builds shrink these pills below their own text's natural width
+    // once the row's combined content doesn't fit the screen (see filterScroll's own width:100%
+    // comment) — the pill's background shrinks but its one-line Text doesn't wrap, so the label
+    // spills out past its own pill and visually overlaps its neighbor instead of the row simply
+    // scrolling. Pinning flexShrink to 0 keeps every pill at its natural size no matter what.
+    flexShrink: 0,
   },
   filterPillActive: { backgroundColor: colors.ink },
   filterLabel: { fontFamily: fontFamily.sans600, fontSize: 13, color: colors.textPrimary },
