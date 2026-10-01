@@ -224,18 +224,21 @@ const styles = StyleSheet.create({
   },
   title: { flex: 1, fontFamily: fontFamily.sans800, fontSize: 22, color: colors.textPrimary },
   markAllRead: { fontFamily: fontFamily.sans600, fontSize: 13.5, color: ACCENT_BLUE },
-  filterScroll: { flexGrow: 0 },
-  filterRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  // `width: '100%'` keeps this ScrollView from ever stretching past the screen's own width (it
+  // otherwise shrink-wraps to its unclipped content on web) — without it, a too-wide pill row
+  // bleeds past the right edge instead of becoming properly horizontally scrollable there.
+  filterScroll: { flexGrow: 0, width: '100%' },
+  filterRow: { flexDirection: 'row', gap: spacing.xs, paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   filterPill: {
-    paddingHorizontal: 16,
-    height: 34,
+    paddingHorizontal: 12,
+    height: 32,
     borderRadius: radius.pill,
     backgroundColor: colors.pale,
     alignItems: 'center',
     justifyContent: 'center',
   },
   filterPillActive: { backgroundColor: colors.ink },
-  filterLabel: { fontFamily: fontFamily.sans600, fontSize: 13.5, color: colors.textPrimary },
+  filterLabel: { fontFamily: fontFamily.sans600, fontSize: 13, color: colors.textPrimary },
   filterLabelActive: { color: colors.white },
   sectionLabel: {
     fontFamily: fontFamily.sans600,

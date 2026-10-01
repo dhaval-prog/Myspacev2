@@ -3,6 +3,7 @@ import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } fro
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { StoryRing } from './StoryRing';
 import { AddStoryButton } from './AddStoryButton';
+import { NotificationCircleButton } from './NotificationCircleButton';
 import { throwColor, throwFont, throwNightColor } from '../../theme/throwTokens';
 import { noSelect } from '../../theme/webStyles';
 import type { ThrowFriend } from '../../types/throw';
@@ -108,6 +109,13 @@ interface RecipientCarouselProps {
    * useInboxArrival's own markRead call). Omitted entirely for callers that don't track unread
    * letters at all (tests, or a carousel shown outside Throw's own letter flow). */
   unreadCountFor?: (userId: string) => number;
+  /** Opens the full notification history — rendered as a slot in this same strip, one position
+   * further left than the add-story slot (index -2), so it slides/scales with the rest of the
+   * carousel exactly like any other off-center item instead of sitting fixed in place. Omitted
+   * entirely (no slot rendered) when absent, same convention as onAddStory. */
+  onOpenNotifications?: () => void;
+  /** Badge count shown on the notifications slot — see NotificationCircleButton. */
+  notificationsUnreadCount?: number;
 }
 
 /** The status-letter-stack's own small count badge — top-right of the avatar, matching the
@@ -143,6 +151,8 @@ export function RecipientCarousel({
   storyModePulseSignal,
   liveOffset,
   unreadCountFor,
+  onOpenNotifications,
+  notificationsUnreadCount,
 }: RecipientCarouselProps) {
   const avatarPulse = useRef(new Animated.Value(1)).current;
   const isFirstPulseRender = useRef(true);
@@ -247,10 +257,28 @@ export function RecipientCarousel({
   });
 
   const addStoryTransform = onAddStory ? itemTransform(-1) : null;
+  const notificationsTransform = onOpenNotifications ? itemTransform(-2) : null;
 
   return (
     <View style={[styles.wrap, noSelect]} {...panResponder.panHandlers}>
       <View style={styles.strip}>
+        {onOpenNotifications && notificationsTransform && (
+          <Animated.View
+            style={[
+              styles.item,
+              {
+                transform: [{ translateX: notificationsTransform.translateX }, { scale: notificationsTransform.scale }],
+                opacity: notificationsTransform.opacity,
+              },
+            ]}
+          >
+            <View style={styles.pressableContent}>
+              <View style={styles.avatarWrap}>
+                <NotificationCircleButton onPress={onOpenNotifications} unreadCount={notificationsUnreadCount ?? 0} />
+              </View>
+            </View>
+          </Animated.View>
+        )}
         {onAddStory && addStoryTransform && (
           <Animated.View
             style={[

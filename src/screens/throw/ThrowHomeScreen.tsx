@@ -3,7 +3,6 @@ import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, u
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import { RecipientCarousel, CAROUSEL_HEIGHT } from '../../components/throw/RecipientCarousel';
-import { NotificationCircleButton } from '../../components/throw/NotificationCircleButton';
 import { FoldingLetter, CONTACT_DRAG_SPACING } from '../../components/throw/FoldingLetter';
 import type { FoldingLetterHandle } from '../../components/throw/FoldingLetter';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
@@ -876,16 +875,6 @@ export function ThrowHomeScreen({
             all the way through the letter/fold/plane-flight lifecycle instead of restarting. */}
         <WeatherOverlay />
 
-        {/* Opens the full notification history (see NotificationsScreen) — sits at the recipient
-            rail's own left edge, outside RecipientCarousel's own animated strip entirely (see
-            NotificationCircleButton's own doc comment for why), so it stays put regardless of
-            where the carousel itself is scrolled to. */}
-        {!inFlight && (
-          <View style={[styles.notificationCircleWrap, { top: insets.top + 16 + (CAROUSEL_HEIGHT - 56) / 2 }]}>
-            <NotificationCircleButton onPress={onOpenNotifications} unreadCount={notificationsUnreadCount} />
-          </View>
-        )}
-
         {!inFlight &&
           (lockedRecipient ? (
             selectedFriend && (
@@ -920,6 +909,8 @@ export function ThrowHomeScreen({
                 storyModePulseSignal={openAvatarPulseSignal}
                 liveOffset={contactDragLiveOffset ?? undefined}
                 unreadCountFor={unreadCountFor}
+                onOpenNotifications={onOpenNotifications}
+                notificationsUnreadCount={notificationsUnreadCount}
               />
             </View>
           ))}
@@ -1226,7 +1217,6 @@ const styles = StyleSheet.create({
   // sibling of mapArea, absolutely pinned to the screen's bottom so it overlaps in front.
   bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
-  notificationCircleWrap: { position: 'absolute', left: 16, zIndex: 1 },
   addFriendOverlay: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   addFriendBtn: {
     flexDirection: 'row',
