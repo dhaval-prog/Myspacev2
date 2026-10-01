@@ -43,10 +43,6 @@ const s = (n: number, scale: number) => n * scale;
 const DEL = 80;
 const LONG_PRESS_MS = 420;
 const MOVE_SLOP = 8;
-// Matches ChipsRowV3's own bigger plane chips (the standalone Received Letters v3 screen).
-const CHIP = 60;
-const CHIP_GLYPH = 32;
-const CHIP_GLYPH_COMPACT = 24;
 const REPLAY_ICON = 'M20 11a8 8 0 1 0-2.3 5.7 M20 4v7h-7';
 const TRASH_ICON = 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3';
 
@@ -294,7 +290,7 @@ export function PlaneSlider({
         horizontal
         showsHorizontalScrollIndicator={false}
         decelerationRate="fast"
-        snapToInterval={s(CHIP + 16, scale)}
+        snapToInterval={s(68, scale)}
         scrollEnabled={!armed}
         contentContainerStyle={{ gap: s(10, scale), paddingHorizontal: s(24, scale), paddingVertical: s(4, scale) }}
       >
@@ -309,8 +305,8 @@ export function PlaneSlider({
           // box's cream fill.
           const inlineLabelColor = armedHere || active ? '#FFFFFF' : '#171717';
           const chipBox = (
-            <View style={[styles.chip, { width: s(CHIP, scale), height: s(CHIP, scale), borderRadius: s(18, scale), backgroundColor: bg }]}>
-              <LetterPlaneGlyph size={s(compact ? CHIP_GLYPH_COMPACT : CHIP_GLYPH, scale)} variant={variant} tiltDeg={-14} />
+            <View style={[styles.chip, { width: s(52, scale), height: s(52, scale), borderRadius: s(16, scale), backgroundColor: bg }]}>
+              <LetterPlaneGlyph size={s(compact ? 21 : 28, scale)} variant={variant} tiltDeg={-14} />
               {compact && (
                 <Text style={[styles.mono, styles.chipInlineLabel, { fontSize: s(7.5, scale), color: inlineLabelColor }]}>{c.short}</Text>
               )}
@@ -379,16 +375,16 @@ export function PlaneSlider({
             style={[
               styles.ghost,
               {
-                width: s(CHIP, scale),
-                height: s(CHIP, scale),
-                borderRadius: s(18, scale),
+                width: s(52, scale),
+                height: s(52, scale),
+                borderRadius: s(16, scale),
                 top: dragY,
                 opacity: dropping ? 0 : 1,
                 transform: [{ rotate: `${(dragY * 0.08).toFixed(1)}deg` }, { scale: dropping ? 0.4 : 1.08 }],
               },
             ]}
           >
-            <LetterPlaneGlyph size={s(CHIP_GLYPH, scale)} variant="delete" tiltDeg={-14} />
+            <LetterPlaneGlyph size={s(28, scale)} variant="delete" tiltDeg={-14} />
           </View>
         </View>
       )}
