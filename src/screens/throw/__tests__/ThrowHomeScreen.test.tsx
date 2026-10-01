@@ -197,6 +197,7 @@ async function renderScreen() {
       onOpenExpenses={noop}
       onOpenChats={noop}
       onOpenThrowLetter={noop}
+      onOpenAddFriendScreen={noop}
       onNotificationTarget={noop}
       onOpenSettings={noop}
     />,
@@ -398,7 +399,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     expect(screen.getByTestId('story-capture')).toBeTruthy();
   });
 
-  it('marks the add-story slot as the active selection, and locks the carousel, while capturing', async () => {
+  it('marks the add-story slot as the active selection, but leaves the carousel flickable, while on the cards step', async () => {
     setupMocks();
     withStories(2);
     await renderScreen();
@@ -409,7 +410,11 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     });
 
     expect(mockCarouselProps.isAddStorySelected).toBe(true);
-    expect(mockCarouselProps.disabled).toBe(true);
+    // Landing on the Profile/Add Friend cards (not yet the camera) doesn't lock the carousel — per
+    // explicit request, flicking away from here (to Notifications or a real contact) has to work
+    // the same as it does everywhere else; only actually being mid-capture (see the preview test
+    // below) locks it.
+    expect(mockCarouselProps.disabled).toBe(false);
   });
 
   it('returns to the Profile/Add Friend cards — not Own Contact\'s letter — once the camera is closed', async () => {

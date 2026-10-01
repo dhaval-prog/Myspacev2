@@ -98,6 +98,9 @@ interface ThrowHomeScreenProps {
    * ThrowScreen's own ThrowNavigator), so a notification row deep-linking to one is handed
    * straight up to it. */
   onOpenThrowLetter: (throwId: string) => void;
+  /** The Add Friend card's own "Share invite link" button — opens the full-screen code/QR Add
+   * Friend flow (same destination the Friends tab's own Add button uses). */
+  onOpenAddFriendScreen: () => void;
   /** Anything a notification row deep-links to that isn't Throw's own concern (Expenses, a chat,
    * Friends) — focusing a contact within Throw itself is handled locally instead (see
    * handleNotificationTarget below). */
@@ -127,6 +130,7 @@ export function ThrowHomeScreen({
   onOpenExpenses,
   onOpenChats,
   onOpenThrowLetter,
+  onOpenAddFriendScreen,
   onNotificationTarget,
   onOpenSettings,
   lockedRecipient,
@@ -518,13 +522,6 @@ export function ThrowHomeScreen({
       }
       return next;
     });
-  };
-
-  // The X on either ProfileCard or AddFriendCard: backs all the way out of Add Status mode,
-  // landing back on whichever real contact (or nothing) was selected before — not just one step
-  // back to 'cards' the way the camera's own close does (see its own onClose below).
-  const handleCloseCards = () => {
-    setStoryFlow(null);
   };
 
   // Tapping a row inside the Notifications card: focusing a contact within Throw itself is
@@ -963,7 +960,7 @@ export function ThrowHomeScreen({
                   setIsNotificationsSelected(false);
                   setSelectedFriendId(friendsWithLocation[i]?.userId ?? null);
                 }}
-                disabled={selfLocked || isCaptureMode || isPreviewMode || isCardsMode}
+                disabled={selfLocked || isCaptureMode || isPreviewMode}
                 isNight={!mapIsDay}
                 storyCountFor={storyCountFor}
                 onOpenStory={handleOpenStory}
@@ -990,7 +987,14 @@ export function ThrowHomeScreen({
             condition below) so the two steps never show at once. */}
         {!inFlight && isCardsMode && (
           <ScrollView
-            style={[styles.cardsOverlay, { top: insets.top + 16 + CAROUSEL_HEIGHT + 8, bottom: insets.bottom + 16 }]}
+            style={[
+              styles.cardsOverlay,
+              // Same BOTTOM_NAV_CLEARANCE the dock itself reserves (see its own comment) — BottomNav
+              // stays fully visible the whole time these cards are up (nothing here fades it out the
+              // way inbox mode does), so this overlay has to clear its full height too, not just the
+              // safe-area inset, or the dock paints over the card's own bottom content.
+              { top: insets.top + 16 + CAROUSEL_HEIGHT + 16, bottom: insets.bottom + 16 + BOTTOM_NAV_CLEARANCE },
+            ]}
             contentContainerStyle={styles.cardsOverlayContent}
             showsVerticalScrollIndicator={false}
           >
@@ -1002,9 +1006,8 @@ export function ThrowHomeScreen({
               friendCount={friends.length}
               hasStatusToday={myId ? storyCountFor(myId) > 0 : false}
               onAddStatus={() => setStoryFlow({ name: 'capture' })}
-              onClose={handleCloseCards}
             />
-            <AddFriendCard onClose={handleCloseCards} />
+            <AddFriendCard onOpenAddFriendScreen={onOpenAddFriendScreen} />
           </ScrollView>
         )}
 
@@ -1015,10 +1018,11 @@ export function ThrowHomeScreen({
           <View
             style={[
               styles.notificationsOverlay,
-              { top: insets.top + 16 + CAROUSEL_HEIGHT + 8, bottom: insets.bottom + 16 },
+              // See cardsOverlay's own comment on BOTTOM_NAV_CLEARANCE — same reasoning applies here.
+              { top: insets.top + 16 + CAROUSEL_HEIGHT + 16, bottom: insets.bottom + 16 + BOTTOM_NAV_CLEARANCE },
             ]}
           >
-            <NotificationsPanel onClose={handleToggleNotifications} onNavigate={handleNotificationTarget} />
+            <NotificationsPanel onNavigate={handleNotificationTarget} />
           </View>
         )}
 

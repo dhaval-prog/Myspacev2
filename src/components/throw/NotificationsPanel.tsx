@@ -9,7 +9,6 @@ import { useFriends } from '../../context/FriendsContext';
 import { targetForNotification, type NotificationTarget } from '../../utils/notify';
 import { throwGlass, throwRadius } from '../../theme/throwTokens';
 
-const BACK_ICON = 'M15 18l-6-6 6-6';
 const PLUS_ICON = 'M12 5v14M5 12h14';
 const PLANE_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
 const CHAT_ICON = 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z';
@@ -59,9 +58,6 @@ function isToday(iso: string): boolean {
 }
 
 interface NotificationsPanelProps {
-  /** Collapses the panel back into the carousel — tapping the Notifications circle again, or
-   * selecting Add Status/a real contact, all route through this same close. */
-  onClose: () => void;
   /** Jumps to whatever this notification is about (a chat, a throw, a contact) — omit to just
    * acknowledge in place. */
   onNavigate?: (target: NotificationTarget) => void;
@@ -74,7 +70,7 @@ interface NotificationsPanelProps {
  * Notifications slot (see RecipientCarousel's own isNotificationsSelected), which the card stays
  * open for exactly as long as that slot stays selected. Distinct from the smaller quick-glance
  * NotificationsSheet used elsewhere in the app. */
-export function NotificationsPanel({ onClose, onNavigate }: NotificationsPanelProps) {
+export function NotificationsPanel({ onNavigate }: NotificationsPanelProps) {
   const { notifications, unreadCount, acknowledge, clearAll } = useNotifications();
   const { friends, receivedRequests, sentRequests, acceptRequest, declineRequest } = useFriends();
   const [filter, setFilter] = useState<Filter>('all');
@@ -160,19 +156,13 @@ export function NotificationsPanel({ onClose, onNavigate }: NotificationsPanelPr
 
   return (
     <GlassSurface tint="light" tintColor={throwGlass.tintWaterBlueStrong} style={styles.card}>
-      <View style={styles.header}>
-        <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close notifications">
-          <Icon path={BACK_ICON} size={22} color={colors.textPrimary} strokeWidth={2.2} />
-        </Pressable>
-        <Text style={styles.title}>Notifications</Text>
-        {unreadCount > 0 ? (
+      {unreadCount > 0 && (
+        <View style={styles.header}>
           <Pressable onPress={clearAll} accessibilityRole="button" accessibilityLabel="Mark all read">
             <Text style={styles.markAllRead}>Mark all read</Text>
           </Pressable>
-        ) : (
-          <View style={{ width: 1 }} />
-        )}
-      </View>
+        </View>
+      )}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
         {FILTERS.map((f) => {
@@ -220,13 +210,11 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
     paddingBottom: spacing.md,
-    gap: spacing.sm,
   },
-  title: { flex: 1, fontFamily: fontFamily.sans800, fontSize: 19, color: colors.textPrimary },
   markAllRead: { fontFamily: fontFamily.sans600, fontSize: 13, color: ACCENT_BLUE },
   // `width: '100%'` keeps this ScrollView from ever stretching past the card's own width (it
   // otherwise shrink-wraps to its unclipped content on web) — without it, a too-wide pill row
