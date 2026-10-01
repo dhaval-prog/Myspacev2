@@ -37,7 +37,12 @@ interface LetterTarget {
 
 function letterTargetFor(stage: LetterStageV3): LetterTarget {
   const inEnv = stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed' || stage === 'flap';
-  if (inEnv) return { x: 0, y: 130, scale: 0.8, rotate: 0, opacity: stage === 'flap' ? 1 : 0, durMs: 0, easing: Easing.linear, opDurMs: 0, opDelayMs: 0 };
+  // Tucked inside the envelope's own 190-tall window (not the handoff's literal translateY(130)/
+  // scale(.8) — those numbers assume CSS's `transform-origin:50% 0`, and even with this card's own
+  // matching `transformOrigin` the resulting box still runs well past the envelope's own bottom
+  // edge, showing as a second, disconnected panel poking out below it). Shrunk enough, with the
+  // right translate, to land entirely within the envelope's own bounds instead.
+  if (inEnv) return { x: 0, y: 95, scale: 0.6, rotate: 0, opacity: stage === 'flap' ? 1 : 0, durMs: 0, easing: Easing.linear, opDurMs: 0, opDelayMs: 0 };
   if (stage === 'rise') return { x: 0, y: -26, scale: 0.86, rotate: 0, opacity: 1, durMs: 600, easing: EASE_RISE, opDurMs: 0, opDelayMs: 0 };
   if (stage === 'shrink') return { x: 0, y: 260, scale: 0.25, rotate: 10, opacity: 0, durMs: 340, easing: EASE_SHRINK, opDurMs: 300, opDelayMs: 50 };
   if (stage === 'trash') return { x: 0, y: 360, scale: 0.12, rotate: 16, opacity: 0, durMs: 500, easing: EASE_SHRINK, opDurMs: 350, opDelayMs: 150 };
@@ -85,8 +90,8 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
   const halfH = h / 2;
 
   const letterX = useRef(new Animated.Value(0)).current;
-  const letterY = useRef(new Animated.Value(s(130, scale))).current;
-  const letterScale = useRef(new Animated.Value(0.8)).current;
+  const letterY = useRef(new Animated.Value(s(95, scale))).current;
+  const letterScale = useRef(new Animated.Value(0.6)).current;
   const letterRotate = useRef(new Animated.Value(0)).current;
   const letterOpacity = useRef(new Animated.Value(0)).current;
 
@@ -101,7 +106,18 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
   const botBackOpacity = useRef(new Animated.Value(1)).current;
   const botShade = useRef(new Animated.Value(0.3)).current;
 
+  // A plain `Animated.timing({duration:0, delay})` is NOT reliable for "snap to a value after a
+  // delay" on web (the zero-duration animation can resolve before its own delay elapses) — ported
+  // LetterFoldCard's own proven `later()` + `.setValue()` pattern instead for the bottom-half face
+  // swap below, rather than routing it through `runTiming`'s delay handling.
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const later = (fn: () => void, ms: number) => {
+    timers.current.push(setTimeout(fn, ms));
+  };
+
   useEffect(() => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
     const lt = letterTargetFor(stage);
     runTiming(letterX, s(lt.x, scale), lt.durMs, lt.easing);
     runTiming(letterY, s(lt.y, scale), lt.durMs, lt.easing);
@@ -129,13 +145,28 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
     const unfolded = stage === 'unfold' || stage === 'open';
     runTiming(botRotateX, unfolded ? 0 : 180, inEnv ? 0 : 600, EASE_UNFOLD);
     // The two faces swap instantly, timed to land halfway through the 600ms unfold (300ms) — same
-    // `transition: opacity 0s linear 300ms` trick the handoff uses instead of a true cross-fade,
-    // so neither face is ever visibly see-through mid-flip.
-    runTiming(botFrontOpacity, unfolded ? 1 : 0, 0, Easing.linear, inEnv ? 0 : 300);
-    runTiming(botBackOpacity, unfolded ? 0 : 1, 0, Easing.linear, inEnv ? 0 : 300);
+    // `transition: opacity 0s linear 300ms` trick the handoff uses instead of a true cross-fade, so
+    // neither face is ever visibly see-through mid-flip. `later()` (not `runTiming`'s own delay —
+    // see its own doc comment) so the delay is actually honored.
+    if (inEnv) {
+      botFrontOpacity.setValue(unfolded ? 1 : 0);
+      botBackOpacity.setValue(unfolded ? 0 : 1);
+    } else {
+      later(() => {
+        botFrontOpacity.setValue(unfolded ? 1 : 0);
+        botBackOpacity.setValue(unfolded ? 0 : 1);
+      }, 300);
+    }
     runTiming(botShade, unfolded ? 0 : 0.3, 500, Easing.linear);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
+
+  useEffect(
+    () => () => {
+      timers.current.forEach(clearTimeout);
+    },
+    [],
+  );
 
   const inEnvNow = stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed' || stage === 'flap';
   const letterZ = inEnvNow || stage === 'rise' ? 2 : 6;
@@ -176,7 +207,10 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
         ]}
       />
 
-      {/* The letter — top half (static) + bottom half (the unfolding one). */}
+      {/* The letter — top half (static) + bottom half (the unfolding one). `transformOrigin` matches
+          the handoff's own `transform-origin:50% 0` — RN's transforms scale/rotate around the
+          element's center by default, which (combined with the translate below) would land the
+          card somewhere else entirely from what these values were tuned against. */}
       <Animated.View
         style={{
           position: 'absolute',
@@ -185,6 +219,7 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
           width: w,
           height: h,
           zIndex: letterZ,
+          transformOrigin: '50% 0%',
           transform: [{ translateX: letterX }, { translateY: letterY }, { scale: letterScale }, { rotate: letterRotate.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] }) }],
           opacity: letterOpacity,
         }}
@@ -218,10 +253,19 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
             </View>
             <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: botShade }]} />
           </Animated.View>
+          {/* The back face doesn't rotate at all — same reasoning as LetterFoldCard's own
+              `panelBack`: folding a rigid panel 180° about its own top edge lands it swung fully
+              onto the front face's own slot, so there's nothing left to animate into once it gets
+              there. Nesting a SECOND independent `rotateX` interpolation here (driven by the same
+              `botRotateX` value, offset 180° from the front face's own) relies on RN Web composing
+              two nested 3D transforms the way CSS's `transform-style:preserve-3d` would — it
+              doesn't (confirmed via screenshots: the back panel visibly bled through/overlapped
+              the front face's body text well into the 'unfold' stage) — so it's purely
+              opacity-gated instead, snapped via `later()` at the exact halfway point above. */}
           <Animated.View
             style={[
               styles.botBack,
-              { width: w, height: halfH, opacity: botBackOpacity, transform: [{ perspective: s(1400, scale) }, { rotateX: botRotateX.interpolate({ inputRange: [0, 180], outputRange: ['180deg', '360deg'] }) }] },
+              { width: w, height: halfH, opacity: botBackOpacity },
             ]}
           >
             <AirmailStripes scale={scale} w={w} h={halfH} />
@@ -484,7 +528,7 @@ const styles = StyleSheet.create({
   envInside: { position: 'absolute', backgroundColor: v3Color.envelopeInside },
   topHalf: { backgroundColor: v3Color.paper, overflow: 'hidden' },
   botFront: { position: 'absolute', backgroundColor: v3Color.paper, overflow: 'hidden', backfaceVisibility: 'hidden' },
-  botBack: { position: 'absolute', backfaceVisibility: 'hidden', overflow: 'hidden', borderBottomLeftRadius: 0 },
+  botBack: { position: 'absolute', overflow: 'hidden', borderBottomLeftRadius: 0 },
   backPanel: { position: 'absolute', bottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: v3Color.envelopeFlap },
   toName: { fontFamily: v3Font.ui800, color: v3Color.ink },
   fromHand: { fontFamily: v3Font.hand600, color: v3Color.inkBlue },
