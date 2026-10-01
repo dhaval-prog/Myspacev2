@@ -257,7 +257,15 @@ export function RecipientCarousel({
   });
 
   const addStoryTransform = onAddStory ? itemTransform(-1) : null;
-  const notificationsTransform = onOpenNotifications ? itemTransform(-2) : null;
+  // The notifications slot always mirrors the add-story slot's own scale/opacity rather than its
+  // own (one slot further left) distance — otherwise, whenever a real contact is selected, it
+  // would sit one falloff step further away than add-story and render visibly smaller/fainter
+  // than it, instead of the two utility icons matching each other's size at every instant. Only
+  // its translateX comes from its own slot index, so it still sits one position further left.
+  const utilityScaleOpacity = itemTransform(-1);
+  const notificationsTransform = onOpenNotifications
+    ? { translateX: itemTransform(-2).translateX, scale: utilityScaleOpacity.scale, opacity: utilityScaleOpacity.opacity }
+    : null;
 
   return (
     <View style={[styles.wrap, noSelect]} {...panResponder.panHandlers}>
