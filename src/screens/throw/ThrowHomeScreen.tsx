@@ -506,7 +506,11 @@ export function ThrowHomeScreen({
   useEffect(() => {
     if (initializedRef.current || friendsWithLocation.length === 0) return;
     initializedRef.current = true;
-    const wanted = lockedRecipient?.friendUserId;
+    // `initialFocusContactId` (e.g. a notification tap, or Reply from Received Letters) is only
+    // honored here as a fallback behind `lockedRecipient` — this effect used to ignore it entirely
+    // once `friendsWithLocation` populated, silently resetting the selection to the first friend
+    // right after the lazy `useState(initialFocusContactId ?? null)` above had set it correctly.
+    const wanted = lockedRecipient?.friendUserId ?? initialFocusContactId ?? undefined;
     const found = wanted ? friendsWithLocation.find((f) => f.userId === wanted) : null;
     setSelectedFriendId((found ?? friendsWithLocation[0]).userId);
     // eslint-disable-next-line react-hooks/exhaustive-deps

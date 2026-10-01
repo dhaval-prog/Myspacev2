@@ -4,6 +4,7 @@ import { Icon } from '../../Icon';
 import { LetterPlaneGlyph } from '../inbox/LetterPlaneGlyph';
 import { vibrate } from '../../../utils/haptics';
 import { v3Color, v3Font } from '../../../theme/throwLettersV3Tokens';
+import { noSelect } from '../../../theme/webStyles';
 
 const BELL_ICON = 'M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15z M10 20.5a2 2 0 0 0 4 0';
 const PAPERCLIP_ICON = 'M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8';
@@ -22,6 +23,8 @@ const s = (n: number, scale: number) => n * scale;
 const DEL = 80;
 const LONG_PRESS_MS = 420;
 const MOVE_SLOP = 8;
+const CHIP = 60;
+const CHIP_GLYPH = 32;
 
 /** The active chip's own long-press(420ms)-then-drag-UP(80px)-to-delete gesture — the mirror image
  * of PlaneSlider's own long-press-drag-DOWN gesture (this screen's bin sits above the chip row,
@@ -228,7 +231,7 @@ export function ChipsRowV3({
   const over = lift > DEL;
 
   return (
-    <View style={{ gap: s(10, scale) }}>
+    <View style={[{ gap: s(10, scale) }, noSelect]}>
       <View style={{ paddingHorizontal: s(24, scale) }}>
         <Text style={[styles.mono, { fontSize: s(10.5, scale), letterSpacing: 1.1 }]}>{rowTitle}</Text>
       </View>
@@ -237,7 +240,7 @@ export function ChipsRowV3({
         horizontal
         showsHorizontalScrollIndicator={false}
         decelerationRate="fast"
-        snapToInterval={s(62, scale)}
+        snapToInterval={s(CHIP + 10, scale)}
         scrollEnabled={!armed}
         contentContainerStyle={{ gap: s(10, scale), paddingHorizontal: s(24, scale), paddingVertical: s(6, scale) }}
       >
@@ -248,21 +251,21 @@ export function ChipsRowV3({
           const bg = armedHere ? v3Color.deleteRed : active ? v3Color.accentBlue : c.unread ? v3Color.chipUnread : v3Color.chipRead;
           const labelColor = armedHere ? v3Color.deleteRed : active ? v3Color.accentBlue : c.unread ? v3Color.ink : v3Color.muted;
           const chipBox = (
-            <View style={[styles.chip, { width: s(52, scale), height: s(52, scale), borderRadius: s(16, scale), backgroundColor: bg }, !active && c.unread && styles.chipUnreadShadow, active && styles.chipActiveShadow]}>
-              <LetterPlaneGlyph size={s(28, scale)} variant={variant} tiltDeg={-14} />
+            <View style={[styles.chip, { width: s(CHIP, scale), height: s(CHIP, scale), borderRadius: s(18, scale), backgroundColor: bg }, !active && c.unread && styles.chipUnreadShadow, active && styles.chipActiveShadow]}>
+              <LetterPlaneGlyph size={s(CHIP_GLYPH, scale)} variant={variant} tiltDeg={-14} />
               {!active && c.unread && (
-                <View style={[styles.unreadDot, { width: s(14, scale), height: s(14, scale), borderRadius: s(7, scale), borderWidth: s(2.5, scale), borderColor: bg }]} />
+                <View style={[styles.unreadDot, { width: s(16, scale), height: s(16, scale), borderRadius: s(8, scale), borderWidth: s(3, scale), borderColor: bg }]} />
               )}
               {(c.alert || c.hasMedia) && (
                 <View style={[styles.cornerBadges, { gap: s(2, scale) }]}>
                   {c.alert && (
-                    <View style={[styles.cornerBadge, styles.alertBadge, { width: s(18, scale), height: s(18, scale), borderRadius: s(9, scale) }]}>
-                      <Icon path={BELL_ICON} size={s(9, scale)} color="#FFFFFF" strokeWidth={3} />
+                    <View style={[styles.cornerBadge, styles.alertBadge, { width: s(20, scale), height: s(20, scale), borderRadius: s(10, scale) }]}>
+                      <Icon path={BELL_ICON} size={s(10, scale)} color="#FFFFFF" strokeWidth={3} />
                     </View>
                   )}
                   {c.hasMedia && (
-                    <View style={[styles.cornerBadge, styles.mediaBadge, { width: s(18, scale), height: s(18, scale), borderRadius: s(9, scale) }]}>
-                      <Icon path={PAPERCLIP_ICON} size={s(10, scale)} color={v3Color.accentBlue} strokeWidth={2.8} />
+                    <View style={[styles.cornerBadge, styles.mediaBadge, { width: s(20, scale), height: s(20, scale), borderRadius: s(10, scale) }]}>
+                      <Icon path={PAPERCLIP_ICON} size={s(11, scale)} color={v3Color.accentBlue} strokeWidth={2.8} />
                     </View>
                   )}
                 </View>
@@ -323,9 +326,9 @@ export function ChipsRowV3({
           style={[
             styles.ghost,
             {
-              width: s(52, scale),
-              height: s(52, scale),
-              borderRadius: s(16, scale),
+              width: s(CHIP, scale),
+              height: s(CHIP, scale),
+              borderRadius: s(18, scale),
               bottom: s(60, scale),
               alignSelf: 'center',
               opacity: ghostOpacity,
@@ -333,7 +336,7 @@ export function ChipsRowV3({
             },
           ]}
         >
-          <LetterPlaneGlyph size={s(28, scale)} variant="delete" tiltDeg={-14} />
+          <LetterPlaneGlyph size={s(CHIP_GLYPH, scale)} variant="delete" tiltDeg={-14} />
         </Animated.View>
       )}
     </View>
