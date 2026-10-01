@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
-import Svg, { ClipPath, Defs, Polygon, Rect } from 'react-native-svg';
+import Svg, { ClipPath, Defs, LinearGradient, Path, Polygon, Rect, Stop } from 'react-native-svg';
 import { Icon } from '../../Icon';
 import { LetterPlaneGlyph } from '../inbox/LetterPlaneGlyph';
 import { v3Color, v3Font, v3Layout, v3Radius } from '../../../theme/throwLettersV3Tokens';
@@ -46,7 +46,6 @@ function letterTargetFor(stage: LetterStageV3): LetterTarget {
   if (stage === 'rise') return { x: 0, y: -26, scale: 0.86, rotate: 0, opacity: 1, durMs: 600, easing: EASE_RISE, opDurMs: 0, opDelayMs: 0 };
   if (stage === 'shrink') return { x: 0, y: 260, scale: 0.25, rotate: 10, opacity: 0, durMs: 340, easing: EASE_SHRINK, opDurMs: 300, opDelayMs: 50 };
   if (stage === 'trash') return { x: 0, y: 360, scale: 0.12, rotate: 16, opacity: 0, durMs: 500, easing: EASE_SHRINK, opDurMs: 350, opDelayMs: 150 };
-  if (stage === 'replyFly') return { x: 150, y: -330, scale: 0.18, rotate: -24, opacity: 0, durMs: 500, easing: Easing.bezier(0.5, 0, 0.75, 0.3), opDurMs: 300, opDelayMs: 200 };
   return { x: 0, y: 0, scale: 1, rotate: 0, opacity: 1, durMs: 500, easing: EASE_DEFAULT, opDurMs: 300, opDelayMs: 0 };
 }
 
@@ -105,6 +104,10 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
   const botFrontOpacity = useRef(new Animated.Value(0)).current;
   const botBackOpacity = useRef(new Animated.Value(1)).current;
   const botShade = useRef(new Animated.Value(0.3)).current;
+  // Drives the top-half/bottom-front faces' own box-shadow — folded→open, .4s, not native-driver
+  // safe (shadow* isn't a transform/opacity property), same JS-driven fallback this codebase
+  // already takes for everything else RN's native driver can't animate.
+  const foldT = useRef(new Animated.Value(0)).current;
 
   // A plain `Animated.timing({duration:0, delay})` is NOT reliable for "snap to a value after a
   // delay" on web (the zero-duration animation can resolve before its own delay elapses) — ported
@@ -158,6 +161,7 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
       }, 300);
     }
     runTiming(botShade, unfolded ? 0 : 0.3, 500, Easing.linear);
+    runTiming(foldT, unfolded ? 1 : 0, 400, Easing.linear);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
 
@@ -176,6 +180,21 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
   const envStyle = {
     transform: [{ translateY: envY }, { scale: envScale }, { rotate: envRotate.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] }) }],
     opacity: envOpacity,
+  };
+
+  // Top half: folded `0 10px 24px rgba(0,0,0,.14)` → open `0 18px 40px rgba(0,0,0,.10)`.
+  const topShadowStyle = {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: foldT.interpolate({ inputRange: [0, 1], outputRange: [s(10, scale), s(18, scale)] }) },
+    shadowRadius: foldT.interpolate({ inputRange: [0, 1], outputRange: [s(24, scale), s(40, scale)] }),
+    shadowOpacity: foldT.interpolate({ inputRange: [0, 1], outputRange: [0.14, 0.1] }),
+  };
+  // Bottom-front face: `none` folded → `0 18px 30px rgba(0,0,0,.10)` open.
+  const botFrontShadowStyle = {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: s(18, scale) },
+    shadowRadius: s(30, scale),
+    shadowOpacity: foldT.interpolate({ inputRange: [0, 1], outputRange: [0, 0.1] }),
   };
 
   if (isEmpty) {
@@ -203,6 +222,9 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
             width: s(v3Layout.envelope.w, scale),
             height: s(v3Layout.envelope.h, scale),
             borderRadius: s(v3Radius.envelope, scale),
+            shadowOffset: { width: 0, height: s(14, scale) },
+            shadowRadius: s(30, scale),
+            shadowOpacity: 0.16,
           },
         ]}
       />
@@ -224,34 +246,42 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
           opacity: letterOpacity,
         }}
       >
-        <View style={[styles.topHalf, { width: w, height: halfH, borderTopLeftRadius: s(22, scale), borderTopRightRadius: s(22, scale) }]}>
-          <View style={{ position: 'absolute', left: 0, top: 0, width: w, height: h }}>
-            <RuledLines scale={scale} h={h} />
-            <HeaderRow letter={L} scale={scale} />
-            <AlertPill letter={L} scale={scale} />
-            <BodyText body={L?.body ?? ''} scale={scale} />
+        {/* Shadow lives on this outer, non-clipping wrapper — a view with `overflow:'hidden'`
+            (needed below to crop the shared ruled/body content to just this half) also clips its
+            own native shadow on iOS, so the shadow and the clip can't live on the same node. */}
+        <Animated.View style={[{ width: w, height: halfH, shadowColor: '#000000' }, topShadowStyle]}>
+          <View style={[styles.topHalf, { width: w, height: halfH, borderTopLeftRadius: s(22, scale), borderTopRightRadius: s(22, scale) }]}>
+            <View style={{ position: 'absolute', left: 0, top: 0, width: w, height: h }}>
+              <RuledLines scale={scale} h={h} />
+              <HeaderRow letter={L} scale={scale} />
+              <AlertPill letter={L} scale={scale} />
+              <BodyText body={L?.body ?? ''} scale={scale} />
+            </View>
           </View>
-        </View>
+        </Animated.View>
 
         <View style={{ position: 'absolute', left: 0, top: halfH, width: w, height: halfH }}>
           <Animated.View
             style={[
-              styles.botFront,
-              { width: w, height: halfH, borderBottomLeftRadius: s(22, scale), borderBottomRightRadius: s(22, scale), opacity: botFrontOpacity, transform: [{ perspective: s(1400, scale) }, { rotateX: botRotateX.interpolate({ inputRange: [0, 180], outputRange: ['0deg', '180deg'] }) }] },
+              { position: 'absolute', width: w, height: halfH, shadowColor: '#000000', backfaceVisibility: 'hidden', opacity: botFrontOpacity },
+              botFrontShadowStyle,
+              { transform: [{ perspective: s(1400, scale) }, { rotateX: botRotateX.interpolate({ inputRange: [0, 180], outputRange: ['0deg', '180deg'] }) }] },
             ]}
           >
-            <View style={{ position: 'absolute', left: 0, top: -halfH, width: w, height: h }}>
-              <RuledLines scale={scale} h={h} />
-              <HeaderRow letter={L} scale={scale} hidePostmark />
-              {/* Reserves the same vertical space the top half's AlertPill actually occupies (height
-                  28 + marginTop 10), rather than rendering it again, so the body text lands at the
-                  identical y-offset in both halves and reads as one continuous block across the
-                  fold — matches the handoff's own blank spacer in this exact spot. */}
-              {!!L?.alertSchedule && <View style={{ height: s(38, scale) }} />}
-              <BodyText body={L?.body ?? ''} scale={scale} />
-              <SignatureRow letter={L} scale={scale} />
+            <View style={[styles.botFront, { width: w, height: halfH, borderBottomLeftRadius: s(22, scale), borderBottomRightRadius: s(22, scale) }]}>
+              <View style={{ position: 'absolute', left: 0, top: -halfH, width: w, height: h }}>
+                <RuledLines scale={scale} h={h} />
+                <HeaderRow letter={L} scale={scale} hidePostmark />
+                {/* Reserves the same vertical space the top half's AlertPill actually occupies (height
+                    28 + marginTop 10), rather than rendering it again, so the body text lands at the
+                    identical y-offset in both halves and reads as one continuous block across the
+                    fold — matches the handoff's own blank spacer in this exact spot. */}
+                {!!L?.alertSchedule && <View style={{ height: s(38, scale) }} />}
+                <BodyText body={L?.body ?? ''} scale={scale} />
+                <SignatureRow letter={L} scale={scale} />
+              </View>
+              <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: botShade }]} />
             </View>
-            <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: botShade }]} />
           </Animated.View>
           {/* The back face doesn't rotate at all — same reasoning as LetterFoldCard's own
               `panelBack`: folding a rigid panel 180° about its own top edge lands it swung fully
@@ -263,20 +293,28 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
               the front face's body text well into the 'unfold' stage) — so it's purely
               opacity-gated instead, snapped via `later()` at the exact halfway point above. */}
           <Animated.View
-            style={[
-              styles.botBack,
-              { width: w, height: halfH, opacity: botBackOpacity },
-            ]}
+            style={{
+              position: 'absolute',
+              width: w,
+              height: halfH,
+              opacity: botBackOpacity,
+              shadowColor: '#000000',
+              shadowOffset: { width: 0, height: s(6, scale) },
+              shadowRadius: s(16, scale),
+              shadowOpacity: 0.12,
+            }}
           >
-            <AirmailStripes scale={scale} w={w} h={halfH} />
-            <View style={[styles.backPanel, { left: s(6, scale), right: s(6, scale), top: s(6, scale), borderTopLeftRadius: s(17, scale), borderTopRightRadius: s(17, scale), paddingHorizontal: s(20, scale) }]}>
-              <View style={{ gap: s(3, scale) }}>
-                <Text style={[styles.mono, { fontSize: s(10, scale), letterSpacing: 1.2 }]}>PAR AVION · TO</Text>
-                <Text style={[styles.toName, { fontSize: s(20, scale) }]}>You</Text>
-                <Text style={[styles.fromHand, { fontSize: s(20, scale) }]}>from {L?.from ?? ''}</Text>
-              </View>
-              <View style={[styles.postmark, { width: s(58, scale), height: s(58, scale), borderRadius: s(29, scale) }]}>
-                <Text style={[styles.mono, styles.postmarkPlace, { fontSize: s(8, scale) }]}>{L?.place ?? ''}</Text>
+            <View style={[styles.botBack, { width: w, height: halfH, borderTopLeftRadius: s(22, scale), borderTopRightRadius: s(22, scale) }]}>
+              <AirmailStripes scale={scale} w={w} h={halfH} />
+              <View style={[styles.backPanel, { left: s(6, scale), right: s(6, scale), top: s(6, scale), borderTopLeftRadius: s(17, scale), borderTopRightRadius: s(17, scale), paddingHorizontal: s(20, scale) }]}>
+                <View style={{ gap: s(3, scale) }}>
+                  <Text style={[styles.mono, { fontSize: s(10, scale), letterSpacing: 1.2 }]}>PAR AVION · TO</Text>
+                  <Text style={[styles.toName, { fontSize: s(20, scale) }]}>You</Text>
+                  <Text style={[styles.fromHand, { fontSize: s(20, scale) }]}>from {L?.from ?? ''}</Text>
+                </View>
+                <View style={[styles.postmark, { width: s(58, scale), height: s(58, scale), borderRadius: s(29, scale) }]}>
+                  <Text style={[styles.mono, styles.postmarkPlace, { fontSize: s(8, scale) }]}>{L?.place ?? ''}</Text>
+                </View>
               </View>
             </View>
           </Animated.View>
@@ -329,21 +367,60 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
   );
 }
 
+/** The envelope's front pocket — `clip-path:polygon(0 0,50% 56%,100% 0,100% 100%,0 100%)` outer
+ * (striped) and a matching, slightly-smaller inner polygon (inset 6/6/0/6) in plain pocket color —
+ * i.e. a rectangle with a downward-pointing notch cut out of its top edge, so the envelope's inside
+ * color (behind it) shows through that notch. Built as two separately-clipped SVG shapes rather
+ * than one, same "draw the real shape" approach `TriangleFlap` already uses for the flap. */
 function EnvelopePocket({ scale, fromName, place }: { scale: number; fromName: string; place: string }) {
   const w = s(v3Layout.envelope.w, scale);
   const h = s(v3Layout.envelope.h, scale);
   const inset = s(v3Layout.envelope.stripeInset, scale);
+  const innerW = w - inset * 2;
+  const innerH = h - inset;
+  const notchYOuter = h * 0.56;
+  const notchYInner = innerH * 0.54;
+  const period = s(STRIPE_PERIOD, scale);
   return (
     <View style={{ width: w, height: h, borderRadius: s(10, scale), overflow: 'hidden' }}>
-      <AirmailStripes scale={scale} w={w} h={h} bg={v3Color.envelopePocket} />
-      <View style={{ position: 'absolute', left: inset, right: inset, top: inset, bottom: 0, backgroundColor: v3Color.envelopePocket, borderRadius: s(6, scale) }}>
-        <View style={{ position: 'absolute', left: s(16, scale), bottom: s(14, scale), gap: 2 }}>
-          <Text style={[styles.mono, { fontSize: s(9, scale), letterSpacing: 1.3 }]}>FROM</Text>
-          <Text style={[styles.fromHand, { fontSize: s(22, scale) }]}>{fromName}</Text>
-        </View>
-        <View style={[styles.postmark, { position: 'absolute', right: s(16, scale), bottom: s(12, scale), width: s(50, scale), height: s(50, scale), borderRadius: s(25, scale), transform: [{ rotate: '-14deg' }] }]}>
-          <Text style={[styles.mono, styles.postmarkPlace, { fontSize: s(7.5, scale) }]}>{place}</Text>
-        </View>
+      <View style={{ position: 'absolute', left: 0, top: 0 }}>
+        <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+          <DefsAny>
+            <ClipPath id="pocketOuter">
+              <Polygon points={`0,0 ${w / 2},${notchYOuter} ${w},0 ${w},${h} 0,${h}`} />
+            </ClipPath>
+          </DefsAny>
+          <Rect x={0} y={0} width={w} height={h} fill={v3Color.envelopePocket} clipPath="url(#pocketOuter)" />
+          <ClippedStripeBars w={w} h={h} period={period} clipId="pocketOuter" />
+        </Svg>
+      </View>
+      {/* Seam lines — drawn over the outer stripe, under the inner panel's own fill. */}
+      <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0 }}>
+        <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+          <Path
+            d={`M0,${s(178, scale)} L${s(128, scale)},${s(92, scale)} M${s(288, scale)},${s(178, scale)} L${s(160, scale)},${s(92, scale)}`}
+            stroke="rgba(0,0,0,0.07)"
+            strokeWidth={1.5 * scale}
+            fill="none"
+          />
+        </Svg>
+      </View>
+      <View style={{ position: 'absolute', left: inset, top: inset }}>
+        <Svg width={innerW} height={innerH} viewBox={`0 0 ${innerW} ${innerH}`}>
+          <DefsAny>
+            <ClipPath id="pocketInner">
+              <Polygon points={`0,0 ${innerW / 2},${notchYInner} ${innerW},0 ${innerW},${innerH} 0,${innerH}`} />
+            </ClipPath>
+          </DefsAny>
+          <Rect x={0} y={0} width={innerW} height={innerH} fill={v3Color.envelopePocket} clipPath="url(#pocketInner)" />
+        </Svg>
+      </View>
+      <View style={{ position: 'absolute', left: s(16, scale), bottom: s(14, scale), gap: 2 }}>
+        <Text style={[styles.mono, { fontSize: s(9, scale), letterSpacing: 1.3 }]}>FROM</Text>
+        <Text style={[styles.fromHand, { fontSize: s(22, scale) }]}>{fromName}</Text>
+      </View>
+      <View style={[styles.postmark, { position: 'absolute', right: s(16, scale), bottom: s(12, scale), width: s(50, scale), height: s(50, scale), borderRadius: s(25, scale), transform: [{ rotate: '-14deg' }] }]}>
+        <Text style={[styles.mono, styles.postmarkPlace, { fontSize: s(7.5, scale) }]}>{place}</Text>
       </View>
     </View>
   );
@@ -356,7 +433,24 @@ function EnvelopeFlap({ scale }: { scale: number }) {
   return (
     <View style={{ width: w, height: h }}>
       <TriangleFlap scale={scale} w={w} h={h} />
-      <View style={[styles.seal, { left: w / 2 - seal / 2, top: s(82, scale), width: seal, height: seal, borderRadius: seal / 2 }]}>
+      <View
+        style={[
+          styles.seal,
+          {
+            left: w / 2 - seal / 2,
+            top: s(82, scale),
+            width: seal,
+            height: seal,
+            borderRadius: seal / 2,
+            shadowOffset: { width: 0, height: s(3, scale) },
+            shadowRadius: s(8, scale),
+            shadowOpacity: 0.4,
+          },
+        ]}
+      >
+        {/* `inset 0 0 0 3px rgba(255,255,255,.18)` — RN has no inset shadow, so the ring is a plain
+            inner border instead, same "draw the real thing" approach used elsewhere in this file. */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: seal / 2, borderWidth: s(3, scale), borderColor: 'rgba(255,255,255,0.18)' }]} />
         <LetterPlaneGlyph size={s(20, scale)} variant="active" tiltDeg={-14} />
       </View>
     </View>
@@ -383,13 +477,31 @@ function TriangleFlap({ scale, w, h }: { scale: number; w: number; h: number }) 
         </DefsAny>
         <Rect x={0} y={0} width={w} height={h} fill={v3Color.envelopeFlap} clipPath="url(#flapTriangle)" />
         {/* The diagonal stripe — alternating blue bars at 135°, clipped to the same triangle. */}
-        <FlapStripeBars w={w} h={h} period={period} />
+        <ClippedStripeBars w={w} h={h} period={period} clipId="flapTriangle" />
+        {/* The flap's own slightly-inset, unstriped inner triangle, with a faint top→bottom shading
+            — `polygon(9px 6px,291px 6px,50% 102px)` + `linear-gradient(180deg,transparent 40%,
+            rgba(0,0,0,.06))`, drawn on top of the striped outer triangle. */}
+        <DefsAny>
+          <ClipPath id="flapInner">
+            <Polygon points={`${s(9, scale)},${s(6, scale)} ${s(291, scale)},${s(6, scale)} ${w / 2},${s(102, scale)}`} />
+          </ClipPath>
+          <LinearGradient id="flapShade" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset={0} stopColor="#000000" stopOpacity={0} />
+            <Stop offset={0.4} stopColor="#000000" stopOpacity={0} />
+            <Stop offset={1} stopColor="#000000" stopOpacity={0.06} />
+          </LinearGradient>
+        </DefsAny>
+        <Rect x={0} y={0} width={w} height={h} fill={v3Color.envelopeFlap} clipPath="url(#flapInner)" />
+        <Rect x={0} y={0} width={w} height={h} fill="url(#flapShade)" clipPath="url(#flapInner)" />
       </Svg>
     </View>
   );
 }
 
-function FlapStripeBars({ w, h, period }: { w: number; h: number; period: number }) {
+/** Shared diagonal-stripe-bar renderer for any SVG shape clipped to `clipId` (the flap's triangle,
+ * the pocket's notched pentagon) — alternating blue bars at 135°, oversized/rotated so the clip
+ * (not this component) decides the final visible shape. */
+function ClippedStripeBars({ w, h, period, clipId }: { w: number; h: number; period: number; clipId: string }) {
   const diag = Math.ceil(Math.sqrt(w * w + h * h)) + period * 2;
   const bars = Math.ceil(diag / period) + 2;
   const cx = w / 2;
@@ -406,7 +518,7 @@ function FlapStripeBars({ w, h, period }: { w: number; h: number; period: number
             width={period / 2}
             height={diag}
             fill={v3Color.accentBlue}
-            clipPath="url(#flapTriangle)"
+            clipPath={`url(#${clipId})`}
             transform={`rotate(-45 ${cx + offset + period / 4} ${cy})`}
           />
         );
@@ -439,12 +551,15 @@ function AirmailStripes({ scale, w, h, bg = v3Color.paperBack }: { scale: number
 function RuledLines({ scale, h }: { scale: number; h: number }) {
   const top = s(v3Layout.letter.rulesTop, scale);
   const bottom = s(v3Layout.letter.rulesBottom, scale);
-  const lineGap = s(33, scale);
-  const count = Math.ceil((h - top - bottom) / lineGap) + 1;
+  // `repeating-linear-gradient(transparent 0 33px, rgba(...) 33px 34px)` — a 34px repeat with the
+  // first rule landing at y=33, not a 33px repeat starting at y=0.
+  const lineGap = s(34, scale);
+  const offset = s(33, scale);
+  const count = Math.ceil((h - top - bottom - s(33, scale)) / lineGap) + 1;
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: s(24, scale), right: s(24, scale), top, bottom, overflow: 'hidden' }}>
       {Array.from({ length: count }).map((_, i) => (
-        <View key={i} style={{ position: 'absolute', top: i * lineGap, left: 0, right: 0, height: 1, backgroundColor: v3Color.ruleLine }} />
+        <View key={i} style={{ position: 'absolute', top: offset + i * lineGap, left: 0, right: 0, height: 1, backgroundColor: v3Color.ruleLine }} />
       ))}
     </View>
   );
@@ -525,10 +640,10 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontFamily: v3Font.ui800, color: v3Color.ink },
   emptyMono: { fontFamily: v3Font.mono, color: v3Color.mutedDark },
-  envInside: { position: 'absolute', backgroundColor: v3Color.envelopeInside },
+  envInside: { position: 'absolute', backgroundColor: v3Color.envelopeInside, shadowColor: '#000000' },
   topHalf: { backgroundColor: v3Color.paper, overflow: 'hidden' },
-  botFront: { position: 'absolute', backgroundColor: v3Color.paper, overflow: 'hidden', backfaceVisibility: 'hidden' },
-  botBack: { position: 'absolute', overflow: 'hidden', borderBottomLeftRadius: 0 },
+  botFront: { backgroundColor: v3Color.paper, overflow: 'hidden' },
+  botBack: { overflow: 'hidden' },
   backPanel: { position: 'absolute', bottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: v3Color.envelopeFlap },
   toName: { fontFamily: v3Font.ui800, color: v3Color.ink },
   fromHand: { fontFamily: v3Font.hand600, color: v3Color.inkBlue },
@@ -541,5 +656,5 @@ const styles = StyleSheet.create({
   alertPill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' },
   body: { fontFamily: v3Font.hand, color: v3Color.inkBlue },
   sig: { fontFamily: v3Font.hand600, color: v3Color.inkBlue },
-  seal: { position: 'absolute', backgroundColor: v3Color.accentBlue, alignItems: 'center', justifyContent: 'center' },
+  seal: { position: 'absolute', backgroundColor: v3Color.accentBlue, alignItems: 'center', justifyContent: 'center', shadowColor: v3Color.accentBlue },
 });
