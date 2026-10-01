@@ -16,7 +16,7 @@ import { useFriends } from '../../../context/FriendsContext';
 // imports the real Supabase client at module scope; that's enough to crash under jest even
 // without ever calling it, same "the bare import still runs at module-load time" reasoning as
 // expo-video below.
-jest.mock('../../../lib/supabase', () => ({ supabase: {} }));
+jest.mock('../../../lib/supabase', () => ({ supabase: { rpc: jest.fn().mockResolvedValue({ data: [], error: null }) } }));
 jest.mock('../../../context/AuthContext', () => ({ useAuth: jest.fn() }));
 jest.mock('../../../context/ThrowContext', () => ({ useThrow: jest.fn() }));
 jest.mock('../../../context/ThrowAlertsContext', () => ({ useThrowAlerts: jest.fn() }));
@@ -148,6 +148,16 @@ const MY_ID = 'me-1';
 const FRIEND = { userId: 'friend-1', name: 'Priya', avatarUrl: null, location: { city: 'Pune', country: 'IN', latitude: 18.5, longitude: 73.8 } };
 const noop = () => {};
 
+// Entering Add Status now always lands on the Profile/Add Friend cards first (see
+// ThrowHomeScreen's own StoryFlow 'cards' step) — every test that needs the actual camera taps
+// through ProfileCard's "Add status" button, same as a real user would, instead of landing on it
+// directly the way a bare onAddStory()/drag-into-status used to.
+async function tapAddStatusInCards() {
+  await act(async () => {
+    fireEvent.press(screen.getByLabelText('Add status'));
+  });
+}
+
 function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) {
   mockUseAuth.mockReturnValue({ user: { id: MY_ID } });
   mockUseThrow.mockReturnValue({
@@ -186,7 +196,6 @@ async function renderScreen() {
     <ThrowHomeScreen
       onOpenExpenses={noop}
       onOpenChats={noop}
-      onOpenAddFriend={noop}
       onOpenThrowLetter={noop}
       onNotificationTarget={noop}
       onOpenSettings={noop}
@@ -364,9 +373,14 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
 
     // Status is for adding a new story now, not viewing existing ones — those are reached the same
     // way any other contact's stories are, by tapping the already-selected avatar (see the
-    // "tap-to-view story" describe block below).
+    // "tap-to-view story" describe block below). Dragging into Status lands on the Profile/Add
+    // Friend cards first now, not the camera directly (see tapAddStatusInCards's own comment).
     expect(screen.queryByTestId('folding-letter')).toBeNull();
     expect(screen.queryByTestId('contact-story-stack')).toBeNull();
+    expect(screen.queryByTestId('story-capture')).toBeNull();
+    expect(screen.getByLabelText('Add status')).toBeTruthy();
+
+    await tapAddStatusInCards();
     expect(screen.getByTestId('story-capture')).toBeTruthy();
   });
 
@@ -379,6 +393,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
       mockFoldingLetterProps.onContactDragStart();
       mockFoldingLetterProps.onContactDragOffset(-1);
     });
+    await tapAddStatusInCards();
 
     expect(screen.getByTestId('story-capture')).toBeTruthy();
   });
@@ -397,7 +412,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
     expect(mockCarouselProps.disabled).toBe(true);
   });
 
-  it('returns to the compose letter for Own Contact once the capture flow is closed', async () => {
+  it('returns to the Profile/Add Friend cards — not Own Contact\'s letter — once the camera is closed', async () => {
     setupMocks();
     withStories(1);
     await renderScreen();
@@ -406,6 +421,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
       mockFoldingLetterProps.onContactDragStart();
       mockFoldingLetterProps.onContactDragOffset(-1);
     });
+    await tapAddStatusInCards();
     expect(screen.getByTestId('story-capture')).toBeTruthy();
     expect(mockCarouselProps.isAddStorySelected).toBe(true);
 
@@ -413,9 +429,12 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
       mockStoryCaptureProps.onClose();
     });
 
-    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    // Both cards come back, same as closing from a tap on the circle itself — Add Status stays the
+    // active selection throughout, it's not a round trip all the way out to the letter.
     expect(screen.queryByTestId('story-capture')).toBeNull();
-    expect(mockCarouselProps.isAddStorySelected).toBe(false);
+    expect(screen.queryByTestId('folding-letter')).toBeNull();
+    expect(screen.getByLabelText('Add status')).toBeTruthy();
+    expect(mockCarouselProps.isAddStorySelected).toBe(true);
   });
 
   it('passes the same contact-flick drag handlers to the inline camera as the letter itself', async () => {
@@ -427,6 +446,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
       mockFoldingLetterProps.onContactDragStart();
       mockFoldingLetterProps.onContactDragOffset(-1);
     });
+    await tapAddStatusInCards();
     expect(screen.getByTestId('story-capture')).toBeTruthy();
     expect(typeof mockStoryCaptureProps.onContactDragStart).toBe('function');
     expect(typeof mockStoryCaptureProps.onContactDragOffset).toBe('function');
@@ -441,6 +461,7 @@ describe('ThrowHomeScreen Status slot (tilt/flick left past Own Contact)', () =>
       mockFoldingLetterProps.onContactDragStart();
       mockFoldingLetterProps.onContactDragOffset(-1);
     });
+    await tapAddStatusInCards();
     expect(screen.getByTestId('story-capture')).toBeTruthy();
 
     await act(async () => {
@@ -638,6 +659,7 @@ describe('ThrowHomeScreen story post-capture confirmation', () => {
     await act(async () => {
       mockCarouselProps.onAddStory();
     });
+    await tapAddStatusInCards();
     expect(screen.getByTestId('story-capture')).toBeTruthy();
 
     await act(async () => {
@@ -675,6 +697,7 @@ describe('ThrowHomeScreen story post-capture confirmation', () => {
     await act(async () => {
       mockCarouselProps.onAddStory();
     });
+    await tapAddStatusInCards();
     await act(async () => {
       mockStoryCaptureProps.onCaptured('file:///captured.jpg', 'photo');
     });
@@ -709,6 +732,7 @@ describe('ThrowHomeScreen story post-capture confirmation', () => {
     await act(async () => {
       mockCarouselProps.onAddStory();
     });
+    await tapAddStatusInCards();
     await act(async () => {
       mockStoryCaptureProps.onCaptured('file:///captured.jpg', 'photo');
     });
