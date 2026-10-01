@@ -324,12 +324,18 @@ export function ThrowHomeScreen({
   // and inbox mode could ever be true "at once" mid-transition).
   const [inboxMode, setInboxMode] = useState(false);
   const inboxChromeOpacity = useRef(new Animated.Value(0)).current;
+  // BottomNav also hides for the Add Status cards and the Notifications panel — same fade+slide
+  // chrome mechanism as inbox mode, just with nothing else fading in to take its place (see
+  // inboxChromeOpacity's own comment on why that row stays specific to inbox mode), so the cards'
+  // own bottom edge is free to extend all the way down once the dock is gone (see cardsOverlay/
+  // notificationsOverlay's own bottom interpolation below).
+  const chromeShouldHide = inboxMode || storyFlow?.name === 'cards' || isNotificationsSelected;
   useEffect(() => {
-    Animated.timing(chromeOpacity, { toValue: inboxMode ? 0 : 1, duration: 280, useNativeDriver: false }).start();
+    Animated.timing(chromeOpacity, { toValue: chromeShouldHide ? 0 : 1, duration: 280, useNativeDriver: false }).start();
     Animated.timing(inboxChromeOpacity, { toValue: inboxMode ? 1 : 0, duration: 280, useNativeDriver: false }).start();
-    setChromeHidden(inboxMode);
+    setChromeHidden(chromeShouldHide);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inboxMode]);
+  }, [chromeShouldHide, inboxMode]);
   // The letter area's own measured box — the arrival panel (plane flight + LetterFoldCard) is laid
   // out purely in these local coordinates, so the plane's flight path and the card it "becomes"
   // once landed always agree on where things are, with no cross-tree window measurement needed.
@@ -1114,17 +1120,17 @@ export function ThrowHomeScreen({
             takes over this exact slot instead (see isCardsMode's own use in letterCard's render
             condition below) so the two steps never show at once. */}
         {!inFlight && isCardsMode && (
-          <ScrollView
+          <Animated.ScrollView
             ref={cardsFlick.ref}
             {...(Platform.OS !== 'web' ? cardsFlick.panHandlers : null)}
             style={[
               styles.cardsOverlay,
               noSelect,
-              // Same BOTTOM_NAV_CLEARANCE the dock itself reserves (see its own comment) — BottomNav
-              // stays fully visible the whole time these cards are up (nothing here fades it out the
-              // way inbox mode does), so this overlay has to clear its full height too, not just the
-              // safe-area inset, or the dock paints over the card's own bottom content.
-              { top: insets.top + 16 + CAROUSEL_HEIGHT + 16, bottom: insets.bottom + 16 + BOTTOM_NAV_CLEARANCE },
+              // `bottom` shrinks from its normal BOTTOM_NAV_CLEARANCE-reserved position down to
+              // just the safe-area inset as BottomNav fades out (see chromeShouldHide above), the
+              // same interpolation the letter card's own bottom edge uses — so these cards extend
+              // all the way down once the dock is gone instead of holding space open for it.
+              { top: insets.top + 16 + CAROUSEL_HEIGHT + 16, bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) },
             ]}
             contentContainerStyle={styles.cardsOverlayContent}
             showsVerticalScrollIndicator={false}
@@ -1139,25 +1145,25 @@ export function ThrowHomeScreen({
               onAddStatus={() => setStoryFlow({ name: 'capture' })}
             />
             <AddFriendCard onOpenAddFriendScreen={onOpenAddFriendScreen} />
-          </ScrollView>
+          </Animated.ScrollView>
         )}
 
         {/* The notification history — a floating glassmorphism card above the map instead of a
             separate screen, exactly as long as the carousel's own Notifications slot stays
             selected (see RecipientCarousel's own isNotificationsSelected). */}
         {!inFlight && isNotificationsSelected && (
-          <View
+          <Animated.View
             ref={notificationsFlick.ref}
             {...(Platform.OS !== 'web' ? notificationsFlick.panHandlers : null)}
             style={[
               styles.notificationsOverlay,
               noSelect,
-              // See cardsOverlay's own comment on BOTTOM_NAV_CLEARANCE — same reasoning applies here.
-              { top: insets.top + 16 + CAROUSEL_HEIGHT + 16, bottom: insets.bottom + 16 + BOTTOM_NAV_CLEARANCE },
+              // See cardsOverlay's own comment on this same interpolation.
+              { top: insets.top + 16 + CAROUSEL_HEIGHT + 16, bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) },
             ]}
           >
             <NotificationsPanel onNavigate={handleNotificationTarget} />
-          </View>
+          </Animated.View>
         )}
 
         {!inFlight && selectedFriend && !isNotificationsSelected && !isCardsMode && (
