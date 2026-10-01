@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
-import Svg, { ClipPath, Defs, LinearGradient, Path, Polygon, Rect, Stop } from 'react-native-svg';
+import Svg, { ClipPath, Defs, G, LinearGradient, Path, Polygon, Rect, Stop } from 'react-native-svg';
 import { Icon } from '../../Icon';
 import { LetterPlaneGlyph } from '../inbox/LetterPlaneGlyph';
 import { v3Color, v3Font, v3Layout, v3Radius } from '../../../theme/throwLettersV3Tokens';
@@ -499,31 +499,26 @@ function TriangleFlap({ scale, w, h }: { scale: number; w: number; h: number }) 
 }
 
 /** Shared diagonal-stripe-bar renderer for any SVG shape clipped to `clipId` (the flap's triangle,
- * the pocket's notched pentagon) — alternating blue bars at 135°, oversized/rotated so the clip
- * (not this component) decides the final visible shape. */
+ * the pocket's notched pentagon) — alternating blue bars at 135°, oversized so the clip (not this
+ * component) decides the final visible shape. The whole set of bars is laid out unrotated first,
+ * then rotated together as a single rigid group about one shared pivot — rotating each bar
+ * individually about its own center (the previous approach) only looks right near that pivot and
+ * visibly warps into uneven, broken-looking blobs away from it, since each bar's own position never
+ * revolves around the shared pivot the way a true rotated fill would. */
 function ClippedStripeBars({ w, h, period, clipId }: { w: number; h: number; period: number; clipId: string }) {
   const diag = Math.ceil(Math.sqrt(w * w + h * h)) + period * 2;
   const bars = Math.ceil(diag / period) + 2;
   const cx = w / 2;
   const cy = h / 2;
   return (
-    <>
-      {Array.from({ length: bars }).map((_, i) => {
-        const offset = -diag / 2 + i * period;
-        return (
-          <Rect
-            key={i}
-            x={cx + offset}
-            y={cy - diag / 2}
-            width={period / 2}
-            height={diag}
-            fill={v3Color.accentBlue}
-            clipPath={`url(#${clipId})`}
-            transform={`rotate(-45 ${cx + offset + period / 4} ${cy})`}
-          />
-        );
-      })}
-    </>
+    <G clipPath={`url(#${clipId})`}>
+      <G transform={`rotate(-45 ${cx} ${cy})`}>
+        {Array.from({ length: bars }).map((_, i) => {
+          const offset = -diag / 2 + i * period;
+          return <Rect key={i} x={cx + offset} y={cy - diag / 2} width={period / 2} height={diag} fill={v3Color.accentBlue} />;
+        })}
+      </G>
+    </G>
   );
 }
 
