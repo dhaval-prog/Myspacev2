@@ -20,6 +20,12 @@ jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => tr
 // viewer, same "the bare import still runs at module-load time" reasoning as ThrowHomeScreen's
 // own tests already document for this exact mock.
 jest.mock('expo-video', () => ({ useVideoPlayer: () => ({}), VideoView: () => null }));
+// ThrowMap (Mapbox GL JS / react-native-maps) is heavy and has no jest/native-module fallback for
+// react-native-maps — same reasoning ThrowHomeScreen's own tests already document for mocking it
+// out entirely rather than rendering a real map.
+jest.mock('../../../components/throw/ThrowMap', () => ({
+  ThrowMap: () => null,
+}));
 
 const mockUseThrow = useThrow as jest.Mock;
 
