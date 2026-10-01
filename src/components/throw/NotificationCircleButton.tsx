@@ -12,12 +12,11 @@ interface NotificationCircleButtonProps {
   unreadCount: number;
 }
 
-/** Opens the full-screen notification history (see NotificationsScreen) — a static entry point
- * sitting at the recipient rail's own left edge, same dark-circle chrome as AddStoryButton right
- * beside it, per explicit request ("similar to the add status contact circle"). Rendered by
- * ThrowHomeScreen itself rather than inside RecipientCarousel's own animated strip: unlike a real
- * contact or the add-story slot, this never needs to be "selected" or move with the carousel's own
- * spring/drag, so it stays out of that transform math entirely. */
+/** Opens the full-screen notification history (see NotificationsScreen) — same dark-circle chrome
+ * as AddStoryButton, per explicit request ("similar to the add status contact circle"). Rendered
+ * as a slot inside RecipientCarousel's own animated strip, one position further left than the
+ * add-story slot, so it slides/scales with the rest of the carousel like any other off-center
+ * item — it just never becomes the "selected" one, since drag/selection never reaches its slot. */
 export function NotificationCircleButton({ onPress, unreadCount }: NotificationCircleButtonProps) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'} hitSlop={8}>
