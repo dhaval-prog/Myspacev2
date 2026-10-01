@@ -51,15 +51,6 @@ export interface V3ContactRow {
   unreadCount: number;
 }
 
-export interface V3Pin {
-  id: string;
-  x: number;
-  y: number;
-  active: boolean;
-  place: string;
-  km: string;
-}
-
 interface UseLettersArrivalV3Options {
   contacts: V3Contact[];
   /** Preselects this contact (by id) on first mount — falls back to the first contact with any
@@ -337,26 +328,6 @@ export function useLettersArrivalV3({ contacts, initialContactId, reduceMotion, 
     a11yLabel: `Letter from ${curContact?.name ?? ''}, ${formatLetterDate(l.createdAt).short}, ${l.senderCity}`,
   }));
 
-  // Map projection — a flat, local `(lon,lat) -> px` placement for the current contact's own
-  // letters (not real-world Mercator; this is a stylized backdrop, not a navigation map), ported
-  // verbatim from the handoff's own `proj()`/`ANCHOR`. The camera then just translates so whichever
-  // letter is active lands exactly on `mapAnchor` — MapBackgroundV3 animates its own Animated.Value
-  // toward this target rather than this hook owning any Animated state itself (same split as the
-  // rest of this screen).
-  const proj = (l: ThrowLetter) => ({ x: (l.senderLongitude - 72.5) * v3Layout.mapScalePxPerDeg, y: (21 - l.senderLatitude) * v3Layout.mapScalePxPerDeg });
-  const focus = curLetter ?? curList[0] ?? curContact?.letters[0] ?? null;
-  const focusP = focus ? proj(focus) : { x: 0, y: 0 };
-  const camTarget = { x: v3Layout.mapAnchor.x - focusP.x, y: v3Layout.mapAnchor.y - focusP.y };
-  const pins: V3Pin[] = curList.map((l) => {
-    const p = proj(l);
-    const active = l.id === curLetter?.id && stage !== 'empty';
-    return { id: l.id, x: p.x, y: p.y, active, place: l.senderCity.toUpperCase(), km: compactKm(l.distanceMiles) };
-  });
-  const route = curList
-    .slice()
-    .reverse()
-    .map((l) => proj(l));
-
   return {
     stage,
     plane,
@@ -367,9 +338,6 @@ export function useLettersArrivalV3({ contacts, initialContactId, reduceMotion, 
     rowTitle,
     chips,
     toast,
-    camTarget,
-    pins,
-    route,
     isEmpty: stage === 'empty',
     busy: busy(),
     selectContact,

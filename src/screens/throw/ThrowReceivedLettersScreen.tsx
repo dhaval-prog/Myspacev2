@@ -1,9 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { PanResponder, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowProvider, useThrow } from '../../context/ThrowContext';
 import { LetterPlaneGlyph } from '../../components/throw/inbox/LetterPlaneGlyph';
-import { MapBackgroundV3 } from '../../components/throw/lettersV3/MapBackgroundV3';
 import { ContactsRowV3 } from '../../components/throw/lettersV3/ContactsRowV3';
 import { ToastV3 } from '../../components/throw/lettersV3/ToastV3';
 import { LetterCardV3 } from '../../components/throw/lettersV3/LetterCardV3';
@@ -13,8 +12,11 @@ import { MediaViewerV3 } from '../../components/throw/lettersV3/MediaViewerV3';
 import { useLettersArrivalV3, type V3Contact } from '../../hooks/useLettersArrivalV3';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { v3Color, v3Font, v3Layout } from '../../theme/throwLettersV3Tokens';
+import { noSelect } from '../../theme/webStyles';
 
 const s = (n: number, scale: number) => n * scale;
+// Same commit-distance convention MediaViewerV3's own horizontal swipe uses.
+const SWIPE_COMMIT_DISTANCE = 40;
 
 interface ThrowReceivedLettersScreenProps {
   /** Reply, after its own fold-away + fly-to-corner exit — the caller lands on the existing Throw
@@ -61,6 +63,30 @@ function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLetter
   });
 
   const topOffset = insets.top;
+  const contactIdx = arrival.contactRows.findIndex((c) => c.selected);
+
+  // Flicking the open letter itself steps to the adjacent contact — dragging right (positive dx)
+  // reveals whatever is to the left (the previous contact), dragging left reveals the next one,
+  // same left/right semantics (and commit distance) as MediaViewerV3's own horizontal swipe.
+  // Clamped at the ends of the contact list rather than wrapping — `selectContact` doesn't itself
+  // guard an out-of-range index, so this checks bounds before ever calling it.
+  const letterSwipe = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy),
+        onPanResponderRelease: (_e, g) => {
+          if (arrival.busy) return;
+          if (g.dx >= SWIPE_COMMIT_DISTANCE) {
+            if (contactIdx > 0) arrival.selectContact(contactIdx - 1);
+          } else if (g.dx <= -SWIPE_COMMIT_DISTANCE) {
+            if (contactIdx >= 0 && contactIdx < arrival.contactRows.length - 1) arrival.selectContact(contactIdx + 1);
+          }
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [contactIdx, arrival.busy, arrival.contactRows.length],
+  );
 
   if (contacts.length === 0) {
     return (
@@ -78,8 +104,6 @@ function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLetter
         if (frameWidth === 0) setFrameWidth(e.nativeEvent.layout.width);
       }}
     >
-      <MapBackgroundV3 camTarget={arrival.camTarget} pins={arrival.pins} route={arrival.route} scale={scale} />
-
       <View style={{ position: 'absolute', left: 0, right: 0, top: topOffset + s(v3Layout.contactsY, scale) }}>
         <ContactsRowV3 contacts={arrival.contactRows} onSelect={arrival.selectContact} scale={scale} />
       </View>
@@ -114,7 +138,7 @@ function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLetter
         </>
       )}
 
-      <View style={{ position: 'absolute', left: s(v3Layout.letter.x, scale), top: topOffset + s(v3Layout.letter.y, scale) }}>
+      <View style={[{ position: 'absolute', left: s(v3Layout.letter.x, scale), top: topOffset + s(v3Layout.letter.y, scale) }, noSelect]} {...letterSwipe.panHandlers}>
         <LetterCardV3 stage={arrival.stage} letter={arrival.cardData} isEmpty={arrival.isEmpty} emptyName={arrival.curContactName} scale={scale} />
       </View>
 

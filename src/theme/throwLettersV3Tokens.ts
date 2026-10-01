@@ -65,10 +65,8 @@ export const v3Layout = {
   letter: { x: 18, y: 262, w: 354, h: 300, halfH: 150, rulesTop: 100, rulesBottom: 54 },
   envelope: { x: 45, y: 352, w: 300, h: 190, flapH: 112, stripeInset: 6, seal: 38 },
   landingPoint: { x: 195, y: 447 },
-  mapAnchor: { x: 195, y: 228 },
-  mapScalePxPerDeg: 260,
   actionRow: { x: 18, y: 576, h: 48, gap: 10, mediaBtn: 48 },
-  chipRow: { bottom: 24, chip: 52, gap: 10, unreadDot: 14 },
+  chipRow: { bottom: 12 },
   bin: { y: 584, size: 54, deleteThresholdPx: 80 },
   mediaViewer: { header: 56, stageX: 16, stageY: 116, stageH: 480, captionY: 612, thumbsY: 700, thumb: 56 },
 } as const;

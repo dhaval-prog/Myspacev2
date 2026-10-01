@@ -210,8 +210,8 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
   return createAlert;
 }
 
-async function renderScreen() {
-  await renderWithSafeArea(
+async function renderScreen(initialFocusContactId?: string) {
+  return renderWithSafeArea(
     <ThrowHomeScreen
       onOpenExpenses={noop}
       onOpenChats={noop}
@@ -219,6 +219,7 @@ async function renderScreen() {
       onOpenAddFriendScreen={noop}
       onNotificationTarget={noop}
       onOpenSettings={noop}
+      initialFocusContactId={initialFocusContactId}
     />,
   );
 }
@@ -277,6 +278,18 @@ describe('ThrowHomeScreen self-reminder contact lock', () => {
 
     expect(createAlert).toHaveBeenCalled();
     expect(mockCarouselProps.disabled).toBe(false);
+  });
+
+  it('honors initialFocusContactId (e.g. Reply from Received Letters) instead of defaulting to Myself', async () => {
+    // Regression test: the mount-time selection effect only ever checked `lockedRecipient`,
+    // silently overwriting the `useState(initialFocusContactId ?? null)` lazy-init with
+    // `friendsWithLocation[0]` (Myself, since `friendsWithLocation` puts the self entry first)
+    // the moment it ran — which fires right after the very first render, so even this
+    // synchronous-mock test setup reproduces it without needing to simulate an async friends load.
+    setupMocks();
+    await renderScreen(FRIEND.userId);
+    const selectedFriend = mockCarouselProps.friends[mockCarouselProps.selectedIndex];
+    expect(selectedFriend.userId).toBe(FRIEND.userId);
   });
 });
 
