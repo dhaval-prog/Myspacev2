@@ -3,11 +3,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, fontFamily, radius, spacing } from '../../theme';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
-import { GlassSurface } from '../friends/GlassSurface';
 import { useNotifications, type AppNotification } from '../../context/NotificationsContext';
 import { useFriends } from '../../context/FriendsContext';
 import { targetForNotification, type NotificationTarget } from '../../utils/notify';
-import { throwGlass, throwRadius } from '../../theme/throwTokens';
+import { throwColor, throwRadius } from '../../theme/throwTokens';
 
 const PLUS_ICON = 'M12 5v14M5 12h14';
 const PLANE_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
@@ -65,7 +64,7 @@ interface NotificationsPanelProps {
 
 /** The notification history — every friend request, throw, chat message, and status post that's
  * come in, grouped by day, filterable by category, built to match a supplied reference design.
- * Rendered as a floating glassmorphism card above the map, directly inside ThrowHomeScreen,
+ * Rendered as a floating solid white card above the map, directly inside ThrowHomeScreen,
  * instead of pushing to a separate full-screen route — reached from the recipient carousel's own
  * Notifications slot (see RecipientCarousel's own isNotificationsSelected), which the card stays
  * open for exactly as long as that slot stays selected. Distinct from the smaller quick-glance
@@ -155,7 +154,7 @@ export function NotificationsPanel({ onNavigate }: NotificationsPanelProps) {
   };
 
   return (
-    <GlassSurface tint="light" tintColor={throwGlass.tintWaterBlueStrong} style={styles.card}>
+    <View style={styles.card}>
       {unreadCount > 0 && (
         <View style={styles.header}>
           <Pressable onPress={clearAll} accessibilityRole="button" accessibilityLabel="Mark all read">
@@ -201,18 +200,28 @@ export function NotificationsPanel({ onNavigate }: NotificationsPanelProps) {
           </>
         )}
       </ScrollView>
-    </GlassSurface>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { flex: 1, borderRadius: throwRadius.card, paddingTop: spacing.sm },
+  card: {
+    flex: 1,
+    backgroundColor: throwColor.cardBg,
+    borderWidth: 1,
+    borderColor: throwColor.cardBorder,
+    borderRadius: throwRadius.card,
+    // A little more breathing room above the filter row than the header alone gave it (see item
+    // 2's own explicit request) — starts the row a bit further down instead of flush against the
+    // card's own top edge/rounded corner, whether or not "Mark all read" is showing above it.
+    paddingTop: spacing.md,
+    ...throwColor.shadowSoft,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
     paddingBottom: spacing.md,
   },
   markAllRead: { fontFamily: fontFamily.sans600, fontSize: 13, color: ACCENT_BLUE },
@@ -220,12 +229,15 @@ const styles = StyleSheet.create({
   // otherwise shrink-wraps to its unclipped content on web) — without it, a too-wide pill row
   // bleeds past the right edge instead of becoming properly horizontally scrollable there.
   filterScroll: { flexGrow: 0, width: '100%' },
-  filterRow: { flexDirection: 'row', gap: spacing.xs, paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  // Extra bottom padding (beyond the pills' own height) so the TODAY/EARLIER label below has real
+  // space before it, rather than sitting right under the pills — same explicit request as the
+  // card's own paddingTop above.
+  filterRow: { flexDirection: 'row', gap: spacing.xs, paddingHorizontal: spacing.md, paddingBottom: spacing.lg },
   filterPill: {
     paddingHorizontal: 12,
     height: 30,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,.55)',
+    backgroundColor: colors.ink07,
     alignItems: 'center',
     justifyContent: 'center',
     // Without this, some WebKit builds shrink these pills below their own text's natural width
@@ -279,7 +291,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,.5)',
+    backgroundColor: colors.ink07,
     alignItems: 'center',
     justifyContent: 'center',
   },

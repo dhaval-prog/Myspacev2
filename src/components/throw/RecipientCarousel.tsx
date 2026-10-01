@@ -175,6 +175,13 @@ export function RecipientCarousel({
 
   const n = friends.length;
   const maxIndex = Math.max(0, n - 1);
+  // How far left a drag may reach — all the way to the notifications slot (-2) when it's present,
+  // else just the add-story slot (-1), else no further than the first real contact (0). Lets a
+  // flick from a real contact (or from Add Story) carry on into Notifications instead of only
+  // being reachable by tapping it directly. Also the floor for an externally-driven liveOffset
+  // (see its own effect below), so a flick starting from inside the Notifications/Add Status cards
+  // themselves (see ThrowHomeScreen's own contact-drag machinery) can drive the strip just as far.
+  const minDragIndex = onOpenNotifications ? -2 : onAddStory ? -1 : 0;
   // Where the strip's own live offset should rest whenever nothing is actively being dragged —
   // the notifications slot (-2) while it's selected, the add-story slot (-1) while Status is,
   // otherwise whatever real contact is.
@@ -203,8 +210,8 @@ export function RecipientCarousel({
   // effect above takes back over and springs to wherever `selectedIndex` actually landed.
   React.useEffect(() => {
     if (liveOffset == null) return;
-    offset.setValue(Math.max(-1, Math.min(maxIndex, liveOffset)));
-  }, [liveOffset, maxIndex, offset]);
+    offset.setValue(Math.max(minDragIndex, Math.min(maxIndex, liveOffset)));
+  }, [liveOffset, maxIndex, minDragIndex, offset]);
 
   const snapTo = (index: number) => {
     const clamped = Math.max(0, Math.min(maxIndex, index));
@@ -215,12 +222,6 @@ export function RecipientCarousel({
     // stuck on screen with no way back short of picking a *different* contact first.
     if (clamped !== selectedIndex || isAddStorySelected) onChangeIndex(clamped);
   };
-
-  // How far left a drag may reach — all the way to the notifications slot (-2) when it's present,
-  // else just the add-story slot (-1), else no further than the first real contact (0). Lets a
-  // flick from a real contact (or from Add Story) carry on into Notifications instead of only
-  // being reachable by tapping it directly.
-  const minDragIndex = onOpenNotifications ? -2 : onAddStory ? -1 : 0;
 
   const panResponder = useMemo(
     () =>

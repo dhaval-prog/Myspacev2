@@ -25,6 +25,7 @@ import { useInboxArrival } from '../../hooks/useInboxArrival';
 import type { Point } from '../../utils/lettersArrivalMath';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { spreadCoincidentPins } from '../../utils/mapProjection';
+import { noSelect } from '../../theme/webStyles';
 import { throwColor, throwFont, throwGlass, throwRadius } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
 import { useThrowAlerts } from '../../context/ThrowAlertsContext';
@@ -46,6 +47,99 @@ const BACK_ICON = 'M15 18l-6-6 6-6';
 // private to that module, but kept numerically identical so the gesture feel matches exactly).
 const INBOX_FLICK_CAPTURE_DX = 20;
 const INBOX_FLICK_CAPTURE_RATIO = 1.7;
+
+/** Drives the same flick-to-switch-recipient gesture the folded letter card and the in-place
+ * inbox panel already use (see CONTACT_DRAG_SPACING/INBOX_FLICK_CAPTURE_*), but for a surface
+ * that only exists while a virtual carousel slot — Add Status or Notifications — is the current
+ * selection, so flicking there reaches the next/previous slot exactly like flicking the letter
+ * card already does, instead of being a dead end only the carousel itself (or a second trip back
+ * to a real contact) can get you out of. `active` gates the gesture to whenever this particular
+ * surface is actually mounted; each call site gets its own ref/PanResponder, independent of the
+ * others, since at most one of them is ever mounted at a time. */
+function useContactFlickGesture<T extends View | ScrollView = View>(
+  active: boolean,
+  handlers: { onContactDragStart: () => void; onContactDragOffset: (steps: number) => void; onContactDragEnd: () => void },
+) {
+  const ref = useRef<T>(null);
+  const latest = useRef(handlers);
+  latest.current = handlers;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponderCapture: (_e, g) =>
+        Math.abs(g.dx) > INBOX_FLICK_CAPTURE_DX && Math.abs(g.dx) > Math.abs(g.dy) * INBOX_FLICK_CAPTURE_RATIO,
+      onPanResponderGrant: () => latest.current.onContactDragStart(),
+      // Negated — matches FoldingLetter's own open-paper flick convention (left flicks forward to
+      // the next slot, right flicks back to the previous one).
+      onPanResponderMove: (_, g) => latest.current.onContactDragOffset(-g.dx / CONTACT_DRAG_SPACING),
+      onPanResponderRelease: () => latest.current.onContactDragEnd(),
+      onPanResponderTerminate: () => latest.current.onContactDragEnd(),
+    }),
+  ).current;
+
+  // Same RN-Web PanResponder move-tracking unreliability the inbox panel's own flick gesture
+  // already works around — raw DOM listeners on web, the real PanResponder above on native.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !active) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const node = ref.current as any as HTMLElement | null;
+    if (!node) return;
+    const getPoint = (e: MouseEvent | TouchEvent): { x: number; y: number } | null => {
+      if ('touches' in e) {
+        const t = e.touches[0];
+        return t ? { x: t.clientX, y: t.clientY } : null;
+      }
+      return { x: e.clientX, y: e.clientY };
+    };
+    let start: { x: number; y: number } | null = null;
+    let captured = false;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      start = getPoint(e);
+      captured = false;
+    };
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (!start) return;
+      const p = getPoint(e);
+      if (!p) return;
+      const dx = p.x - start.x;
+      const dy = p.y - start.y;
+      if (!captured) {
+        if (Math.abs(dx) > INBOX_FLICK_CAPTURE_DX && Math.abs(dx) > Math.abs(dy) * INBOX_FLICK_CAPTURE_RATIO) {
+          captured = true;
+          latest.current.onContactDragStart();
+        } else {
+          return;
+        }
+      }
+      latest.current.onContactDragOffset(-dx / CONTACT_DRAG_SPACING);
+    };
+    const onUp = () => {
+      start = null;
+      if (captured) {
+        captured = false;
+        latest.current.onContactDragEnd();
+      }
+    };
+    node.addEventListener('mousedown', onDown);
+    node.addEventListener('touchstart', onDown, { passive: true });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchend', onUp);
+    return () => {
+      node.removeEventListener('mousedown', onDown);
+      node.removeEventListener('touchstart', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
+    };
+  }, [active]);
+
+  return { ref, panHandlers: Platform.OS !== 'web' ? panResponder.panHandlers : undefined };
+}
 
 /** What's currently covering the screen for the story flow — capture (camera/gallery), the preview
  * step (a captured/picked photo or short video, awaiting the explicit post confirmation), or the
@@ -649,11 +743,13 @@ export function ThrowHomeScreen({
   // and, like RecipientCarousel's own drag, clamps at the list's ends rather than wrapping.
   // Selecting a different friend here also re-centers the map, since focusTarget above already
   // follows selectedFriend.
-  // Guards the "entering Status" branch below against firing more than once per drag — the
-  // offset callback fires continuously while the finger's still down, and re-triggering it every
-  // tick past the boundary would re-open the capture flow repeatedly for as long as the drag holds
-  // there. Reset on every fresh grant.
-  const statusBoundaryHandledRef = useRef(false);
+  // Guards the "entering Status"/"entering Notifications" branches below against firing more than
+  // once per drag — the offset callback fires continuously while the finger's still down, and
+  // re-triggering either one every tick past its boundary would re-open that flow repeatedly for
+  // as long as the drag holds there. Tracks *which* virtual slot (if any) this drag has already
+  // landed on, so crossing from one straight into the other (Status -> Notifications in one
+  // continuous flick) still re-fires correctly. Reset on every fresh grant.
+  const virtualSlotHandledRef = useRef<-1 | -2 | null>(null);
   // The strip's own live-drag position (see RecipientCarousel's liveOffset prop) — set the moment
   // a recipient-switching drag starts and updated continuously while it moves, so the carousel
   // tracks the finger 1:1 instead of only reacting once selectedFriendId itself lands on a new
@@ -661,45 +757,77 @@ export function ThrowHomeScreen({
   // to RecipientCarousel's own resting-index spring.
   const [contactDragLiveOffset, setContactDragLiveOffset] = useState<number | null>(null);
   const handleContactDragStart = () => {
-    dragBaseIndexRef.current = selectedIndex;
-    statusBoundaryHandledRef.current = false;
-    setContactDragLiveOffset(selectedIndex);
+    // A drag can start from inside the Notifications/Add Status cards themselves (see
+    // useContactFlickGesture below), not just from a real contact's own letter card — in which
+    // case the virtual slot already showing is the base to drag relative to, not whatever real
+    // contact was selected before it.
+    const base = isNotificationsSelected ? -2 : isCardsMode ? -1 : selectedIndex;
+    dragBaseIndexRef.current = base;
+    virtualSlotHandledRef.current = isNotificationsSelected ? -2 : isCardsMode ? -1 : null;
+    setContactDragLiveOffset(base);
   };
   const handleContactDragOffset = (steps: number) => {
     const n = friendsWithLocation.length;
     if (n === 0) return;
-    // A single drag/flick only ever moves the selection by at most one contact in whichever
+    // A single drag/flick only ever moves the selection by at most one slot in whichever
     // direction it's moving — capped here against the index the drag started from, rather than
     // left proportional to raw drag distance, which let one decisive flick (a fast, longer swipe)
-    // jump two or three contacts at once instead of reading as "one step, that way". Seeing more
-    // than one contact over still just takes another flick, same as paging a carousel.
+    // jump several slots at once instead of reading as "one step, that way". Seeing more than one
+    // slot over still just takes another flick, same as paging a carousel.
     const base = dragBaseIndexRef.current;
     const raw = Math.max(base - 1, Math.min(base + 1, base + steps));
-    setContactDragLiveOffset(Math.max(-1, Math.min(n - 1, raw)));
-    // -1 is the virtual "Status" slot, one further left than any real contact (index 0) — tilting/
-    // flicking into it always opens the cards popover now, regardless of whether you've already
-    // posted a story today: Status is for adding one, not for viewing what's already there (see
-    // isCaptureMode's own comment) — viewing your own existing stories works the same way viewing
-    // anyone else's does, by tapping your own already-selected avatar (see handleOpenStory).
-    const nextIdx = Math.max(-1, Math.min(n - 1, Math.round(raw)));
+    setContactDragLiveOffset(Math.max(-2, Math.min(n - 1, raw)));
+    // -1 is the virtual "Status" slot and -2 the virtual "Notifications" slot, one and two further
+    // left (respectively) than any real contact (index 0) — same order as the carousel's own strip.
+    const nextIdx = Math.max(-2, Math.min(n - 1, Math.round(raw)));
+    if (nextIdx === -2) {
+      if (virtualSlotHandledRef.current === -2) return;
+      virtualSlotHandledRef.current = -2;
+      setStoryView(null);
+      setStoryFlow(null);
+      setIsNotificationsSelected(true);
+      return;
+    }
     if (nextIdx === -1) {
-      if (statusBoundaryHandledRef.current) return;
-      statusBoundaryHandledRef.current = true;
+      if (virtualSlotHandledRef.current === -1) return;
+      virtualSlotHandledRef.current = -1;
+      // Tilting/flicking into Status always opens the cards popover now, regardless of whether
+      // you've already posted a story today: Status is for adding one, not for viewing what's
+      // already there (see isCaptureMode's own comment) — viewing your own existing stories works
+      // the same way viewing anyone else's does, by tapping your own already-selected avatar (see
+      // handleOpenStory).
+      setIsNotificationsSelected(false);
       if (myId) setSelectedFriendId(myId);
       setStoryFlow({ name: 'cards' });
       return;
     }
+    virtualSlotHandledRef.current = null;
     setStoryView(null);
-    // Also exits capture/preview mode — otherwise dragging back to a real contact from the Status
-    // slot (see the StoryCaptureScreen flick gesture above) would leave the camera showing on top
-    // of a now-different, non-Status selection.
+    // Also exits capture/preview mode and Notifications — otherwise dragging back to a real
+    // contact from either virtual slot would leave it showing on top of a now-different selection.
     setStoryFlow(null);
+    setIsNotificationsSelected(false);
     const nextFriend = friendsWithLocation[nextIdx];
     if (nextFriend && nextFriend.userId !== selectedFriendId) setSelectedFriendId(nextFriend.userId);
   };
   const handleContactDragEnd = () => {
     setContactDragLiveOffset(null);
   };
+
+  // Lets flicking work from inside the Add Status cards and the Notifications panel themselves,
+  // not just the carousel or the letter card — same contact-drag machinery as everywhere else
+  // (see useContactFlickGesture's own doc comment), just gated to whichever of these two surfaces
+  // is actually showing.
+  const cardsFlick = useContactFlickGesture<ScrollView>(isCardsMode, {
+    onContactDragStart: handleContactDragStart,
+    onContactDragOffset: handleContactDragOffset,
+    onContactDragEnd: handleContactDragEnd,
+  });
+  const notificationsFlick = useContactFlickGesture<View>(isNotificationsSelected, {
+    onContactDragStart: handleContactDragStart,
+    onContactDragOffset: handleContactDragOffset,
+    onContactDragEnd: handleContactDragEnd,
+  });
 
   // Flicking any received letter left/right switches to the next/previous contact and shows
   // *their* received letters — same left→next/right→previous convention, and the exact same
@@ -987,8 +1115,11 @@ export function ThrowHomeScreen({
             condition below) so the two steps never show at once. */}
         {!inFlight && isCardsMode && (
           <ScrollView
+            ref={cardsFlick.ref}
+            {...(Platform.OS !== 'web' ? cardsFlick.panHandlers : null)}
             style={[
               styles.cardsOverlay,
+              noSelect,
               // Same BOTTOM_NAV_CLEARANCE the dock itself reserves (see its own comment) — BottomNav
               // stays fully visible the whole time these cards are up (nothing here fades it out the
               // way inbox mode does), so this overlay has to clear its full height too, not just the
@@ -1016,8 +1147,11 @@ export function ThrowHomeScreen({
             selected (see RecipientCarousel's own isNotificationsSelected). */}
         {!inFlight && isNotificationsSelected && (
           <View
+            ref={notificationsFlick.ref}
+            {...(Platform.OS !== 'web' ? notificationsFlick.panHandlers : null)}
             style={[
               styles.notificationsOverlay,
+              noSelect,
               // See cardsOverlay's own comment on BOTTOM_NAV_CLEARANCE — same reasoning applies here.
               { top: insets.top + 16 + CAROUSEL_HEIGHT + 16, bottom: insets.bottom + 16 + BOTTOM_NAV_CLEARANCE },
             ]}
