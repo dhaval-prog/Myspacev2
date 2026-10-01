@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
-import Svg, { Defs, Line, Path, Pattern, Rect } from 'react-native-svg';
+import Svg, { Defs, Path, Pattern, Rect } from 'react-native-svg';
 import { v3Color, v3Font } from '../../../theme/throwLettersV3Tokens';
 import type { V3Pin } from '../../../hooks/useLettersArrivalV3';
 
@@ -15,26 +15,41 @@ const s = (n: number, scale: number) => n * scale;
 // every camera position without needing to resize/retile it as the pan target changes.
 const FIELD = 4000;
 
+// The handoff's own backdrop is four stacked `repeating-linear-gradient(angle, transparent 0 a,
+// rgba(0,0,0,op) a b)` layers — a fine crosshatch (28°/-62°, ~40-56px period) plus a looser one
+// (8°/98°, ~145-184px period) — not a single hairline grid. Each becomes one SVG `Pattern` tile
+// (a `period`-tall rect with just the band portion painted, left transparent otherwise) rotated
+// via `patternTransform`, ported value-for-value from the CSS.
+const STRIPE_LAYERS = [
+  { angle: 28, period: 40, band: 2, opacity: 0.045 },
+  { angle: -62, period: 56, band: 2, opacity: 0.04 },
+  { angle: 8, period: 145, band: 5, opacity: 0.06 },
+  { angle: 98, period: 184, band: 4, opacity: 0.05 },
+];
+
 /** A faint, decorative crossed-diagonal street-grid — a stylized backdrop (not real geography),
- * approximating the handoff's own 4-layer `repeating-linear-gradient` hatch with two crossing
- * line families instead (react-native-svg's `Pattern` tiles a repeating fill natively, so this
- * tiles correctly at any size rather than needing the CSS trick ported literally). */
+ * matching the handoff's own 4-layer `repeating-linear-gradient` hatch (react-native-svg's
+ * `Pattern` tiles a repeating fill natively, so this tiles correctly at any size rather than
+ * needing the CSS trick ported literally). */
 function MapPattern({ scale }: { scale: number }) {
-  const tile = s(44, scale);
   const field = s(FIELD, scale);
   return (
     <View style={{ position: 'absolute', left: 0, top: 0, width: field, height: field }}>
       <Svg width={field} height={field}>
         <DefsAny>
-          <Pattern id="v3grid" patternUnits="userSpaceOnUse" width={tile} height={tile} patternTransform="rotate(26)">
-            <Line x1={0} y1={0} x2={0} y2={tile} stroke="rgba(0,0,0,.05)" strokeWidth={1} />
-          </Pattern>
-          <Pattern id="v3grid2" patternUnits="userSpaceOnUse" width={tile * 1.3} height={tile * 1.3} patternTransform="rotate(-64)">
-            <Line x1={0} y1={0} x2={0} y2={tile * 1.3} stroke="rgba(0,0,0,.04)" strokeWidth={1} />
-          </Pattern>
+          {STRIPE_LAYERS.map((l, i) => {
+            const period = s(l.period, scale);
+            const band = s(l.band, scale);
+            return (
+              <Pattern key={i} id={`v3stripe${i}`} patternUnits="userSpaceOnUse" width={period} height={period} patternTransform={`rotate(${l.angle})`}>
+                <Rect x={0} y={0} width={period} height={band} fill={`rgba(0,0,0,${l.opacity})`} />
+              </Pattern>
+            );
+          })}
         </DefsAny>
-        <Rect x={0} y={0} width="100%" height="100%" fill="url(#v3grid)" />
-        <Rect x={0} y={0} width="100%" height="100%" fill="url(#v3grid2)" />
+        {STRIPE_LAYERS.map((_, i) => (
+          <Rect key={i} x={0} y={0} width="100%" height="100%" fill={`url(#v3stripe${i})`} />
+        ))}
       </Svg>
     </View>
   );
