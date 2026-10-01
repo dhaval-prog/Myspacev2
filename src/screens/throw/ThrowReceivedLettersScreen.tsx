@@ -3,6 +3,8 @@ import { PanResponder, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowProvider, useThrow } from '../../context/ThrowContext';
 import { LetterPlaneGlyph } from '../../components/throw/inbox/LetterPlaneGlyph';
+import { ThrowMap } from '../../components/throw/ThrowMap';
+import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 import { ContactsRowV3 } from '../../components/throw/lettersV3/ContactsRowV3';
 import { ToastV3 } from '../../components/throw/lettersV3/ToastV3';
 import { LetterCardV3 } from '../../components/throw/lettersV3/LetterCardV3';
@@ -65,6 +67,36 @@ function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLetter
   const topOffset = insets.top;
   const contactIdx = arrival.contactRows.findIndex((c) => c.selected);
 
+  // The real, interactive world map behind Throw's own home screen, reused here as this screen's
+  // background too — each contact with both a letter and a live location gets a pin (the active
+  // one ringed/selected, the rest dimmed, same convention as ThrowHomeScreen's own pins), and the
+  // map centers on whichever contact is currently open, by their *current* location (not the
+  // letter's own send-time senderLatitude/senderLongitude).
+  const mapPins: ThrowMapPin[] = useMemo(
+    () =>
+      friends.flatMap((f) => {
+        if (!f.location || !contacts.some((c) => c.id === f.userId)) return [];
+        const selected = f.userId === contacts[contactIdx]?.id;
+        return [
+          {
+            id: f.userId,
+            latitude: f.location.latitude,
+            longitude: f.location.longitude,
+            label: f.name,
+            selected,
+            dimmed: !selected,
+            onPress: () => {
+              const ci = contacts.findIndex((c) => c.id === f.userId);
+              if (ci >= 0) arrival.selectContact(ci);
+            },
+          },
+        ];
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [friends, contacts, contactIdx],
+  );
+  const activeLocation = contacts[contactIdx] ? (friends.find((f) => f.userId === contacts[contactIdx].id)?.location ?? null) : null;
+
   // Flicking the open letter itself steps to the adjacent contact — dragging right (positive dx)
   // reveals whatever is to the left (the previous contact), dragging left reveals the next one,
   // same left/right semantics (and commit distance) as MediaViewerV3's own horizontal swipe.
@@ -104,6 +136,8 @@ function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLetter
         if (frameWidth === 0) setFrameWidth(e.nativeEvent.layout.width);
       }}
     >
+      <ThrowMap pins={mapPins} focus={activeLocation} />
+
       <View style={{ position: 'absolute', left: 0, right: 0, top: topOffset + s(v3Layout.contactsY, scale) }}>
         <ContactsRowV3 contacts={arrival.contactRows} onSelect={arrival.selectContact} scale={scale} />
       </View>
