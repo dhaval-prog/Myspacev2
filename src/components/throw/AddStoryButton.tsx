@@ -3,7 +3,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon } from '../Icon';
 import { throwColor, throwNightColor } from '../../theme/throwTokens';
 
-const SIZE = 56;
+// Matches RecipientCarousel's own AVATAR_SIZE (64) so this slot's circle reads as the same
+// diameter as every real contact's avatar, not a visibly smaller stand-in beside them.
+const SIZE = 64;
 const BADGE_SIZE = 20;
 // Feather Icons' "user" glyph — a plain person silhouette, matching the reference screenshot's
 // dark circle-with-person button rather than a generic camera icon.
