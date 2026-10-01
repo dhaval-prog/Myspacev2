@@ -3,6 +3,8 @@ import type { DirectMessage, Friend, FriendProfile, FriendRequest, MatchRelation
 import type { ChatGroup, GroupMessage, GroupPoll } from '../types/groups';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { useCachedBootstrap } from '../hooks/useCachedBootstrap';
+import { writeCache } from '../utils/persistedCache';
 
 export type FriendsPage = 'home' | 'add' | 'scan' | 'match' | 'requests' | 'chats' | 'chat' | 'locked-chat' | 'create-group' | 'group-chat';
 
@@ -30,6 +32,22 @@ interface ProfileInfo {
   name: string;
   username: string | null;
   avatarUrl: string | null;
+}
+
+/** Just enough to render the friends/requests lists and their names/avatars instantly on a repeat
+ * app open — the pieces every other screen (Chats, groups, presence) is itself derived from or
+ * loads independently, so caching only this keeps the snapshot small and quick to hydrate. */
+interface FriendsCoreSnapshot {
+  friendCode: string | null;
+  connectionRows: ConnectionRow[];
+  profiles: Record<string, ProfileInfo>;
+}
+
+/** The Chats list's own preview data — cached separately from FriendsCoreSnapshot since it only
+ * exists once `friends` itself is known, and refreshes independently of it. */
+interface FriendsChatsSnapshot {
+  lastMessages: Record<string, MessageRow>;
+  unreadCounts: Record<string, number>;
 }
 
 interface GroupRow {
@@ -292,6 +310,10 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const [profiles, setProfiles] = useState<Record<string, ProfileInfo>>({});
   const [loading, setLoading] = useState(true);
   const [justAcceptedIds, setJustAcceptedIds] = useState<string[]>([]);
+  // A cache hit (see coreCacheReady below) counts as a load already having happened, same as
+  // ThrowContext's own hasLoadedRef — otherwise the real fetch that follows it would flip
+  // `loading` back on for no reason, flashing a spinner over content that's already showing.
+  const hasLoadedCoreRef = useRef(false);
 
   const [page, setPage] = useState<FriendsPage>('home');
   const [matchFoundUserId, setMatchFoundUserId] = useState<string | null>(null);
@@ -334,6 +356,24 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
 
   const isOnline = (targetUserId: string) => onlineUserIds.has(targetUserId);
 
+  // Hydrates the friends/requests list (and their names/avatars) from whatever was cached last
+  // time, so reopening Friends shows real content instantly instead of a blank list while the
+  // fetch below is still in flight — see useCachedBootstrap's own doc comment.
+  const coreCacheReady = useCachedBootstrap<FriendsCoreSnapshot>(userId, 'friends-core', (cached) => {
+    setFriendCode(cached.friendCode);
+    setConnectionRows(cached.connectionRows);
+    setProfiles(cached.profiles);
+    hasLoadedCoreRef.current = true;
+    setLoading(false);
+  });
+
+  // Keeps the cache in step with whatever's actually on screen — the initial load below and the
+  // profile-backfill effect after it both flow through these three pieces of state, so this is
+  // the one place that needs to persist rather than repeating a write in each.
+  useEffect(() => {
+    if (userId) writeCache<FriendsCoreSnapshot>(userId, 'friends-core', { friendCode, connectionRows, profiles });
+  }, [userId, friendCode, connectionRows, profiles]);
+
   // Real mutual-friend count for whoever the current match is, via count_mutual_friends.
   useEffect(() => {
     if (!matchFoundUserId || !userId || matchFoundUserId === userId || !isSupabaseConfigured) {
@@ -350,8 +390,11 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [matchFoundUserId, userId]);
 
-  // Initial load: own code + every connection this account is party to.
+  // Initial load: own code + every connection this account is party to. Waits for the cache
+  // check above to settle (hit or miss) first — see useCachedBootstrap's own doc comment on why
+  // the ordering matters.
   useEffect(() => {
+    if (!coreCacheReady) return;
     let cancelled = false;
     if (!userId || !isSupabaseConfigured) {
       setFriendCode(null);
@@ -359,7 +402,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!hasLoadedCoreRef.current) setLoading(true);
     (async () => {
       const [profileRes, connRes] = await Promise.all([
         supabase.from('profiles').select('friend_code').eq('id', userId).single(),
@@ -374,12 +417,13 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
       warn('load connections', connRes.error);
       setFriendCode((profileRes.data as { friend_code: string } | null)?.friend_code ?? null);
       setConnectionRows((connRes.data as ConnectionRow[] | null) ?? []);
+      hasLoadedCoreRef.current = true;
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [coreCacheReady, userId]);
 
   // Live updates: a request arriving, being accepted, or being removed by
   // the other side should show up without a reload on either account.
@@ -492,8 +536,20 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const typingChannelsRef = useRef<Record<string, ReturnType<typeof supabase.channel>>>({});
 
+  // Hydrates the Chats list's own preview (last message + unread count per thread) from whatever
+  // was cached last time, so it shows real previews instantly instead of blank rows while the two
+  // fetches below are still in flight — see useCachedBootstrap's own doc comment.
+  const chatsCacheReady = useCachedBootstrap<FriendsChatsSnapshot>(userId, 'friends-chats', (cached) => {
+    setLastMessages(cached.lastMessages);
+    setUnreadCounts(cached.unreadCounts);
+  });
+  useEffect(() => {
+    if (userId) writeCache<FriendsChatsSnapshot>(userId, 'friends-chats', { lastMessages, unreadCounts });
+  }, [userId, lastMessages, unreadCounts]);
+
   // Load the latest message per accepted connection, for the Chats list preview.
   useEffect(() => {
+    if (!chatsCacheReady) return;
     if (!userId || !isSupabaseConfigured || friends.length === 0) {
       setLastMessages({});
       return;
@@ -516,11 +572,12 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [userId, friends]);
+  }, [chatsCacheReady, userId, friends]);
 
   // Real, persisted unread counts (survives app restart) — computed
   // server-side from direct_message_reads via get_unread_counts().
   useEffect(() => {
+    if (!chatsCacheReady) return;
     if (!userId || !isSupabaseConfigured || friends.length === 0) {
       setUnreadCounts({});
       return;
@@ -538,7 +595,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [userId, friends]);
+  }, [chatsCacheReady, userId, friends]);
 
   // Live preview + unread updates for every accepted thread at once — the
   // Chats list needs to react to a message even while some other screen is open.

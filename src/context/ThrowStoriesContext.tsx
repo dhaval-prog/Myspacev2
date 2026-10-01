@@ -2,6 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useThrow } from './ThrowContext';
+import { useCachedBootstrap } from '../hooks/useCachedBootstrap';
+import { writeCache } from '../utils/persistedCache';
 import type { StoryMediaType, ThrowStory, ThrowStoryRow } from '../types/story';
 
 const POLL_MS = 30000;
@@ -67,6 +69,15 @@ export function ThrowStoriesProvider({ children }: { children: React.ReactNode }
   const [rows, setRows] = useState<ThrowStoryRow[]>([]);
   const hasLoadedRef = useRef(false);
 
+  // Hydrates `rows` from whatever was cached last time, so reopening Throw shows everyone's
+  // stories instantly instead of a blank ring/strip while the network round-trip below is still
+  // in flight — see useCachedBootstrap's own doc comment.
+  const cacheReady = useCachedBootstrap<ThrowStoryRow[]>(myId, 'throw-stories', (cached) => {
+    setRows(cached);
+    hasLoadedRef.current = true;
+    setLoading(false);
+  });
+
   const refresh = useCallback(async () => {
     if (!myId) return;
     if (!hasLoadedRef.current) setLoading(true);
@@ -78,14 +89,17 @@ export function ThrowStoriesProvider({ children }: { children: React.ReactNode }
       .gt('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
       .order('created_at', { ascending: true });
     warn('load stories', error);
-    setRows((data as ThrowStoryRow[] | null) ?? []);
+    const nextRows = (data as ThrowStoryRow[] | null) ?? [];
+    setRows(nextRows);
     hasLoadedRef.current = true;
     setLoading(false);
+    writeCache(myId, 'throw-stories', nextRows);
   }, [myId, friends]);
 
   useEffect(() => {
+    if (!cacheReady) return;
     refresh();
-  }, [refresh]);
+  }, [cacheReady, refresh]);
 
   useEffect(() => {
     if (!myId) return;
