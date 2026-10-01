@@ -228,11 +228,17 @@ const styles = StyleSheet.create({
   // `width: '100%'` keeps this ScrollView from ever stretching past the card's own width (it
   // otherwise shrink-wraps to its unclipped content on web) — without it, a too-wide pill row
   // bleeds past the right edge instead of becoming properly horizontally scrollable there.
-  filterScroll: { flexGrow: 0, width: '100%' },
-  // Extra bottom padding (beyond the pills' own height) so the TODAY/EARLIER label below has real
-  // space before it, rather than sitting right under the pills — same explicit request as the
-  // card's own paddingTop above.
-  filterRow: { flexDirection: 'row', gap: spacing.xs, paddingHorizontal: spacing.md, paddingBottom: spacing.lg },
+  // `height` is pinned explicitly to the pills' own height (filterPill below) rather than left to
+  // auto-size from content — real iPhone Safari otherwise measures this horizontal ScrollView's
+  // cross-axis height too short (a flexbox min-height/overflow-content quirk specific to that
+  // engine, distinct from the WebKit pill-shrinking one noted on filterPill below), slicing the
+  // tops off every pill in the row instead of showing them full-height.
+  filterScroll: { flexGrow: 0, width: '100%', height: 30, marginBottom: spacing.lg },
+  // Extra bottom MARGIN (not padding) so the TODAY/EARLIER label below has real space before it —
+  // kept off the ScrollView's own contentContainerStyle since that padding would otherwise just
+  // extend the (now explicitly height-pinned) scrollable content past what's visible, rather than
+  // actually making room below the row the way a true sibling-level gap does.
+  filterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md },
   filterPill: {
     paddingHorizontal: 12,
     height: 30,
