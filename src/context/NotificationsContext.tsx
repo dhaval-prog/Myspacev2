@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { useCachedBootstrap } from '../hooks/useCachedBootstrap';
+import { writeCache } from '../utils/persistedCache';
 
 export interface AppNotification {
   id: string;
@@ -73,7 +75,20 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const userId = user?.id ?? null;
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
+  // Hydrates `notifications` from whatever was cached last time, so the panel shows real history
+  // instantly instead of a flash of "You're all caught up" while the fetch below is still in
+  // flight — see useCachedBootstrap's own doc comment.
+  const cacheReady = useCachedBootstrap<AppNotification[]>(userId, 'notifications', setNotifications);
+
+  // Keeps the cache in step with whatever's actually on screen — the initial fetch below, and
+  // every realtime insert/update/delete after it, all flow through `notifications` itself, so
+  // this is the one place that needs to persist rather than repeating a write in each handler.
   useEffect(() => {
+    if (userId) writeCache(userId, 'notifications', notifications);
+  }, [userId, notifications]);
+
+  useEffect(() => {
+    if (!cacheReady) return;
     if (!userId || !isSupabaseConfigured) {
       setNotifications([]);
       return;
@@ -126,7 +141,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [cacheReady, userId]);
 
   const acknowledge = (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));

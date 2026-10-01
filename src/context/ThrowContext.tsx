@@ -3,7 +3,20 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useFriends } from './FriendsContext';
 import { computeNextTrigger } from '../utils/throwAlerts';
+import { useCachedBootstrap } from '../hooks/useCachedBootstrap';
+import { writeCache } from '../utils/persistedCache';
 import type { AlertSchedule, ComposeDraft, MediaTrim, ThrowFriend, ThrowLetter, ThrowLocation, ThrowRow } from '../types/throw';
+
+/** Everything `refresh` loads in one round-trip, cached together so a repeat app open can hydrate
+ * the whole screen — map pins, streaks, my own profile — in one shot instead of a blank screen
+ * while the real fetch is still in flight. */
+interface ThrowCacheSnapshot {
+  myLocation: ThrowLocation | null;
+  myProfile: { name: string; avatarUrl: string | null };
+  friendLocations: Record<string, ThrowLocation>;
+  rows: ThrowRow[];
+  streaksByCounterpart: Record<string, number>;
+}
 
 function warn(action: string, error: { message: string } | null) {
   if (error) console.warn(`[Throw] ${action} failed:`, error.message);
@@ -151,15 +164,37 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
   const [rows, setRows] = useState<ThrowRow[]>([]);
   const [streaksByCounterpart, setStreaksByCounterpart] = useState<Record<string, number>>({});
   const hasLoadedRef = useRef(false);
+  // Mirrors myLocation/myProfile outside React state, purely so `refresh` can fold whichever of
+  // the two didn't change this round into its own cache write below — without this, that field
+  // would have to be a dependency of `refresh` itself, and since `refresh` writes it, that would
+  // give the effect that calls `refresh` a new identity every time it runs, looping forever.
+  const latestMyLocationRef = useRef<ThrowLocation | null>(null);
+  const latestMyProfileRef = useRef<{ name: string; avatarUrl: string | null }>({ name: 'Myself', avatarUrl: null });
 
   const nameFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.name ?? 'Someone', [fsFriends]);
   const avatarFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.avatarUrl ?? null, [fsFriends]);
+
+  // Hydrates every piece `refresh` loads from whatever was cached last time, so a repeat app open
+  // shows the map/letters/streaks instantly instead of a blank screen while the network round-trip
+  // below is still in flight — see useCachedBootstrap's own doc comment.
+  const cacheReady = useCachedBootstrap<ThrowCacheSnapshot>(myId, 'throw', (cached) => {
+    setMyLocationState(cached.myLocation);
+    latestMyLocationRef.current = cached.myLocation;
+    setMyProfile(cached.myProfile);
+    latestMyProfileRef.current = cached.myProfile;
+    setFriendLocations(cached.friendLocations);
+    setRows(cached.rows);
+    setStreaksByCounterpart(cached.streaksByCounterpart);
+    hasLoadedRef.current = true;
+    setLoading(false);
+  });
 
   const refresh = useCallback(async () => {
     if (!myId) return;
     // Only the very first load blanks the screen — a poll or realtime-triggered refresh updates
     // data quietly in the background so it never interrupts whatever's on screen (mid-gesture
-    // composing, an in-progress flight animation, etc.).
+    // composing, an in-progress flight animation, etc.). A cache hit (see cacheReady above)
+    // counts as a first load for this purpose too, since the screen's already showing something.
     if (!hasLoadedRef.current) setLoading(true);
     const [meRes, throwsRes, streakRes, profileRes] = await Promise.all([
       supabase.from('throw_profiles').select('city,country,latitude,longitude').eq('user_id', myId).maybeSingle(),
@@ -174,11 +209,15 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
 
     if (meRes.data) {
       const d = meRes.data as { city: string; country: string; latitude: number; longitude: number };
-      setMyLocationState({ city: d.city, country: d.country, latitude: d.latitude, longitude: d.longitude });
+      const loc = { city: d.city, country: d.country, latitude: d.latitude, longitude: d.longitude };
+      setMyLocationState(loc);
+      latestMyLocationRef.current = loc;
     }
     if (profileRes.data) {
       const p = profileRes.data as { full_name: string | null; avatar_url: string | null };
-      setMyProfile({ name: p.full_name?.trim() || 'Myself', avatarUrl: p.avatar_url });
+      const profile = { name: p.full_name?.trim() || 'Myself', avatarUrl: p.avatar_url };
+      setMyProfile(profile);
+      latestMyProfileRef.current = profile;
     }
     // Each row's stored streak only advances when a throw to that counterpart actually happens —
     // if a whole day's gone by with nothing thrown to them since, it's lapsed even though the row
@@ -202,6 +241,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     setRows(visibleRows);
 
     const friendIds = fsFriends.map((f) => f.userId);
+    let friendLocationsSnapshot: Record<string, ThrowLocation> = {};
     if (friendIds.length > 0) {
       const { data: locRows, error: locErr } = await supabase
         .from('throw_profiles')
@@ -212,17 +252,29 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
       for (const r of (locRows as { user_id: string; city: string; country: string; latitude: number; longitude: number }[] | null) ?? []) {
         map[r.user_id] = { city: r.city, country: r.country, latitude: r.latitude, longitude: r.longitude };
       }
+      friendLocationsSnapshot = map;
       setFriendLocations(map);
     } else {
       setFriendLocations({});
     }
     hasLoadedRef.current = true;
     setLoading(false);
+    writeCache<ThrowCacheSnapshot>(myId, 'throw', {
+      myLocation: latestMyLocationRef.current,
+      myProfile: latestMyProfileRef.current,
+      friendLocations: friendLocationsSnapshot,
+      rows: visibleRows,
+      streaksByCounterpart: streakMap,
+    });
   }, [myId, fsFriends]);
 
+  // Waits for the cache check above to settle (hit or miss) before deciding whether this is a
+  // first-ever load that should show the normal loading state — see useCachedBootstrap's own doc
+  // comment on why the ordering matters.
   useEffect(() => {
+    if (!cacheReady) return;
     refresh();
-  }, [refresh]);
+  }, [cacheReady, refresh]);
 
   useEffect(() => {
     if (!myId) return;
