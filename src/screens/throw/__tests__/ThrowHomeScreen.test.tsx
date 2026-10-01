@@ -9,7 +9,14 @@ import { useGameStats } from '../../../context/GameStatsContext';
 import { useThrowColorMode } from '../../../context/ThrowColorModeContext';
 import { useThrowStories } from '../../../context/ThrowStoriesContext';
 import { useNotifications } from '../../../context/NotificationsContext';
+import { useFriends } from '../../../context/FriendsContext';
 
+// NotificationsPanel (rendered, via ThrowHomeScreen's own import of it, only once
+// isNotificationsSelected is true — none of these tests reach that) pulls in notify.ts, which
+// imports the real Supabase client at module scope; that's enough to crash under jest even
+// without ever calling it, same "the bare import still runs at module-load time" reasoning as
+// expo-video below.
+jest.mock('../../../lib/supabase', () => ({ supabase: {} }));
 jest.mock('../../../context/AuthContext', () => ({ useAuth: jest.fn() }));
 jest.mock('../../../context/ThrowContext', () => ({ useThrow: jest.fn() }));
 jest.mock('../../../context/ThrowAlertsContext', () => ({ useThrowAlerts: jest.fn() }));
@@ -17,6 +24,11 @@ jest.mock('../../../context/GameStatsContext', () => ({ useGameStats: jest.fn() 
 jest.mock('../../../context/ThrowColorModeContext', () => ({ useThrowColorMode: jest.fn() }));
 jest.mock('../../../context/ThrowStoriesContext', () => ({ useThrowStories: jest.fn() }));
 jest.mock('../../../context/NotificationsContext', () => ({ useNotifications: jest.fn() }));
+// Never exercised directly (isNotificationsSelected stays false in these tests, so
+// NotificationsPanel never mounts), but it's imported — via NotificationsPanel — the moment
+// ThrowHomeScreen's own module loads, same "the bare import still runs at module-load time"
+// reasoning as expo-video below, so this has to be mocked regardless of what's rendered.
+jest.mock('../../../context/FriendsContext', () => ({ useFriends: jest.fn() }));
 
 // WeatherOverlay/RainOverlay are a purely visual screen-space effect (Animated loops/canvas,
 // irrelevant to anything under test in this file) — stubbed out the same way ThrowMap is, so tests
@@ -130,6 +142,7 @@ const mockUseGameStats = useGameStats as jest.Mock;
 const mockUseThrowColorMode = useThrowColorMode as jest.Mock;
 const mockUseThrowStories = useThrowStories as jest.Mock;
 const mockUseNotifications = useNotifications as jest.Mock;
+const mockUseFriends = useFriends as jest.Mock;
 
 const MY_ID = 'me-1';
 const FRIEND = { userId: 'friend-1', name: 'Priya', avatarUrl: null, location: { city: 'Pune', country: 'IN', latitude: 18.5, longitude: 73.8 } };
@@ -164,11 +177,21 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
     refresh: jest.fn(),
   });
   mockUseNotifications.mockReturnValue({ notifications: [], unreadCount: 0, acknowledge: jest.fn(), clearAll: jest.fn() });
+  mockUseFriends.mockReturnValue({ friends: [], receivedRequests: [], sentRequests: [], acceptRequest: jest.fn(), declineRequest: jest.fn() });
   return createAlert;
 }
 
 async function renderScreen() {
-  await renderWithSafeArea(<ThrowHomeScreen onOpenExpenses={noop} onOpenChats={noop} onOpenAddFriend={noop} onOpenNotifications={noop} onOpenSettings={noop} />);
+  await renderWithSafeArea(
+    <ThrowHomeScreen
+      onOpenExpenses={noop}
+      onOpenChats={noop}
+      onOpenAddFriend={noop}
+      onOpenThrowLetter={noop}
+      onNotificationTarget={noop}
+      onOpenSettings={noop}
+    />,
+  );
 }
 
 describe('ThrowHomeScreen self-reminder contact lock', () => {

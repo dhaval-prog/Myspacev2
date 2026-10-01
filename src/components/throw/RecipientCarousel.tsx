@@ -116,6 +116,11 @@ interface RecipientCarouselProps {
   onOpenNotifications?: () => void;
   /** Badge count shown on the notifications slot — see NotificationCircleButton. */
   notificationsUnreadCount?: number;
+  /** True while the Notifications slot itself is the current selection (its own glassmorphism
+   * card is showing above the map instead of the letter) — moves the strip's own resting offset
+   * onto it and gives it the same "active" chrome (pulse ring, inner border) a selected contact
+   * or Add Status gets. Same convention as isAddStorySelected, one slot further left. */
+  isNotificationsSelected?: boolean;
 }
 
 /** The status-letter-stack's own small count badge — top-right of the avatar, matching the
@@ -153,6 +158,7 @@ export function RecipientCarousel({
   unreadCountFor,
   onOpenNotifications,
   notificationsUnreadCount,
+  isNotificationsSelected,
 }: RecipientCarouselProps) {
   const avatarPulse = useRef(new Animated.Value(1)).current;
   const isFirstPulseRender = useRef(true);
@@ -170,8 +176,9 @@ export function RecipientCarousel({
   const n = friends.length;
   const maxIndex = Math.max(0, n - 1);
   // Where the strip's own live offset should rest whenever nothing is actively being dragged —
-  // the add-story slot (-1) while Status is selected, otherwise whatever real contact is.
-  const restingIndex = isAddStorySelected ? -1 : Math.min(selectedIndex, maxIndex);
+  // the notifications slot (-2) while it's selected, the add-story slot (-1) while Status is,
+  // otherwise whatever real contact is.
+  const restingIndex = isNotificationsSelected ? -2 : isAddStorySelected ? -1 : Math.min(selectedIndex, maxIndex);
   const offset = useRef(new Animated.Value(restingIndex)).current;
   const offsetValueRef = useRef(restingIndex);
   const grantOffsetRef = useRef(0);
@@ -232,12 +239,11 @@ export function RecipientCarousel({
           draggingRef.current = false;
           const raw = grantOffsetRef.current - g.dx / ITEM_SPACING;
           const nearest = Math.max(minDragIndex, Math.min(maxIndex, Math.round(raw)));
-          // Dragging all the way to the notifications slot opens it directly, same as tapping it
-          // — then springs back to wherever the strip actually rests (it isn't a "selection" that
-          // persists like a real contact or Add Story is), so the strip isn't left stranded fully
-          // left once the user comes back from the notifications screen.
+          // Dragging to the notifications slot selects it exactly like tapping it does — same
+          // optimistic spring as Add Story's own case below, so it doesn't visually bounce back
+          // before the parent's own isNotificationsSelected round-trip takes over.
           if (nearest === -2 && onOpenNotifications) {
-            Animated.spring(offset, { toValue: restingIndex, useNativeDriver: false, friction: 8, tension: 60 }).start();
+            Animated.spring(offset, { toValue: -2, useNativeDriver: false, friction: 8, tension: 60 }).start();
             onOpenNotifications();
             return;
           }
@@ -255,7 +261,7 @@ export function RecipientCarousel({
           if (nearest !== selectedIndex || isAddStorySelected) onChangeIndex(nearest);
         },
       }),
-    [disabled, n, maxIndex, selectedIndex, onChangeIndex, offset, isAddStorySelected, minDragIndex, onOpenNotifications, onAddStory, restingIndex],
+    [disabled, n, maxIndex, selectedIndex, onChangeIndex, offset, isAddStorySelected, minDragIndex, onOpenNotifications, onAddStory],
   );
 
   if (n === 0) return null;
@@ -280,15 +286,12 @@ export function RecipientCarousel({
   });
 
   const addStoryTransform = onAddStory ? itemTransform(-1) : null;
-  // The notifications slot always mirrors the add-story slot's own scale/opacity rather than its
-  // own (one slot further left) distance — otherwise, whenever a real contact is selected, it
-  // would sit one falloff step further away than add-story and render visibly smaller/fainter
-  // than it, instead of the two utility icons matching each other's size at every instant. Only
-  // its translateX comes from its own slot index, so it still sits one position further left.
-  const utilityScaleOpacity = itemTransform(-1);
-  const notificationsTransform = onOpenNotifications
-    ? { translateX: itemTransform(-2).translateX, scale: utilityScaleOpacity.scale, opacity: utilityScaleOpacity.opacity }
-    : null;
+  // Its own independent falloff, exactly like any other slot — when it isn't the current
+  // selection, it shrinks/fades by its own real distance from whatever is (one step further than
+  // Add Story's own, since it sits one more position left), the same "inactive" look a real
+  // contact one slot further away would get. Only becomes full size/opacity by actually being the
+  // selection (isNotificationsSelected, via restingIndex above), same as Add Story or any contact.
+  const notificationsTransform = onOpenNotifications ? itemTransform(-2) : null;
 
   return (
     <View style={[styles.wrap, noSelect]} {...panResponder.panHandlers}>
@@ -305,9 +308,18 @@ export function RecipientCarousel({
           >
             <View style={styles.pressableContent}>
               <View style={styles.avatarWrap}>
-                <NotificationCircleButton onPress={onOpenNotifications} unreadCount={notificationsUnreadCount ?? 0} />
+                {isNotificationsSelected && <SelectedPulseRing isNight={isNight} />}
+                <NotificationCircleButton onPress={onOpenNotifications} unreadCount={notificationsUnreadCount ?? 0} selected={isNotificationsSelected} isNight={isNight} />
               </View>
-              <Text style={[styles.name, styles.utilityLabel, isNight && styles.nameNight]} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.name,
+                  styles.utilityLabel,
+                  isNight && styles.nameNight,
+                  isNotificationsSelected && (isNight ? styles.nameSelectedNight : styles.nameSelected),
+                ]}
+                numberOfLines={1}
+              >
                 Notifications
               </Text>
               {/* Invisible placeholder reserving the same second-line height a real contact's

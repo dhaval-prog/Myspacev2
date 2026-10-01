@@ -12,6 +12,7 @@ import { ContactStoryStack } from '../../components/throw/ContactStoryStack';
 import { StoryPreviewScreen } from '../../components/throw/StoryPreviewScreen';
 import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
 import { WeatherOverlay } from '../../components/throw/weather/WeatherOverlay';
+import { NotificationsPanel } from '../../components/throw/NotificationsPanel';
 import { BottomNav } from '../../components/BottomNav';
 import { Icon } from '../../components/Icon';
 import { LetterFoldCard } from '../../components/throw/inbox/LetterFoldCard';
@@ -31,6 +32,7 @@ import { useThrowStories } from '../../context/ThrowStoriesContext';
 import { useAuth } from '../../context/AuthContext';
 import { useGameStats } from '../../context/GameStatsContext';
 import { formatAlertSchedule } from '../../utils/throwAlerts';
+import type { NotificationTarget } from '../../utils/notify';
 import type { AlertSchedule, MediaTrim, StrokePath, ThrowLetter } from '../../types/throw';
 import type { StoryMediaType } from '../../types/story';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
@@ -90,7 +92,14 @@ interface ThrowHomeScreenProps {
   onOpenExpenses: () => void;
   onOpenChats: () => void;
   onOpenAddFriend: () => void;
-  onOpenNotifications: () => void;
+  /** Opens a specific past letter — this screen has no notion of that subscreen itself (see
+   * ThrowScreen's own ThrowNavigator), so a notification row deep-linking to one is handed
+   * straight up to it. */
+  onOpenThrowLetter: (throwId: string) => void;
+  /** Anything a notification row deep-links to that isn't Throw's own concern (Expenses, a chat,
+   * Friends) — focusing a contact within Throw itself is handled locally instead (see
+   * handleNotificationTarget below). */
+  onNotificationTarget: (target: NotificationTarget) => void;
   onOpenSettings: () => void;
   /** Set when arriving here via "Throw Back" — recipient is fixed, carousel is hidden. Only ever
    * set from ThrowInboxScreen/ThrowLetterDetailScreen's own separate Throw Back buttons — the
@@ -116,7 +125,8 @@ export function ThrowHomeScreen({
   onOpenExpenses,
   onOpenChats,
   onOpenAddFriend,
-  onOpenNotifications,
+  onOpenThrowLetter,
+  onNotificationTarget,
   onOpenSettings,
   lockedRecipient,
   initialFocusContactId,
@@ -163,6 +173,12 @@ export function ThrowHomeScreen({
   const [openAvatarCount, setOpenAvatarCount] = useState(0);
   const [openAvatarPulseSignal, setOpenAvatarPulseSignal] = useState(0);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(initialFocusContactId ?? null);
+  // Whether the carousel's own Notifications slot is the current selection — shows the
+  // glassmorphism notification card above the map in its place (see cardMode/render below)
+  // instead of pushing to a separate screen, same inline-slot convention as Add Status's own
+  // isAddStorySelected. Toggled by tapping/dragging to the slot again (see handleToggleNotifications
+  // below), and cleared whenever a real contact or Add Status is selected instead.
+  const [isNotificationsSelected, setIsNotificationsSelected] = useState(false);
   const [alertSchedule, setAlertSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
   // Once the user has touched the alert schedule, switching to a different contact is locked
   // (see selfLocked below) — otherwise a stray sideways swipe could yank them away from a
@@ -485,6 +501,42 @@ export function ThrowHomeScreen({
   // status contact's own Add Friend glass pill (see its own render below) is scoped to this,
   // same condition RecipientCarousel's own isAddStorySelected prop already uses.
   const isAddStorySelected = storyView?.viaAddSlot === true || isCaptureMode || isPreviewMode;
+
+  // Tapping/dragging to the Notifications slot again (or while it's already open) closes it —
+  // same "tap the active one again to back out" convention the rest of the carousel already uses.
+  // Opening it also backs out of whatever story/Add Status state was showing, so only one of the
+  // three ever occupies the letter-card slot at once.
+  const handleToggleNotifications = () => {
+    setIsNotificationsSelected((prev) => {
+      const next = !prev;
+      if (next) {
+        setStoryView(null);
+        setStoryFlow(null);
+      }
+      return next;
+    });
+  };
+
+  // Tapping a row inside the Notifications card: focusing a contact within Throw itself is
+  // handled right here (this screen owns that state), opening a specific past letter is handed up
+  // to ThrowNavigator (it owns that subscreen), and anything else (Expenses, a chat, Friends)
+  // bubbles all the way up to App.tsx's own navigator. Closes the card either way, since every one
+  // of these means "go look at something else" rather than "stay here".
+  const handleNotificationTarget = (target: NotificationTarget) => {
+    setIsNotificationsSelected(false);
+    if (target.screen === 'throw' && 'throwId' in target) {
+      onOpenThrowLetter(target.throwId);
+      return;
+    }
+    if (target.screen === 'throw' && 'focusContactId' in target) {
+      setStoryView(null);
+      setStoryFlow(null);
+      setSelectedFriendId(target.focusContactId);
+      return;
+    }
+    onNotificationTarget(target);
+  };
+
   // Which of the five things the letter card is currently showing — a single source of truth so
   // every transition between any two of them (not just entering/leaving story mode) gets the same
   // smooth crossfade below, instead of only some pairs of states doing so.
@@ -894,22 +946,28 @@ export function ThrowHomeScreen({
                   // already selected before Status — is the way back out of story mode (see
                   // storyView's own comment); without this, tapping "Dhaval" again while viewing
                   // Status would be a no-op (already `selectedFriendId`) and leave the user stuck
-                  // looking at their own photos with no way back.
+                  // looking at their own photos with no way back. Same reasoning extends to
+                  // Notifications: selecting any real contact closes that card too.
                   setStoryView(null);
                   setStoryFlow(null);
+                  setIsNotificationsSelected(false);
                   setSelectedFriendId(friendsWithLocation[i]?.userId ?? null);
                 }}
                 disabled={selfLocked || isCaptureMode || isPreviewMode}
                 isNight={!mapIsDay}
                 storyCountFor={storyCountFor}
                 onOpenStory={handleOpenStory}
-                onAddStory={() => setStoryFlow({ name: 'capture' })}
+                onAddStory={() => {
+                  setIsNotificationsSelected(false);
+                  setStoryFlow({ name: 'capture' });
+                }}
                 isAddStorySelected={isAddStorySelected}
                 storyModeAvatarCount={isStoryMode ? openAvatarCount : undefined}
                 storyModePulseSignal={openAvatarPulseSignal}
                 liveOffset={contactDragLiveOffset ?? undefined}
                 unreadCountFor={unreadCountFor}
-                onOpenNotifications={onOpenNotifications}
+                onOpenNotifications={handleToggleNotifications}
+                isNotificationsSelected={isNotificationsSelected}
                 notificationsUnreadCount={notificationsUnreadCount}
               />
             </View>
@@ -933,7 +991,21 @@ export function ThrowHomeScreen({
           </View>
         )}
 
-        {!inFlight && selectedFriend && (
+        {/* The notification history — a floating glassmorphism card above the map instead of a
+            separate screen, exactly as long as the carousel's own Notifications slot stays
+            selected (see RecipientCarousel's own isNotificationsSelected). */}
+        {!inFlight && isNotificationsSelected && (
+          <View
+            style={[
+              styles.notificationsOverlay,
+              { top: insets.top + 16 + CAROUSEL_HEIGHT + 8, bottom: insets.bottom + 16 },
+            ]}
+          >
+            <NotificationsPanel onClose={handleToggleNotifications} onNavigate={handleNotificationTarget} />
+          </View>
+        )}
+
+        {!inFlight && selectedFriend && !isNotificationsSelected && (
           // `bottom` shrinks from its normal BOTTOM_NAV_CLEARANCE-reserved position down to just
           // the safe-area inset as the letter folds, on the same chromeOpacity value that already
           // fades BottomNav out — that reserved clearance exists so the card clears the *visible*
@@ -1218,6 +1290,7 @@ const styles = StyleSheet.create({
   bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
   addFriendOverlay: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  notificationsOverlay: { position: 'absolute', left: 16, right: 16 },
   addFriendBtn: {
     flexDirection: 'row',
     alignItems: 'center',

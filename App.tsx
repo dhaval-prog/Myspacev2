@@ -24,7 +24,6 @@ import { GamesScreen } from './src/screens/games/GamesScreen';
 import { GamesDashboardScreen } from './src/screens/games/GamesDashboardScreen';
 import { TriviaGameScreen } from './src/screens/games/trivia/TriviaGameScreen';
 import { ThrowScreen } from './src/screens/throw/ThrowScreen';
-import { NotificationsScreen } from './src/screens/NotificationsScreen';
 import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScreen';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -37,7 +36,6 @@ type Screen =
   | { name: 'games'; initialTab?: 'create' | 'join' }
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
   | { name: 'throw'; openThrowId?: string; focusContactId?: string }
-  | { name: 'notifications' }
   | { name: 'account' };
 
 function AuthNavigator() {
@@ -131,9 +129,6 @@ function AppNavigator() {
       />
     );
   }
-  if (screen.name === 'notifications') {
-    return <NotificationsScreen onBack={() => setScreen({ name: 'throw' })} onNavigate={openNotificationTarget} />;
-  }
   return (
     <ThrowScreen
       onHome={() => setScreen({ name: 'throw' })}
@@ -146,7 +141,7 @@ function AppNavigator() {
         goAdd();
         setScreen({ name: 'friends' });
       }}
-      onOpenNotifications={() => setScreen({ name: 'notifications' })}
+      onNotificationTarget={openNotificationTarget}
       initialThrowId={screen.name === 'throw' ? screen.openThrowId : undefined}
       initialFocusContactId={screen.name === 'throw' ? screen.focusContactId : undefined}
     />
