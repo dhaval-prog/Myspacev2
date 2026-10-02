@@ -21,11 +21,15 @@ const s = (n: number, scale: number) => n * scale;
 const SWIPE_COMMIT_DISTANCE = 40;
 
 interface ThrowReceivedLettersScreenProps {
+  /** Reply, after its own fold-away + fly-to-corner exit — the caller lands on the existing Throw
+   * compose flow for this contact (no separate "ThrowCompose" route exists in this app; Throw's
+   * own screen already composes in place once a contact is focused). */
+  onReply: (contactId: string, throwId: string) => void;
   /** Preselects this contact — set when reached from a specific chat thread's own Throw icon. */
   initialContactId?: string;
 }
 
-function ReceivedLettersInner({ initialContactId }: ThrowReceivedLettersScreenProps) {
+function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLettersScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friends, inbox, deleteThrow, markRead, confirmThrowAlert } = useThrow();
@@ -57,6 +61,7 @@ function ReceivedLettersInner({ initialContactId }: ThrowReceivedLettersScreenPr
     deleteThrow,
     markRead,
     confirmThrowAlert,
+    onReply,
   });
 
   const topOffset = insets.top;
@@ -175,6 +180,7 @@ function ReceivedLettersInner({ initialContactId }: ThrowReceivedLettersScreenPr
         <ActionRowV3
           visible={arrival.stage === 'open' && !armed && !mediaOpen}
           letter={arrival.cardData}
+          onReply={arrival.reply}
           onConfirm={arrival.confirmAlert}
           onOpenMedia={() => setMediaOpen(true)}
           scale={scale}

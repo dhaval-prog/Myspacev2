@@ -4,6 +4,7 @@ import { Icon } from '../../Icon';
 import { v3Color, v3Font } from '../../../theme/throwLettersV3Tokens';
 import type { V3LetterCardData } from '../../../hooks/useLettersArrivalV3';
 
+const REPLY_ICON = 'M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 6 6v5';
 const BELL_ICON = 'M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15z M10 20.5a2 2 0 0 0 4 0';
 const CHECK_ICON = 'M5 12.5l4.5 4.5L19 7.5';
 const IMAGE_ICON = 'M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2z M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M21 15l-5-5L5 21';
@@ -26,18 +27,19 @@ function PressableScale({ onPress, scaleTo, children, style, accessibilityLabel 
   );
 }
 
-/** Confirm/Media — the letter card's own action row, visible only once the letter is fully open
- * and no delete-drag is armed, fading/sliding in per the handoff's own `actOp`/`actY`. No Reply
- * button, per the pixel spec's own explicit rule. */
+/** Reply/Confirm/Media — the letter card's own action row, visible only once the letter is fully
+ * open and no delete-drag is armed, fading/sliding in per the handoff's own `actOp`/`actY`. */
 export function ActionRowV3({
   visible,
   letter,
+  onReply,
   onConfirm,
   onOpenMedia,
   scale,
 }: {
   visible: boolean;
   letter: V3LetterCardData | null;
+  onReply: () => void;
   onConfirm: () => void;
   onOpenMedia: () => void;
   scale: number;
@@ -57,6 +59,13 @@ export function ActionRowV3({
 
   return (
     <Animated.View pointerEvents={visible ? 'auto' : 'none'} style={{ flexDirection: 'row', gap: s(10, scale), opacity, transform: [{ translateY }] }}>
+      <PressableScale onPress={onReply} scaleTo={0.97} accessibilityLabel="Reply" style={{ flex: 1 }}>
+        <View style={[styles.replyBtn, { height: h, borderRadius: h / 2, gap: s(8, scale) }]}>
+          <Icon path={REPLY_ICON} size={s(18, scale)} color="#FFFFFF" strokeWidth={2.2} />
+          <Text style={[styles.replyLabel, { fontSize: s(15, scale) }]}>Reply</Text>
+        </View>
+      </PressableScale>
+
       {hasAlert && (
         <PressableScale onPress={onConfirm} scaleTo={0.97} accessibilityLabel={confirmed ? 'Alert set' : 'Confirm reminder'} style={{ flex: 1 }}>
           <View style={[styles.confirmBtn, { height: h, borderRadius: h / 2, gap: s(8, scale), backgroundColor: confirmed ? 'rgba(255,255,255,.85)' : v3Color.accentBlue }]}>
@@ -81,6 +90,8 @@ export function ActionRowV3({
 }
 
 const styles = StyleSheet.create({
+  replyBtn: { backgroundColor: v3Color.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  replyLabel: { fontFamily: v3Font.ui700, color: '#FFFFFF' },
   confirmBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   confirmLabel: { fontFamily: v3Font.ui700 },
   mediaBtn: { backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
