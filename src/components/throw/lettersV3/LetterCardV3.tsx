@@ -50,6 +50,7 @@ function letterTargetFor(stage: LetterStageV3): LetterTarget {
   if (stage === 'rise') return { x: 0, y: -26, scale: 0.86, rotate: 0, opacity: 1, durMs: 600, easing: EASE_RISE, opDurMs: 0, opDelayMs: 0 };
   if (stage === 'shrink') return { x: 0, y: 260, scale: 0.25, rotate: 10, opacity: 0, durMs: 340, easing: EASE_SHRINK, opDurMs: 300, opDelayMs: 50 };
   if (stage === 'trash') return { x: 0, y: 360, scale: 0.12, rotate: 16, opacity: 0, durMs: 500, easing: EASE_SHRINK, opDurMs: 350, opDelayMs: 150 };
+  if (stage === 'replyFly') return { x: 150, y: -330, scale: 0.18, rotate: -24, opacity: 0, durMs: 500, easing: Easing.bezier(0.5, 0, 0.75, 0.3), opDurMs: 300, opDelayMs: 200 };
   return { x: 0, y: 0, scale: 1, rotate: 0, opacity: 1, durMs: 500, easing: EASE_DEFAULT, opDurMs: 300, opDelayMs: 0 };
 }
 

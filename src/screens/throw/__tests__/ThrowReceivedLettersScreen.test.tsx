@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, screen } from '@testing-library/react-native';
+import { act, fireEvent, screen } from '@testing-library/react-native';
 import { renderWithSafeArea } from '../../../testUtils/renderWithSafeArea';
 import { ThrowReceivedLettersScreen } from '../ThrowReceivedLettersScreen';
 import { useThrow } from '../../../context/ThrowContext';
@@ -75,9 +75,11 @@ function setupMocks(inbox: ReturnType<typeof letter>[], friends = [FRIEND_A, FRI
 }
 
 async function renderScreen(props: Partial<React.ComponentProps<typeof ThrowReceivedLettersScreen>> = {}) {
+  const onReply = jest.fn();
   await act(async () => {
-    renderWithSafeArea(<ThrowReceivedLettersScreen {...props} />);
+    renderWithSafeArea(<ThrowReceivedLettersScreen onReply={onReply} {...props} />);
   });
+  return { onReply };
 }
 
 describe('ThrowReceivedLettersScreen', () => {
@@ -108,6 +110,7 @@ describe('ThrowReceivedLettersScreen', () => {
     // Both the contacts row and the open letter card show the selected contact's name — just
     // confirms it rendered at all, not which element specifically.
     expect(screen.getAllByText('Dhaval').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Reply')).toBeTruthy();
   });
 
   it('preselects a specific contact when initialContactId is given, even with no unread letters', async () => {
@@ -122,5 +125,23 @@ describe('ThrowReceivedLettersScreen', () => {
     });
 
     expect(screen.getAllByText('Priya').length).toBeGreaterThan(0);
+  });
+
+  it('Reply calls onReply with the contact and letter id once the fold-away/fly-out finishes', async () => {
+    setupMocks([letter({ id: 'l1', counterpartId: FRIEND_A.userId, createdAt: new Date().toISOString(), status: 'thrown' })]);
+    const { onReply } = await renderScreen({ initialContactId: FRIEND_A.userId });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 650));
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Reply'));
+      // reply() drives its own 620ms/1150ms timers (fold-away then fly-to-corner) before calling
+      // onReply — reduceMotion only short-circuits the arrival flight, not this exit sequence.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    });
+
+    expect(onReply).toHaveBeenCalledWith(FRIEND_A.userId, 'l1');
   });
 });
