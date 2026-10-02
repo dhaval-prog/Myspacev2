@@ -42,7 +42,11 @@ function letterTargetFor(stage: LetterStageV3): LetterTarget {
   // matching `transformOrigin` the resulting box still runs well past the envelope's own bottom
   // edge, showing as a second, disconnected panel poking out below it). Shrunk enough, with the
   // right translate, to land entirely within the envelope's own bounds instead.
-  if (inEnv) return { x: 0, y: 95, scale: 0.6, rotate: 0, opacity: stage === 'flap' ? 1 : 0, durMs: 0, easing: Easing.linear, opDurMs: 0, opDelayMs: 0 };
+  // Opacity stays 0 through every tucked stage, including 'flap' — the pocket's own notch cutout
+  // (added after this opacity:1-at-flap exception was written) lets whatever sits behind it at that
+  // exact spot show through, so a fully-opaque, already-positioned letter pokes up through the gap
+  // the instant the flap opens, well before it's meant to become visible at 'rise'.
+  if (inEnv) return { x: 0, y: 95, scale: 0.6, rotate: 0, opacity: 0, durMs: 0, easing: Easing.linear, opDurMs: 0, opDelayMs: 0 };
   if (stage === 'rise') return { x: 0, y: -26, scale: 0.86, rotate: 0, opacity: 1, durMs: 600, easing: EASE_RISE, opDurMs: 0, opDelayMs: 0 };
   if (stage === 'shrink') return { x: 0, y: 260, scale: 0.25, rotate: 10, opacity: 0, durMs: 340, easing: EASE_SHRINK, opDurMs: 300, opDelayMs: 50 };
   if (stage === 'trash') return { x: 0, y: 360, scale: 0.12, rotate: 16, opacity: 0, durMs: 500, easing: EASE_SHRINK, opDurMs: 350, opDelayMs: 150 };
