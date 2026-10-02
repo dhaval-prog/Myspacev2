@@ -108,6 +108,10 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
   const botFrontOpacity = useRef(new Animated.Value(0)).current;
   const botBackOpacity = useRef(new Animated.Value(1)).current;
   const botShade = useRef(new Animated.Value(0.3)).current;
+  // The top half (header/alert/body) stays hidden until the unfold reveal — only the rising
+  // back-face card should be visible beforehand (confirmed against the design reference: no top
+  // header shows while the letter is still just rising/settling in front of the envelope).
+  const topOpacity = useRef(new Animated.Value(0)).current;
   // Drives the top-half/bottom-front faces' own box-shadow — folded→open, .4s, not native-driver
   // safe (shadow* isn't a transform/opacity property), same JS-driven fallback this codebase
   // already takes for everything else RN's native driver can't animate.
@@ -166,6 +170,7 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
     }
     runTiming(botShade, unfolded ? 0 : 0.3, 500, Easing.linear);
     runTiming(foldT, unfolded ? 1 : 0, 400, Easing.linear);
+    runTiming(topOpacity, unfolded ? 1 : 0, inEnv ? 0 : 600, EASE_UNFOLD);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
 
@@ -253,7 +258,7 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
         {/* Shadow lives on this outer, non-clipping wrapper — a view with `overflow:'hidden'`
             (needed below to crop the shared ruled/body content to just this half) also clips its
             own native shadow on iOS, so the shadow and the clip can't live on the same node. */}
-        <Animated.View style={[{ width: w, height: halfH, shadowColor: '#000000' }, topShadowStyle]}>
+        <Animated.View style={[{ width: w, height: halfH, shadowColor: '#000000', opacity: topOpacity }, topShadowStyle]}>
           <View style={[styles.topHalf, { width: w, height: halfH, borderTopLeftRadius: s(22, scale), borderTopRightRadius: s(22, scale) }]}>
             <View style={{ position: 'absolute', left: 0, top: 0, width: w, height: h }}>
               <RuledLines scale={scale} h={h} />
@@ -364,7 +369,12 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
             transform: [{ perspective: s(800, scale) }, { rotateX: flapRotateX.interpolate({ inputRange: [0, 180], outputRange: ['0deg', '180deg'] }) }],
           }}
         >
-          <EnvelopeFlap scale={scale} />
+          {/* The wax seal is glued to the flap's own front face, so it should vanish once the flap
+              rotates past 90° — CSS `backface-visibility:hidden` is how the handoff does this, but
+              RN Web doesn't compose that correctly through this nested, non-`preserve-3d` 3D setup
+              (the same underlying gap `botBack`'s own opacity-gating works around elsewhere in this
+              file), so it's driven as a hard opacity cutoff off the flap's own rotation value instead. */}
+          <EnvelopeFlap scale={scale} sealOpacity={flapRotateX.interpolate({ inputRange: [0, 89, 90, 180], outputRange: [1, 1, 0, 0] })} />
         </Animated.View>
       </Animated.View>
     </View>
@@ -430,14 +440,14 @@ function EnvelopePocket({ scale, fromName, place }: { scale: number; fromName: s
   );
 }
 
-function EnvelopeFlap({ scale }: { scale: number }) {
+function EnvelopeFlap({ scale, sealOpacity }: { scale: number; sealOpacity: Animated.AnimatedInterpolation<string | number> }) {
   const w = s(v3Layout.envelope.w, scale);
   const h = s(v3Layout.envelope.flapH, scale);
   const seal = s(v3Layout.envelope.seal, scale);
   return (
     <View style={{ width: w, height: h }}>
       <TriangleFlap scale={scale} w={w} h={h} />
-      <View
+      <Animated.View
         style={[
           styles.seal,
           {
@@ -449,6 +459,7 @@ function EnvelopeFlap({ scale }: { scale: number }) {
             shadowOffset: { width: 0, height: s(3, scale) },
             shadowRadius: s(8, scale),
             shadowOpacity: 0.4,
+            opacity: sealOpacity,
           },
         ]}
       >
@@ -456,7 +467,7 @@ function EnvelopeFlap({ scale }: { scale: number }) {
             inner border instead, same "draw the real thing" approach used elsewhere in this file. */}
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: seal / 2, borderWidth: s(3, scale), borderColor: 'rgba(255,255,255,0.18)' }]} />
         <LetterPlaneGlyph size={s(20, scale)} variant="active" tiltDeg={-14} />
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -655,5 +666,5 @@ const styles = StyleSheet.create({
   alertPill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' },
   body: { fontFamily: v3Font.hand, color: v3Color.inkBlue },
   sig: { fontFamily: v3Font.hand600, color: v3Color.inkBlue },
-  seal: { position: 'absolute', backgroundColor: v3Color.accentBlue, alignItems: 'center', justifyContent: 'center', shadowColor: v3Color.accentBlue },
+  seal: { position: 'absolute', backgroundColor: v3Color.accentBlue, alignItems: 'center', justifyContent: 'center', shadowColor: v3Color.accentBlue, backfaceVisibility: 'hidden' },
 });
