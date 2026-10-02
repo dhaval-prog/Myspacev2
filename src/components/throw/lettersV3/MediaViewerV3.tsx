@@ -56,14 +56,16 @@ export function MediaViewerV3({ visible, contactName, dateShort, place, photoUrl
 
   const opacity = useRef(new Animated.Value(0)).current;
   const stageScale = useRef(new Animated.Value(0.92)).current;
+  const dragY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(opacity, { toValue: visible ? 1 : 0, duration: 300, easing: Easing.linear, useNativeDriver: true }).start();
     Animated.timing(stageScale, { toValue: visible ? 1 : 0.92, duration: 400, easing: Easing.bezier(0.3, 1.2, 0.5, 1), useNativeDriver: true }).start();
-    if (visible) {
-      setIndex(0);
-      setPlaying(false);
-    }
+    // Pauses the video both on open (reset to the first item) and on close — the overlay only
+    // fades out rather than unmounting, so a playing video would otherwise keep running (and its
+    // audio keeps playing) behind the closed viewer.
+    if (visible) setIndex(0);
+    setPlaying(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
@@ -89,13 +91,43 @@ export function MediaViewerV3({ visible, contactName, dateShort, place, photoUrl
     [index, photoUrls.length],
   );
 
+  // Swipe-down-to-close — independent of the stage's own horizontal swipe above (a vertical drag
+  // anywhere in the overlay, not just on the stage), dragging the whole view down with it and
+  // springing back if released short of the threshold.
+  const closePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_e, g) => g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+        onPanResponderMove: (_e, g) => {
+          if (g.dy > 0) dragY.setValue(g.dy);
+        },
+        onPanResponderRelease: (_e, g) => {
+          if (g.dy > 120 || g.vy > 1.2) {
+            onClose();
+          }
+          Animated.timing(dragY, { toValue: 0, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+        },
+        onPanResponderTerminate: () => {
+          Animated.timing(dragY, { toValue: 0, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [onClose],
+  );
+  const dragOpacity = dragY.interpolate({ inputRange: [0, 250], outputRange: [1, 0.4], extrapolate: 'clamp' });
+
   const url = photoUrls[index];
   const isVideo = url ? isVideoUrl(url) : false;
   const w = s(390 - v3Layout.mediaViewer.stageX * 2, scale);
   const h = s(v3Layout.mediaViewer.stageH, scale);
 
   return (
-    <Animated.View pointerEvents={visible ? 'auto' : 'none'} style={[styles.overlay, { opacity }]}>
+    <Animated.View
+      pointerEvents={visible ? 'auto' : 'none'}
+      style={[styles.overlay, { opacity: Animated.multiply(opacity, dragOpacity), transform: [{ translateY: dragY }] }]}
+      {...closePanResponder.panHandlers}
+    >
       <View style={[styles.header, { top: s(v3Layout.mediaViewer.header, scale), left: s(18, scale), right: s(18, scale), height: s(44, scale) }]}>
         <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={[styles.closeBtn, { width: s(44, scale), height: s(44, scale), borderRadius: s(22, scale) }]}>
           <Icon path={CLOSE_ICON} size={s(18, scale)} color="#FFFFFF" strokeWidth={2.4} />
@@ -171,6 +203,8 @@ export function MediaViewerV3({ visible, contactName, dateShort, place, photoUrl
         {photoUrls.map((u, i) => {
           const active = i === index;
           const video = isVideoUrl(u);
+          const trim = photoTrims[i];
+          const videoLabel = video && trim ? formatClockMs(trim.endMs - trim.startMs) : '';
           return (
             <Pressable
               key={`${u}-${i}`}
@@ -184,7 +218,7 @@ export function MediaViewerV3({ visible, contactName, dateShort, place, photoUrl
               ]}
             >
               {video ? <PlayTriangle size={s(18, scale)} color="#FFFFFF" /> : <Icon path={IMAGE_ICON} size={s(18, scale)} color="#FFFFFF" strokeWidth={2} />}
-              <Text style={[styles.mono, { fontSize: s(9, scale), color: 'rgba(255,255,255,.7)', marginTop: 2 }]}>{video ? '' : `0${i + 1}`}</Text>
+              <Text style={[styles.mono, { fontSize: s(9, scale), color: 'rgba(255,255,255,.7)', marginTop: 2 }]}>{video ? videoLabel : `0${i + 1}`}</Text>
             </Pressable>
           );
         })}
