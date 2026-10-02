@@ -183,7 +183,13 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
   );
 
   const inEnvNow = stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed' || stage === 'flap';
-  const letterZ = inEnvNow || stage === 'rise' ? 2 : 6;
+  // The pocket's own notch cutout (added after this 'rise' exception was written) lets whatever
+  // sits behind it show through — keeping the letter at the same low z-index it uses while still
+  // tucked inside the envelope let the rising letter's own striped back-face edge peek through that
+  // notch as a stray "ghost" triangle. The letter needs to be in front of the pocket from the
+  // moment it starts rising, matching this file's own "sitting above the inside panel but below
+  // the letter once it rises past it" description of the pocket layer below.
+  const letterZ = inEnvNow ? 2 : 6;
   const flapOpenNow = !(stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed');
   const flapZ = flapOpenNow ? 0 : 4;
 
