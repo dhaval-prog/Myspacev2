@@ -1,13 +1,15 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
-import Svg, { ClipPath, Defs, G, LinearGradient, Path, Polygon, Rect, Stop } from 'react-native-svg';
+import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, ClipPath, Defs, G, LinearGradient, Path, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
+import * as Haptics from 'expo-haptics';
 import { Icon } from '../../Icon';
-import { LetterPlaneGlyph } from '../inbox/LetterPlaneGlyph';
 import { v3Color, v3Font, v3Layout, v3Radius } from '../../../theme/throwLettersV3Tokens';
 import type { LetterStageV3, V3LetterCardData } from '../../../hooks/useLettersArrivalV3';
 
 const BELL_ICON = 'M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15z M10 20.5a2 2 0 0 0 4 0';
 const PAPERCLIP_ICON = 'M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8';
+const PLANE_ICON_PATH = 'M4 30 L60 8 L38 58 L30 36 Z';
+const PLANE_ICON_SHADE = 'M30 36 L60 8 L22 40 Z';
 
 // react-native-svg's web typings omit `children` on Defs (a typing gap, not a runtime issue,
 // already worked around the same way in NpatGlassBackdrop) — cast once.
@@ -17,11 +19,44 @@ const s = (n: number, scale: number) => n * scale;
 
 const EASE_ENV_IN = Easing.bezier(0.3, 1.5, 0.5, 1);
 const EASE_ENV_OUT = Easing.bezier(0.5, 0, 0.8, 0.4);
-const EASE_RISE = Easing.bezier(0.3, 1.2, 0.5, 1);
+// Ported verbatim from assets/tokens.json's own `easing.rise` (the wax-seal handoff's own curve).
+const EASE_RISE = Easing.bezier(0.3, 1.3, 0.5, 1);
 const EASE_DEFAULT = Easing.bezier(0.3, 1.25, 0.5, 1);
 const EASE_SHRINK = Easing.bezier(0.5, 0, 0.8, 0.4);
 const EASE_FLAP = Easing.bezier(0.4, 0, 0.2, 1);
 const EASE_UNFOLD = Easing.bezier(0.55, 0, 0.25, 1);
+// The wax-seal handoff's own `easing.seal` / `easing.grow` — the seal-crack transform and the
+// letter's own folded→open height growth each use a curve distinct from everything above.
+const EASE_SEAL = Easing.bezier(0.5, 0, 0.8, 0.5);
+const EASE_GROW = Easing.bezier(0.3, 1.1, 0.5, 1);
+const EASE_OUT_QUAD = Easing.out(Easing.quad);
+
+/** The wax-seal handoff's own geometry (`assets/tokens.json`'s 300×400 reference stage) ported as
+ * ratios of this screen's own envelope/letter box — see `v3Layout.envelope`/`v3Layout.letter` —
+ * rather than as literal pixels, since this screen's card is a different size than that stage.
+ * Envelope-anchored numbers (the seal's crack distance, the flap height, how far the envelope
+ * falls away) scale with this screen's own envelope height; the letter's own folded-window height
+ * scales with this screen's own letter height. */
+const WAX_RATIO_ENV = v3Layout.envelope.h / 150;
+const WAX_RATIO_ENV_W = v3Layout.envelope.w / 240;
+const WAX_RATIO_LETTER = v3Layout.letter.h / 250;
+const WAX_SEAL_CRACK_DX = 34 * WAX_RATIO_ENV_W;
+const WAX_SEAL_CRACK_DY = 90 * WAX_RATIO_ENV;
+const WAX_SEAL_CRACK_ROT = 50;
+const WAX_FLASH_SIZE = 60 * WAX_RATIO_ENV;
+// Reference seal/flash positions (132,266 / 120,254) expressed relative to the envelope's own
+// top-left (30,200) — the offset within the envelope box this screen's own pocket/flap already
+// use, scaled per-axis onto this screen's own (differently-proportioned) envelope box.
+const WAX_SEAL_REL_X = (132 - 30) * WAX_RATIO_ENV_W;
+const WAX_SEAL_REL_Y = (266 - 200) * WAX_RATIO_ENV;
+const WAX_FLASH_REL_X = (120 - 30) * WAX_RATIO_ENV_W;
+const WAX_FLASH_REL_Y = (254 - 200) * WAX_RATIO_ENV;
+const WAX_FOLDED_LETTER_H = 130 * WAX_RATIO_LETTER;
+const WAX_ENV_DROP_Y = 260 * WAX_RATIO_ENV;
+// The reference's own phase4→phase5 letter rise is continuous (translateY -120 then -140 — i.e.
+// still rising, not an overshoot-and-settle-back) — expressed here as how far below its own final
+// rest spot the letter sits mid-rise, in the letter's own ratio.
+const WAX_RISE_Y = 20 * WAX_RATIO_LETTER;
 
 interface LetterTarget {
   x: number;
@@ -36,21 +71,23 @@ interface LetterTarget {
 }
 
 function letterTargetFor(stage: LetterStageV3): LetterTarget {
-  const inEnv = stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed' || stage === 'flap';
-  // Tucked inside the envelope's own 190-tall window (not the handoff's literal translateY(130)/
-  // scale(.8) — those numbers assume CSS's `transform-origin:50% 0`, and even with this card's own
-  // matching `transformOrigin` the resulting box still runs well past the envelope's own bottom
-  // edge, showing as a second, disconnected panel poking out below it). Shrunk enough, with the
-  // right translate, to land entirely within the envelope's own bounds instead.
-  // Opacity stays 0 through every tucked stage, including 'flap' — the pocket's own notch cutout
-  // (added after this opacity:1-at-flap exception was written) lets whatever sits behind it at that
-  // exact spot show through, so a fully-opaque, already-positioned letter pokes up through the gap
-  // the instant the flap opens, well before it's meant to become visible at 'rise'.
-  if (inEnv) return { x: 0, y: 95, scale: 0.6, rotate: 0, opacity: 0, durMs: 0, easing: Easing.linear, opDurMs: 0, opDelayMs: 0 };
-  if (stage === 'rise') return { x: 0, y: -26, scale: 0.86, rotate: 0, opacity: 1, durMs: 600, easing: EASE_RISE, opDurMs: 0, opDelayMs: 0 };
+  // The wax-seal handoff never hides the letter via opacity at all — a closed/still-tucked letter
+  // is hidden purely by sitting behind the opaque flap/pocket at a lower z-index (see `letterZ`
+  // below), the same mechanism that deliberately lets its header peek through the pocket's own
+  // notch for a beat once the flap has opened but before the letter has risen (confirmed against
+  // the reference itself — not a bug to hide, the actual designed look of that moment).
+  const stillTucked = stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed' || stage === 'crack' || stage === 'flap' || stage === 'flapBehind';
+  if (stillTucked) return { x: 0, y: 95, scale: 0.94, rotate: 0, opacity: 1, durMs: 0, easing: Easing.linear, opDurMs: 0, opDelayMs: 0 };
+  // 'rise' (phase 4): the letter lifts out from behind the envelope at its folded height, still a
+  // little short of its own final resting spot (continues rising into 'settle' below) — ported
+  // from the handoff's own phase4→phase5 translateY(-120)→(-140) relationship.
+  if (stage === 'rise') return { x: 0, y: WAX_RISE_Y, scale: 0.94, rotate: 0, opacity: 1, durMs: 600, easing: EASE_RISE, opDurMs: 0, opDelayMs: 0 };
   if (stage === 'shrink') return { x: 0, y: 260, scale: 0.25, rotate: 10, opacity: 0, durMs: 340, easing: EASE_SHRINK, opDurMs: 300, opDelayMs: 50 };
   if (stage === 'trash') return { x: 0, y: 360, scale: 0.12, rotate: 16, opacity: 0, durMs: 500, easing: EASE_SHRINK, opDurMs: 350, opDelayMs: 150 };
   if (stage === 'replyFly') return { x: 150, y: -330, scale: 0.18, rotate: -24, opacity: 0, durMs: 500, easing: Easing.bezier(0.5, 0, 0.75, 0.3), opDurMs: 300, opDelayMs: 200 };
+  // 'settle' (phase 5, envelope falls away + letter grows to full size) and 'open' (at rest,
+  // interactive) share this same final resting target — `EASE_DEFAULT` already matches the
+  // handoff's own `easing.rest` (cubic-bezier(.3,1.25,.5,1)) exactly.
   return { x: 0, y: 0, scale: 1, rotate: 0, opacity: 1, durMs: 500, easing: EASE_DEFAULT, opDurMs: 300, opDelayMs: 0 };
 }
 
@@ -65,10 +102,21 @@ interface EnvTarget {
 }
 
 function envTargetFor(stage: LetterStageV3): EnvTarget {
+  // Pre-landing (the plane still flying in) keeps this screen's own scale-up-from-nothing arrival
+  // effect — the wax-seal handoff's own loop starts already-landed/closed, so it has nothing to
+  // say about this part; untouched by this port.
   if (stage === 'hidden' || stage === 'flying' || stage === 'empty') return { y: 0, scale: 0.3, rotate: -24, opacity: 0, durMs: 0, opDurMs: 0, opDelayMs: 0 };
-  if (stage === 'landed' || stage === 'flap' || stage === 'rise') return { y: 0, scale: 1, rotate: -2, opacity: 1, durMs: 500, opDurMs: 200, opDelayMs: 0 };
-  if (stage === 'drop') return { y: 240, scale: 0.9, rotate: 6, opacity: 0, durMs: 500, opDurMs: 350, opDelayMs: 120 };
-  return { y: 240, scale: 0.9, rotate: 6, opacity: 0, durMs: 0, opDurMs: 0, opDelayMs: 0 };
+  // Landed through 'rise': the envelope itself never moves — only the flap/seal animate — so it
+  // just holds at rest. The handoff's own `.env` never rotates or scales at all; dropping the
+  // earlier -2° resting tilt to match it exactly.
+  if (stage === 'landed' || stage === 'crack' || stage === 'flap' || stage === 'flapBehind' || stage === 'rise') {
+    return { y: 0, scale: 1, rotate: 0, opacity: 1, durMs: 500, opDurMs: 200, opDelayMs: 0 };
+  }
+  // 'settle' (phase 5): the envelope falls away and fades — ported timing/easing from the
+  // handoff's own `easing.drop` (`.55s cubic-bezier(.5,0,.8,.4)` transform, `.35s ease .15s`
+  // opacity) exactly; `EASE_ENV_OUT` below already matches that curve.
+  if (stage === 'settle') return { y: WAX_ENV_DROP_Y, scale: 1, rotate: 0, opacity: 0, durMs: 550, opDurMs: 350, opDelayMs: 150 };
+  return { y: WAX_ENV_DROP_Y, scale: 1, rotate: 0, opacity: 0, durMs: 0, opDurMs: 0, opDelayMs: 0 };
 }
 
 function runTiming(v: Animated.Value, toValue: number, durMs: number, easing: (t: number) => number, delayMs = 0) {
@@ -80,13 +128,15 @@ function runTiming(v: Animated.Value, toValue: number, durMs: number, easing: (t
 }
 
 /**
- * The envelope → flap-opens → letter-rises-and-drops → unfolds sequence — ported stage-for-stage
- * from the design handoff's own `renderVals()` (`envT`/`letterT`/`flapT`/`botT` and their own
- * transition strings), using one `Animated.Value` per CSS property it drives and `Animated.timing`
- * calls that match each transition's own duration/easing/delay exactly, the same "snap to a target
- * whenever the stage prop changes" convention LetterFoldCard's own tri-fold uses for the in-place
- * panel. `stage==='open'` additionally exposes nothing extra here — ActionRowV3/ChipsRowV3 (siblings,
- * not children) derive their own visibility from the same `stage` prop independently.
+ * The wax-seal envelope → flap-opens → letter-rises → envelope-drops sequence — ported stage-for-
+ * stage from the `wax-seal-envelope.html` handoff's own `TIMELINE`/phase CSS rules, using one
+ * `Animated.Value` per CSS property it drives and `Animated.timing` calls that match each
+ * transition's own duration/easing/delay exactly, the same "snap to a target whenever the stage
+ * prop changes" convention LetterFoldCard's own tri-fold uses for the in-place panel. The letter's
+ * own closing exit (Reply/switch-letter/delete) still uses this file's older flip-to-back-face
+ * illusion, untouched by this port — the handoff only covers how a letter arrives, not how it
+ * closes. `stage==='open'` additionally exposes nothing extra here — ActionRowV3/ChipsRowV3
+ * (siblings, not children) derive their own visibility from the same `stage` prop independently.
  */
 export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { stage: LetterStageV3; letter: V3LetterCardData | null; isEmpty: boolean; emptyName: string; scale: number }) {
   const w = s(v3Layout.letter.w, scale);
@@ -105,18 +155,31 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
   const envOpacity = useRef(new Animated.Value(0)).current;
 
   const flapRotateX = useRef(new Animated.Value(0)).current;
-  const botRotateX = useRef(new Animated.Value(180)).current;
-  const botFrontOpacity = useRef(new Animated.Value(0)).current;
-  const botBackOpacity = useRef(new Animated.Value(1)).current;
-  const botShade = useRef(new Animated.Value(0.3)).current;
-  // The top half (header/alert/body) stays hidden until the unfold reveal — only the rising
-  // back-face card should be visible beforehand (confirmed against the design reference: no top
-  // header shows while the letter is still just rising/settling in front of the envelope).
-  const topOpacity = useRef(new Animated.Value(0)).current;
+  const botRotateX = useRef(new Animated.Value(0)).current;
+  const botFrontOpacity = useRef(new Animated.Value(1)).current;
+  const botBackOpacity = useRef(new Animated.Value(0)).current;
+  const botShade = useRef(new Animated.Value(0)).current;
+  // The wax-seal arrival never hides the header — it's only ever hidden by this component's own
+  // "folding" exit (Reply/switch-letter/delete), so this starts visible rather than hidden.
+  const topOpacity = useRef(new Animated.Value(1)).current;
   // Drives the top-half/bottom-front faces' own box-shadow — folded→open, .4s, not native-driver
   // safe (shadow* isn't a transform/opacity property), same JS-driven fallback this codebase
   // already takes for everything else RN's native driver can't animate.
-  const foldT = useRef(new Animated.Value(0)).current;
+  const foldT = useRef(new Animated.Value(1)).current;
+  // The letter's own visible "window" height — folded (header + a line or two of body) while
+  // still tucked/rising, growing to the full card height once the envelope falls away. Ported
+  // from the handoff's own `.letter{height:130px→250px}` — unlike the old two-face flip this
+  // replaces, the wax-seal design never hides the letter's real content behind a blank back face;
+  // it's simply cropped shorter, so whatever's visible through the crop is always the real thing.
+  const letterWindowH = useRef(new Animated.Value(s(WAX_FOLDED_LETTER_H, scale))).current;
+  // Seal-crack progress (0 closed → 1 cracked apart) and its own, slightly-lagged opacity fade —
+  // ported from the handoff's own two separate transitions (`transform .6s …`, `opacity .35s ease
+  // .25s`) rather than one, so the halves visibly start sliding apart a beat before they fade.
+  const sealCrackT = useRef(new Animated.Value(0)).current;
+  const sealOpacityT = useRef(new Animated.Value(1)).current;
+  // The blue bloom behind the cracking seal — scale/opacity share one driver since the handoff's
+  // own CSS animates both over the same .4s on the way in AND the way back out.
+  const flashT = useRef(new Animated.Value(0)).current;
 
   // A plain `Animated.timing({duration:0, delay})` is NOT reliable for "snap to a value after a
   // delay" on web (the zero-duration animation can resolve before its own delay elapses) — ported
@@ -138,40 +201,63 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
     runTiming(letterOpacity, lt.opacity, lt.opDurMs, Easing.linear, lt.opDelayMs);
 
     const et = envTargetFor(stage);
-    runTiming(envY, s(et.y, scale), et.durMs, EASE_ENV_IN);
-    runTiming(envScale, et.scale, et.durMs, EASE_ENV_IN);
-    runTiming(envRotate, et.rotate, et.durMs, EASE_ENV_IN);
+    // Same stage groups `envTargetFor` itself branches on — "arriving"/"at rest" use the arriving
+    // curve, "falling away" (settle, and everything after it) uses the handoff's own falling one.
+    const notYetLanded = stage === 'hidden' || stage === 'flying' || stage === 'empty';
+    const atRest = stage === 'landed' || stage === 'crack' || stage === 'flap' || stage === 'flapBehind' || stage === 'rise';
+    const envEase = notYetLanded || atRest ? EASE_ENV_IN : EASE_ENV_OUT;
+    runTiming(envY, s(et.y, scale), et.durMs, envEase);
+    runTiming(envScale, et.scale, et.durMs, envEase);
+    runTiming(envRotate, et.rotate, et.durMs, envEase);
     runTiming(envOpacity, et.opacity, et.opDurMs, Easing.linear, et.opDelayMs);
-    // The 'drop' stage is the one case where the envelope's own fall-away transform uses the
-    // "falling" easing instead of the "arriving" one — matches the handoff's own envTr swap.
-    if (stage === 'drop') {
-      runTiming(envY, s(et.y, scale), et.durMs, EASE_ENV_OUT);
-      runTiming(envScale, et.scale, et.durMs, EASE_ENV_OUT);
-      runTiming(envRotate, et.rotate, et.durMs, EASE_ENV_OUT);
+
+    // The flap stays shut through 'crack' (the seal has to crack open first) and only starts its
+    // own 500ms rotation on entering 'flap' — then holds open for every stage after.
+    const flapOpenNow = stage === 'flap' || stage === 'flapBehind' || stage === 'rise' || stage === 'settle' || stage === 'open';
+    runTiming(flapRotateX, flapOpenNow ? 178 : 0, 500, EASE_FLAP);
+
+    // The seal cracks open exactly once, on entering 'crack', and stays cracked for every stage
+    // after (closing the whole screen resets through 'hidden'/'flying', which snap it back shut
+    // instantly rather than animating it closed again).
+    const sealCracked = stage !== 'hidden' && stage !== 'flying' && stage !== 'empty' && stage !== 'landed';
+    runTiming(sealCrackT, sealCracked ? 1 : 0, stage === 'crack' ? 600 : 0, EASE_SEAL);
+    runTiming(sealOpacityT, sealCracked ? 0 : 1, stage === 'crack' ? 350 : 0, Easing.linear, stage === 'crack' ? 250 : 0);
+    if (stage === 'crack' && Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
+    // The flash blooms in as the seal cracks, then fades straight back out the moment the flap
+    // starts opening — the handoff's own CSS rule for the flash only ever applies at phase 1.
+    runTiming(flashT, stage === 'crack' ? 1 : 0, 400, EASE_OUT_QUAD);
 
-    const flapOpen = !(stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed');
-    runTiming(flapRotateX, flapOpen ? 178 : 0, flapOpen ? 500 : 0, EASE_FLAP);
+    // The letter's own crop window: folded height while still tucked/rising, growing to the full
+    // card height only at 'settle' (the handoff's own phase 5) — everywhere else just snaps,
+    // including the closing stages, which were already full height coming from 'open'.
+    const stillFolded = stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed' || stage === 'crack' || stage === 'flap' || stage === 'flapBehind' || stage === 'rise';
+    runTiming(letterWindowH, s(stillFolded ? WAX_FOLDED_LETTER_H : v3Layout.letter.h, scale), stage === 'settle' ? 550 : 0, EASE_GROW);
 
-    const inEnv = stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed' || stage === 'flap';
-    const unfolded = stage === 'unfold' || stage === 'open';
-    runTiming(botRotateX, unfolded ? 0 : 180, inEnv ? 0 : 600, EASE_UNFOLD);
-    // The two faces swap instantly, timed to land halfway through the 600ms unfold (300ms) — same
-    // `transition: opacity 0s linear 300ms` trick the handoff uses instead of a true cross-fade, so
-    // neither face is ever visibly see-through mid-flip. `later()` (not `runTiming`'s own delay —
-    // see its own doc comment) so the delay is actually honored.
-    if (inEnv) {
+    // This screen's own closing exit (Reply / switch-letter / delete) is the one case that still
+    // uses the old flip-to-back-face illusion — untouched by this port, since the wax-seal handoff
+    // has nothing to say about how a letter closes, only how it arrives.
+    const closingNow = stage === 'folding' || stage === 'shrink' || stage === 'trash' || stage === 'replyFly';
+    const unfolded = !closingNow;
+    runTiming(botRotateX, unfolded ? 0 : 180, stage === 'folding' ? 600 : 0, EASE_UNFOLD);
+    // The two faces swap instantly unless we're actually mid-flip (entering 'folding'), where it's
+    // timed to land halfway through that 600ms rotation — same `transition: opacity 0s linear
+    // 300ms` trick the handoff uses instead of a true cross-fade, so neither face is ever visibly
+    // see-through mid-flip. `later()` (not `runTiming`'s own delay — see its own doc comment) so
+    // the delay is actually honored.
+    if (stage === 'folding') {
+      later(() => {
+        botFrontOpacity.setValue(0);
+        botBackOpacity.setValue(1);
+      }, 300);
+    } else {
       botFrontOpacity.setValue(unfolded ? 1 : 0);
       botBackOpacity.setValue(unfolded ? 0 : 1);
-    } else {
-      later(() => {
-        botFrontOpacity.setValue(unfolded ? 1 : 0);
-        botBackOpacity.setValue(unfolded ? 0 : 1);
-      }, 300);
     }
     runTiming(botShade, unfolded ? 0 : 0.3, 500, Easing.linear);
     runTiming(foldT, unfolded ? 1 : 0, 400, Easing.linear);
-    runTiming(topOpacity, unfolded ? 1 : 0, inEnv ? 0 : 600, EASE_UNFOLD);
+    runTiming(topOpacity, unfolded ? 1 : 0, stage === 'folding' ? 600 : 0, EASE_UNFOLD);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
 
@@ -182,16 +268,21 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
     [],
   );
 
-  const inEnvNow = stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed' || stage === 'flap';
-  // The pocket's own notch cutout (added after this 'rise' exception was written) lets whatever
-  // sits behind it show through — keeping the letter at the same low z-index it uses while still
-  // tucked inside the envelope let the rising letter's own striped back-face edge peek through that
-  // notch as a stray "ghost" triangle. The letter needs to be in front of the pocket from the
-  // moment it starts rising, matching this file's own "sitting above the inside panel but below
-  // the letter once it rises past it" description of the pocket layer below.
-  const letterZ = inEnvNow ? 2 : 6;
-  const flapOpenNow = !(stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed');
-  const flapZ = flapOpenNow ? 0 : 4;
+  // z-index exactly as the handoff's own tokens.json describes: the letter sits behind the pocket
+  // (z2 < z3) through every stage up to and including 'rise' — the pocket's notch cutout
+  // deliberately lets its header peek through there, the reference's own designed look, not a bug
+  // — and only jumps in front (z6) once the envelope has fallen away at 'settle'.
+  const letterZ = stage === 'settle' || stage === 'open' ? 6 : 2;
+  // The flap stays in front (z4, covering the pocket's own notch) until its own rotation finishes
+  // opening, then drops behind the letter (z0) for every stage after.
+  const flapZ = stage === 'flapBehind' || stage === 'rise' || stage === 'settle' || stage === 'open' ? 0 : 4;
+  // The letter's crop window only needs `overflow:'hidden'` while it's actually cropped shorter
+  // than its full height (or mid-grow, at 'settle') — switching to 'visible' everywhere else
+  // (including 'open' and every closing stage) so this wrapper never clips the top/bottom
+  // halves' own box-shadow once the letter is actually full height, matching this screen's
+  // already-shipped 'open' look exactly rather than the handoff's own same-node shadow trick
+  // (RN's shadow* props, unlike CSS box-shadow, ARE clipped by an ancestor's own overflow:hidden).
+  const letterCropping = stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed' || stage === 'crack' || stage === 'flap' || stage === 'flapBehind' || stage === 'rise' || stage === 'settle';
 
   const envStyle = {
     transform: [{ translateY: envY }, { scale: envScale }, { rotate: envRotate.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] }) }],
@@ -262,79 +353,86 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
           opacity: letterOpacity,
         }}
       >
-        {/* Shadow lives on this outer, non-clipping wrapper — a view with `overflow:'hidden'`
-            (needed below to crop the shared ruled/body content to just this half) also clips its
-            own native shadow on iOS, so the shadow and the clip can't live on the same node. */}
-        <Animated.View style={[{ width: w, height: halfH, shadowColor: '#000000', opacity: topOpacity }, topShadowStyle]}>
-          <View style={[styles.topHalf, { width: w, height: halfH, borderTopLeftRadius: s(22, scale), borderTopRightRadius: s(22, scale) }]}>
-            <View style={{ position: 'absolute', left: 0, top: 0, width: w, height: h }}>
-              <RuledLines scale={scale} h={h} />
-              <HeaderRow letter={L} scale={scale} />
-              <AlertPill letter={L} scale={scale} />
-              <BodyText body={L?.body ?? ''} scale={scale} />
+        {/* The wax-seal "crop window" — ported from the handoff's own `.letter{height:130px→
+            250px;overflow:hidden}`. Only actually clips while folded/rising/mid-grow (see
+            `letterCropping`'s own doc comment above for why it switches to 'visible' once full
+            height, rather than keeping overflow:hidden permanently the way the reference's own
+            single div does). */}
+        <Animated.View style={{ width: w, height: letterWindowH, overflow: letterCropping ? 'hidden' : 'visible' }}>
+          {/* Shadow lives on this outer, non-clipping wrapper — a view with `overflow:'hidden'`
+              (needed below to crop the shared ruled/body content to just this half) also clips its
+              own native shadow on iOS, so the shadow and the clip can't live on the same node. */}
+          <Animated.View style={[{ width: w, height: halfH, shadowColor: '#000000', opacity: topOpacity }, topShadowStyle]}>
+            <View style={[styles.topHalf, { width: w, height: halfH, borderTopLeftRadius: s(22, scale), borderTopRightRadius: s(22, scale) }]}>
+              <View style={{ position: 'absolute', left: 0, top: 0, width: w, height: h }}>
+                <RuledLines scale={scale} h={h} />
+                <HeaderRow letter={L} scale={scale} />
+                <AlertPill letter={L} scale={scale} />
+                <BodyText body={L?.body ?? ''} scale={scale} />
+              </View>
             </View>
+          </Animated.View>
+
+          <View style={{ position: 'absolute', left: 0, top: halfH, width: w, height: halfH }}>
+            <Animated.View
+              style={[
+                { position: 'absolute', width: w, height: halfH, shadowColor: '#000000', backfaceVisibility: 'hidden', opacity: botFrontOpacity },
+                botFrontShadowStyle,
+                { transform: [{ perspective: s(1400, scale) }, { rotateX: botRotateX.interpolate({ inputRange: [0, 180], outputRange: ['0deg', '180deg'] }) }] },
+              ]}
+            >
+              <View style={[styles.botFront, { width: w, height: halfH, borderBottomLeftRadius: s(22, scale), borderBottomRightRadius: s(22, scale) }]}>
+                <View style={{ position: 'absolute', left: 0, top: -halfH, width: w, height: h }}>
+                  <RuledLines scale={scale} h={h} />
+                  <HeaderRow letter={L} scale={scale} hidePostmark />
+                  {/* Reserves the same vertical space the top half's AlertPill actually occupies (height
+                      28 + marginTop 10), rather than rendering it again, so the body text lands at the
+                      identical y-offset in both halves and reads as one continuous block across the
+                      fold — matches the handoff's own blank spacer in this exact spot. */}
+                  {!!L?.alertSchedule && <View style={{ height: s(38, scale) }} />}
+                  <BodyText body={L?.body ?? ''} scale={scale} />
+                  <SignatureRow letter={L} scale={scale} />
+                </View>
+                <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: botShade }]} />
+              </View>
+            </Animated.View>
+            {/* The back face doesn't rotate at all — same reasoning as LetterFoldCard's own
+                `panelBack`: folding a rigid panel 180° about its own top edge lands it swung fully
+                onto the front face's own slot, so there's nothing left to animate into once it gets
+                there. Nesting a SECOND independent `rotateX` interpolation here (driven by the same
+                `botRotateX` value, offset 180° from the front face's own) relies on RN Web composing
+                two nested 3D transforms the way CSS's `transform-style:preserve-3d` would — it
+                doesn't (confirmed via screenshots: the back panel visibly bled through/overlapped
+                the front face's body text well into the 'unfold' stage) — so it's purely
+                opacity-gated instead, snapped via `later()` at the exact halfway point above. */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+                width: w,
+                height: halfH,
+                opacity: botBackOpacity,
+                shadowColor: '#000000',
+                shadowOffset: { width: 0, height: s(6, scale) },
+                shadowRadius: s(16, scale),
+                shadowOpacity: 0.12,
+              }}
+            >
+              <View style={[styles.botBack, { width: w, height: halfH, borderTopLeftRadius: s(22, scale), borderTopRightRadius: s(22, scale) }]}>
+                <AirmailStripes scale={scale} w={w} h={halfH} />
+                <View style={[styles.backPanel, { left: s(6, scale), right: s(6, scale), top: s(6, scale), borderTopLeftRadius: s(17, scale), borderTopRightRadius: s(17, scale), paddingHorizontal: s(20, scale) }]}>
+                  <View style={{ gap: s(3, scale) }}>
+                    <Text style={[styles.mono, { fontSize: s(10, scale), letterSpacing: 1.2 }]}>PAR AVION · TO</Text>
+                    <Text style={[styles.toName, { fontSize: s(20, scale) }]}>You</Text>
+                    <Text style={[styles.fromHand, { fontSize: s(20, scale) }]}>from {L?.from ?? ''}</Text>
+                  </View>
+                  <View style={[styles.postmark, { width: s(58, scale), height: s(58, scale), borderRadius: s(29, scale) }]}>
+                    <Text style={[styles.mono, styles.postmarkPlace, { fontSize: s(8, scale) }]}>{L?.place ?? ''}</Text>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
           </View>
         </Animated.View>
-
-        <View style={{ position: 'absolute', left: 0, top: halfH, width: w, height: halfH }}>
-          <Animated.View
-            style={[
-              { position: 'absolute', width: w, height: halfH, shadowColor: '#000000', backfaceVisibility: 'hidden', opacity: botFrontOpacity },
-              botFrontShadowStyle,
-              { transform: [{ perspective: s(1400, scale) }, { rotateX: botRotateX.interpolate({ inputRange: [0, 180], outputRange: ['0deg', '180deg'] }) }] },
-            ]}
-          >
-            <View style={[styles.botFront, { width: w, height: halfH, borderBottomLeftRadius: s(22, scale), borderBottomRightRadius: s(22, scale) }]}>
-              <View style={{ position: 'absolute', left: 0, top: -halfH, width: w, height: h }}>
-                <RuledLines scale={scale} h={h} />
-                <HeaderRow letter={L} scale={scale} hidePostmark />
-                {/* Reserves the same vertical space the top half's AlertPill actually occupies (height
-                    28 + marginTop 10), rather than rendering it again, so the body text lands at the
-                    identical y-offset in both halves and reads as one continuous block across the
-                    fold — matches the handoff's own blank spacer in this exact spot. */}
-                {!!L?.alertSchedule && <View style={{ height: s(38, scale) }} />}
-                <BodyText body={L?.body ?? ''} scale={scale} />
-                <SignatureRow letter={L} scale={scale} />
-              </View>
-              <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: botShade }]} />
-            </View>
-          </Animated.View>
-          {/* The back face doesn't rotate at all — same reasoning as LetterFoldCard's own
-              `panelBack`: folding a rigid panel 180° about its own top edge lands it swung fully
-              onto the front face's own slot, so there's nothing left to animate into once it gets
-              there. Nesting a SECOND independent `rotateX` interpolation here (driven by the same
-              `botRotateX` value, offset 180° from the front face's own) relies on RN Web composing
-              two nested 3D transforms the way CSS's `transform-style:preserve-3d` would — it
-              doesn't (confirmed via screenshots: the back panel visibly bled through/overlapped
-              the front face's body text well into the 'unfold' stage) — so it's purely
-              opacity-gated instead, snapped via `later()` at the exact halfway point above. */}
-          <Animated.View
-            style={{
-              position: 'absolute',
-              width: w,
-              height: halfH,
-              opacity: botBackOpacity,
-              shadowColor: '#000000',
-              shadowOffset: { width: 0, height: s(6, scale) },
-              shadowRadius: s(16, scale),
-              shadowOpacity: 0.12,
-            }}
-          >
-            <View style={[styles.botBack, { width: w, height: halfH, borderTopLeftRadius: s(22, scale), borderTopRightRadius: s(22, scale) }]}>
-              <AirmailStripes scale={scale} w={w} h={halfH} />
-              <View style={[styles.backPanel, { left: s(6, scale), right: s(6, scale), top: s(6, scale), borderTopLeftRadius: s(17, scale), borderTopRightRadius: s(17, scale), paddingHorizontal: s(20, scale) }]}>
-                <View style={{ gap: s(3, scale) }}>
-                  <Text style={[styles.mono, { fontSize: s(10, scale), letterSpacing: 1.2 }]}>PAR AVION · TO</Text>
-                  <Text style={[styles.toName, { fontSize: s(20, scale) }]}>You</Text>
-                  <Text style={[styles.fromHand, { fontSize: s(20, scale) }]}>from {L?.from ?? ''}</Text>
-                </View>
-                <View style={[styles.postmark, { width: s(58, scale), height: s(58, scale), borderRadius: s(29, scale) }]}>
-                  <Text style={[styles.mono, styles.postmarkPlace, { fontSize: s(8, scale) }]}>{L?.place ?? ''}</Text>
-                </View>
-              </View>
-            </View>
-          </Animated.View>
-        </View>
       </Animated.View>
 
       {/* Envelope pocket — the "slot the letter slides out of", sitting above the inside panel but
@@ -376,14 +474,14 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
             transform: [{ perspective: s(800, scale) }, { rotateX: flapRotateX.interpolate({ inputRange: [0, 180], outputRange: ['0deg', '180deg'] }) }],
           }}
         >
-          {/* The wax seal is glued to the flap's own front face, so it should vanish once the flap
-              rotates past 90° — CSS `backface-visibility:hidden` is how the handoff does this, but
-              RN Web doesn't compose that correctly through this nested, non-`preserve-3d` 3D setup
-              (the same underlying gap `botBack`'s own opacity-gating works around elsewhere in this
-              file), so it's driven as a hard opacity cutoff off the flap's own rotation value instead. */}
-          <EnvelopeFlap scale={scale} sealOpacity={flapRotateX.interpolate({ inputRange: [0, 89, 90, 180], outputRange: [1, 1, 0, 0] })} />
+          <EnvelopeFlap scale={scale} />
         </Animated.View>
       </Animated.View>
+
+      {/* The wax seal — two cracked halves plus the flash behind them — sits at the stage level in
+          the handoff too (a sibling of the flap, not a child of its own rotating transform), so it
+          cracks apart on its own independent 2D transform regardless of what the flap is doing. */}
+      <WaxSeal scale={scale} crackT={sealCrackT} opacityT={sealOpacityT} flashT={flashT} envLeft={s(v3Layout.envelope.x - v3Layout.letter.x, scale)} envTop={s(v3Layout.envelope.y - v3Layout.letter.y, scale)} envOpacity={envOpacity} />
     </View>
   );
 }
@@ -447,35 +545,130 @@ function EnvelopePocket({ scale, fromName, place }: { scale: number; fromName: s
   );
 }
 
-function EnvelopeFlap({ scale, sealOpacity }: { scale: number; sealOpacity: Animated.AnimatedInterpolation<string | number> }) {
+// The wax seal used to live here, glued to the flap's own rotating face — the wax-seal handoff
+// instead keeps it a sibling of the flap at the stage level (see `WaxSeal` below), cracking apart
+// on its own independent 2D transform regardless of the flap's own 3D rotation.
+function EnvelopeFlap({ scale }: { scale: number }) {
   const w = s(v3Layout.envelope.w, scale);
   const h = s(v3Layout.envelope.flapH, scale);
-  const seal = s(v3Layout.envelope.seal, scale);
   return (
     <View style={{ width: w, height: h }}>
       <TriangleFlap scale={scale} w={w} h={h} />
-      <Animated.View
-        style={[
-          styles.seal,
-          {
-            left: w / 2 - seal / 2,
-            top: s(82, scale),
-            width: seal,
-            height: seal,
-            borderRadius: seal / 2,
-            shadowOffset: { width: 0, height: s(3, scale) },
-            shadowRadius: s(8, scale),
-            shadowOpacity: 0.4,
-            opacity: sealOpacity,
-          },
-        ]}
-      >
-        {/* `inset 0 0 0 3px rgba(255,255,255,.18)` — RN has no inset shadow, so the ring is a plain
-            inner border instead, same "draw the real thing" approach used elsewhere in this file. */}
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: seal / 2, borderWidth: s(3, scale), borderColor: 'rgba(255,255,255,0.18)' }]} />
-        <LetterPlaneGlyph size={s(20, scale)} variant="active" tiltDeg={-14} />
-      </Animated.View>
     </View>
+  );
+}
+
+/** The cracked wax seal + its flash bloom — ported from the handoff's own `.seal.l`/`.seal.r`/
+ * `.flash` (siblings of `.env-flap`, each on their own independent transform/opacity). Both seal
+ * halves render the SAME full circle + plane icon, each clipped to its own jagged half-polygon
+ * (`clip-path:polygon(...)` in the handoff, `react-native-svg`'s `ClipPath` here) — exactly how the
+ * handoff's own markup duplicates the identical inner SVG in both `.seal.l` and `.seal.r`. */
+function WaxSeal({
+  scale,
+  crackT,
+  opacityT,
+  flashT,
+  envLeft,
+  envTop,
+  envOpacity,
+}: {
+  scale: number;
+  crackT: Animated.Value;
+  opacityT: Animated.Value;
+  flashT: Animated.Value;
+  envLeft: number;
+  envTop: number;
+  envOpacity: Animated.Value;
+}) {
+  const seal = s(v3Layout.envelope.seal, scale);
+  const flash = s(WAX_FLASH_SIZE, scale);
+  const dx = s(WAX_SEAL_CRACK_DX, scale);
+  const dy = s(WAX_SEAL_CRACK_DY, scale);
+  const sealLeft = envLeft + s(WAX_SEAL_REL_X, scale) - seal / 2;
+  const sealTop = envTop + s(WAX_SEAL_REL_Y, scale) - seal / 2;
+  const flashLeft = envLeft + s(WAX_FLASH_REL_X, scale) - flash / 2;
+  const flashTop = envTop + s(WAX_FLASH_REL_Y, scale) - flash / 2;
+  // Both halves hidden entirely while the envelope itself hasn't landed yet (scaled to nothing/
+  // transparent — see `envTargetFor`'s own pre-landing case) — the seal is conceptually part of
+  // the closed envelope, not an independently-visible layer.
+  const sealOpacity = Animated.multiply(opacityT, envOpacity);
+  const flashOpacity = Animated.multiply(flashT, envOpacity);
+
+  const leftTransform = [
+    { translateX: crackT.interpolate({ inputRange: [0, 1], outputRange: [0, -dx] }) },
+    { translateY: crackT.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) },
+    { rotate: crackT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `-${WAX_SEAL_CRACK_ROT}deg`] }) },
+  ];
+  const rightTransform = [
+    { translateX: crackT.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) },
+    { translateY: crackT.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) },
+    { rotate: crackT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${WAX_SEAL_CRACK_ROT}deg`] }) },
+  ];
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: flashLeft,
+          top: flashTop,
+          width: flash,
+          height: flash,
+          zIndex: 6,
+          opacity: flashOpacity,
+          transform: [{ scale: flashT.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.6] }) }],
+        }}
+      >
+        <Svg width={flash} height={flash} viewBox={`0 0 ${flash} ${flash}`}>
+          <DefsAny>
+            <RadialGradient id="flashGlow" cx="50%" cy="50%" r="50%">
+              <Stop offset="0" stopColor={v3Color.accentBlue} stopOpacity={0.35} />
+              <Stop offset="1" stopColor={v3Color.accentBlue} stopOpacity={0} />
+            </RadialGradient>
+          </DefsAny>
+          <Circle cx={flash / 2} cy={flash / 2} r={flash / 2} fill="url(#flashGlow)" />
+        </Svg>
+      </Animated.View>
+      <Animated.View pointerEvents="none" style={{ position: 'absolute', left: sealLeft, top: sealTop, width: seal, height: seal, zIndex: 7, opacity: sealOpacity, transform: leftTransform }}>
+        <SealHalf scale={scale} seal={seal} side="l" />
+      </Animated.View>
+      <Animated.View pointerEvents="none" style={{ position: 'absolute', left: sealLeft, top: sealTop, width: seal, height: seal, zIndex: 7, opacity: sealOpacity, transform: rightTransform }}>
+        <SealHalf scale={scale} seal={seal} side="r" />
+      </Animated.View>
+    </>
+  );
+}
+
+/** One cracked half of the wax seal — a full circle + plane icon, SVG-clipped to a jagged
+ * half-polygon so only its own side shows (ported verbatim from the handoff's own `.seal.l`/
+ * `.seal.r` clip-path percentages). Both sides render the identical circle+icon, exactly like the
+ * handoff's own duplicated inner markup — only the clip differs. */
+function SealHalf({ scale, seal, side }: { scale: number; seal: number; side: 'l' | 'r' }) {
+  const pts =
+    side === 'l'
+      ? `0,0 ${0.54 * seal},0 ${0.44 * seal},${0.35 * seal} ${0.58 * seal},${0.55 * seal} ${0.46 * seal},${seal} 0,${seal}`
+      : `${0.54 * seal},0 ${seal},0 ${seal},${seal} ${0.46 * seal},${seal} ${0.58 * seal},${0.55 * seal} ${0.44 * seal},${0.35 * seal}`;
+  const iconSize = seal * 0.5;
+  const iconXY = seal * 0.25;
+  return (
+    <Svg width={seal} height={seal} viewBox={`0 0 ${seal} ${seal}`}>
+      <DefsAny>
+        <ClipPath id={`sealClip${side}`}>
+          <Polygon points={pts} />
+        </ClipPath>
+      </DefsAny>
+      <G clipPath={`url(#sealClip${side})`}>
+        <Circle cx={seal / 2} cy={seal / 2} r={seal / 2} fill={v3Color.accentBlue} />
+        {/* `inset 0 0 0 3px rgba(255,255,255,.18)` — RN/SVG has no inset shadow, so this is a plain
+            inset stroke ring instead, same "draw the real thing" approach used elsewhere here. */}
+        <Circle cx={seal / 2} cy={seal / 2} r={seal / 2 - s(1.5, scale)} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={s(3, scale)} />
+        <G transform={`translate(${iconXY} ${iconXY}) scale(${iconSize / 64}) rotate(-14 32 32)`}>
+          <Path d={PLANE_ICON_PATH} fill="#FFFFFF" />
+          <Path d={PLANE_ICON_SHADE} fill={v3Color.planeTint} />
+        </G>
+      </G>
+    </Svg>
   );
 }
 
@@ -673,5 +866,4 @@ const styles = StyleSheet.create({
   alertPill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' },
   body: { fontFamily: v3Font.hand, color: v3Color.inkBlue },
   sig: { fontFamily: v3Font.hand600, color: v3Color.inkBlue },
-  seal: { position: 'absolute', backgroundColor: v3Color.accentBlue, alignItems: 'center', justifyContent: 'center', shadowColor: v3Color.accentBlue, backfaceVisibility: 'hidden' },
 });

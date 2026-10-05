@@ -5,7 +5,21 @@ import { formatAlertPillLabel, compactKm } from '../utils/lettersV3Format';
 import { v3Layout } from '../theme/throwLettersV3Tokens';
 import type { AlertSchedule, ThrowLetter } from '../types/throw';
 
-export type LetterStageV3 = 'hidden' | 'flying' | 'landed' | 'flap' | 'rise' | 'drop' | 'unfold' | 'open' | 'folding' | 'shrink' | 'trash' | 'replyFly' | 'empty';
+export type LetterStageV3 =
+  | 'hidden'
+  | 'flying'
+  | 'landed'
+  | 'crack'
+  | 'flap'
+  | 'flapBehind'
+  | 'rise'
+  | 'settle'
+  | 'open'
+  | 'folding'
+  | 'shrink'
+  | 'trash'
+  | 'replyFly'
+  | 'empty';
 
 export interface V3Contact {
   id: string;
@@ -185,14 +199,21 @@ export function useLettersArrivalV3({ contacts, initialContactId, reduceMotion, 
         } else {
           setPlane(null);
           setStageBoth('landed');
-          later(() => setStageBoth('flap'), 460);
-          later(() => setStageBoth('rise'), 940);
-          later(() => setStageBoth('drop'), 1480);
-          later(() => setStageBoth('unfold'), 1820);
+          // Wax-seal envelope-opening timeline — ported verbatim (same t-offsets) from the
+          // handoff's own assets/tokens.json `timeline` array, relative to the envelope landing
+          // (phase 0): seal cracks @500, flap opens @1000, flap drops behind the letter @1500,
+          // letter rises @1650, envelope falls away + letter grows to full size @2400. 'open'
+          // follows 550ms after 'settle' — the longest of that phase's own transitions (the
+          // envelope's own .55s fall-away) — so interactivity doesn't arrive mid-animation.
+          later(() => setStageBoth('crack'), 500);
+          later(() => setStageBoth('flap'), 1000);
+          later(() => setStageBoth('flapBehind'), 1500);
+          later(() => setStageBoth('rise'), 1650);
+          later(() => setStageBoth('settle'), 2400);
           later(() => {
             setStageBoth('open');
             markIfUnread(ci, idx);
-          }, 2440);
+          }, 2950);
         }
       };
       rafRef.current = requestAnimationFrame(step);
