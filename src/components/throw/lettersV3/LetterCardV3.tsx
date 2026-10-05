@@ -536,8 +536,11 @@ function EnvelopePocket({ scale, fromName, place }: { scale: number; fromName: s
       {/* Seam lines — drawn over the outer stripe, under the inner panel's own fill. */}
       <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0 }}>
         <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+          {/* x-coordinates expressed as fractions of `w` (tuned against the old 300-wide envelope:
+              128/300, 288/300, 160/300) rather than literal pixels, so the seam lines stay
+              correctly placed now that the envelope is as wide as the letter itself. */}
           <Path
-            d={`M0,${s(178, scale)} L${s(128, scale)},${s(92, scale)} M${s(288, scale)},${s(178, scale)} L${s(160, scale)},${s(92, scale)}`}
+            d={`M0,${s(178, scale)} L${w * 0.4267},${s(92, scale)} M${w * 0.96},${s(178, scale)} L${w * 0.5333},${s(92, scale)}`}
             stroke="rgba(0,0,0,0.07)"
             strokeWidth={1.5 * scale}
             fill="none"
@@ -721,10 +724,12 @@ function TriangleFlap({ scale, w, h }: { scale: number; w: number; h: number }) 
         <ClippedStripeBars w={w} h={h} period={period} clipId="flapTriangle" />
         {/* The flap's own slightly-inset, unstriped inner triangle, with a faint top→bottom shading
             — `polygon(9px 6px,291px 6px,50% 102px)` + `linear-gradient(180deg,transparent 40%,
-            rgba(0,0,0,.06))`, drawn on top of the striped outer triangle. */}
+            rgba(0,0,0,.06))`, drawn on top of the striped outer triangle. The right edge is `w -
+            9px` (not a literal 291px, tuned against the old 300-wide envelope) so this stays a
+            constant 9px inset from both edges regardless of the envelope's own width. */}
         <DefsAny>
           <ClipPath id="flapInner">
-            <Polygon points={`${s(9, scale)},${s(6, scale)} ${s(291, scale)},${s(6, scale)} ${w / 2},${s(102, scale)}`} />
+            <Polygon points={`${s(9, scale)},${s(6, scale)} ${w - s(9, scale)},${s(6, scale)} ${w / 2},${s(102, scale)}`} />
           </ClipPath>
           <LinearGradient id="flapShade" x1="0" y1="0" x2="0" y2="1">
             <Stop offset={0} stopColor="#000000" stopOpacity={0} />
