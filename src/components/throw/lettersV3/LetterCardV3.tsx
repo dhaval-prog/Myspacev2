@@ -70,13 +70,18 @@ interface LetterTarget {
 }
 
 function letterTargetFor(stage: LetterStageV3): LetterTarget {
-  // The wax-seal handoff never hides the letter via opacity at all — a closed/still-tucked letter
-  // is hidden purely by sitting behind the opaque flap/pocket at a lower z-index (see `letterZ`
-  // below), the same mechanism that deliberately lets its header peek through the pocket's own
-  // notch for a beat once the flap has opened but before the letter has risen (confirmed against
-  // the reference itself — not a bug to hide, the actual designed look of that moment).
-  const stillTucked = stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed' || stage === 'crack' || stage === 'flap' || stage === 'flapBehind';
-  if (stillTucked) return { x: 0, y: 95, scale: 0.94, rotate: 0, opacity: 1, durMs: 0, easing: Easing.linear, opDurMs: 0, opDelayMs: 0 };
+  // Before the envelope itself even exists on screen (the plane is still flying in, or there's
+  // nothing to show yet) there's nothing opaque to hide behind — opacity 0 here, same as this
+  // file always did, so the letter doesn't float nakedly over the map underneath the flying plane.
+  const noEnvelopeYet = stage === 'hidden' || stage === 'flying' || stage === 'empty';
+  if (noEnvelopeYet) return { x: 0, y: 95, scale: 0.94, rotate: 0, opacity: 0, durMs: 0, easing: Easing.linear, opDurMs: 0, opDelayMs: 0 };
+  // The wax-seal handoff never hides the letter via opacity once the envelope has landed — a
+  // closed/still-tucked letter is hidden purely by sitting behind the opaque flap/pocket at a
+  // lower z-index (see `letterZ` below), the same mechanism that deliberately lets its header peek
+  // through the pocket's own notch for a beat once the flap has opened but before the letter has
+  // risen (confirmed against the reference itself — not a bug to hide, the actual designed look).
+  const envelopeClosed = stage === 'landed' || stage === 'crack' || stage === 'flap' || stage === 'flapBehind';
+  if (envelopeClosed) return { x: 0, y: 95, scale: 0.94, rotate: 0, opacity: 1, durMs: 0, easing: Easing.linear, opDurMs: 0, opDelayMs: 0 };
   // 'rise' (phase 4): the letter lifts out from behind the envelope at its folded height, still a
   // little short of its own final resting spot (continues rising into 'settle' below) — ported
   // from the handoff's own phase4→phase5 translateY(-120)→(-140) relationship.
