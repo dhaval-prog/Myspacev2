@@ -80,8 +80,14 @@ function letterTargetFor(stage: LetterStageV3): LetterTarget {
   // lower z-index (see `letterZ` below), the same mechanism that deliberately lets its header peek
   // through the pocket's own notch for a beat once the flap has opened but before the letter has
   // risen (confirmed against the reference itself — not a bug to hide, the actual designed look).
+  // Opacity waits for the envelope's own 200ms fade-in (`envTargetFor`'s `opDurMs` for this same
+  // stage group) to finish before it switches on — without this delay, the letter (opacity jumping
+  // to 1 instantly) was fully opaque well before the still-fading-in envelope was, so for that
+  // ~200ms window you could see both the letter and the envelope at once, right as the plane
+  // lands. A tiny nonzero `opDurMs` here (not 0) is required for the delay itself to actually be
+  // honored — `runTiming` skips delay entirely on a zero-duration set (see its own doc comment).
   const envelopeClosed = stage === 'landed' || stage === 'crack' || stage === 'flap' || stage === 'flapBehind';
-  if (envelopeClosed) return { x: 0, y: 95, scale: 0.94, rotate: 0, opacity: 1, durMs: 0, easing: Easing.linear, opDurMs: 0, opDelayMs: 0 };
+  if (envelopeClosed) return { x: 0, y: 95, scale: 0.94, rotate: 0, opacity: 1, durMs: 0, easing: Easing.linear, opDurMs: 50, opDelayMs: 200 };
   // 'rise' (phase 4): the letter lifts out from behind the envelope at its folded height, still a
   // little short of its own final resting spot (continues rising into 'settle' below) — ported
   // from the handoff's own phase4→phase5 translateY(-120)→(-140) relationship.
