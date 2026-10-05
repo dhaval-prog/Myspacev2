@@ -156,6 +156,7 @@ function AppNavigator() {
         setScreen({ name: 'friends' });
       }}
       onNotificationTarget={openNotificationTarget}
+      onOpenReceivedLetters={(contactId) => setScreen({ name: 'throwLetters', contactId })}
       initialThrowId={screen.name === 'throw' ? screen.openThrowId : undefined}
       initialFocusContactId={screen.name === 'throw' ? screen.focusContactId : undefined}
     />

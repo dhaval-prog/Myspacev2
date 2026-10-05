@@ -16,6 +16,7 @@ interface ThrowScreenProps {
   onOpenChats: () => void;
   onOpenAddFriendScreen: () => void;
   onNotificationTarget: (target: NotificationTarget) => void;
+  onOpenReceivedLetters: (contactId?: string) => void;
   initialThrowId?: string;
   initialFocusContactId?: string;
 }
@@ -31,6 +32,7 @@ function ThrowNavigator({
   onOpenChats,
   onOpenAddFriendScreen,
   onNotificationTarget,
+  onOpenReceivedLetters,
   initialThrowId,
   initialFocusContactId,
 }: {
@@ -39,6 +41,7 @@ function ThrowNavigator({
   onOpenChats: () => void;
   onOpenAddFriendScreen: () => void;
   onNotificationTarget: (target: NotificationTarget) => void;
+  onOpenReceivedLetters: (contactId?: string) => void;
   initialThrowId?: string;
   initialFocusContactId?: string;
 }) {
@@ -66,6 +69,7 @@ function ThrowNavigator({
         onOpenThrowLetter={(throwId) => setScreen({ name: 'letter', throwId })}
         onOpenAddFriendScreen={onOpenAddFriendScreen}
         onNotificationTarget={onNotificationTarget}
+        onOpenReceivedLetters={onOpenReceivedLetters}
         lockedRecipient={screen.lockedRecipient}
         initialFocusContactId={initialFocusContactId}
       />
@@ -89,7 +93,7 @@ function ThrowNavigator({
   return null;
 }
 
-export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFriendScreen, onNotificationTarget, initialThrowId, initialFocusContactId }: ThrowScreenProps) {
+export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFriendScreen, onNotificationTarget, onOpenReceivedLetters, initialThrowId, initialFocusContactId }: ThrowScreenProps) {
   return (
     <ThrowProvider>
       <ThrowStoriesProvider>
@@ -100,6 +104,7 @@ export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFrie
             onOpenChats={onOpenChats}
             onOpenAddFriendScreen={onOpenAddFriendScreen}
             onNotificationTarget={onNotificationTarget}
+            onOpenReceivedLetters={onOpenReceivedLetters}
             initialThrowId={initialThrowId}
             initialFocusContactId={initialFocusContactId}
           />
