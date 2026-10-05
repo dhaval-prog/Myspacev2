@@ -44,13 +44,12 @@ const WAX_SEAL_CRACK_DX = 34 * WAX_RATIO_ENV_W;
 const WAX_SEAL_CRACK_DY = 90 * WAX_RATIO_ENV;
 const WAX_SEAL_CRACK_ROT = 50;
 const WAX_FLASH_SIZE = 60 * WAX_RATIO_ENV;
-// Reference seal/flash positions (132,266 / 120,254) expressed relative to the envelope's own
-// top-left (30,200) — the offset within the envelope box this screen's own pocket/flap already
-// use, scaled per-axis onto this screen's own (differently-proportioned) envelope box.
-const WAX_SEAL_REL_X = (132 - 30) * WAX_RATIO_ENV_W;
-const WAX_SEAL_REL_Y = (266 - 200) * WAX_RATIO_ENV;
-const WAX_FLASH_REL_X = (120 - 30) * WAX_RATIO_ENV_W;
-const WAX_FLASH_REL_Y = (254 - 200) * WAX_RATIO_ENV;
+// The reference's own seal position (132,266, within a 240-wide envelope) sits a little off the
+// notch's actual center (120) — centered here instead, on this screen's own envelope/flap, which
+// is where a wax seal visually belongs (glued to the flap's tip, dead center). Reuses this file's
+// own pre-wax-seal seal anchor (`top:82` within the flap) rather than a freshly-derived ratio,
+// since that vertical placement was already tuned/shipped against this exact envelope box.
+const WAX_SEAL_ANCHOR_Y = 82;
 const WAX_FOLDED_LETTER_H = 130 * WAX_RATIO_LETTER;
 const WAX_ENV_DROP_Y = 260 * WAX_RATIO_ENV;
 // The reference's own phase4→phase5 letter rise is continuous (translateY -120 then -140 — i.e.
@@ -119,12 +118,12 @@ function envTargetFor(stage: LetterStageV3): EnvTarget {
   return { y: WAX_ENV_DROP_Y, scale: 1, rotate: 0, opacity: 0, durMs: 0, opDurMs: 0, opDelayMs: 0 };
 }
 
-function runTiming(v: Animated.Value, toValue: number, durMs: number, easing: (t: number) => number, delayMs = 0) {
+function runTiming(v: Animated.Value, toValue: number, durMs: number, easing: (t: number) => number, delayMs = 0, nativeDriver = true) {
   if (durMs <= 0) {
     v.setValue(toValue);
     return;
   }
-  Animated.timing(v, { toValue, duration: durMs, delay: delayMs, easing, useNativeDriver: true }).start();
+  Animated.timing(v, { toValue, duration: durMs, delay: delayMs, easing, useNativeDriver: nativeDriver }).start();
 }
 
 /**
@@ -233,7 +232,12 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
     // card height only at 'settle' (the handoff's own phase 5) — everywhere else just snaps,
     // including the closing stages, which were already full height coming from 'open'.
     const stillFolded = stage === 'hidden' || stage === 'flying' || stage === 'empty' || stage === 'landed' || stage === 'crack' || stage === 'flap' || stage === 'flapBehind' || stage === 'rise';
-    runTiming(letterWindowH, s(stillFolded ? WAX_FOLDED_LETTER_H : v3Layout.letter.h, scale), stage === 'settle' ? 550 : 0, EASE_GROW);
+    // `height` is a layout property, not a transform/opacity one — RN's native animated module
+    // flatly rejects it (throws) under `useNativeDriver:true`, which left this permanently stuck
+    // at its folded value on native once that throw aborted this whole effect run before it ever
+    // reached the calls below. JS-driven here instead, same fallback this codebase already takes
+    // for every other non-transform/opacity property it animates.
+    runTiming(letterWindowH, s(stillFolded ? WAX_FOLDED_LETTER_H : v3Layout.letter.h, scale), stage === 'settle' ? 550 : 0, EASE_GROW, 0, false);
 
     // This screen's own closing exit (Reply / switch-letter / delete) is the one case that still
     // uses the old flip-to-back-face illusion — untouched by this port, since the wax-seal handoff
@@ -471,6 +475,11 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
           style={{
             width: s(v3Layout.envelope.w, scale),
             height: s(v3Layout.envelope.flapH, scale),
+            // Pivot at the flap's own top edge (matches the handoff's own `transform-origin:50%
+            // 0`) — without this it rotates about its center by default, which makes the flap
+            // visibly sink down INTO the envelope instead of hinging open at the top edge and
+            // swinging up and away from it.
+            transformOrigin: '50% 0%',
             transform: [{ perspective: s(800, scale) }, { rotateX: flapRotateX.interpolate({ inputRange: [0, 180], outputRange: ['0deg', '180deg'] }) }],
           }}
         >
@@ -584,10 +593,16 @@ function WaxSeal({
   const flash = s(WAX_FLASH_SIZE, scale);
   const dx = s(WAX_SEAL_CRACK_DX, scale);
   const dy = s(WAX_SEAL_CRACK_DY, scale);
-  const sealLeft = envLeft + s(WAX_SEAL_REL_X, scale) - seal / 2;
-  const sealTop = envTop + s(WAX_SEAL_REL_Y, scale) - seal / 2;
-  const flashLeft = envLeft + s(WAX_FLASH_REL_X, scale) - flash / 2;
-  const flashTop = envTop + s(WAX_FLASH_REL_Y, scale) - flash / 2;
+  const envW = s(v3Layout.envelope.w, scale);
+  // Centered horizontally on the envelope/flap (the flap's tip is dead-center, and that's where a
+  // wax seal visually belongs) — `WAX_SEAL_ANCHOR_Y` is this file's own pre-wax-seal vertical
+  // anchor for the seal (already tuned/shipped against this exact envelope box), reused here
+  // rather than the handoff's own slightly off-center literal position.
+  const sealCenterY = envTop + s(WAX_SEAL_ANCHOR_Y, scale) + seal / 2;
+  const sealLeft = envLeft + envW / 2 - seal / 2;
+  const sealTop = sealCenterY - seal / 2;
+  const flashLeft = envLeft + envW / 2 - flash / 2;
+  const flashTop = sealCenterY - flash / 2;
   // Both halves hidden entirely while the envelope itself hasn't landed yet (scaled to nothing/
   // transparent — see `envTargetFor`'s own pre-landing case) — the seal is conceptually part of
   // the closed envelope, not an independently-visible layer.
