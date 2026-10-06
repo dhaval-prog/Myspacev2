@@ -12,8 +12,10 @@ import { FriendsGlow } from '../../components/friends/FriendsGlow';
 import { ChatsBottomBar } from '../../components/friends/ChatsBottomBar';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFriends } from '../../context/FriendsContext';
+import { useAuth } from '../../context/AuthContext';
 import { useThrowColorMode } from '../../context/ThrowColorModeContext';
 import { timeAgo } from '../../utils/relativeTime';
+import { avatarSkinFor, initialsOf } from '../../utils/friendAvatar';
 
 const CHAT_PLUS_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z M12 8.5v6M9 11.5h6';
 const GROUP_ICON = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
@@ -34,6 +36,36 @@ function ChatsLogoMark({ size, arcColor, bodyFill, wingFill }: { size: number; a
   );
 }
 
+/** A group row's avatar — the first two other members' own colored initials circles, overlapping
+ * diagonally (back circle top-left, front circle bottom-right), matching every other avatar's
+ * lime/ice/coral hash-rotation. Falls back to the plain group-icon circle for an empty/solo group. */
+function GroupAvatarPair({ members, size, borderColor }: { members: { id: string; name: string }[]; size: number; borderColor: string }) {
+  if (members.length === 0) {
+    return (
+      <View style={[styles.groupAvatar, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Icon path={GROUP_ICON} color={colors.lime} size={20} strokeWidth={1.8} />
+      </View>
+    );
+  }
+  const circleSize = Math.round(size * 0.667);
+  return (
+    <View style={{ width: size, height: size }}>
+      {members.slice(0, 2).map((m, i) => {
+        const skin = avatarSkinFor(m.id);
+        const pos = i === 0 ? { left: 0, top: 0 } : { right: 0, bottom: 0 };
+        return (
+          <View
+            key={m.id}
+            style={[styles.groupAvatarCircle, pos, { width: circleSize, height: circleSize, borderRadius: circleSize / 2, backgroundColor: skin.bg, borderColor }]}
+          >
+            <Text style={[styles.groupAvatarCircleText, { color: skin.fg }]}>{initialsOf(m.name)}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 interface ChatsListScreenProps {
   onOpenExpenses: () => void;
   /** Opens Throw — both the Chats menu bar's Throw/Map tabs and the quick-action row's center button. */
@@ -49,9 +81,31 @@ export function ChatsListScreen({ onOpenExpenses, onOpenThrow, onOpenGames, onOp
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { isDay } = useThrowColorMode();
+  const { user } = useAuth();
   const [filter, setFilter] = useState<Filter>('all');
-  const { friends, sentRequests, goAdd, openChat, lastMessageFor, isUnread, unreadCountFor, isOnline, isTyping, groups, goCreateGroup, openGroupChat, lastGroupMessageFor } =
-    useFriends();
+  const {
+    friends,
+    sentRequests,
+    goAdd,
+    openChat,
+    lastMessageFor,
+    isUnread,
+    unreadCountFor,
+    isOnline,
+    isTyping,
+    groups,
+    goCreateGroup,
+    openGroupChat,
+    lastGroupMessageFor,
+    groupMemberIdsFor,
+    groupMemberNamesFor,
+  } = useFriends();
+
+  const firstTwoMembers = (groupId: string): { id: string; name: string }[] => {
+    const otherIds = groupMemberIdsFor(groupId).filter((id) => id !== user?.id);
+    const names = groupMemberNamesFor(groupId);
+    return otherIds.slice(0, 2).map((id, i) => ({ id, name: names[i] ?? 'Someone' }));
+  };
 
   const unreadTotal = friends.reduce((sum, f) => sum + unreadCountFor(f.connectionId), 0);
   const friendsForFilter = filter === 'groups' || filter === 'letters' ? [] : filter === 'unread' ? friends.filter((f) => isUnread(f.connectionId)) : friends;
@@ -122,6 +176,13 @@ export function ChatsListScreen({ onOpenExpenses, onOpenThrow, onOpenGames, onOp
                 <Pressable key={f.connectionId} onPress={() => openChat(f.connectionId)} style={styles.railItem}>
                   <View style={styles.railRing}>
                     <FriendAvatar userId={f.userId} name={f.name} size={50} initialsFontSize={16} avatarUrl={f.avatarUrl} />
+                    {isUnread(f.connectionId) && (
+                      <View style={styles.railUnreadBadge}>
+                        <Svg width={12} height={12} viewBox="0 0 64 64">
+                          <Path d={PLANE_BODY} fill={colors.lime} />
+                        </Svg>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.railLabel} numberOfLines={1}>
                     {f.name.split(' ')[0]}
@@ -163,13 +224,12 @@ export function ChatsListScreen({ onOpenExpenses, onOpenThrow, onOpenGames, onOp
                 {groupsForFilter.map((g) => {
                   const last = lastGroupMessageFor(g.id);
                   const avatarSize = isDay ? 48 : 50;
+                  const members = firstTwoMembers(g.id);
                   return (
                     <Pressable key={g.id} onPress={() => openGroupChat(g.id)} style={({ pressed }) => [pressed && styles.rowPressed]}>
                       {isDay ? (
                         <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={styles.rowDay}>
-                          <View style={[styles.groupAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
-                            <Icon path={GROUP_ICON} color={colors.lime} size={20} strokeWidth={1.8} />
-                          </View>
+                          <GroupAvatarPair members={members} size={avatarSize} borderColor="#F6F5DF" />
                           <View style={styles.rowText}>
                             <View style={styles.rowNameLine}>
                               <Text style={[styles.rowName, { color: nameColor }]}>{g.name}</Text>
@@ -184,9 +244,7 @@ export function ChatsListScreen({ onOpenExpenses, onOpenThrow, onOpenGames, onOp
                         </GlassSurface>
                       ) : (
                         <View style={styles.rowNight}>
-                          <View style={[styles.groupAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
-                            <Icon path={GROUP_ICON} color={colors.lime} size={20} strokeWidth={1.8} />
-                          </View>
+                          <GroupAvatarPair members={members} size={avatarSize} borderColor="#121B0B" />
                           <View style={styles.rowText}>
                             <View style={styles.rowNameLine}>
                               <Text style={[styles.rowName, { color: nameColor }]}>{g.name}</Text>
@@ -363,6 +421,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  railUnreadBadge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   railLabel: {
     fontFamily: fontFamily.sans400,
     fontSize: 11.5,
@@ -473,7 +542,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   rowPreviewUnreadWeight: {
-    fontFamily: fontFamily.sans500,
+    fontFamily: fontFamily.sans700,
   },
   rowTime: {
     fontFamily: fontFamily.mono500,
@@ -511,6 +580,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  groupAvatarCircle: {
+    position: 'absolute',
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupAvatarCircleText: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 11,
   },
   lockedList: {
     marginTop: 20,

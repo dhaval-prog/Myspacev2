@@ -22,7 +22,7 @@ interface MessageRow {
   id: string;
   connection_id: string;
   sender_id: string;
-  kind: 'text' | 'image' | 'location' | 'system';
+  kind: 'text' | 'image' | 'location' | 'system' | 'letter';
   text: string | null;
   attachment_url: string | null;
   created_at: string;
@@ -198,6 +198,7 @@ function toDirectMessage(row: MessageRow): DirectMessage {
 function previewFor(row: MessageRow): string {
   if (row.kind === 'image') return row.text?.trim() ? row.text : '📷 Photo';
   if (row.kind === 'location') return '📍 Location';
+  if (row.kind === 'letter') return '✉️ Threw a letter';
   return row.text ?? '';
 }
 

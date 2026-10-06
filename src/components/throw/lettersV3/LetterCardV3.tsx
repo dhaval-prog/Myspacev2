@@ -148,9 +148,29 @@ function runTiming(v: Animated.Value, toValue: number, durMs: number, easing: (t
  * closes. `stage==='open'` additionally exposes nothing extra here — ActionRowV3/ChipsRowV3
  * (siblings, not children) derive their own visibility from the same `stage` prop independently.
  */
-export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { stage: LetterStageV3; letter: V3LetterCardData | null; isEmpty: boolean; emptyName: string; scale: number }) {
+export function LetterCardV3({
+  stage,
+  letter,
+  isEmpty,
+  emptyName,
+  scale,
+  heightPx,
+}: {
+  stage: LetterStageV3;
+  letter: V3LetterCardData | null;
+  isEmpty: boolean;
+  emptyName: string;
+  scale: number;
+  /** Overrides the letter's own height (already in absolute px, not a token to further scale) —
+   * lets the caller match whatever vertical space it actually has (see ThrowReceivedLettersScreen,
+   * matched to FoldingLetter's own flex-filled paper) instead of the fixed v3Layout.letter.h this
+   * card was originally designed around. RuledLines already tiles to fill whatever height it's
+   * given, so this is safe without touching any of the envelope/flap/seal math below, which is
+   * entirely width-driven (derived from `scale`, never from this card's own height). */
+  heightPx?: number;
+}) {
   const w = s(v3Layout.letter.w, scale);
-  const h = s(v3Layout.letter.h, scale);
+  const h = heightPx ?? s(v3Layout.letter.h, scale);
   const halfH = h / 2;
 
   const letterX = useRef(new Animated.Value(0)).current;
@@ -248,7 +268,7 @@ export function LetterCardV3({ stage, letter, isEmpty, emptyName, scale }: { sta
     // at its folded value on native once that throw aborted this whole effect run before it ever
     // reached the calls below. JS-driven here instead, same fallback this codebase already takes
     // for every other non-transform/opacity property it animates.
-    runTiming(letterWindowH, s(stillFolded ? WAX_FOLDED_LETTER_H : v3Layout.letter.h, scale), stage === 'settle' ? 550 : 0, EASE_GROW, 0, false);
+    runTiming(letterWindowH, stillFolded ? s(WAX_FOLDED_LETTER_H, scale) : h, stage === 'settle' ? 550 : 0, EASE_GROW, 0, false);
 
     // This screen's own closing exit (Reply / switch-letter / delete) is the one case that still
     // uses the old flip-to-back-face illusion — untouched by this port, since the wax-seal handoff

@@ -15,8 +15,10 @@ import { ActionButton } from '../../components/account/rows';
 import { MediaGalleryModal } from '../../components/chat/MediaGalleryModal';
 import { PlaneGlyph } from '../../components/chat/PlaneGlyph';
 import { AnimatedMessageWrap } from '../../components/chat/AnimatedMessageWrap';
+import { LetterThrownCard } from '../../components/chat/LetterThrownCard';
 import { STATUS_LABEL, STATUS_COLOR } from '../../components/chat/sendStatus';
 import { useFriends } from '../../context/FriendsContext';
+import type { DirectMessage } from '../../types/friends';
 import { useAuth } from '../../context/AuthContext';
 import { useCall } from '../../context/CallContext';
 import { useThrowColorMode } from '../../context/ThrowColorModeContext';
@@ -86,6 +88,7 @@ export function ChatThreadScreen() {
   const [mediaOpen, setMediaOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+  const [letterDetail, setLetterDetail] = useState<DirectMessage | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   const { statusFor } = useMessageSendStatus(messages, user?.id, reduceMotion);
@@ -251,6 +254,22 @@ export function ChatThreadScreen() {
               );
             }
             const mine = m.senderId === user?.id;
+
+            if (m.kind === 'letter') {
+              return (
+                <AnimatedMessageWrap key={m.id} reduceMotion={reduceMotion} style={styles.letterWrap}>
+                  <Text style={[styles.senderName, !isDay && styles.senderNameNight]}>{mine ? 'You' : focusedFriend.name} threw a letter</Text>
+                  <LetterThrownCard
+                    title={m.text}
+                    place={m.attachmentUrl}
+                    toLabel={mine ? focusedFriend.name : 'You'}
+                    timeLabel={timeLabel(m.createdAt)}
+                    onBreakSeal={() => setLetterDetail(m)}
+                  />
+                </AnimatedMessageWrap>
+              );
+            }
+
             const status = statusFor(m.id, m.senderId);
             return (
               <AnimatedMessageWrap key={m.id} reduceMotion={reduceMotion} style={[styles.msgWrap, mine ? styles.msgWrapMine : styles.msgWrapTheirs]}>
@@ -420,6 +439,20 @@ export function ChatThreadScreen() {
             <ActionButton label="Remove" variant="destructive" onPress={doRemoveFriend} />
           </View>
         </View>
+      </BottomSheet>
+
+      <BottomSheet visible={!!letterDetail} onClose={() => setLetterDetail(null)}>
+        {letterDetail && (
+          <View style={styles.letterDetail}>
+            <Text style={styles.letterDetailKicker}>
+              PAR AVION · FROM {(letterDetail.senderId === user?.id ? 'You' : focusedFriend.name).toUpperCase()}
+            </Text>
+            <Text style={styles.letterDetailTitle}>{letterDetail.text}</Text>
+            {letterDetail.attachmentUrl && <Text style={styles.letterDetailPlace}>{letterDetail.attachmentUrl}</Text>}
+            <Text style={styles.letterDetailTime}>Thrown {timeLabel(letterDetail.createdAt)}</Text>
+            <ActionButton label="Close" variant="secondary" onPress={() => setLetterDetail(null)} />
+          </View>
+        )}
       </BottomSheet>
     </KeyboardAvoidingView>
     </LinearGradient>
@@ -591,6 +624,20 @@ const styles = StyleSheet.create({
     marginTop: 18,
     gap: 9,
   },
+  letterWrap: {
+    alignSelf: 'flex-start',
+    maxWidth: '86%',
+    gap: 4,
+  },
+  senderName: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 12,
+    paddingLeft: 6,
+    color: '#2346C8',
+  },
+  senderNameNight: {
+    color: colors.lime,
+  },
   msgWrap: {
     maxWidth: '78%',
   },
@@ -724,6 +771,33 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
+  },
+  letterDetail: {
+    gap: spacing.ms,
+    paddingTop: spacing.xs,
+  },
+  letterDetailKicker: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 10,
+    letterSpacing: 1,
+    color: colors.textFaint,
+  },
+  letterDetailTitle: {
+    fontFamily: 'Caveat_700Bold',
+    fontSize: 36,
+    lineHeight: 38,
+    color: '#2346C8',
+  },
+  letterDetailPlace: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  letterDetailTime: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
   },
   attachError: {
     paddingHorizontal: spacing.xxl,

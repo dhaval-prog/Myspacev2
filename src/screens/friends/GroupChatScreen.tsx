@@ -11,7 +11,7 @@ import { ActionButton, ToggleRow } from '../../components/account/rows';
 import { MediaGalleryModal } from '../../components/chat/MediaGalleryModal';
 import { PlaneGlyph } from '../../components/chat/PlaneGlyph';
 import { AnimatedMessageWrap } from '../../components/chat/AnimatedMessageWrap';
-import { GroupLetterCard } from '../../components/chat/GroupLetterCard';
+import { LetterThrownCard } from '../../components/chat/LetterThrownCard';
 import { STATUS_LABEL, STATUS_COLOR } from '../../components/chat/sendStatus';
 import { useFriends } from '../../context/FriendsContext';
 import { useAuth } from '../../context/AuthContext';
@@ -385,10 +385,10 @@ export function GroupChatScreen() {
                         </View>
                         <View style={styles.letterCol}>
                           <Text style={[styles.senderName, { color: skin.bg }]}>{mine ? 'You' : senderNameFor(m.senderId)} threw a letter</Text>
-                          <GroupLetterCard
+                          <LetterThrownCard
                             title={m.text}
                             place={m.attachmentUrl}
-                            groupName={focusedGroup.name}
+                            toLabel={focusedGroup.name}
                             timeLabel={timeLabel(m.createdAt)}
                             onBreakSeal={() => setLetterDetail(m)}
                           />

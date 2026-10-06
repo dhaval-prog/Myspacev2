@@ -1135,8 +1135,10 @@ const styles = StyleSheet.create({
   },
   letterCard: {
     position: 'absolute',
-    left: 28,
-    right: 28,
+    // Matches v3Layout.letter's own 18px side margins (ThrowReceivedLettersScreen) exactly, so the
+    // letter reads as the same width on both screens.
+    left: 18,
+    right: 18,
     top: '32%',
   },
   letterCardContent: { flex: 1 },
