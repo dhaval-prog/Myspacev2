@@ -6,7 +6,7 @@ export interface ChatGroup {
   createdAt: string;
 }
 
-export type GroupMessageKind = 'text' | 'image' | 'location' | 'poll' | 'system';
+export type GroupMessageKind = 'text' | 'image' | 'location' | 'poll' | 'system' | 'letter';
 
 export interface GroupPollOption {
   id: string;
@@ -39,9 +39,11 @@ export interface GroupMessage {
   groupId: string;
   senderId: string;
   kind: GroupMessageKind;
-  /** The message body for 'text'/'system'; empty for 'image'/'location'/'poll'. */
+  /** The message body for 'text'/'system'; the letter's short title (Caveat-font headline on its
+   * card) for 'letter'; empty for 'image'/'location'/'poll'. */
   text: string;
-  /** Public storage URL for 'image', a Google Maps link for 'location'; null otherwise. */
+  /** Public storage URL for 'image', a Google Maps link for 'location', a short place tag (e.g.
+   * "GOA") for 'letter'; null otherwise. */
   attachmentUrl: string | null;
   /** Set only when kind is 'poll'. */
   pollId: string | null;

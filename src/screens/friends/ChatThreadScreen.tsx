@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { Animated, Easing, ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,11 +13,16 @@ import { GlassSurface } from '../../components/friends/GlassSurface';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { ActionButton } from '../../components/account/rows';
 import { MediaGalleryModal } from '../../components/chat/MediaGalleryModal';
+import { PlaneGlyph } from '../../components/chat/PlaneGlyph';
+import { AnimatedMessageWrap } from '../../components/chat/AnimatedMessageWrap';
+import { STATUS_LABEL, STATUS_COLOR } from '../../components/chat/sendStatus';
 import { useFriends } from '../../context/FriendsContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCall } from '../../context/CallContext';
 import { useThrowColorMode } from '../../context/ThrowColorModeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useMessageSendStatus } from '../../hooks/useMessageSendStatus';
+import { useSendPlaneFly } from '../../hooks/useSendPlaneFly';
 
 const CHECK_ICON = 'M5 12.5 10 17.5 19 7';
 const BACK_ICON = 'M15 5l-7 7 7 7';
@@ -29,21 +34,6 @@ const GRID_ICON = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z';
 const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 const PERSON_X_ICON = 'M4 19c0-3.3 2.7-6 6-6s6 2.7 6 6M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM17 8l4 4M21 8l-4 4';
 const PLANE_BODY = 'M4 30 L60 8 L38 58 L30 36 Z';
-const PLANE_WING = 'M30 36 L60 8 L22 40 Z';
-
-// The handoff's own msIn bubble-entrance curve — a deliberate overshoot, distinct from the app's
-// global "quiet, never bouncy" EASE (same convention LetterCardV3's EASE_RISE already uses).
-const EASE_BUBBLE_IN = Easing.bezier(0.3, 1.3, 0.5, 1);
-// The handoff's own msFly send-plane curve.
-const EASE_FLY = Easing.bezier(0.4, 0, 0.6, 1);
-
-type SendStatus = 'thrown' | 'landed' | 'read';
-
-const STATUS_LABEL: Record<SendStatus, string> = { thrown: 'Thrown', landed: 'Landed', read: 'Read' };
-const STATUS_COLOR: Record<'day' | 'night', Record<SendStatus, string>> = {
-  day: { thrown: 'rgba(22,33,12,0.5)', landed: 'rgba(22,33,12,0.72)', read: '#5C7A2E' },
-  night: { thrown: 'rgba(237,253,255,0.45)', landed: 'rgba(237,253,255,0.72)', read: colors.lime },
-};
 
 function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
@@ -54,34 +44,6 @@ function isToday(iso: string | null): boolean {
   const d = new Date(iso);
   const now = new Date();
   return d.toDateString() === now.toDateString();
-}
-
-/** The two-tone paper-plane glyph used for the send button and the status ticks — per the
- * handoff's own rule, status ticks are plane glyphs, never checkmarks. */
-function PlaneGlyph({ size, bodyFill, wingFill }: { size: number; bodyFill: string; wingFill?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 64 64">
-      <Path d={PLANE_BODY} fill={bodyFill} />
-      {wingFill && <Path d={PLANE_WING} fill={wingFill} />}
-    </Svg>
-  );
-}
-
-/** Wraps one message bubble with the handoff's msIn entrance (opacity + translateY + scale,
- * overshoot ease). Keyed by message id in the parent `.map()`, so React only mounts (and
- * therefore only animates) genuinely new messages — existing ones never replay it on re-render. */
-function AnimatedMessageWrap({ children, style, reduceMotion }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; reduceMotion: boolean }) {
-  const progress = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: reduceMotion ? 0 : 350, easing: EASE_BUBBLE_IN, useNativeDriver: true }).start();
-  }, []);
-  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [10, 0] });
-  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
-  return (
-    <Animated.View style={[style, { opacity: progress, transform: [{ translateY }, { scale }] }]}>
-      {children}
-    </Animated.View>
-  );
 }
 
 /** One tappable row inside a bottom-sheet menu. */
@@ -124,45 +86,16 @@ export function ChatThreadScreen() {
   const [mediaOpen, setMediaOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
-  const [statusByMsgId, setStatusByMsgId] = useState<Record<string, SendStatus>>({});
   const scrollRef = useRef<ScrollView>(null);
 
-  const [flying, setFlying] = useState(false);
-  const flyProgress = useRef(new Animated.Value(0)).current;
+  const { statusFor } = useMessageSendStatus(messages, user?.id, reduceMotion);
+  const { flying, flyThePlane, flyStyle } = useSendPlaneFly(reduceMotion);
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
   }, [messages.length]);
 
-  // Arms the Thrown → Landed → Read presentation-layer status for a message I just sent (never
-  // for history loaded on open — the recency check keeps old messages a static "Read" via
-  // statusFor's own fallback below, instead of replaying the animation on every screen open).
-  useEffect(() => {
-    const last = messages[messages.length - 1];
-    if (!last || last.senderId !== user?.id || last.id in statusByMsgId) return;
-    if (Date.now() - new Date(last.createdAt).getTime() > 5000) return;
-    setStatusByMsgId((m) => ({ ...m, [last.id]: 'thrown' }));
-    const landedMs = reduceMotion ? 300 : 1300;
-    const readMs = reduceMotion ? 600 : 2300;
-    const t1 = setTimeout(() => setStatusByMsgId((m) => ({ ...m, [last.id]: 'landed' })), landedMs);
-    const t2 = setTimeout(() => setStatusByMsgId((m) => ({ ...m, [last.id]: 'read' })), readMs);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages]);
-
   if (!focusedFriend) return null;
-
-  const statusFor = (messageId: string, senderId: string): SendStatus | null => (senderId === user?.id ? (statusByMsgId[messageId] ?? 'read') : null);
-
-  const flyThePlane = () => {
-    if (reduceMotion) return;
-    flyProgress.setValue(0);
-    setFlying(true);
-    Animated.timing(flyProgress, { toValue: 1, duration: 900, easing: EASE_FLY, useNativeDriver: true }).start(() => setFlying(false));
-  };
 
   const submit = () => {
     if (!text.trim()) return;
@@ -245,12 +178,6 @@ export function ChatThreadScreen() {
 
   const statusColor = STATUS_COLOR[isDay ? 'day' : 'night'];
   const online = isOnline(focusedFriend.userId);
-
-  const flyTranslateX = flyProgress.interpolate({ inputRange: [0, 1], outputRange: [0, -150] });
-  const flyTranslateY = flyProgress.interpolate({ inputRange: [0, 1], outputRange: [0, -420] });
-  const flyRotate = flyProgress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-28deg'] });
-  const flyScale = flyProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.45] });
-  const flyOpacity = flyProgress.interpolate({ inputRange: [0, 0.6, 1], outputRange: [1, 1, 0] });
 
   return (
     <LinearGradient
@@ -429,16 +356,7 @@ export function ChatThreadScreen() {
           </View>
         )}
         {flying && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.flyingPlane,
-              {
-                opacity: flyOpacity,
-                transform: [{ translateX: flyTranslateX }, { translateY: flyTranslateY }, { rotate: flyRotate }, { scale: flyScale }],
-              },
-            ]}
-          >
+          <Animated.View pointerEvents="none" style={[styles.flyingPlane, flyStyle]}>
             <PlaneGlyph size={26} bodyFill={colors.lime} wingFill="#8FB52E" />
           </Animated.View>
         )}
