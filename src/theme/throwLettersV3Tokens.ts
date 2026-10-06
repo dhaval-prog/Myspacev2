@@ -62,14 +62,16 @@ export const v3Layout = {
   phone: { width: 390, height: 844 },
   contactsY: 56,
   toastY: 208,
-  // w widened twice (354 -> 366 -> 378) to equalize the left/right margins at 6px each, then x
-  // nudged 6 -> 10 per explicit request to shift the card a bit right (left 10px / right 2px) —
-  // w itself is unchanged, so this only repositions the card, it doesn't resize it.
-  letter: { x: 10, y: 262, w: 378, h: 300, halfH: 150, rulesTop: 100, rulesBottom: 54 },
+  // x/w now deliberately match actionRow's own margins exactly (x: 18, w: phone.width - 2*18 =
+  // 354) per explicit request to size/position the card the same as the Reply button sitting
+  // right below it (ActionRowV3's own Reply fills its wrapping row edge-to-edge, and that row is
+  // itself inset by actionRow.x on both sides) — this replaces the last few rounds' worth of
+  // independently-tuned margins with "match the already-correct reference element" instead.
+  letter: { x: 18, y: 262, w: 354, h: 300, halfH: 150, rulesTop: 100, rulesBottom: 54 },
   // Envelope width matches the letter's own exactly (x flush with the letter's own left edge) so
   // the letter is always fully hidden behind it while closed — a narrower envelope let the
   // letter's side edges peek out past the envelope's own during the opening animation.
-  envelope: { x: 10, y: 352, w: 378, h: 190, flapH: 112, stripeInset: 6, seal: 38 },
+  envelope: { x: 18, y: 352, w: 354, h: 190, flapH: 112, stripeInset: 6, seal: 38 },
   landingPoint: { x: 195, y: 447 },
   actionRow: { x: 18, y: 576, h: 48, gap: 10, mediaBtn: 48 },
   chipRow: { bottom: 12 },
