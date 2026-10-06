@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { colors, fontFamily } from '../../theme';
 import { Icon } from '../Icon';
 
@@ -12,24 +12,6 @@ const ME_TAB_ICON = 'M5 20a7 7 0 0 1 14 0';
 const PLANE_BODY = 'M4 30 L60 8 L38 58 L30 36 Z';
 const PLANE_WING = 'M30 36 L60 8 L22 40 Z';
 const THROW_TAB_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
-
-function CameraGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-      <Path d="M4 8h3l2-2.5h6L17 8h3v11H4z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
-      <Circle cx={12} cy={13.5} r={3.5} stroke={color} strokeWidth={1.8} />
-    </Svg>
-  );
-}
-
-function MicGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-      <Rect x={9} y={3} width={6} height={11} rx={3} stroke={color} strokeWidth={1.8} />
-      <Path d="M6 11a6 6 0 0 0 12 0M12 17v4" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-  );
-}
 
 /** The center Throw button's two-tone plane fill, lime-on-ink (day) or ink-on-lime (night) — same glyph `LetterPlaneGlyph` draws, inlined here since this is a fixed 24px button icon rather than an animated flight. */
 function ThrowPlaneGlyph({ bodyFill, wingFill }: { bodyFill: string; wingFill: string }) {
@@ -51,10 +33,10 @@ interface ChatsBottomBarProps {
 
 /**
  * The Chats list's bottom chrome (MySpace Chats Throw handoff, §"Bottom of the chat list") — a
- * floating quick-action pill (Camera/Voice are visual-parity placeholders with no screen to open
- * yet; Throw/Split/Games map onto this app's existing Throw/Expenses/Games destinations) and the
- * new Chats/Throw/Map/Me menu bar. Docked outside the scroll view (unlike the handoff's own inline
- * placement) so it never scrolls away, matching every other screen's bottom-dock convention.
+ * floating quick-action pill (Throw/Split/Games map onto this app's existing Throw/Expenses/Games
+ * destinations; the handoff's own Camera/Voice buttons were dropped — no screen for them to open)
+ * and the new Chats/Throw/Map/Me menu bar. Docked outside the scroll view (unlike the handoff's own
+ * inline placement) so it never scrolls away, matching every other screen's bottom-dock convention.
  * Map and Me have no dedicated screens in this app yet — Map opens Throw (which already shows the
  * map), Me opens the existing account settings screen.
  */
@@ -67,12 +49,6 @@ export function ChatsBottomBar({ isDay, onOpenThrow, onOpenExpenses, onOpenGames
     <View>
       <View style={styles.quickWrap}>
         <View style={[styles.quickPill, isDay ? styles.quickPillDay : styles.quickPillNight]}>
-          <View style={[styles.circle44, { backgroundColor: circleBg }]}>
-            <CameraGlyph color={circleIcon} />
-          </View>
-          <View style={[styles.circle44, { backgroundColor: circleBg }]}>
-            <MicGlyph color={circleIcon} />
-          </View>
           <Pressable
             onPress={onOpenThrow}
             style={[styles.circle54, { backgroundColor: isDay ? colors.ink : colors.lime }]}

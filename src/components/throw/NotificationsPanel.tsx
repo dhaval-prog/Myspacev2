@@ -28,6 +28,8 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'throw', label: 'Throws' },
 ];
 
+const RELEVANT_CATEGORIES = new Set<string>(FILTERS.map((f) => f.id).filter((id) => id !== 'all'));
+
 const BADGE: Record<string, { bg: string; icon: string; iconColor: string }> = {
   friend_requests: { bg: '#3DD16B', icon: PLUS_ICON, iconColor: '#FFFFFF' },
   throw: { bg: '#111111', icon: PLANE_ICON, iconColor: '#FFFFFF' },
@@ -83,7 +85,14 @@ export function NotificationsPanel({ onNavigate }: NotificationsPanelProps) {
     return null;
   };
 
-  const filtered = useMemo(() => (filter === 'all' ? notifications : notifications.filter((n) => n.category === filter)), [notifications, filter]);
+  // `notifications` (NotificationsContext) is shared app-wide and also carries categories this
+  // panel has no pill/badge art for at all (Expenses' budget_reset/budget_alerts/invitations/
+  // expiring_items/item_reminders, shared_space_activity, etc.) — "All" must mean "all of this
+  // panel's own four categories", not literally every notification the user has ever gotten,
+  // or those rows show up with the wrong badge icon, no matching avatar, and a tap target that
+  // falls through to targetForNotification's generic default.
+  const relevant = useMemo(() => notifications.filter((n) => RELEVANT_CATEGORIES.has(n.category)), [notifications]);
+  const filtered = useMemo(() => (filter === 'all' ? relevant : relevant.filter((n) => n.category === filter)), [relevant, filter]);
   const todayItems = useMemo(() => filtered.filter((n) => isToday(n.createdAt)), [filtered]);
   const earlierItems = useMemo(() => filtered.filter((n) => !isToday(n.createdAt)), [filtered]);
 

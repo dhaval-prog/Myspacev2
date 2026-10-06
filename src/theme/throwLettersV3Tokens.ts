@@ -62,11 +62,13 @@ export const v3Layout = {
   phone: { width: 390, height: 844 },
   contactsY: 56,
   toastY: 208,
-  letter: { x: 18, y: 262, w: 354, h: 300, halfH: 150, rulesTop: 100, rulesBottom: 54 },
+  // w widened from 354 (right margin trimmed from 18 to 6, left kept at 18) per explicit request —
+  // the letter was reading as having too much empty space on its right.
+  letter: { x: 18, y: 262, w: 366, h: 300, halfH: 150, rulesTop: 100, rulesBottom: 54 },
   // Envelope width matches the letter's own exactly (x flush with the letter's own left edge) so
   // the letter is always fully hidden behind it while closed — a narrower envelope let the
   // letter's side edges peek out past the envelope's own during the opening animation.
-  envelope: { x: 18, y: 352, w: 354, h: 190, flapH: 112, stripeInset: 6, seal: 38 },
+  envelope: { x: 18, y: 352, w: 366, h: 190, flapH: 112, stripeInset: 6, seal: 38 },
   landingPoint: { x: 195, y: 447 },
   actionRow: { x: 18, y: 576, h: 48, gap: 10, mediaBtn: 48 },
   chipRow: { bottom: 12 },
