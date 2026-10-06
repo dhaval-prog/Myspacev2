@@ -15,6 +15,8 @@ import { WeatherOverlay } from '../../components/throw/weather/WeatherOverlay';
 import { NotificationsPanel } from '../../components/throw/NotificationsPanel';
 import { ProfileCard } from '../../components/throw/ProfileCard';
 import { LetterPlaneGlyph } from '../../components/throw/inbox/LetterPlaneGlyph';
+import { InlineReceivedLetters } from '../../components/throw/InlineReceivedLetters';
+import { v3Layout } from '../../theme/throwLettersV3Tokens';
 import { AddFriendCard } from '../../components/throw/AddFriendCard';
 import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -242,7 +244,23 @@ export function ThrowHomeScreen({
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const myId = user?.id ?? null;
-  const { myLocation, myName, myAvatarUrl, friends, unreadCount, unreadCountFor, streakFor, sendThrow, uploadPhoto, latestIncoming, clearLatestIncoming } = useThrow();
+  const {
+    myLocation,
+    myName,
+    myAvatarUrl,
+    friends,
+    inbox,
+    unreadCount,
+    unreadCountFor,
+    streakFor,
+    sendThrow,
+    uploadPhoto,
+    deleteThrow,
+    markRead,
+    confirmThrowAlert,
+    latestIncoming,
+    clearLatestIncoming,
+  } = useThrow();
   // Auto-dismisses the incoming-letter toast if the user doesn't tap it — same "don't demand an
   // action" courtesy as every other toast in this app.
   useEffect(() => {
@@ -282,6 +300,12 @@ export function ThrowHomeScreen({
   // isAddStorySelected. Toggled by tapping/dragging to the slot again (see handleToggleNotifications
   // below), and cleared whenever a real contact or Add Status is selected instead.
   const [isNotificationsSelected, setIsNotificationsSelected] = useState(false);
+  // Whether the compose letter's own inbox icon (FoldingLetter's bottom-controls row) is open —
+  // takes over the letter card's own slot with the received-letters arrival sequence (plane lands,
+  // envelope opens) in place of the compose paper, same map/screen underneath, per explicit
+  // request that this not navigate to a separate screen. Same mutual-exclusion convention as
+  // isNotificationsSelected/isCardsMode: opening this closes them, and vice versa.
+  const [isReceivingSelected, setIsReceivingSelected] = useState(false);
   const [alertSchedule, setAlertSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
   // Once the user has touched the alert schedule, switching to a different contact is locked
   // (see selfLocked below) — otherwise a stray sideways swipe could yank them away from a
@@ -441,6 +465,20 @@ export function ThrowHomeScreen({
     return selfEntry ? [selfEntry, ...withLoc] : withLoc;
   }, [friends, selfEntry]);
 
+  // Same contacts-with-letters shape ThrowReceivedLettersScreen's own ReceivedLettersInner builds
+  // from friends+inbox — reused here for InlineReceivedLetters instead of duplicating that screen.
+  const receivedContacts = useMemo(
+    () =>
+      friends
+        .map((f) => ({ id: f.userId, name: f.name, city: f.location?.city ?? '', avatarUrl: f.avatarUrl, letters: inbox.filter((l) => l.counterpartId === f.userId) }))
+        .filter((c) => c.letters.length > 0),
+    [friends, inbox],
+  );
+  // Design-units-to-pixels scale for the v3 letter/envelope geometry — same derivation
+  // ThrowReceivedLettersScreen's own `scale` uses (frameWidth / v3Layout.phone.width), just from
+  // useWindowDimensions (already tracked here for storyFlightTargetX) instead of its own onLayout.
+  const v3Scale = windowWidth / v3Layout.phone.width;
+
   useEffect(() => {
     if (initializedRef.current || friendsWithLocation.length === 0) return;
     initializedRef.current = true;
@@ -494,6 +532,7 @@ export function ThrowHomeScreen({
       if (next) {
         setStoryView(null);
         setStoryFlow(null);
+        setIsReceivingSelected(false);
       }
       return next;
     });
@@ -506,6 +545,7 @@ export function ThrowHomeScreen({
   // of these means "go look at something else" rather than "stay here".
   const handleNotificationTarget = (target: NotificationTarget) => {
     setIsNotificationsSelected(false);
+    setIsReceivingSelected(false);
     if (target.screen === 'throw' && 'throwId' in target) {
       onOpenThrowLetter(target.throwId);
       return;
@@ -658,6 +698,7 @@ export function ThrowHomeScreen({
       virtualSlotHandledRef.current = -2;
       setStoryView(null);
       setStoryFlow(null);
+      setIsReceivingSelected(false);
       setIsNotificationsSelected(true);
       return;
     }
@@ -670,16 +711,19 @@ export function ThrowHomeScreen({
       // the same way viewing anyone else's does, by tapping your own already-selected avatar (see
       // handleOpenStory).
       setIsNotificationsSelected(false);
+      setIsReceivingSelected(false);
       if (myId) setSelectedFriendId(myId);
       setStoryFlow({ name: 'cards' });
       return;
     }
     virtualSlotHandledRef.current = null;
     setStoryView(null);
-    // Also exits capture/preview mode and Notifications — otherwise dragging back to a real
-    // contact from either virtual slot would leave it showing on top of a now-different selection.
+    // Also exits capture/preview mode, Notifications, and the inline received-letters panel —
+    // otherwise dragging back to a real contact from any of those would leave it showing on top of
+    // a now-different selection.
     setStoryFlow(null);
     setIsNotificationsSelected(false);
+    setIsReceivingSelected(false);
     const nextFriend = friendsWithLocation[nextIdx];
     if (nextFriend && nextFriend.userId !== selectedFriendId) setSelectedFriendId(nextFriend.userId);
   };
@@ -871,10 +915,12 @@ export function ThrowHomeScreen({
                   // storyView's own comment); without this, tapping "Dhaval" again while viewing
                   // Status would be a no-op (already `selectedFriendId`) and leave the user stuck
                   // looking at their own photos with no way back. Same reasoning extends to
-                  // Notifications: selecting any real contact closes that card too.
+                  // Notifications and the inline received-letters panel: selecting any real
+                  // contact closes those too.
                   setStoryView(null);
                   setStoryFlow(null);
                   setIsNotificationsSelected(false);
+                  setIsReceivingSelected(false);
                   setSelectedFriendId(friendsWithLocation[i]?.userId ?? null);
                 }}
                 disabled={selfLocked || isCaptureMode || isPreviewMode}
@@ -883,6 +929,7 @@ export function ThrowHomeScreen({
                 onOpenStory={handleOpenStory}
                 onAddStory={() => {
                   setIsNotificationsSelected(false);
+                  setIsReceivingSelected(false);
                   setStoryFlow({ name: 'cards' });
                 }}
                 isAddStorySelected={isAddStorySelected}
@@ -980,7 +1027,7 @@ export function ThrowHomeScreen({
           </Animated.View>
         )}
 
-        {!inFlight && selectedFriend && !isNotificationsSelected && !isCardsMode && (
+        {!inFlight && selectedFriend && !isNotificationsSelected && !isCardsMode && !isReceivingSelected && (
           // `bottom` shrinks from its normal BOTTOM_NAV_CLEARANCE-reserved position down to just
           // the safe-area inset as the letter folds, on the same chromeOpacity value that already
           // fades BottomNav out — that reserved clearance exists so the card clears the *visible*
@@ -1046,7 +1093,12 @@ export function ThrowHomeScreen({
                   onThrow={handleThrow}
                   onLaunched={handleLaunched}
                   throwLabel={isSelfSelected ? 'Swipe up to set alert' : lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
-                  onOpenInbox={() => onOpenReceivedLetters(selectedFriend?.userId)}
+                  onOpenInbox={() => {
+                    setStoryView(null);
+                    setStoryFlow(null);
+                    setIsNotificationsSelected(false);
+                    setIsReceivingSelected(true);
+                  }}
                   unreadCount={unreadCount}
                   onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}
                   onContactDragOffset={!lockedRecipient && !selfLocked ? handleContactDragOffset : undefined}
@@ -1061,6 +1113,27 @@ export function ThrowHomeScreen({
               )}
             </Animated.View>
           </Animated.View>
+        )}
+
+        {/* The compose letter's own "receive" mode (its bottom-controls inbox icon) — takes over
+            the same map/screen instead of navigating away, per explicit request. Gated the same
+            as the letter card itself, swapped in via isReceivingSelected rather than sharing its
+            slot, since the plane/envelope/chip row below are all absolutely screen-positioned
+            (see InlineReceivedLetters's own doc comment) rather than confined to letterCard's own
+            box. */}
+        {!inFlight && selectedFriend && isReceivingSelected && (
+          <InlineReceivedLetters
+            contacts={receivedContacts}
+            initialContactId={selectedFriend.userId}
+            reduceMotion={reduceMotion}
+            scale={v3Scale}
+            deleteThrow={deleteThrow}
+            markRead={markRead}
+            confirmThrowAlert={confirmThrowAlert}
+            onClose={() => setIsReceivingSelected(false)}
+            topOffset={insets.top}
+            chipRowBottom={insets.bottom + 16 + BOTTOM_NAV_CLEARANCE}
+          />
         )}
 
         {/* The self-reminder sheet's collapsed stand-in — a plain "Remind me" button, not a bare
