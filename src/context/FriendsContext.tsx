@@ -67,7 +67,7 @@ interface GroupMessageRow {
   id: string;
   group_id: string;
   sender_id: string;
-  kind: 'text' | 'image' | 'location' | 'poll' | 'system';
+  kind: 'text' | 'image' | 'location' | 'poll' | 'system' | 'letter';
   text: string | null;
   attachment_url: string | null;
   poll_id: string | null;
@@ -143,6 +143,7 @@ function previewForGroupMessage(row: GroupMessageRow): string {
   if (row.kind === 'image') return row.text?.trim() ? row.text : '📷 Photo';
   if (row.kind === 'location') return '📍 Location';
   if (row.kind === 'poll') return '📊 Poll';
+  if (row.kind === 'letter') return '✉️ Threw a letter';
   return row.text ?? '';
 }
 
@@ -281,6 +282,8 @@ interface FriendsContextValue {
   sendGroupMessage: (text: string) => Promise<void>;
   sendGroupPhoto: (localUri: string) => Promise<{ error: string | null }>;
   sendGroupLocation: (latitude: number, longitude: number) => Promise<{ error: string | null }>;
+  /** Throws a letter (a short title + place tag) into the focused group as a 'letter' message. */
+  sendGroupLetter: (title: string, place: string) => Promise<{ error: string | null }>;
   /** Creates a two-option poll and posts it as a message in the focused group. */
   createGroupPoll: (question: string, options: [string, string], allowMultiple: boolean) => Promise<{ error: string | null }>;
   /** Casts (or retracts) this account's vote for one option of a poll. */
@@ -1158,6 +1161,25 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   };
 
+  /** Throws a letter into the group — a lightweight, group-native message kind (no shared row with
+   * `throws`, which is strictly 1:1 and keyed to a single recipient's distance/location). `place`
+   * is a short tag like "GOA", shown on the card's dashed postmark; stored in the same
+   * `attachment_url` column 'location' messages use for their Maps link, since it's already a
+   * free-form per-kind payload field and this needs no schema change. */
+  const sendGroupLetter = async (title: string, place: string): Promise<{ error: string | null }> => {
+    if (!focusedGroupId || !userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) return { error: 'Give the letter a line to say.' };
+    const { data, error } = await supabase
+      .from('group_messages')
+      .insert({ group_id: focusedGroupId, sender_id: userId, kind: 'letter', text: trimmedTitle, attachment_url: place.trim() || null })
+      .select('*')
+      .single();
+    if (error) return { error: error.message };
+    if (data) appendGroupMessage(data as GroupMessageRow);
+    return { error: null };
+  };
+
   const createGroupPoll = async (question: string, options: [string, string], allowMultiple: boolean): Promise<{ error: string | null }> => {
     if (!focusedGroupId || !userId || !isSupabaseConfigured) return { error: 'Not signed in.' };
     const trimmedQuestion = question.trim();
@@ -1468,6 +1490,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     sendGroupMessage,
     sendGroupPhoto,
     sendGroupLocation,
+    sendGroupLetter,
     createGroupPoll,
     voteOnPoll,
     proposeGroupRename,
