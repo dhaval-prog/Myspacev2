@@ -14,6 +14,7 @@ import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
 import { WeatherOverlay } from '../../components/throw/weather/WeatherOverlay';
 import { NotificationsPanel } from '../../components/throw/NotificationsPanel';
 import { ProfileCard } from '../../components/throw/ProfileCard';
+import { LetterPlaneGlyph } from '../../components/throw/inbox/LetterPlaneGlyph';
 import { AddFriendCard } from '../../components/throw/AddFriendCard';
 import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -241,7 +242,15 @@ export function ThrowHomeScreen({
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const myId = user?.id ?? null;
-  const { myLocation, myName, myAvatarUrl, friends, unreadCount, unreadCountFor, streakFor, sendThrow, uploadPhoto } = useThrow();
+  const { myLocation, myName, myAvatarUrl, friends, unreadCount, unreadCountFor, streakFor, sendThrow, uploadPhoto, latestIncoming, clearLatestIncoming } = useThrow();
+  // Auto-dismisses the incoming-letter toast if the user doesn't tap it — same "don't demand an
+  // action" courtesy as every other toast in this app.
+  useEffect(() => {
+    if (!latestIncoming) return;
+    const t = setTimeout(clearLatestIncoming, 5000);
+    return () => clearTimeout(t);
+  }, [latestIncoming, clearLatestIncoming]);
+
   const { createAlert } = useThrowAlerts();
   const { unreadCount: notificationsUnreadCount } = useNotifications();
   const { statsFor } = useGameStats();
@@ -888,6 +897,32 @@ export function ThrowHomeScreen({
             </View>
           ))}
 
+        {/* "X sent you a letter" — fires the instant a friend's letter actually arrives (see
+            ThrowContext's own latestIncoming), not just once you happen to open the inbox.
+            Reaching for the existing onOpenReceivedLetters deep link rather than a bespoke
+            transition — see this feature's own Tier A/B scoping notes on why a cross-screen plane
+            handoff (Tier B) is a separate, larger follow-up. */}
+        {!inFlight && latestIncoming && (
+          <View pointerEvents="box-none" style={[styles.incomingToastWrap, { top: insets.top + 16 + CAROUSEL_HEIGHT + 16 }]}>
+            <Pressable
+              onPress={() => {
+                clearLatestIncoming();
+                onOpenReceivedLetters(latestIncoming.counterpartId);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`${latestIncoming.counterpartName} sent you a letter`}
+              style={styles.incomingToastPressable}
+            >
+              <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.incomingToast}>
+                <LetterPlaneGlyph size={22} variant="active" />
+                <Text style={styles.incomingToastText} numberOfLines={1}>
+                  {latestIncoming.counterpartName} sent you a letter
+                </Text>
+              </GlassSurface>
+            </Pressable>
+          </View>
+        )}
+
         {/* The Profile + Add Friend cards popover — the first thing shown once Add Status is
             selected, before the camera (see StoryFlow's own 'cards' comment). Both cards come and
             go together; tapping "Add status" inside ProfileCard moves on to the camera, which
@@ -1175,6 +1210,24 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
   },
+  // left/right: 16 (not 0/0 + a maxWidth percentage on the pill) gives the pill real screen-edge
+  // margins to shrink-wrap within — a percentage cap on the pill itself left far less room than
+  // intended once the icon/gap/padding were subtracted from it, truncating most sender names.
+  incomingToastWrap: { position: 'absolute', left: 16, right: 16, alignItems: 'center' },
+  incomingToastPressable: { maxWidth: '100%' },
+  incomingToast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: throwRadius.pill,
+    borderWidth: 1,
+    borderColor: throwGlass.border,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    maxWidth: '100%',
+    ...throwColor.shadowSoft,
+  },
+  incomingToastText: { fontFamily: throwFont.ui700, fontSize: 14, color: throwColor.ink, flexShrink: 1 },
   flightStatus: {
     borderRadius: throwRadius.card,
     borderWidth: 1,

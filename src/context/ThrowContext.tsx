@@ -147,6 +147,14 @@ interface ThrowContextValue {
    * for me at the given schedule and marks the letter's request confirmed, atomically. */
   confirmThrowAlert: (throwId: string, schedule: AlertSchedule) => Promise<{ error: string | null }>;
   refresh: () => Promise<void>;
+  /** The most recent letter someone else threw me, surfaced the instant its realtime INSERT
+   * arrives (not just folded into the next `refresh()`) — lets ThrowHomeScreen show an "X sent you
+   * a letter" toast while the recipient is already sitting on the map, rather than them only
+   * finding out once they happen to open the inbox. Null once dismissed (see
+   * clearLatestIncoming) or whenever there's nothing new to show. */
+  latestIncoming: ThrowLetter | null;
+  /** Dismisses the current latestIncoming toast — called on tap-to-open and on its own auto-expiry. */
+  clearLatestIncoming: () => void;
 }
 
 const ThrowContext = createContext<ThrowContextValue | null>(null);
@@ -163,6 +171,8 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
   const [friendLocations, setFriendLocations] = useState<Record<string, ThrowLocation>>({});
   const [rows, setRows] = useState<ThrowRow[]>([]);
   const [streaksByCounterpart, setStreaksByCounterpart] = useState<Record<string, number>>({});
+  const [latestIncoming, setLatestIncoming] = useState<ThrowLetter | null>(null);
+  const clearLatestIncoming = useCallback(() => setLatestIncoming(null), []);
   const hasLoadedRef = useRef(false);
   // Mirrors myLocation/myProfile outside React state, purely so `refresh` can fold whichever of
   // the two didn't change this round into its own cache write below — without this, that field
@@ -280,7 +290,18 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     if (!myId) return;
     const channel = supabase
       .channel(`throws-${myId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'throws', filter: `recipient_id=eq.${myId}` }, () => refresh())
+      // Split out from a plain '*' so an INSERT's own `payload.new` can be read directly for the
+      // latestIncoming toast below — UPDATE/DELETE (read receipts, deletes) still just reload.
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'throws', filter: `recipient_id=eq.${myId}` }, (payload) => {
+        const row = payload.new as ThrowRow;
+        // Excludes a self-reminder's own throw (sender_id === recipient_id === myId) — that has
+        // its own existing UX (the peek banner), not this toast, which is specifically "someone
+        // else sent you something."
+        if (row.sender_id !== myId) setLatestIncoming(toLetter(row, myId, nameFor, avatarFor));
+        refresh();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'throws', filter: `recipient_id=eq.${myId}` }, () => refresh())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'throws', filter: `recipient_id=eq.${myId}` }, () => refresh())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'throws', filter: `sender_id=eq.${myId}` }, () => refresh())
       .subscribe();
     const poll = setInterval(refresh, 15000);
@@ -445,6 +466,8 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     deleteThrow,
     confirmThrowAlert,
     refresh,
+    latestIncoming,
+    clearLatestIncoming,
   };
   return <ThrowContext.Provider value={value}>{children}</ThrowContext.Provider>;
 }
