@@ -1,173 +1,280 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, radius, spacing } from '../../theme';
 import { Icon } from '../../components/Icon';
 import { LockIcon } from '../../components/icons/LockIcon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
-import { BottomNav } from '../../components/BottomNav';
 import { GlassSurface } from '../../components/friends/GlassSurface';
 import { FriendsGlow } from '../../components/friends/FriendsGlow';
+import { ChatsBottomBar } from '../../components/friends/ChatsBottomBar';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFriends } from '../../context/FriendsContext';
+import { useThrowColorMode } from '../../context/ThrowColorModeContext';
 import { timeAgo } from '../../utils/relativeTime';
 
 const CHAT_PLUS_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z M12 8.5v6M9 11.5h6';
 const GROUP_ICON = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
-// Same paper-plane glyph used everywhere else Throw is a destination (BottomNav's own tab
-// included) — reused here so this reads as the same destination, not a Chats-specific
-// reinterpretation.
-const THROW_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
-const ADD_FRIEND_ICON = 'M3.5 3.5h6.5v6.5h-6.5z M14 3.5h6.5v6.5h-6.5z M3.5 14h6.5v6.5h-6.5z M14 14h3v3h-3zM20.5 17.5v3h-3';
-// Same dice glyph used everywhere else Games is a destination — reused here so this reads as the
-// same destination, not a Chats-specific reinterpretation.
-const GAMES_ICON = 'M4 4h16v16H4z M8 8h.01 M16 8h.01 M8 16h.01 M16 16h.01 M12 12h.01';
-// A plain envelope — distinct from THROW_ICON's own paper-plane glyph (Throw itself), since this
-// opens the Received Letters v3 screen specifically, not Throw's own compose/home screen.
-const RECEIVED_LETTERS_ICON = 'M4 4h16v16H4z M4 4l8 8 8-8';
+const PLANE_BODY = 'M4 30 L60 8 L38 58 L30 36 Z';
+const ARC_PATH = 'M8 52 C14 34 28 52 34 34';
 
-const STORY_DOT_OVERRIDE = { size: 14, ringWidth: 2.5, ringColor: colors.onlineDotRing };
+type Filter = 'all' | 'unread' | 'groups' | 'letters';
 
-interface ChatsListScreenProps {
-  onHome: () => void;
-  onOpenExpenses: () => void;
-  /** Opens Throw — both the bottom nav dock's Throw tab and the pinned row below the list
-   * (which replaces the old "back to Friends" button there). */
-  onOpenThrow: () => void;
-  /** Opens the Games hub — also in the pinned row. */
-  onOpenGames: () => void;
-  /** Opens the Received Letters v3 screen — also in the pinned row. */
-  onOpenReceivedLetters: () => void;
+/** The MySpace Chats Throw handoff's logo mark — a dashed arc trailing a tiny two-tone paper
+ * plane, next to the "Chats" title (day) or above it beside a MYSPACE wordmark (night). */
+function ChatsLogoMark({ size, arcColor, bodyFill, wingFill }: { size: number; arcColor: string; bodyFill: string; wingFill: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 64 64">
+      <Path d={ARC_PATH} fill="none" stroke={arcColor} strokeWidth={4.5} strokeLinecap="round" strokeDasharray="1 8" />
+      <Path d={PLANE_BODY} transform="translate(28 6) scale(.48)" fill={bodyFill} stroke={bodyFill} strokeWidth={5} strokeLinejoin="round" />
+      <Path d="M30 36 L60 8 L22 40 Z" transform="translate(28 6) scale(.48)" fill={wingFill} />
+    </Svg>
+  );
 }
 
-/** Chats (6p-6) — only accepted friends get a thread here. */
-export function ChatsListScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenGames, onOpenReceivedLetters }: ChatsListScreenProps) {
+interface ChatsListScreenProps {
+  onOpenExpenses: () => void;
+  /** Opens Throw — both the Chats menu bar's Throw/Map tabs and the quick-action row's center button. */
+  onOpenThrow: () => void;
+  /** Opens the Games hub — also in the quick-action row. */
+  onOpenGames: () => void;
+  /** Opens account settings — the Chats menu bar's "Me" tab. */
+  onOpenAccount: () => void;
+}
+
+/** Chats (MySpace Chats Throw handoff) — day/night themed, only accepted friends get a thread here. */
+export function ChatsListScreen({ onOpenExpenses, onOpenThrow, onOpenGames, onOpenAccount }: ChatsListScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
+  const { isDay } = useThrowColorMode();
+  const [filter, setFilter] = useState<Filter>('all');
   const { friends, sentRequests, goAdd, openChat, lastMessageFor, isUnread, unreadCountFor, isOnline, isTyping, groups, goCreateGroup, openGroupChat, lastGroupMessageFor } =
     useFriends();
 
+  const unreadTotal = friends.reduce((sum, f) => sum + unreadCountFor(f.connectionId), 0);
+  const friendsForFilter = filter === 'groups' || filter === 'letters' ? [] : filter === 'unread' ? friends.filter((f) => isUnread(f.connectionId)) : friends;
+  const groupsForFilter = filter === 'unread' || filter === 'letters' ? [] : groups;
+  const sentRequestsForFilter = filter === 'all' ? sentRequests : [];
+  const nothingToShow = friendsForFilter.length === 0 && groupsForFilter.length === 0 && sentRequestsForFilter.length === 0;
+  const emptyCopy =
+    filter === 'letters'
+      ? { title: 'No letter chats yet', body: 'Thrown letters shared in a conversation will show up here.' }
+      : filter === 'unread'
+        ? { title: "You're all caught up", body: 'No unread chats right now.' }
+        : filter === 'groups'
+          ? { title: 'No groups yet', body: 'Start a group to see it here.' }
+          : { title: 'No chats yet', body: 'Add a friend to start a conversation.' };
+
+  const sidePad = isDay ? 26 : 22;
+  const nameColor = isDay ? colors.textPrimary : colors.pale;
+  const timeColor = isDay ? colors.textFaint : 'rgba(237,253,255,0.45)';
+  const previewReadColor = isDay ? colors.ink55 : 'rgba(237,253,255,0.5)';
+  const previewUnreadColor = isDay ? colors.textPrimary : colors.pale;
+
   return (
     <LinearGradient
-      colors={colors.friendsCanvas as [string, string, ...string[]]}
-      locations={colors.friendsCanvasStops as [number, number, ...number[]]}
+      colors={(isDay ? colors.friendsCanvas : colors.chatsNightCanvas) as [string, string, ...string[]]}
+      locations={(isDay ? colors.friendsCanvasStops : colors.chatsNightCanvasStops) as [number, number, ...number[]]}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
       style={styles.screen}
     >
-      <FriendsGlow />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md }]}>
-        <View style={styles.topRow}>
-          <Text style={styles.title}>Chats</Text>
+      {isDay && <FriendsGlow />}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md, paddingHorizontal: sidePad }]}>
+        <View style={styles.headerRow}>
+          {isDay ? (
+            <View style={styles.headerLeftDay}>
+              <ChatsLogoMark size={34} arcColor={colors.ink} bodyFill={colors.ink} wingFill={colors.coral} />
+              <Text style={[styles.title, { color: nameColor }]}>Chats</Text>
+            </View>
+          ) : (
+            <View style={styles.headerLeftNight}>
+              <View style={styles.headerWordmarkRow}>
+                <ChatsLogoMark size={22} arcColor={colors.pale} bodyFill={colors.lime} wingFill="#8FB52E" />
+                <Text style={styles.wordmark}>MYSPACE</Text>
+              </View>
+              <Text style={[styles.title, { color: nameColor }]}>Chats</Text>
+            </View>
+          )}
+          <Pressable
+            onPress={goAdd}
+            style={[styles.newChatBtn, { backgroundColor: isDay ? colors.ink : colors.lime, shadowColor: isDay ? colors.ink : colors.lime }]}
+            accessibilityRole="button"
+            accessibilityLabel="Start a new chat"
+          >
+            <Icon path={CHAT_PLUS_ICON} color={isDay ? colors.lime : colors.ink} size={22} strokeWidth={1.9} />
+          </Pressable>
         </View>
 
-        <View style={styles.spacerUnderHeader} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-          <Pressable onPress={goCreateGroup} style={styles.railItem} accessibilityRole="button" accessibilityLabel="Start a group">
-            <GlassSurface tint="light" tintColor="rgba(255,255,255,0.35)" style={styles.railNewTile}>
-              <Icon path={GROUP_ICON} color={colors.ink50} size={22} strokeWidth={1.8} />
-            </GlassSurface>
-            <Text style={styles.railLabelNew}>Groups</Text>
-          </Pressable>
-          {friends.map((f) => (
-            <Pressable key={f.connectionId} onPress={() => openChat(f.connectionId)} style={styles.railItem}>
-              <FriendAvatar userId={f.userId} name={f.name} size={58} initialsFontSize={18} online={isOnline(f.userId)} onlineDotOverride={STORY_DOT_OVERRIDE} avatarUrl={f.avatarUrl} />
-              <Text style={styles.railLabel} numberOfLines={1}>
-                {f.name.split(' ')[0]}
-              </Text>
-            </Pressable>
-          ))}
-          {groups.map((g) => (
-            <Pressable key={g.id} onPress={() => openGroupChat(g.id)} style={styles.railItem}>
-              <View style={styles.railGroupAvatar}>
-                <Icon path={GROUP_ICON} color={colors.lime} size={22} strokeWidth={1.8} />
-              </View>
-              <Text style={styles.railLabel} numberOfLines={1}>
-                {g.name}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        {isDay ? (
+          <>
+            <Text style={styles.railKicker}>IN THE AIR</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+              <Pressable onPress={goCreateGroup} style={styles.railItem} accessibilityRole="button" accessibilityLabel="Start a group">
+                <View style={styles.railRing}>
+                  <Icon path={GROUP_ICON} color={colors.ink50} size={22} strokeWidth={1.8} />
+                </View>
+                <Text style={styles.railLabelNew}>Groups</Text>
+              </Pressable>
+              {friends.map((f) => (
+                <Pressable key={f.connectionId} onPress={() => openChat(f.connectionId)} style={styles.railItem}>
+                  <View style={styles.railRing}>
+                    <FriendAvatar userId={f.userId} name={f.name} size={50} initialsFontSize={16} avatarUrl={f.avatarUrl} />
+                  </View>
+                  <Text style={styles.railLabel} numberOfLines={1}>
+                    {f.name.split(' ')[0]}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        ) : (
+          <View style={styles.chipsRow}>
+            {(['all', 'unread', 'groups', 'letters'] as Filter[]).map((f) => {
+              const active = filter === f;
+              return (
+                <Pressable key={f} onPress={() => setFilter(f)} style={[styles.chip, { backgroundColor: active ? colors.pale : 'rgba(237,253,255,0.08)' }]}>
+                  <Text style={[styles.chipText, { color: active ? colors.ink : colors.pale }]}>{f === 'all' ? 'All' : f === 'unread' ? 'Unread' : f === 'groups' ? 'Groups' : 'Letters'}</Text>
+                  {f === 'unread' && <Text style={styles.chipCount}>{unreadTotal}</Text>}
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
-        {friends.length === 0 && sentRequests.length === 0 && groups.length === 0 ? (
-          <GlassSurface tint="light" tintColor="rgba(255,255,255,0.45)" style={styles.empty}>
-            <Text style={styles.emptyTitle}>No chats yet</Text>
-            <Text style={styles.emptyBody}>Add a friend to start a conversation.</Text>
-          </GlassSurface>
+        {nothingToShow ? (
+          isDay ? (
+            <GlassSurface tint="light" tintColor="rgba(255,255,255,0.45)" style={styles.empty}>
+              <Text style={styles.emptyTitle}>{emptyCopy.title}</Text>
+              <Text style={styles.emptyBody}>{emptyCopy.body}</Text>
+            </GlassSurface>
+          ) : (
+            <View style={[styles.empty, styles.emptyNight]}>
+              <Text style={[styles.emptyTitle, { color: colors.pale }]}>{emptyCopy.title}</Text>
+              <Text style={[styles.emptyBody, { color: 'rgba(237,253,255,0.6)' }]}>{emptyCopy.body}</Text>
+            </View>
+          )
         ) : (
           <>
-            {groups.length > 0 && (
+            {groupsForFilter.length > 0 && (
               <View style={styles.list}>
-                {groups.map((g) => {
+                {groupsForFilter.map((g) => {
                   const last = lastGroupMessageFor(g.id);
+                  const avatarSize = isDay ? 48 : 50;
                   return (
                     <Pressable key={g.id} onPress={() => openGroupChat(g.id)} style={({ pressed }) => [pressed && styles.rowPressed]}>
-                      <GlassSurface tint="light" tintColor="rgba(255,255,255,0.4)" style={styles.row}>
-                        <View style={styles.groupAvatar}>
-                          <Icon path={GROUP_ICON} color={colors.lime} size={20} strokeWidth={1.8} />
-                        </View>
-                        <View style={styles.rowText}>
-                          <View style={styles.rowNameLine}>
-                            <Text style={styles.rowName}>{g.name}</Text>
-                            {last && <Text style={styles.rowTime}>{timeAgo(last.createdAt)}</Text>}
+                      {isDay ? (
+                        <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={styles.rowDay}>
+                          <View style={[styles.groupAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
+                            <Icon path={GROUP_ICON} color={colors.lime} size={20} strokeWidth={1.8} />
                           </View>
-                          <View style={styles.rowPreviewLine}>
-                            <Text style={styles.rowPreview} numberOfLines={1}>
-                              {last ? last.text : 'Say hi to the group 👋'}
-                            </Text>
+                          <View style={styles.rowText}>
+                            <View style={styles.rowNameLine}>
+                              <Text style={[styles.rowName, { color: nameColor }]}>{g.name}</Text>
+                              {last && <Text style={[styles.rowTime, { color: timeColor }]}>{timeAgo(last.createdAt)}</Text>}
+                            </View>
+                            <View style={styles.rowPreviewLine}>
+                              <Text style={[styles.rowPreview, { color: previewReadColor }]} numberOfLines={1}>
+                                {last ? last.text : 'Say hi to the group 👋'}
+                              </Text>
+                            </View>
+                          </View>
+                        </GlassSurface>
+                      ) : (
+                        <View style={styles.rowNight}>
+                          <View style={[styles.groupAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
+                            <Icon path={GROUP_ICON} color={colors.lime} size={20} strokeWidth={1.8} />
+                          </View>
+                          <View style={styles.rowText}>
+                            <View style={styles.rowNameLine}>
+                              <Text style={[styles.rowName, { color: nameColor }]}>{g.name}</Text>
+                              {last && <Text style={[styles.rowTime, { color: timeColor }]}>{timeAgo(last.createdAt)}</Text>}
+                            </View>
+                            <View style={styles.rowPreviewLine}>
+                              <Text style={[styles.rowPreview, { color: previewReadColor }]} numberOfLines={1}>
+                                {last ? last.text : 'Say hi to the group 👋'}
+                              </Text>
+                            </View>
                           </View>
                         </View>
-                      </GlassSurface>
+                      )}
                     </Pressable>
                   );
                 })}
               </View>
             )}
 
-            {friends.length > 0 && (
+            {friendsForFilter.length > 0 && (
               <View style={styles.list}>
-                {friends.map((f) => {
+                {friendsForFilter.map((f) => {
                   const last = lastMessageFor(f.connectionId);
                   const unread = isUnread(f.connectionId);
                   const unreadCount = unreadCountFor(f.connectionId);
                   const typing = isTyping(f.connectionId);
+                  const previewText = typing ? 'Typing…' : last ? last.text : 'Say hi 👋';
                   return (
                     <Pressable key={f.connectionId} onPress={() => openChat(f.connectionId)} style={({ pressed }) => [pressed && styles.rowPressed]}>
-                      <GlassSurface tint="light" tintColor={unread ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.35)'} style={styles.row}>
-                        <FriendAvatar userId={f.userId} name={f.name} size={48} initialsFontSize={16} online={isOnline(f.userId)} avatarUrl={f.avatarUrl} />
-                        <View style={styles.rowText}>
-                          <View style={styles.rowNameLine}>
-                            <Text style={styles.rowName}>{f.name}</Text>
-                            {last && <Text style={styles.rowTime}>{timeAgo(last.createdAt)}</Text>}
+                      {isDay ? (
+                        <GlassSurface tint="light" tintColor={unread ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.6)'} style={styles.rowDay}>
+                          <FriendAvatar userId={f.userId} name={f.name} size={48} initialsFontSize={16} avatarUrl={f.avatarUrl} />
+                          <View style={styles.rowText}>
+                            <View style={styles.rowNameLine}>
+                              <Text style={[styles.rowName, { color: nameColor }]}>{f.name}</Text>
+                              {last && <Text style={[styles.rowTime, { color: timeColor }]}>{timeAgo(last.createdAt)}</Text>}
+                            </View>
+                            <View style={styles.rowPreviewLine}>
+                              <Text style={[styles.rowPreview, { color: unread ? previewUnreadColor : previewReadColor }, unread && styles.rowPreviewUnreadWeight]} numberOfLines={1}>
+                                {previewText}
+                              </Text>
+                              {unreadCount > 0 && (
+                                <View style={styles.unreadPillDay}>
+                                  <Svg width={11} height={11} viewBox="0 0 64 64">
+                                    <Path d={PLANE_BODY} fill={colors.lime} />
+                                  </Svg>
+                                  <Text style={styles.unreadPillDayText}>{unreadCount}</Text>
+                                </View>
+                              )}
+                            </View>
                           </View>
-                          <View style={styles.rowPreviewLine}>
-                            <Text style={[styles.rowPreview, unread && styles.rowPreviewUnread]} numberOfLines={1}>
-                              {typing ? 'Typing…' : last ? last.text : 'Say hi 👋'}
-                            </Text>
-                            {unreadCount > 0 && (
-                              <View style={styles.unreadPill}>
-                                <Text style={styles.unreadPillText}>{unreadCount}</Text>
-                              </View>
-                            )}
+                        </GlassSurface>
+                      ) : (
+                        <View style={[styles.rowNight, { backgroundColor: unread ? 'rgba(237,253,255,0.09)' : 'rgba(237,253,255,0.03)' }]}>
+                          <FriendAvatar userId={f.userId} name={f.name} size={50} initialsFontSize={16} online={isOnline(f.userId)} avatarUrl={f.avatarUrl} />
+                          <View style={styles.rowText}>
+                            <View style={styles.rowNameLine}>
+                              <Text style={[styles.rowName, { color: nameColor }]}>{f.name}</Text>
+                              {last && <Text style={[styles.rowTime, { color: timeColor }]}>{timeAgo(last.createdAt)}</Text>}
+                            </View>
+                            <View style={styles.rowPreviewLine}>
+                              <Text style={[styles.rowPreview, { color: unread ? previewUnreadColor : previewReadColor }, unread && styles.rowPreviewUnreadWeight]} numberOfLines={1}>
+                                {previewText}
+                              </Text>
+                              {unreadCount > 0 && (
+                                <View style={styles.unreadPillNight}>
+                                  <Text style={styles.unreadPillNightText}>{unreadCount}</Text>
+                                </View>
+                              )}
+                            </View>
                           </View>
                         </View>
-                      </GlassSurface>
+                      )}
                     </Pressable>
                   );
                 })}
               </View>
             )}
 
-            {sentRequests.length > 0 && (
+            {sentRequestsForFilter.length > 0 && (
               <View style={styles.lockedList}>
-                {sentRequests.map((r) => (
-                  <Pressable key={r.connectionId} onPress={() => openChat(r.connectionId)} style={styles.lockedRow}>
-                    <View style={styles.lockedIcon}>
-                      <LockIcon size={18} color={colors.ink50} strokeWidth={1.7} />
+                {sentRequestsForFilter.map((r) => (
+                  <Pressable key={r.connectionId} onPress={() => openChat(r.connectionId)} style={[styles.lockedRow, !isDay && styles.lockedRowNight]}>
+                    <View style={[styles.lockedIcon, !isDay && styles.lockedIconNight]}>
+                      <LockIcon size={18} color={isDay ? colors.ink50 : colors.pale} strokeWidth={1.7} />
                     </View>
-                    <Text style={styles.lockedText}>
-                      <Text style={styles.lockedName}>{r.name}</Text> — chat opens when they accept your request.
+                    <Text style={[styles.lockedText, { color: isDay ? colors.ink55 : 'rgba(237,253,255,0.6)' }]}>
+                      <Text style={[styles.lockedName, { color: isDay ? colors.ink75 : colors.pale }]}>{r.name}</Text> — chat opens when they accept your request.
                     </Text>
                   </Pressable>
                 ))}
@@ -177,34 +284,7 @@ export function ChatsListScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenGam
         )}
       </ScrollView>
 
-      <View style={styles.pinned}>
-        <Pressable onPress={onOpenThrow} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Throw">
-          <Icon path={THROW_ICON} color={colors.textPrimary} size={20} strokeWidth={1.8} />
-        </Pressable>
-        <Pressable onPress={goAdd} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Add a friend">
-          <Icon path={ADD_FRIEND_ICON} color={colors.textPrimary} size={18} strokeWidth={1.8} />
-        </Pressable>
-        <Pressable onPress={onOpenGames} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Games">
-          <Icon path={GAMES_ICON} color={colors.textPrimary} size={18} strokeWidth={1.8} />
-        </Pressable>
-        <Pressable onPress={onOpenReceivedLetters} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Received letters">
-          <Icon path={RECEIVED_LETTERS_ICON} color={colors.textPrimary} size={18} strokeWidth={1.8} />
-        </Pressable>
-      </View>
-
-      <BottomNav
-        activeId="chat"
-        onSelect={(id) => {
-          if (id === 'chat') onHome();
-          if (id === 'expenses') onOpenExpenses();
-          if (id === 'throw') onOpenThrow();
-        }}
-        onAdd={goAdd}
-        fabIconPath={CHAT_PLUS_ICON}
-        fabAccessibilityLabel="Add a friend"
-        bottomInset={insets.bottom}
-        reduceMotion={reduceMotion}
-      />
+      <ChatsBottomBar isDay={isDay} onOpenThrow={onOpenThrow} onOpenExpenses={onOpenExpenses} onOpenGames={onOpenGames} onOpenAccount={onOpenAccount} />
     </LinearGradient>
   );
 }
@@ -214,76 +294,72 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scroll: {
-    paddingHorizontal: 26,
     paddingBottom: spacing.huge,
   },
-  // Even columns spanning the row's full width, rather than a tight left-aligned cluster.
-  pinned: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 26,
-    paddingTop: spacing.ms,
-    paddingBottom: spacing.ms,
-  },
-  topRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.ms,
+    justifyContent: 'space-between',
+  },
+  headerLeftDay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerLeftNight: {
+    gap: 4,
+  },
+  headerWordmarkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  wordmark: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 10.5,
+    letterSpacing: 1.5,
+    color: 'rgba(237,253,255,0.55)',
   },
   title: {
     fontFamily: fontFamily.sans700,
     fontSize: 30,
     letterSpacing: -0.9,
-    color: colors.textPrimary,
   },
-  iconButton: {
+  newChatBtn: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 14,
-    elevation: 1,
+    shadowOpacity: 0.26,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 22,
+    elevation: 2,
   },
-  spacerUnderHeader: {
-    height: 20,
+  railKicker: {
+    marginTop: 22,
+    fontFamily: fontFamily.mono500,
+    fontSize: 10.5,
+    letterSpacing: 1.5,
+    color: colors.ink50,
   },
   rail: {
+    marginTop: 10,
     gap: 14,
     paddingRight: 26,
   },
   railItem: {
     alignItems: 'center',
     gap: 7,
-    width: 58,
+    width: 62,
   },
-  railNewTile: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+  railRing: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: 'rgba(22,33,12,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  groupAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  railGroupAvatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -297,6 +373,28 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: colors.ink55,
   },
+  chipsRow: {
+    marginTop: 20,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  chip: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 17,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  chipText: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 13,
+  },
+  chipCount: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 11,
+    color: colors.lime,
+  },
   empty: {
     marginTop: 24,
     borderRadius: radius.md,
@@ -305,6 +403,10 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.55)',
+  },
+  emptyNight: {
+    backgroundColor: 'rgba(237,253,255,0.05)',
+    borderColor: 'rgba(237,253,255,0.1)',
   },
   emptyTitle: {
     fontFamily: fontFamily.sans600,
@@ -321,7 +423,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
     gap: 6,
   },
-  row: {
+  rowDay: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
@@ -330,6 +432,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.5)',
+  },
+  rowNight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 26,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(237,253,255,0.07)',
   },
   rowPressed: {
     opacity: 0.85,
@@ -348,7 +460,6 @@ const styles = StyleSheet.create({
   rowName: {
     fontFamily: fontFamily.sans600,
     fontSize: 15.5,
-    color: colors.textPrimary,
   },
   rowPreviewLine: {
     flexDirection: 'row',
@@ -360,30 +471,46 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: fontFamily.sans400,
     fontSize: 13,
-    color: colors.ink55,
   },
-  rowPreviewUnread: {
+  rowPreviewUnreadWeight: {
     fontFamily: fontFamily.sans500,
-    color: colors.textPrimary,
   },
   rowTime: {
     fontFamily: fontFamily.mono500,
     fontSize: 11.5,
-    color: colors.textFaint,
   },
-  unreadPill: {
-    minWidth: 21,
-    height: 21,
-    paddingHorizontal: 5,
-    borderRadius: 10.5,
-    backgroundColor: colors.ink,
+  unreadPillDay: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    height: 22,
+    paddingHorizontal: 8,
+    borderRadius: 11,
+    backgroundColor: colors.ink,
   },
-  unreadPillText: {
+  unreadPillDayText: {
     fontFamily: fontFamily.sans600,
     fontSize: 11.5,
     color: colors.lime,
+  },
+  unreadPillNight: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 7,
+    borderRadius: 11,
+    backgroundColor: colors.lime,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unreadPillNightText: {
+    fontFamily: fontFamily.sans700,
+    fontSize: 11.5,
+    color: colors.ink,
+  },
+  groupAvatar: {
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   lockedList: {
     marginTop: 20,
@@ -399,6 +526,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 18,
   },
+  lockedRowNight: {
+    borderColor: 'rgba(237,253,255,0.22)',
+  },
   lockedIcon: {
     width: 40,
     height: 40,
@@ -407,15 +537,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  lockedIconNight: {
+    backgroundColor: 'rgba(237,253,255,0.06)',
+  },
   lockedText: {
     flex: 1,
     fontFamily: fontFamily.sans400,
     fontSize: 13,
     lineHeight: 18,
-    color: colors.ink55,
   },
   lockedName: {
     fontFamily: fontFamily.sans600,
-    color: colors.ink75,
   },
 });

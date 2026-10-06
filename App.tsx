@@ -38,7 +38,7 @@ type Screen =
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
   | { name: 'throw'; openThrowId?: string; focusContactId?: string }
   | { name: 'throwLetters'; contactId?: string }
-  | { name: 'account' };
+  | { name: 'account'; from?: 'expenses' | 'friends' };
 
 function AuthNavigator() {
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
@@ -119,7 +119,7 @@ function AppNavigator() {
     );
   }
   if (screen.name === 'account') {
-    return <AccountSettingsScreen onBack={() => setScreen({ name: 'expenses' })} />;
+    return <AccountSettingsScreen onBack={() => setScreen(screen.from === 'friends' ? { name: 'friends' } : { name: 'expenses' })} />;
   }
   if (screen.name === 'friends') {
     return (
@@ -128,7 +128,7 @@ function AppNavigator() {
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenThrow={() => setScreen({ name: 'throw' })}
         onOpenGames={() => setScreen({ name: 'gamesHub' })}
-        onOpenReceivedLetters={() => setScreen({ name: 'throwLetters' })}
+        onOpenAccount={() => setScreen({ name: 'account', from: 'friends' })}
       />
     );
   }
