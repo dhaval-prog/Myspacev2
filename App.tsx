@@ -126,7 +126,7 @@ function AppNavigator() {
       <FriendsScreen
         onHome={() => setScreen({ name: 'throw' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
-        onOpenThrow={() => setScreen({ name: 'throw' })}
+        onOpenThrow={(focusContactId) => setScreen({ name: 'throw', focusContactId })}
         onOpenGames={() => setScreen({ name: 'gamesHub' })}
         onOpenAccount={() => setScreen({ name: 'account', from: 'friends' })}
       />

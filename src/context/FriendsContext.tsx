@@ -6,7 +6,7 @@ import { useAuth } from './AuthContext';
 import { useCachedBootstrap } from '../hooks/useCachedBootstrap';
 import { writeCache } from '../utils/persistedCache';
 
-export type FriendsPage = 'home' | 'add' | 'scan' | 'match' | 'requests' | 'chats' | 'chat' | 'locked-chat' | 'create-group' | 'group-chat';
+export type FriendsPage = 'home' | 'add' | 'scan' | 'match' | 'requests' | 'chats' | 'chat' | 'locked-chat' | 'create-group' | 'group-chat' | 'map';
 
 interface ConnectionRow {
   id: string;
@@ -239,6 +239,8 @@ interface FriendsContextValue {
   goMatch: () => void;
   goRequests: () => void;
   goChats: () => void;
+  /** Opens the Friends Map screen (Chats menu bar's "Map" tab). */
+  goMap: () => void;
   /** Opens the right thread view for a connection — the live chat if accepted, the locked view if still pending. */
   openChat: (connectionId: string) => void;
   /** Looks up the connection with this user and opens its thread — used by the "already friends" match state. */
@@ -714,6 +716,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   const goMatch = () => setPage('match');
   const goRequests = () => setPage('requests');
   const goChats = () => setPage('chats');
+  const goMap = () => setPage('map');
   const openChat = (connectionId: string) => {
     const row = connectionRows.find((c) => c.id === connectionId);
     setFocusedConnectionId(connectionId);
@@ -1462,6 +1465,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     goMatch,
     goRequests,
     goChats,
+    goMap,
     openChat,
     openChatWithUser,
     relationshipWith,

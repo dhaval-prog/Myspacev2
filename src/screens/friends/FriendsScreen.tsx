@@ -5,6 +5,7 @@ import { FriendsScannerScreen } from './FriendsScannerScreen';
 import { MatchFoundScreen } from './MatchFoundScreen';
 import { FriendRequestsScreen } from './FriendRequestsScreen';
 import { ChatsListScreen } from './ChatsListScreen';
+import { FriendsMapScreen } from './FriendsMapScreen';
 import { ChatThreadScreen } from './ChatThreadScreen';
 import { LockedThreadScreen } from './LockedThreadScreen';
 import { CreateGroupScreen } from './CreateGroupScreen';
@@ -14,8 +15,9 @@ interface FriendsScreenProps {
   onHome: () => void;
   /** Threaded through to the bottom nav dock on the Chats list and Add-a-friend screens. */
   onOpenExpenses: () => void;
-  /** Opens Throw — both the bottom nav dock's Throw tab and the Chats list's pinned row. */
-  onOpenThrow: () => void;
+  /** Opens Throw — both the bottom nav dock's Throw tab and the Chats list's pinned row. Accepts
+   * an optional contact to pre-address the compose to (the Map screen's own "Throw" action). */
+  onOpenThrow: (focusContactId?: string) => void;
   /** Opens the Games hub — also surfaced from the Chats list's quick-action row. */
   onOpenGames: () => void;
   /** Opens account settings — the Chats list's menu bar "Me" tab. */
@@ -44,6 +46,8 @@ export function FriendsScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenGames
       return <CreateGroupScreen />;
     case 'group-chat':
       return <GroupChatScreen />;
+    case 'map':
+      return <FriendsMapScreen onOpenAccount={onOpenAccount} onOpenThrow={onOpenThrow} />;
     default:
       return <ChatsListScreen onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} onOpenGames={onOpenGames} onOpenAccount={onOpenAccount} />;
   }
