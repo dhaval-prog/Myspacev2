@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
 import { LetterPlaneGlyph } from './inbox/LetterPlaneGlyph';
 import { ToastV3 } from './lettersV3/ToastV3';
 import { LetterCardV3 } from './lettersV3/LetterCardV3';
@@ -33,8 +33,10 @@ interface InlineReceivedLettersProps {
   topOffset: number;
   /** Where the bottom chip row's own `bottom` lands — ThrowHomeScreen's own BOTTOM_NAV_CLEARANCE-
    * aware offset (its BottomNav dock has no equivalent on the standalone screen, which is why this
-   * isn't just v3Layout.chipRow.bottom + insets.bottom the way that screen does it). */
-  chipRowBottom: number;
+   * isn't just v3Layout.chipRow.bottom + insets.bottom the way that screen does it), animated down
+   * to just the safe-area inset as that dock fades out behind this panel (same chromeOpacity-driven
+   * interpolation the letter card's own bottom edge uses). */
+  chipRowBottom: number | Animated.AnimatedAddition<number>;
 }
 
 /**
@@ -126,7 +128,7 @@ export function InlineReceivedLetters({
         />
       </View>
 
-      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: chipRowBottom }}>
+      <Animated.View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: chipRowBottom }}>
         <ChipsRowV3
           rowTitle={arrival.rowTitle}
           chips={arrival.chips}
@@ -137,7 +139,7 @@ export function InlineReceivedLetters({
           onArmedChange={setArmed}
           scale={scale}
         />
-      </View>
+      </Animated.View>
 
       <MediaViewerV3
         visible={mediaOpen}
