@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { fmColor } from '../../../theme/friendsMapTokens';
 import type { FriendsMapCanvasProps } from './friendsMapCanvasTypes';
 
 mapboxgl.accessToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
@@ -133,8 +132,6 @@ export function FriendsMapCanvas({ me, pins, renderPin, renderMe, cameraCommand,
           filter: 'grayscale(1) brightness(1.1) contrast(.85)',
         }}
       />
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: fmColor.mapTileTint, opacity: 0.38, mixBlendMode: 'multiply' } as object]} />
-
       {me &&
         (() => {
           const pos = project(me.latitude, me.longitude);

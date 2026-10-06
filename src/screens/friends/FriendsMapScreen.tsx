@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Animated, Linking, PanResponder, StyleSheet, View, useWindowDimensions, type GestureResponderEvent, type PanResponderGestureState } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowProvider, useThrow } from '../../context/ThrowContext';
@@ -89,6 +89,51 @@ function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenP
   const commandTokenRef = useRef(0);
   const didInitialFitRef = useRef(false);
 
+  // Collapsible bottom sheet / nav-bar swap — one shared 0..1 value drives both: 0 is the normal
+  // "card docked at the bottom, nav bar hidden" state, 1 is "card swiped fully out of view, nav
+  // bar back in its place". Dragging the card's own handle (down) or the nav bar (up) tracks the
+  // finger live; releasing snaps to whichever end is closer (or past the distance/velocity
+  // threshold), per explicit request.
+  const sheetProgress = useRef(new Animated.Value(0)).current;
+  const sheetProgressValueRef = useRef(0);
+  // Mirrored into refs (for the pan responder's synchronous math, which would otherwise close
+  // over a stale value) and into state (so the Animated interpolations below pick up the real
+  // measured height once `onLayout` reports it, instead of staying on the rough fallback forever).
+  const [sheetHeight, setSheetHeight] = useState(400);
+  const [navBarHeight, setNavBarHeight] = useState(84);
+  const sheetHeightRef = useRef(sheetHeight);
+  const dragStartProgressRef = useRef(0);
+
+  useEffect(() => {
+    const id = sheetProgress.addListener(({ value }) => {
+      sheetProgressValueRef.current = value;
+    });
+    return () => sheetProgress.removeListener(id);
+  }, [sheetProgress]);
+
+  const animateSheetTo = (target: 0 | 1) => {
+    Animated.spring(sheetProgress, { toValue: target, useNativeDriver: false, bounciness: 4, speed: 14 }).start();
+  };
+
+  const sheetPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_: GestureResponderEvent, g: PanResponderGestureState) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderGrant: () => {
+        dragStartProgressRef.current = sheetProgressValueRef.current;
+      },
+      onPanResponderMove: (_: GestureResponderEvent, g: PanResponderGestureState) => {
+        const h = sheetHeightRef.current || 1;
+        const next = Math.max(0, Math.min(1, dragStartProgressRef.current + g.dy / h));
+        sheetProgress.setValue(next);
+      },
+      onPanResponderRelease: (_: GestureResponderEvent, g: PanResponderGestureState) => {
+        const collapse = g.dy > 60 || g.vy > 0.5 ? true : g.dy < -60 || g.vy < -0.5 ? false : sheetProgressValueRef.current > 0.5;
+        animateSheetTo(collapse ? 1 : 0);
+      },
+    }),
+  ).current;
+
   const me: LatLng | null = myLocation ? { latitude: myLocation.latitude, longitude: myLocation.longitude } : null;
 
   const contacts: MapContact[] = useMemo(() => {
@@ -153,6 +198,9 @@ function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenP
     setSelectedId(contact.userId);
     const { zoom, center } = focusCamera({ latitude: contact.lat, longitude: contact.lon }, camera.zoom);
     jumpTo(center, zoom);
+    // Selecting a contact should always surface its detail card, even if the sheet had been
+    // swiped away beforehand.
+    animateSheetTo(0);
   };
 
   const onClusterTap = (memberIds: string[]) => {
@@ -316,11 +364,25 @@ function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenP
         onLocateMe={() => me && jumpTo(me, 12)}
       />
 
-      <View style={[styles.bottomStack, { bottom: 84 * scale }]}>
+      <Animated.View
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          sheetHeightRef.current = h;
+          setSheetHeight(h);
+        }}
+        style={[styles.bottomStack, { bottom: 0, transform: [{ translateY: sheetProgress.interpolate({ inputRange: [0, 1], outputRange: [0, sheetHeight] }) }] }]}
+      >
+        {/* Invisible drag target over the card's own decorative handle — swiping down here
+            collapses the card out of view and brings the nav bar back. */}
+        <View {...sheetPanResponder.panHandlers} style={[styles.dragHandleCatcher, { height: 40 * scale }]} />
         <FriendsMapSheet listTitle={listTitle} cards={listCards} detail={detail} onCloseDetail={closeDetail} />
-      </View>
+      </Animated.View>
 
-      <View style={styles.navBarWrap}>
+      <Animated.View
+        onLayout={(e) => setNavBarHeight(e.nativeEvent.layout.height)}
+        {...sheetPanResponder.panHandlers}
+        style={[styles.navBarWrap, { transform: [{ translateY: sheetProgress.interpolate({ inputRange: [0, 1], outputRange: [navBarHeight, 0] }) }] }]}
+      >
         <ChatsBottomBar
           isDay={isDay}
           activeTab="map"
@@ -332,7 +394,7 @@ function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenP
           onOpenExpenses={() => {}}
           onOpenGames={() => {}}
         />
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -343,4 +405,5 @@ const styles = StyleSheet.create({
   topBar: { position: 'absolute' },
   bottomStack: { position: 'absolute', left: 0, right: 0 },
   navBarWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  dragHandleCatcher: { position: 'absolute', left: 0, right: 0, top: 0, zIndex: 10 },
 });
