@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Easing, ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -15,17 +16,34 @@ import { MediaGalleryModal } from '../../components/chat/MediaGalleryModal';
 import { useFriends } from '../../context/FriendsContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCall } from '../../context/CallContext';
+import { useThrowColorMode } from '../../context/ThrowColorModeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const CHECK_ICON = 'M5 12.5 10 17.5 19 7';
+const BACK_ICON = 'M15 5l-7 7 7 7';
 const ATTACH_ICON = 'M12 5v14M5 12h14';
 const PHONE_ICON = 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2C9.5 21 3 14.5 3 6a2 2 0 0 1 2-2z';
-const SEND_ICON = 'M4 12 20 4l-7 16-2.5-6.5z';
 const PIN_ICON = 'M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11z M12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z';
 const IMAGE_ICON = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4L15 13l5 5';
 const GRID_ICON = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z';
 const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 const PERSON_X_ICON = 'M4 19c0-3.3 2.7-6 6-6s6 2.7 6 6M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM17 8l4 4M21 8l-4 4';
-const HEADER_AVATAR_COLOR = { bg: colors.lime, fg: colors.ink };
+const PLANE_BODY = 'M4 30 L60 8 L38 58 L30 36 Z';
+const PLANE_WING = 'M30 36 L60 8 L22 40 Z';
+
+// The handoff's own msIn bubble-entrance curve — a deliberate overshoot, distinct from the app's
+// global "quiet, never bouncy" EASE (same convention LetterCardV3's EASE_RISE already uses).
+const EASE_BUBBLE_IN = Easing.bezier(0.3, 1.3, 0.5, 1);
+// The handoff's own msFly send-plane curve.
+const EASE_FLY = Easing.bezier(0.4, 0, 0.6, 1);
+
+type SendStatus = 'thrown' | 'landed' | 'read';
+
+const STATUS_LABEL: Record<SendStatus, string> = { thrown: 'Thrown', landed: 'Landed', read: 'Read' };
+const STATUS_COLOR: Record<'day' | 'night', Record<SendStatus, string>> = {
+  day: { thrown: 'rgba(22,33,12,0.5)', landed: 'rgba(22,33,12,0.72)', read: '#5C7A2E' },
+  night: { thrown: 'rgba(237,253,255,0.45)', landed: 'rgba(237,253,255,0.72)', read: colors.lime },
+};
 
 function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
@@ -36,6 +54,34 @@ function isToday(iso: string | null): boolean {
   const d = new Date(iso);
   const now = new Date();
   return d.toDateString() === now.toDateString();
+}
+
+/** The two-tone paper-plane glyph used for the send button and the status ticks — per the
+ * handoff's own rule, status ticks are plane glyphs, never checkmarks. */
+function PlaneGlyph({ size, bodyFill, wingFill }: { size: number; bodyFill: string; wingFill?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 64 64">
+      <Path d={PLANE_BODY} fill={bodyFill} />
+      {wingFill && <Path d={PLANE_WING} fill={wingFill} />}
+    </Svg>
+  );
+}
+
+/** Wraps one message bubble with the handoff's msIn entrance (opacity + translateY + scale,
+ * overshoot ease). Keyed by message id in the parent `.map()`, so React only mounts (and
+ * therefore only animates) genuinely new messages — existing ones never replay it on re-render. */
+function AnimatedMessageWrap({ children, style, reduceMotion }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; reduceMotion: boolean }) {
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(progress, { toValue: 1, duration: reduceMotion ? 0 : 350, easing: EASE_BUBBLE_IN, useNativeDriver: true }).start();
+  }, []);
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [10, 0] });
+  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
+  return (
+    <Animated.View style={[style, { opacity: progress, transform: [{ translateY }, { scale }] }]}>
+      {children}
+    </Animated.View>
+  );
 }
 
 /** One tappable row inside a bottom-sheet menu. */
@@ -60,12 +106,16 @@ function SheetOption({
   );
 }
 
-/** The unlocked 1:1 conversation (6p-7) — messages, with the accept moment marked inline. */
+/** The unlocked 1:1 conversation (MySpace Chats Throw handoff) — day/night themed, with the
+ * paper-plane send flow (fly animation + client-side Thrown/Landed/Read status) and the accept
+ * moment marked inline. */
 export function ChatThreadScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { focusedFriend, messages, sendMessage, sendPhoto, sendLocation, goChats, removeFriend, clearChat, isOnline, isTyping, notifyTyping } = useFriends();
   const { startCall } = useCall();
+  const { isDay } = useThrowColorMode();
+  const reduceMotion = useReducedMotion();
   const [text, setText] = useState('');
   const [sendingAttachment, setSendingAttachment] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -74,18 +124,51 @@ export function ChatThreadScreen() {
   const [mediaOpen, setMediaOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+  const [statusByMsgId, setStatusByMsgId] = useState<Record<string, SendStatus>>({});
   const scrollRef = useRef<ScrollView>(null);
+
+  const [flying, setFlying] = useState(false);
+  const flyProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
   }, [messages.length]);
 
+  // Arms the Thrown → Landed → Read presentation-layer status for a message I just sent (never
+  // for history loaded on open — the recency check keeps old messages a static "Read" via
+  // statusFor's own fallback below, instead of replaying the animation on every screen open).
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (!last || last.senderId !== user?.id || last.id in statusByMsgId) return;
+    if (Date.now() - new Date(last.createdAt).getTime() > 5000) return;
+    setStatusByMsgId((m) => ({ ...m, [last.id]: 'thrown' }));
+    const landedMs = reduceMotion ? 300 : 1300;
+    const readMs = reduceMotion ? 600 : 2300;
+    const t1 = setTimeout(() => setStatusByMsgId((m) => ({ ...m, [last.id]: 'landed' })), landedMs);
+    const t2 = setTimeout(() => setStatusByMsgId((m) => ({ ...m, [last.id]: 'read' })), readMs);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
+
   if (!focusedFriend) return null;
+
+  const statusFor = (messageId: string, senderId: string): SendStatus | null => (senderId === user?.id ? (statusByMsgId[messageId] ?? 'read') : null);
+
+  const flyThePlane = () => {
+    if (reduceMotion) return;
+    flyProgress.setValue(0);
+    setFlying(true);
+    Animated.timing(flyProgress, { toValue: 1, duration: 900, easing: EASE_FLY, useNativeDriver: true }).start(() => setFlying(false));
+  };
 
   const submit = () => {
     if (!text.trim()) return;
     sendMessage(text);
     setText('');
+    flyThePlane();
   };
 
   const changeText = (next: string) => {
@@ -160,82 +243,125 @@ export function ChatThreadScreen() {
     });
   };
 
+  const statusColor = STATUS_COLOR[isDay ? 'day' : 'night'];
+  const online = isOnline(focusedFriend.userId);
+
+  const flyTranslateX = flyProgress.interpolate({ inputRange: [0, 1], outputRange: [0, -150] });
+  const flyTranslateY = flyProgress.interpolate({ inputRange: [0, 1], outputRange: [0, -420] });
+  const flyRotate = flyProgress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-28deg'] });
+  const flyScale = flyProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.45] });
+  const flyOpacity = flyProgress.interpolate({ inputRange: [0, 0.6, 1], outputRange: [1, 1, 0] });
+
   return (
     <LinearGradient
-      colors={colors.friendsChatCanvas as [string, string, ...string[]]}
-      locations={colors.friendsChatCanvasStops as [number, number, ...number[]]}
+      colors={(isDay ? colors.friendsChatCanvas : colors.chatsNightCanvas) as [string, string, ...string[]]}
+      locations={(isDay ? colors.friendsChatCanvasStops : colors.chatsNightCanvasStops) as [number, number, ...number[]]}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
       style={styles.screen}
     >
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <GlassSurface tint="dark" tintColor="rgba(22,33,12,0.6)" style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} colorOverride={HEADER_AVATAR_COLOR} avatarUrl={focusedFriend.avatarUrl} />
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>{focusedFriend.name}</Text>
-          {isOnline(focusedFriend.userId) && (
-            <View style={styles.presenceRow}>
-              <View style={styles.presenceDot} />
-              <Text style={styles.presenceText}>Active now</Text>
-            </View>
-          )}
+      {isDay ? (
+        <GlassSurface tint="dark" tintColor="rgba(22,33,12,0.6)" style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+          <Pressable onPress={goChats} style={styles.headerIconBtnDay} accessibilityRole="button" accessibilityLabel="Back">
+            <Icon path={BACK_ICON} color="#fff" size={19} strokeWidth={2} />
+          </Pressable>
+          <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} avatarUrl={focusedFriend.avatarUrl} />
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitleDay}>{focusedFriend.name}</Text>
+            {online && (
+              <View style={styles.presenceRow}>
+                <View style={styles.presenceDot} />
+                <Text style={styles.presenceTextDay}>Active now</Text>
+              </View>
+            )}
+          </View>
+          <Pressable onPress={startVideoCall} style={styles.headerIconBtnDay} accessibilityRole="button" accessibilityLabel="Start video call">
+            <Icon path={PHONE_ICON} color="#FFFFFF" size={18} strokeWidth={1.8} />
+          </Pressable>
+          <Pressable onPress={() => setOptionsOpen(true)} style={styles.headerIconBtnDay} accessibilityRole="button" accessibilityLabel="More options">
+            <OverflowIcon size={19} color="#FFFFFF" />
+          </Pressable>
+        </GlassSurface>
+      ) : (
+        <View style={[styles.headerNight, { paddingTop: insets.top + spacing.md }]}>
+          <Pressable onPress={goChats} style={styles.headerIconBtnNight} accessibilityRole="button" accessibilityLabel="Back">
+            <Icon path={BACK_ICON} color={colors.pale} size={19} strokeWidth={2} />
+          </Pressable>
+          <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} avatarUrl={focusedFriend.avatarUrl} />
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitleNight}>{focusedFriend.name}</Text>
+            {online && <Text style={styles.presenceTextNight}>Active now</Text>}
+          </View>
+          <Pressable onPress={startVideoCall} style={styles.headerIconBtnNight} accessibilityRole="button" accessibilityLabel="Start video call">
+            <Icon path={PHONE_ICON} color={colors.pale} size={18} strokeWidth={1.8} />
+          </Pressable>
+          <Pressable onPress={() => setOptionsOpen(true)} style={styles.headerIconBtnNight} accessibilityRole="button" accessibilityLabel="More options">
+            <Svg width={17} height={17} viewBox="0 0 64 64">
+              <Path d={PLANE_BODY} fill="none" stroke={colors.lime} strokeWidth={5} strokeLinejoin="round" />
+            </Svg>
+          </Pressable>
         </View>
-        <Pressable onPress={startVideoCall} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Start video call">
-          <Icon path={PHONE_ICON} color="#FFFFFF" size={18} strokeWidth={1.8} />
-        </Pressable>
-        <Pressable onPress={() => setOptionsOpen(true)} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="More options">
-          <OverflowIcon size={19} color="#FFFFFF" />
-        </Pressable>
-      </GlassSurface>
+      )}
 
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {showFriendsChip && (
-          <View style={styles.systemChip}>
-            <Icon path={CHECK_ICON} color={colors.ink55} size={14} strokeWidth={2.2} />
-            <Text style={styles.systemChipText}>You're friends since today</Text>
+          <View style={[styles.systemChip, !isDay && styles.systemChipNight]}>
+            <Icon path={CHECK_ICON} color={isDay ? colors.ink55 : colors.pale} size={14} strokeWidth={2.2} />
+            <Text style={[styles.systemChipText, !isDay && styles.systemChipTextNight]}>You're friends since today</Text>
           </View>
         )}
         {messages.length === 0 ? (
-          <Text style={styles.emptyNote}>No messages yet. Say hi.</Text>
+          <Text style={[styles.emptyNote, !isDay && styles.emptyNoteNight]}>No messages yet. Say hi.</Text>
         ) : (
         <View style={styles.bubbleStack}>
           {messages.map((m) => {
             if (m.kind === 'system') {
               return (
-                <View key={m.id} style={styles.systemChip}>
-                  <Text style={styles.systemChipText}>{m.text}</Text>
-                </View>
+                <AnimatedMessageWrap key={m.id} reduceMotion={reduceMotion} style={[styles.systemChip, !isDay && styles.systemChipNight]}>
+                  <Text style={[styles.systemChipText, !isDay && styles.systemChipTextNight]}>{m.text}</Text>
+                </AnimatedMessageWrap>
               );
             }
             const mine = m.senderId === user?.id;
+            const status = statusFor(m.id, m.senderId);
             return (
-              <View key={m.id} style={[styles.msgWrap, mine ? styles.msgWrapMine : styles.msgWrapTheirs]}>
+              <AnimatedMessageWrap key={m.id} reduceMotion={reduceMotion} style={[styles.msgWrap, mine ? styles.msgWrapMine : styles.msgWrapTheirs]}>
                 {m.kind === 'image' && m.attachmentUrl ? (
                   <Image source={{ uri: m.attachmentUrl }} style={styles.imageBubble} resizeMode="cover" />
                 ) : m.kind === 'location' && m.attachmentUrl ? (
                   <Pressable
                     onPress={() => Linking.openURL(m.attachmentUrl!)}
-                    style={[styles.bubble, styles.locationBubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}
+                    style={[styles.bubble, styles.locationBubble, mine ? styles.bubbleMine : isDay ? styles.bubbleTheirsDay : styles.bubbleTheirsNight]}
                   >
                     <View style={styles.locationIcon}>
                       <Icon path={PIN_ICON} color={mine ? colors.ink : colors.lime} size={16} strokeWidth={1.8} />
                     </View>
-                    <Text style={[styles.locationText, mine && styles.bubbleTextMine]}>Location shared · Open in Maps</Text>
+                    <Text style={[styles.locationText, mine ? styles.bubbleTextMine : isDay ? styles.bubbleTextDay : styles.bubbleTextNight]}>Location shared · Open in Maps</Text>
                   </Pressable>
                 ) : mine ? (
                   <View style={[styles.bubble, styles.bubbleMine]}>
-                    <Text style={styles.bubbleText}>{m.text}</Text>
+                    <Text style={styles.bubbleTextMine}>{m.text}</Text>
+                  </View>
+                ) : isDay ? (
+                  <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={[styles.bubble, styles.bubbleTheirsDay]}>
+                    <Text style={styles.bubbleTextDay}>{m.text}</Text>
+                  </GlassSurface>
+                ) : (
+                  <View style={[styles.bubble, styles.bubbleTheirsNight]}>
+                    <Text style={styles.bubbleTextNight}>{m.text}</Text>
+                  </View>
+                )}
+                {mine && status ? (
+                  <View style={styles.metaRow}>
+                    <Text style={[styles.meta, styles.metaMine, { color: isDay ? colors.ink50 : 'rgba(237,253,255,0.45)' }]}>{timeLabel(m.createdAt)} ·</Text>
+                    <PlaneGlyph size={11} bodyFill={statusColor[status]} />
+                    <Text style={[styles.statusText, { color: statusColor[status] }]}>{STATUS_LABEL[status]}</Text>
                   </View>
                 ) : (
-                  <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={[styles.bubble, styles.bubbleTheirs]}>
-                    <Text style={styles.bubbleText}>{m.text}</Text>
-                  </GlassSurface>
+                  <Text style={[styles.meta, isDay ? styles.metaTheirsDay : styles.metaTheirsNight]}>{timeLabel(m.createdAt)}</Text>
                 )}
-                <Text style={[styles.meta, mine ? styles.metaMine : styles.metaTheirs]}>
-                  {timeLabel(m.createdAt)}
-                  {mine ? '  ✓✓' : ''}
-                </Text>
-              </View>
+              </AnimatedMessageWrap>
             );
           })}
           {sendingAttachment && (
@@ -247,11 +373,15 @@ export function ChatThreadScreen() {
           )}
           {theirTyping && (
             <View style={[styles.msgWrap, styles.msgWrapTheirs]}>
-              <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={styles.typingBubble}>
-                <View style={[styles.typingDot, styles.typingDot1]} />
-                <View style={[styles.typingDot, styles.typingDot2]} />
-                <View style={[styles.typingDot, styles.typingDot3]} />
-              </GlassSurface>
+              {isDay ? (
+                <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={styles.typingBubble}>
+                  <TypingDots color={colors.ink} reduceMotion={reduceMotion} />
+                </GlassSurface>
+              ) : (
+                <View style={[styles.typingBubble, styles.typingBubbleNight]}>
+                  <TypingDots color={colors.pale} reduceMotion={reduceMotion} />
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -260,30 +390,58 @@ export function ChatThreadScreen() {
 
       {attachError && <Text style={styles.attachError}>{attachError}</Text>}
 
-      <View style={styles.bottomBackRow}>
-        <Pressable onPress={goChats} style={styles.pinnedIconButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Text style={styles.pinnedBackArrow}>←</Text>
-        </Pressable>
-      </View>
-
       <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <GlassSurface tint="light" tintColor="rgba(255,255,255,0.65)" style={styles.composer}>
-          <Pressable onPress={() => setAttachOpen(true)} style={styles.attachButton} accessibilityRole="button" accessibilityLabel="Share a photo or your location">
-            <Icon path={ATTACH_ICON} color={colors.textMuted} size={21} strokeWidth={1.8} />
-          </Pressable>
-          <TextInput
-            value={text}
-            onChangeText={changeText}
-            placeholder={`Message ${focusedFriend.name.split(' ')[0]}…`}
-            placeholderTextColor={colors.textDisabled}
-            style={[styles.input, noOutline]}
-            onSubmitEditing={submit}
-            returnKeyType="send"
-          />
-          <Pressable onPress={submit} style={styles.sendButton} accessibilityRole="button" accessibilityLabel="Send">
-            <Icon path={SEND_ICON} color={colors.lime} size={19} strokeWidth={1.9} />
-          </Pressable>
-        </GlassSurface>
+        {isDay ? (
+          <GlassSurface tint="light" tintColor="rgba(255,255,255,0.65)" style={styles.composer}>
+            <Pressable onPress={() => setAttachOpen(true)} style={styles.attachButton} accessibilityRole="button" accessibilityLabel="Share a photo or your location">
+              <Icon path={ATTACH_ICON} color={colors.textMuted} size={21} strokeWidth={1.8} />
+            </Pressable>
+            <TextInput
+              value={text}
+              onChangeText={changeText}
+              placeholder={`Message ${focusedFriend.name.split(' ')[0]}…`}
+              placeholderTextColor={colors.textDisabled}
+              style={[styles.input, noOutline]}
+              onSubmitEditing={submit}
+              returnKeyType="send"
+            />
+            <Pressable onPress={submit} style={styles.sendButtonDay} accessibilityRole="button" accessibilityLabel="Send">
+              <PlaneGlyph size={19} bodyFill={colors.lime} wingFill="#8FB52E" />
+            </Pressable>
+          </GlassSurface>
+        ) : (
+          <View style={styles.composerNight}>
+            <Pressable onPress={() => setAttachOpen(true)} style={styles.attachButton} accessibilityRole="button" accessibilityLabel="Share a photo or your location">
+              <Icon path={ATTACH_ICON} color="rgba(237,253,255,0.6)" size={21} strokeWidth={1.8} />
+            </Pressable>
+            <TextInput
+              value={text}
+              onChangeText={changeText}
+              placeholder={`Message ${focusedFriend.name.split(' ')[0]}…`}
+              placeholderTextColor="rgba(237,253,255,0.4)"
+              style={[styles.input, styles.inputNight, noOutline]}
+              onSubmitEditing={submit}
+              returnKeyType="send"
+            />
+            <Pressable onPress={submit} style={styles.sendButtonNight} accessibilityRole="button" accessibilityLabel="Send">
+              <PlaneGlyph size={20} bodyFill={colors.ink} wingFill="#3B5222" />
+            </Pressable>
+          </View>
+        )}
+        {flying && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.flyingPlane,
+              {
+                opacity: flyOpacity,
+                transform: [{ translateX: flyTranslateX }, { translateY: flyTranslateY }, { rotate: flyRotate }, { scale: flyScale }],
+              },
+            ]}
+          >
+            <PlaneGlyph size={26} bodyFill={colors.lime} wingFill="#8FB52E" />
+          </Animated.View>
+        )}
       </View>
 
       <BottomSheet visible={optionsOpen} onClose={() => setOptionsOpen(false)}>
@@ -350,6 +508,43 @@ export function ChatThreadScreen() {
   );
 }
 
+/** The handoff's msDot bounce — each dot rises -3px and brightens on a staggered 1s loop. */
+function TypingDots({ color, reduceMotion }: { color: string; reduceMotion: boolean }) {
+  const dots = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loops = dots.map((v, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 150),
+          Animated.timing(v, { toValue: 1, duration: 400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(v, { toValue: 0, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+      ),
+    );
+    loops.forEach((l) => l.start());
+    return () => loops.forEach((l) => l.stop());
+  }, [reduceMotion]);
+
+  return (
+    <>
+      {dots.map((v, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            styles.typingDot,
+            {
+              backgroundColor: color,
+              opacity: reduceMotion ? 0.6 : v.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
+              transform: [{ translateY: reduceMotion ? 0 : v.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }],
+            },
+          ]}
+        />
+      ))}
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -373,7 +568,19 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 3,
   },
-  iconButton: {
+  headerNight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    backgroundColor: 'rgba(237,253,255,0.05)',
+    borderBottomWidth: 1,
+    borderColor: 'rgba(237,253,255,0.08)',
+  },
+  headerIconBtnDay: {
     width: 42,
     height: 42,
     borderRadius: 21,
@@ -381,18 +588,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backArrow: {
-    fontSize: 19,
-    color: '#FFFFFF',
+  headerIconBtnNight: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(237,253,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerText: {
     flex: 1,
     gap: 2,
   },
-  headerTitle: {
+  headerTitleDay: {
     fontFamily: fontFamily.sans600,
     fontSize: 16.5,
     color: '#fff',
+  },
+  headerTitleNight: {
+    fontFamily: fontFamily.sans600,
+    fontSize: 16.5,
+    color: colors.pale,
   },
   presenceRow: {
     flexDirection: 'row',
@@ -406,10 +622,16 @@ const styles = StyleSheet.create({
     borderRadius: 3.5,
     backgroundColor: colors.onlineDotOnInk,
   },
-  presenceText: {
+  presenceTextDay: {
     fontFamily: fontFamily.sans400,
     fontSize: 12,
     color: colors.onInk60,
+  },
+  presenceTextNight: {
+    marginTop: 2,
+    fontFamily: fontFamily.sans400,
+    fontSize: 12,
+    color: 'rgba(237,253,255,0.55)',
   },
   scroll: {
     paddingHorizontal: 22,
@@ -426,10 +648,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 15,
   },
+  systemChipNight: {
+    backgroundColor: 'rgba(237,253,255,0.06)',
+  },
   systemChipText: {
     fontFamily: fontFamily.sans500,
     fontSize: 12,
     color: colors.ink55,
+  },
+  systemChipTextNight: {
+    color: 'rgba(237,253,255,0.6)',
   },
   emptyNote: {
     marginTop: spacing.xxl,
@@ -437,6 +665,9 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans400,
     fontSize: 13.5,
     color: colors.textSecondary,
+  },
+  emptyNoteNight: {
+    color: 'rgba(237,253,255,0.5)',
   },
   bubbleStack: {
     marginTop: 18,
@@ -467,7 +698,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 2,
   },
-  bubbleTheirs: {
+  bubbleTheirsDay: {
     borderBottomLeftRadius: 7,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.7)',
@@ -477,13 +708,28 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 1,
   },
-  bubbleText: {
+  bubbleTheirsNight: {
+    borderBottomLeftRadius: 7,
+    backgroundColor: 'rgba(237,253,255,0.09)',
+    borderWidth: 1,
+    borderColor: 'rgba(237,253,255,0.07)',
+  },
+  bubbleTextDay: {
     fontFamily: fontFamily.sans400,
     fontSize: 15,
     lineHeight: 21,
     color: colors.textPrimary,
   },
+  bubbleTextNight: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.pale,
+  },
   bubbleTextMine: {
+    fontFamily: fontFamily.sans400,
+    fontSize: 15,
+    lineHeight: 21,
     color: colors.ink,
   },
   sendingBubble: {
@@ -510,18 +756,31 @@ const styles = StyleSheet.create({
   locationText: {
     fontFamily: fontFamily.sans600,
     fontSize: 13.5,
-    color: colors.textPrimary,
   },
   meta: {
     marginTop: 6,
     fontFamily: fontFamily.mono500,
     fontSize: 10.5,
   },
-  metaTheirs: {
+  metaTheirsDay: {
     color: colors.textDisabled,
   },
+  metaTheirsNight: {
+    color: 'rgba(237,253,255,0.4)',
+  },
   metaMine: {
-    color: colors.ink50,
+    marginTop: 0,
+  },
+  metaRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statusText: {
+    fontFamily: fontFamily.mono500,
+    fontSize: 10.5,
+    letterSpacing: 0.3,
   },
   typingBubble: {
     flexDirection: 'row',
@@ -539,20 +798,14 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 1,
   },
+  typingBubbleNight: {
+    backgroundColor: 'rgba(237,253,255,0.09)',
+    borderColor: 'rgba(237,253,255,0.07)',
+  },
   typingDot: {
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: colors.ink,
-  },
-  typingDot1: {
-    opacity: 0.3,
-  },
-  typingDot2: {
-    opacity: 0.45,
-  },
-  typingDot3: {
-    opacity: 0.6,
   },
   attachError: {
     paddingHorizontal: spacing.xxl,
@@ -561,30 +814,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.danger,
   },
-  bottomBackRow: {
-    paddingHorizontal: spacing.xxl,
-    paddingTop: spacing.ms,
-  },
-  pinnedIconButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 14,
-    elevation: 2,
-  },
-  pinnedBackArrow: {
-    fontSize: 19,
-    color: colors.textPrimary,
-  },
   inputRow: {
     paddingHorizontal: spacing.xxl,
     paddingTop: spacing.ms,
+    position: 'relative',
   },
   composer: {
     flexDirection: 'row',
@@ -602,6 +835,18 @@ const styles = StyleSheet.create({
     shadowRadius: 22,
     elevation: 1,
   },
+  composerNight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingRight: 8,
+    paddingLeft: 18,
+    backgroundColor: 'rgba(237,253,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(237,253,255,0.1)',
+  },
   attachButton: {
     minWidth: 44,
     minHeight: 44,
@@ -614,13 +859,34 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
   },
-  sendButton: {
+  inputNight: {
+    color: colors.pale,
+  },
+  sendButtonDay: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sendButtonNight: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.lime,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.lime,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 16,
+    elevation: 2,
+  },
+  flyingPlane: {
+    position: 'absolute',
+    right: 48,
+    top: 2,
   },
   sheetTitle: {
     fontFamily: fontFamily.sans700,
