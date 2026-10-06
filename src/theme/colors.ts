@@ -111,6 +111,10 @@ export const colors = {
   friendsScannerCanvas: ['#2C3A1C', '#151E0C', '#0B1006'] as string[],
   friendsScannerCanvasStops: [0, 0.55, 1] as number[],
   scannerBase: '#101709',
+  // Night-mode Chats canvas (MySpace Chats Throw handoff, 2B) — a radial forest gradient
+  // approximated as vertical, same trick as friendsScannerCanvas above.
+  chatsNightCanvas: ['#2A3D1A', '#121B0B', '#0B1106'] as string[],
+  chatsNightCanvasStops: [0, 0.55, 1] as number[],
 } as const;
 
 export type ColorToken = keyof typeof colors;
