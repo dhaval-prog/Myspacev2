@@ -31,9 +31,14 @@ interface ThrowReceivedLettersScreenProps {
   onReply: (contactId: string, throwId: string) => void;
   /** Preselects this contact — set when reached from a specific chat thread's own Throw icon. */
   initialContactId?: string;
+  /** Set when reached by tapping ThrowHomeScreen's own "X sent you a letter" toast (see its
+   * liftoff animation) — skips the arrival screen's usual 600ms lead-in beat before the plane
+   * starts flying in, so it reads as a continuation of the toast's own launch rather than a
+   * second, independent pause. */
+  viaToast?: boolean;
 }
 
-function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLettersScreenProps) {
+function ReceivedLettersInner({ onReply, initialContactId, viaToast }: ThrowReceivedLettersScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friends, inbox, deleteThrow, markRead, confirmThrowAlert } = useThrow();
@@ -73,6 +78,7 @@ function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLetter
     markRead,
     confirmThrowAlert,
     onReply,
+    skipLeadIn: viaToast,
   });
 
   const topOffset = insets.top;

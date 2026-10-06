@@ -37,7 +37,7 @@ type Screen =
   | { name: 'games'; initialTab?: 'create' | 'join' }
   | { name: 'trivia'; initialTab?: 'create' | 'join' }
   | { name: 'throw'; openThrowId?: string; focusContactId?: string }
-  | { name: 'throwLetters'; contactId?: string }
+  | { name: 'throwLetters'; contactId?: string; viaToast?: boolean }
   | { name: 'account'; from?: 'expenses' | 'friends' };
 
 function AuthNavigator() {
@@ -140,6 +140,7 @@ function AppNavigator() {
         // focused), so this reuses the same `focusContactId` navigation a notification tap uses.
         onReply={(contactId) => setScreen({ name: 'throw', focusContactId: contactId })}
         initialContactId={screen.contactId}
+        viaToast={screen.viaToast}
       />
     );
   }
@@ -156,7 +157,7 @@ function AppNavigator() {
         setScreen({ name: 'friends' });
       }}
       onNotificationTarget={openNotificationTarget}
-      onOpenReceivedLetters={(contactId) => setScreen({ name: 'throwLetters', contactId })}
+      onOpenReceivedLetters={(contactId, opts) => setScreen({ name: 'throwLetters', contactId, viaToast: opts?.viaToast })}
       initialThrowId={screen.name === 'throw' ? screen.openThrowId : undefined}
       initialFocusContactId={screen.name === 'throw' ? screen.focusContactId : undefined}
     />

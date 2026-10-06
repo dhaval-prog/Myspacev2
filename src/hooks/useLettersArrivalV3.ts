@@ -80,6 +80,10 @@ interface UseLettersArrivalV3Options {
   /** Fires once the fold-away + fly-to-corner reply exit finishes (1150ms in) — the caller
    * navigates to compose from here, same timing as the handoff's own `window.location.href` call. */
   onReply: (contactId: string, letterId: string) => void;
+  /** Skips the initial auto-play's usual 600ms lead-in beat — set when this screen was reached by
+   * tapping a toast that already played its own short "launch" animation, so the plane flying in
+   * here reads as a continuation of that beat rather than a second, independent pause. */
+  skipLeadIn?: boolean;
 }
 
 const DEL = 80;
@@ -98,7 +102,17 @@ function unreadCountOf(letters: ThrowLetter[]): number {
  * own Animated values from, the same "hook owns the stage, components own their own Animated
  * interpolation of it" split `useInboxArrival`/`LetterFoldCard` already use for the in-place panel.
  */
-export function useLettersArrivalV3({ contacts, initialContactId, reduceMotion, scale, deleteThrow, markRead, confirmThrowAlert, onReply }: UseLettersArrivalV3Options) {
+export function useLettersArrivalV3({
+  contacts,
+  initialContactId,
+  reduceMotion,
+  scale,
+  deleteThrow,
+  markRead,
+  confirmThrowAlert,
+  onReply,
+  skipLeadIn,
+}: UseLettersArrivalV3Options) {
   const initialIndex = useMemo(() => {
     if (initialContactId) {
       const byId = contacts.findIndex((c) => c.id === initialContactId);
@@ -234,7 +248,7 @@ export function useLettersArrivalV3({ contacts, initialContactId, reduceMotion, 
       return;
     }
     const unreadIdx = list.findIndex((l) => l.status === 'thrown');
-    const t = setTimeout(() => play(initialIndex, unreadIdx >= 0 ? unreadIdx : 0, null), 600);
+    const t = setTimeout(() => play(initialIndex, unreadIdx >= 0 ? unreadIdx : 0, null), skipLeadIn ? 0 : 600);
     timers.current.push(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

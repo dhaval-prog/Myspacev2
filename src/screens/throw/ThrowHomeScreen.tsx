@@ -196,7 +196,7 @@ interface ThrowHomeScreenProps {
   /** FoldingLetter's own inbox icon (bottom-right of the compose letter's own button row) —
    * navigates to the standalone ThrowReceivedLettersScreen, optionally pre-seeded with whichever
    * contact's compose letter was showing. */
-  onOpenReceivedLetters: (contactId?: string) => void;
+  onOpenReceivedLetters: (contactId?: string, opts?: { viaToast?: boolean }) => void;
   /** Set when arriving here via "Throw Back" — recipient is fixed, carousel is hidden. Only ever
    * set from ThrowLetterDetailScreen's own separate Throw Back button. */
   lockedRecipient?: { friendUserId: string; repliedToThrowId: string } | null;
@@ -899,15 +899,20 @@ export function ThrowHomeScreen({
 
         {/* "X sent you a letter" — fires the instant a friend's letter actually arrives (see
             ThrowContext's own latestIncoming), not just once you happen to open the inbox.
-            Reaching for the existing onOpenReceivedLetters deep link rather than a bespoke
-            transition — see this feature's own Tier A/B scoping notes on why a cross-screen plane
-            handoff (Tier B) is a separate, larger follow-up. */}
+            Reaching for the existing onOpenReceivedLetters deep link rather than a true
+            cross-screen plane handoff — a literal position/trajectory handoff was evaluated
+            (reusing useLettersArrivalV3's own chip-tap `from` bezier) and found to pop the plane
+            upward oddly when started near the top of the screen, since that curve was tuned for
+            bottom-anchored starts (the chip row); doing it properly would need its own dedicated
+            top-entry curve, left as a future refinement. `viaToast: true` here does the lower-risk
+            half of that continuity instead — it skips the arrival screen's usual 600ms lead-in
+            beat, so the plane starts flying in immediately rather than after a second pause. */}
         {!inFlight && latestIncoming && (
           <View pointerEvents="box-none" style={[styles.incomingToastWrap, { top: insets.top + 16 + CAROUSEL_HEIGHT + 16 }]}>
             <Pressable
               onPress={() => {
                 clearLatestIncoming();
-                onOpenReceivedLetters(latestIncoming.counterpartId);
+                onOpenReceivedLetters(latestIncoming.counterpartId, { viaToast: true });
               }}
               accessibilityRole="button"
               accessibilityLabel={`${latestIncoming.counterpartName} sent you a letter`}
