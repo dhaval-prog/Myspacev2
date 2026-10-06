@@ -21,6 +21,8 @@ import {
 } from '../../utils/friendsMapMath';
 import { fmColor, fmLayout } from '../../theme/friendsMapTokens';
 import { ChatsBottomBar } from '../../components/friends/ChatsBottomBar';
+import { ThrowMap } from '../../components/throw/ThrowMap';
+import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 import { FriendsMapCanvas } from '../../components/friends/map/FriendsMapCanvas';
 import type { FriendsMapCameraCommand, FriendsMapCanvasPin } from '../../components/friends/map/friendsMapCanvasTypes';
 import { FriendsMapSearchRow } from '../../components/friends/map/FriendsMapSearchRow';
@@ -160,10 +162,20 @@ function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenP
     jumpTo({ latitude: (Math.min(...lats) + Math.max(...lats)) / 2, longitude: (Math.min(...lons) + Math.max(...lons)) / 2 }, Math.min(15, camera.zoom + 2));
   };
 
-  const closeDetail = () => {
-    setSelectedId(null);
-    fitAllVisible();
-  };
+  // Detail mode swaps the flat clustering canvas out for the real pitched 3D ThrowMap (see the
+  // render below) — that map owns its own Mapbox instance, so closing detail re-mounts the flat
+  // canvas fresh at its own hardcoded default camera. Re-fitting here (whenever selection clears,
+  // not just via the explicit close button — typing a search or tapping a filter chip also clears
+  // it) is what actually lands it back on the visible friends instead of visibly resetting to the
+  // India-wide default for a frame.
+  const prevSelectedIdRef = useRef(selectedId);
+  useEffect(() => {
+    if (prevSelectedIdRef.current != null && selectedId == null) fitAllVisible();
+    prevSelectedIdRef.current = selectedId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  const closeDetail = () => setSelectedId(null);
 
   const groupById = useMemo(() => {
     const map = new Map<string, (typeof groups)[number]>();
@@ -251,19 +263,33 @@ function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenP
       }
     : null;
 
+  // Detail mode's map — the same pitched, 3D-building Mapbox view Throw's own map shows for a
+  // focused contact, per explicit request, rather than this screen's own flat overview canvas
+  // just zoomed in further.
+  const throwMapPins: ThrowMapPin[] = useMemo(() => {
+    const pins: ThrowMapPin[] = [];
+    if (me) pins.push({ id: 'me', latitude: me.latitude, longitude: me.longitude, label: 'You', isSelf: true });
+    if (selectedContact) pins.push({ id: selectedContact.userId, latitude: selectedContact.lat, longitude: selectedContact.lon, label: selectedContact.name, selected: true });
+    return pins;
+  }, [me, selectedContact]);
+
   const sidePad = 16 * scale;
   const topBarTop = insets.top + fmLayout.searchRowY * scale;
 
   return (
     <View style={styles.screen}>
-      <FriendsMapCanvas
-        me={me}
-        pins={pins}
-        renderPin={renderPin}
-        renderMe={() => <FriendsMapMeGlyph scale={scale} reduceMotion={reduceMotion} />}
-        cameraCommand={cameraCommand}
-        onCameraChange={setCamera}
-      />
+      {selectedContact ? (
+        <ThrowMap pins={throwMapPins} focus={{ latitude: selectedContact.lat, longitude: selectedContact.lon }} />
+      ) : (
+        <FriendsMapCanvas
+          me={me}
+          pins={pins}
+          renderPin={renderPin}
+          renderMe={() => <FriendsMapMeGlyph scale={scale} reduceMotion={reduceMotion} />}
+          cameraCommand={cameraCommand}
+          onCameraChange={setCamera}
+        />
+      )}
       <LinearGradient
         pointerEvents="none"
         colors={[fmColor.mapFadeTop, 'rgba(221,237,223,0)']}
