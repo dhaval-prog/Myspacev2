@@ -25,51 +25,82 @@ function ThrowPlaneGlyph({ bodyFill, wingFill }: { bodyFill: string; wingFill: s
 
 interface ChatsBottomBarProps {
   isDay: boolean;
+  /** Which tab reads as active — defaults to 'chats' (every existing call site but the Map screen
+   * itself leaves this unset). */
+  activeTab?: 'chats' | 'map';
   onOpenThrow: () => void;
   onOpenExpenses: () => void;
   onOpenGames: () => void;
   onOpenAccount: () => void;
+  /** Returns to the Chats list — only reachable from the Map screen's own "Chats" tab; every other
+   * screen using this bar is already the Chats list, so its own "Chats" tab has nothing to do. */
+  onOpenChats?: () => void;
+  /** Opens the real Friends Map screen — falls back to `onOpenThrow` (Map used to just alias to
+   * Throw, which already showed a map) wherever a caller hasn't been updated to pass this yet. */
+  onOpenMap?: () => void;
+  /** Hides the floating Throw/Split/Games quick-action pill — the Map screen's own design has no
+   * equivalent row, just the menu bar underneath it. Defaults to true (every other screen). */
+  showQuickActions?: boolean;
 }
 
 /**
  * The Chats list's bottom chrome (MySpace Chats Throw handoff, §"Bottom of the chat list") — a
  * floating quick-action pill (Throw/Split/Games map onto this app's existing Throw/Expenses/Games
  * destinations; the handoff's own Camera/Voice buttons were dropped — no screen for them to open)
- * and the new Chats/Throw/Map/Me menu bar. Docked outside the scroll view (unlike the handoff's own
- * inline placement) so it never scrolls away, matching every other screen's bottom-dock convention.
- * Map and Me have no dedicated screens in this app yet — Map opens Throw (which already shows the
- * map), Me opens the existing account settings screen.
+ * and the Chats/Throw/Map/Me menu bar, also reused as-is by the Friends Map screen (with the quick
+ * actions hidden and "Map" the active tab instead). Docked outside the scroll view (unlike the
+ * handoff's own inline placement) so it never scrolls away, matching every other screen's
+ * bottom-dock convention. Me still has no dedicated screen — it opens account settings.
  */
-export function ChatsBottomBar({ isDay, onOpenThrow, onOpenExpenses, onOpenGames, onOpenAccount }: ChatsBottomBarProps) {
+export function ChatsBottomBar({
+  isDay,
+  activeTab = 'chats',
+  onOpenThrow,
+  onOpenExpenses,
+  onOpenGames,
+  onOpenAccount,
+  onOpenChats,
+  onOpenMap,
+  showQuickActions = true,
+}: ChatsBottomBarProps) {
   const dim = isDay ? colors.ink50 : 'rgba(237,253,255,0.5)';
   const circleBg = isDay ? 'rgba(22,33,12,0.06)' : 'rgba(237,253,255,0.08)';
   const circleIcon = isDay ? colors.ink : colors.pale;
 
   return (
     <View>
-      <View style={styles.quickWrap}>
-        <View style={[styles.quickPill, isDay ? styles.quickPillDay : styles.quickPillNight]}>
-          <Pressable
-            onPress={onOpenThrow}
-            style={[styles.circle54, { backgroundColor: isDay ? colors.ink : colors.lime }]}
-            accessibilityRole="button"
-            accessibilityLabel="Throw"
-          >
-            <ThrowPlaneGlyph bodyFill={isDay ? colors.lime : colors.ink} wingFill={isDay ? '#8FB52E' : '#3B5222'} />
-          </Pressable>
-          <Pressable onPress={onOpenExpenses} style={[styles.circle44, { backgroundColor: circleBg }]} accessibilityRole="button" accessibilityLabel="Split">
-            <Icon path={SPLIT_ICON} color={circleIcon} size={20} strokeWidth={1.9} />
-          </Pressable>
-          <Pressable onPress={onOpenGames} style={[styles.circle44, { backgroundColor: circleBg }]} accessibilityRole="button" accessibilityLabel="Games">
-            <Icon path={GAMES_ICON} color={circleIcon} size={21} strokeWidth={1.8} />
-          </Pressable>
+      {showQuickActions && (
+        <View style={styles.quickWrap}>
+          <View style={[styles.quickPill, isDay ? styles.quickPillDay : styles.quickPillNight]}>
+            <Pressable
+              onPress={onOpenThrow}
+              style={[styles.circle54, { backgroundColor: isDay ? colors.ink : colors.lime }]}
+              accessibilityRole="button"
+              accessibilityLabel="Throw"
+            >
+              <ThrowPlaneGlyph bodyFill={isDay ? colors.lime : colors.ink} wingFill={isDay ? '#8FB52E' : '#3B5222'} />
+            </Pressable>
+            <Pressable onPress={onOpenExpenses} style={[styles.circle44, { backgroundColor: circleBg }]} accessibilityRole="button" accessibilityLabel="Split">
+              <Icon path={SPLIT_ICON} color={circleIcon} size={20} strokeWidth={1.9} />
+            </Pressable>
+            <Pressable onPress={onOpenGames} style={[styles.circle44, { backgroundColor: circleBg }]} accessibilityRole="button" accessibilityLabel="Games">
+              <Icon path={GAMES_ICON} color={circleIcon} size={21} strokeWidth={1.8} />
+            </Pressable>
+          </View>
         </View>
-      </View>
+      )}
 
       <View style={[styles.menuBar, isDay ? styles.menuBarDay : styles.menuBarNight]}>
-        <MenuTab icon={CHATS_TAB_ICON} label="Chats" active isDay={isDay} />
+        <MenuTab icon={CHATS_TAB_ICON} label="Chats" active={activeTab === 'chats'} isDay={isDay} onPress={onOpenChats} />
         <MenuTab icon={THROW_TAB_ICON} label="Throw" isDay={isDay} onPress={onOpenThrow} strokeWidth={4.5} viewBox="0 0 64 64" />
-        <MenuTab icon={MAP_TAB_ICON} label="Map" isDay={isDay} onPress={onOpenThrow} pathExtra={<Circle cx={12} cy={10} r={2.2} stroke={dim} strokeWidth={1.8} />} />
+        <MenuTab
+          icon={MAP_TAB_ICON}
+          label="Map"
+          active={activeTab === 'map'}
+          isDay={isDay}
+          onPress={onOpenMap ?? onOpenThrow}
+          pathExtra={<Circle cx={12} cy={10} r={2.2} stroke={dim} strokeWidth={1.8} />}
+        />
         <MenuTab icon={ME_TAB_ICON} label="Me" isDay={isDay} onPress={onOpenAccount} pathExtra={<Circle cx={12} cy={8} r={3.5} stroke={dim} strokeWidth={1.8} />} />
       </View>
     </View>

@@ -10,6 +10,9 @@ export interface ThrowLocation {
   country: string;
   latitude: number;
   longitude: number;
+  /** When this location was last saved — undefined for a location loaded before this column was
+   * read back (or never set). Backs the Friends Map's "live" vs "last seen" distinction. */
+  updatedAt?: string;
 }
 
 export type ThrowStatus = 'thrown' | 'read' | 'replied';

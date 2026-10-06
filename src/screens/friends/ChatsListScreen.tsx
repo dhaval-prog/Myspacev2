@@ -99,6 +99,7 @@ export function ChatsListScreen({ onOpenExpenses, onOpenThrow, onOpenGames, onOp
     lastGroupMessageFor,
     groupMemberIdsFor,
     groupMemberNamesFor,
+    goMap,
   } = useFriends();
 
   const firstTwoMembers = (groupId: string): { id: string; name: string }[] => {
@@ -342,7 +343,7 @@ export function ChatsListScreen({ onOpenExpenses, onOpenThrow, onOpenGames, onOp
         )}
       </ScrollView>
 
-      <ChatsBottomBar isDay={isDay} onOpenThrow={onOpenThrow} onOpenExpenses={onOpenExpenses} onOpenGames={onOpenGames} onOpenAccount={onOpenAccount} />
+      <ChatsBottomBar isDay={isDay} onOpenThrow={onOpenThrow} onOpenMap={goMap} onOpenExpenses={onOpenExpenses} onOpenGames={onOpenGames} onOpenAccount={onOpenAccount} />
     </LinearGradient>
   );
 }

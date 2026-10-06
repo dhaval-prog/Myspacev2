@@ -207,7 +207,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     // counts as a first load for this purpose too, since the screen's already showing something.
     if (!hasLoadedRef.current) setLoading(true);
     const [meRes, throwsRes, streakRes, profileRes] = await Promise.all([
-      supabase.from('throw_profiles').select('city,country,latitude,longitude').eq('user_id', myId).maybeSingle(),
+      supabase.from('throw_profiles').select('city,country,latitude,longitude,updated_at').eq('user_id', myId).maybeSingle(),
       supabase.from('throws').select('*').or(`sender_id.eq.${myId},recipient_id.eq.${myId}`).order('created_at', { ascending: false }),
       supabase.from('throw_streaks').select('counterpart_id,current_streak,last_throw_date').eq('user_id', myId),
       supabase.from('profiles').select('full_name,avatar_url').eq('id', myId).maybeSingle(),
@@ -218,8 +218,8 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     warn('load my profile', profileRes.error);
 
     if (meRes.data) {
-      const d = meRes.data as { city: string; country: string; latitude: number; longitude: number };
-      const loc = { city: d.city, country: d.country, latitude: d.latitude, longitude: d.longitude };
+      const d = meRes.data as { city: string; country: string; latitude: number; longitude: number; updated_at: string | null };
+      const loc = { city: d.city, country: d.country, latitude: d.latitude, longitude: d.longitude, updatedAt: d.updated_at ?? undefined };
       setMyLocationState(loc);
       latestMyLocationRef.current = loc;
     }
@@ -255,12 +255,12 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     if (friendIds.length > 0) {
       const { data: locRows, error: locErr } = await supabase
         .from('throw_profiles')
-        .select('user_id,city,country,latitude,longitude')
+        .select('user_id,city,country,latitude,longitude,updated_at')
         .in('user_id', friendIds);
       warn('load friend locations', locErr);
       const map: Record<string, ThrowLocation> = {};
-      for (const r of (locRows as { user_id: string; city: string; country: string; latitude: number; longitude: number }[] | null) ?? []) {
-        map[r.user_id] = { city: r.city, country: r.country, latitude: r.latitude, longitude: r.longitude };
+      for (const r of (locRows as { user_id: string; city: string; country: string; latitude: number; longitude: number; updated_at: string | null }[] | null) ?? []) {
+        map[r.user_id] = { city: r.city, country: r.country, latitude: r.latitude, longitude: r.longitude, updatedAt: r.updated_at ?? undefined };
       }
       friendLocationsSnapshot = map;
       setFriendLocations(map);
