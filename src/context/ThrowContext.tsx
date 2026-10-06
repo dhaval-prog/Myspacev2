@@ -337,16 +337,19 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
         p_alert_minute: alertSchedule?.minute ?? null,
       });
       if (error) return { error: error.message };
-      // Surfaces the letter in Orbit's Chats too — a small system note in the sender/recipient's
-      // own DM thread, same convention as "Missed video call"/"📍 Location". Best-effort: a
-      // connection between the two might not resolve here (e.g. Throw's own friend list is
-      // slightly stale), and the throw itself has already succeeded either way, so failures here
-      // are only warned, never surfaced as an error to the user.
+      // Surfaces the letter in Orbit's Chats too, as the same airmail letter card the Chats
+      // redesign uses for a group's own thrown letters — not a plain system note, so the title and
+      // sender's city (the postmark's place tag) carry through. Best-effort: a connection between
+      // the two might not resolve here (e.g. Throw's own friend list is slightly stale), and the
+      // throw itself has already succeeded either way, so failures here are only warned, never
+      // surfaced as an error to the user.
       const connectionId = fsFriends.find((f) => f.userId === draft.recipientId)?.connectionId;
       if (connectionId && myId) {
+        const throwRow = data as ThrowRow;
+        const title = draft.messageText?.trim().slice(0, 60) || 'A letter';
         const { error: msgErr } = await supabase
           .from('direct_messages')
-          .insert({ connection_id: connectionId, sender_id: myId, kind: 'system', text: '💌 A letter was thrown' });
+          .insert({ connection_id: connectionId, sender_id: myId, kind: 'letter', text: title, attachment_url: throwRow.sender_city || null });
         warn('post throw chat message', msgErr);
       }
       await refresh();

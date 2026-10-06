@@ -30,16 +30,19 @@ export interface FriendRequest {
   introMessage: string | null;
 }
 
-export type MessageKind = 'text' | 'image' | 'location' | 'system';
+export type MessageKind = 'text' | 'image' | 'location' | 'system' | 'letter';
 
 export interface DirectMessage {
   id: string;
   connectionId: string;
   senderId: string;
   kind: MessageKind;
-  /** The message body for 'text'/'system'; a caption (may be empty) for 'image'/'location'. */
+  /** The message body for 'text'/'system'; a short title for 'letter' (a real Throw letter's own
+   * message text, truncated — see ThrowContext.sendThrow); a caption (may be empty) for
+   * 'image'/'location'. */
   text: string;
-  /** Public storage URL for 'image', a Google Maps link for 'location'; null for 'text'. */
+  /** Public storage URL for 'image', a Google Maps link for 'location', the sender's city as a
+   * place tag for 'letter'; null for 'text'. */
   attachmentUrl: string | null;
   createdAt: string;
 }

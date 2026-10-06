@@ -27,21 +27,23 @@ function AirmailStripe() {
 }
 
 /**
- * The airmail "letter card" group messages carry a Throw letter as — the MySpace Chats Throw
+ * The airmail "letter card" a thrown Throw letter shows up as in Chats — the MySpace Chats Throw
  * handoff's own blue/cream diagonal-stripe border, Caveat title, dashed postmark place tag, and
- * "Break seal" button. Identical in day and night (the handoff never themes it), so there's no
- * isDay variant here.
+ * "Break seal" button. Shared by the group thread (a letter-kind group message) and the 1:1
+ * thread (Throw's own sendThrow posts one into the DM thread instead of a plain system note).
+ * Identical in day and night (the handoff never themes it), so there's no isDay variant here.
  */
-export function GroupLetterCard({
+export function LetterThrownCard({
   title,
   place,
-  groupName,
+  toLabel,
   timeLabel,
   onBreakSeal,
 }: {
   title: string;
   place: string | null;
-  groupName: string;
+  /** The "TO ..." line's destination — a group's name, or a friend's name in a 1:1 thread. */
+  toLabel: string;
   timeLabel: string;
   onBreakSeal: () => void;
 }) {
@@ -51,7 +53,7 @@ export function GroupLetterCard({
       <View style={styles.inner}>
         <View style={styles.topRow}>
           <View style={styles.topText}>
-            <Text style={styles.kicker}>PAR AVION · TO {groupName.toUpperCase()}</Text>
+            <Text style={styles.kicker}>PAR AVION · TO {toLabel.toUpperCase()}</Text>
             <Text style={styles.title} numberOfLines={2}>
               {title}
             </Text>

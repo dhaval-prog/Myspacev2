@@ -19,6 +19,10 @@ import { noSelect } from '../../theme/webStyles';
 const s = (n: number, scale: number) => n * scale;
 // Same commit-distance convention MediaViewerV3's own horizontal swipe uses.
 const SWIPE_COMMIT_DISTANCE = 40;
+// Matches FoldingLetter's own bottom anchor exactly (ThrowHomeScreen's `letterCard` style: `bottom:
+// insets.bottom + 16 + BOTTOM_NAV_CLEARANCE` at rest) so the open letter here reads as the same
+// height as Throw's own compose letter — raw device pixels in both, not run through `scale`.
+const BOTTOM_NAV_CLEARANCE = 92;
 
 interface ThrowReceivedLettersScreenProps {
   /** Reply, after its own fold-away + fly-to-corner exit — the caller lands on the existing Throw
@@ -34,6 +38,7 @@ function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLetter
   const reduceMotion = useReducedMotion();
   const { friends, inbox, deleteThrow, markRead, confirmThrowAlert } = useThrow();
   const [frameWidth, setFrameWidth] = useState(0);
+  const [frameHeight, setFrameHeight] = useState(0);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [armed, setArmed] = useState(false);
 
@@ -52,6 +57,12 @@ function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLetter
   );
 
   const scale = frameWidth > 0 ? frameWidth / v3Layout.phone.width : 1;
+  // The letter's own top (v3Layout.letter.y) stays exactly where it's always been — the envelope/
+  // seal/plane-landing-point geometry is all tuned relative to it — only its bottom edge extends
+  // further down to match FoldingLetter's own (see BOTTOM_NAV_CLEARANCE's comment). Falls back to
+  // the original fixed token height until the frame's actually measured.
+  const letterTopPx = insets.top + s(v3Layout.letter.y, scale);
+  const letterHeightPx = frameHeight > 0 ? Math.max(s(200, scale), frameHeight - letterTopPx - (insets.bottom + 16 + BOTTOM_NAV_CLEARANCE)) : s(v3Layout.letter.h, scale);
 
   const arrival = useLettersArrivalV3({
     contacts,
@@ -134,6 +145,7 @@ function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLetter
       style={styles.screen}
       onLayout={(e) => {
         if (frameWidth === 0) setFrameWidth(e.nativeEvent.layout.width);
+        if (frameHeight === 0) setFrameHeight(e.nativeEvent.layout.height);
       }}
     >
       <ThrowMap pins={mapPins} focus={activeLocation} />
@@ -173,7 +185,7 @@ function ReceivedLettersInner({ onReply, initialContactId }: ThrowReceivedLetter
       )}
 
       <View style={[{ position: 'absolute', left: s(v3Layout.letter.x, scale), top: topOffset + s(v3Layout.letter.y, scale) }, noSelect]} {...letterSwipe.panHandlers}>
-        <LetterCardV3 stage={arrival.stage} letter={arrival.cardData} isEmpty={arrival.isEmpty} emptyName={arrival.curContactName} scale={scale} />
+        <LetterCardV3 stage={arrival.stage} letter={arrival.cardData} isEmpty={arrival.isEmpty} emptyName={arrival.curContactName} scale={scale} heightPx={letterHeightPx} />
       </View>
 
       <View style={{ position: 'absolute', left: s(v3Layout.actionRow.x, scale), right: s(v3Layout.actionRow.x, scale), top: topOffset + s(v3Layout.actionRow.y, scale) }}>
