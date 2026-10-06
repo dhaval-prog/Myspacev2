@@ -16,7 +16,7 @@ interface ThrowScreenProps {
   onOpenChats: () => void;
   onOpenAddFriendScreen: () => void;
   onNotificationTarget: (target: NotificationTarget) => void;
-  onOpenReceivedLetters: (contactId?: string) => void;
+  onOpenReceivedLetters: (contactId?: string, opts?: { viaToast?: boolean }) => void;
   initialThrowId?: string;
   initialFocusContactId?: string;
 }
@@ -41,7 +41,7 @@ function ThrowNavigator({
   onOpenChats: () => void;
   onOpenAddFriendScreen: () => void;
   onNotificationTarget: (target: NotificationTarget) => void;
-  onOpenReceivedLetters: (contactId?: string) => void;
+  onOpenReceivedLetters: (contactId?: string, opts?: { viaToast?: boolean }) => void;
   initialThrowId?: string;
   initialFocusContactId?: string;
 }) {
