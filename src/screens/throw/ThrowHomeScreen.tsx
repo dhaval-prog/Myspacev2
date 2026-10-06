@@ -341,10 +341,11 @@ export function ThrowHomeScreen({
     setChromeHidden((prev) => (prev === hidden ? prev : hidden));
   };
 
-  // BottomNav also hides for the Add Status cards and the Notifications panel — same fade+slide
-  // chrome mechanism, so the cards' own bottom edge is free to extend all the way down once the
-  // dock is gone (see cardsOverlay/notificationsOverlay's own bottom interpolation below).
-  const chromeShouldHide = storyFlow?.name === 'cards' || isNotificationsSelected;
+  // BottomNav also hides for the Add Status cards, the Notifications panel, and the inline
+  // received-letters panel — same fade+slide chrome mechanism, so each one's own bottom edge is
+  // free to extend all the way down once the dock is gone (see cardsOverlay/notificationsOverlay's
+  // own bottom interpolation below, and InlineReceivedLetters's own chipRowBottom prop).
+  const chromeShouldHide = storyFlow?.name === 'cards' || isNotificationsSelected || isReceivingSelected;
   useEffect(() => {
     Animated.timing(chromeOpacity, { toValue: chromeShouldHide ? 0 : 1, duration: 280, useNativeDriver: false }).start();
     setChromeHidden(chromeShouldHide);
@@ -1132,7 +1133,7 @@ export function ThrowHomeScreen({
             confirmThrowAlert={confirmThrowAlert}
             onClose={() => setIsReceivingSelected(false)}
             topOffset={insets.top}
-            chipRowBottom={insets.bottom + 16 + BOTTOM_NAV_CLEARANCE}
+            chipRowBottom={Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE))}
           />
         )}
 
