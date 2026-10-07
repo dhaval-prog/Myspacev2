@@ -352,9 +352,13 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
       setLocationVisibilityState(visibility);
       latestLocationVisibilityRef.current = visibility;
       if (!myId) return;
+      // update, not upsert — throw_profiles has other NOT NULL columns (city/country/lat/long)
+      // that an upsert's INSERT path would need, even though this row always already exists by
+      // the time Settings is reachable (ThrowNavigator requires myLocation to be set first).
       supabase
         .from('throw_profiles')
-        .upsert({ user_id: myId, location_visibility: visibility }, { onConflict: 'user_id' })
+        .update({ location_visibility: visibility })
+        .eq('user_id', myId)
         .then(({ error }) => {
           if (error) console.warn('[Throw] failed to save location visibility:', error.message);
         });
