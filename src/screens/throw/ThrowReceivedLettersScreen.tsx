@@ -3,6 +3,7 @@ import { PanResponder, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowProvider, useThrow } from '../../context/ThrowContext';
 import { LetterPlaneGlyph } from '../../components/throw/inbox/LetterPlaneGlyph';
+import { BottomNav } from '../../components/BottomNav';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 import { ContactsRowV3 } from '../../components/throw/lettersV3/ContactsRowV3';
@@ -23,6 +24,7 @@ const SWIPE_COMMIT_DISTANCE = 40;
 // insets.bottom + 16 + BOTTOM_NAV_CLEARANCE` at rest) so the open letter here reads as the same
 // height as Throw's own compose letter — raw device pixels in both, not run through `scale`.
 const BOTTOM_NAV_CLEARANCE = 92;
+const BACK_ICON = 'M15 18l-6-6 6-6';
 
 interface ThrowReceivedLettersScreenProps {
   /** Reply, after its own fold-away + fly-to-corner exit — the caller lands on the existing Throw
@@ -36,9 +38,17 @@ interface ThrowReceivedLettersScreenProps {
    * starts flying in, so it reads as a continuation of the toast's own launch rather than a
    * second, independent pause. */
   viaToast?: boolean;
+  /** The shared bottom nav dock's own destinations — this screen had no way back out besides
+   * Reply before, so the dock doubles as its exit (its "+" slot is repurposed as Back, landing on
+   * Throw's own home screen, same destination its own Throw tab already goes to). */
+  onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
+  onOpenGames: () => void;
+  onOpenExpenses: () => void;
 }
 
-function ReceivedLettersInner({ onReply, initialContactId, viaToast }: ThrowReceivedLettersScreenProps) {
+function ReceivedLettersInner({ onReply, initialContactId, viaToast, onOpenThrow, onOpenChats, onOpenMap, onOpenGames, onOpenExpenses }: ThrowReceivedLettersScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { friends, inbox, deleteThrow, markRead, confirmThrowAlert } = useThrow();
@@ -142,6 +152,22 @@ function ReceivedLettersInner({ onReply, initialContactId, viaToast }: ThrowRece
       <View style={styles.emptyScreen}>
         <Text style={styles.emptyTitle}>No letters yet</Text>
         <Text style={styles.emptySub}>Letters friends throw you will show up here.</Text>
+        <View style={styles.bottomNavWrap}>
+          <BottomNav
+            activeId="throw"
+            onSelect={(id) => {
+              if (id === 'chat') onOpenChats();
+              if (id === 'map') onOpenMap();
+              if (id === 'games') onOpenGames();
+              if (id === 'expenses') onOpenExpenses();
+            }}
+            onAdd={onOpenThrow}
+            fabIconPath={BACK_ICON}
+            fabAccessibilityLabel="Back"
+            bottomInset={insets.bottom}
+            reduceMotion={reduceMotion}
+          />
+        </View>
       </View>
     );
   }
@@ -205,7 +231,7 @@ function ReceivedLettersInner({ onReply, initialContactId, viaToast }: ThrowRece
         />
       </View>
 
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: s(v3Layout.chipRow.bottom, scale) + insets.bottom }}>
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: s(v3Layout.chipRow.bottom, scale) + insets.bottom + BOTTOM_NAV_CLEARANCE }}>
         <ChipsRowV3
           rowTitle={arrival.rowTitle}
           chips={arrival.chips}
@@ -228,6 +254,23 @@ function ReceivedLettersInner({ onReply, initialContactId, viaToast }: ThrowRece
         onClose={() => setMediaOpen(false)}
         scale={scale}
       />
+
+      <View style={styles.bottomNavWrap}>
+        <BottomNav
+          activeId="throw"
+          onSelect={(id) => {
+            if (id === 'chat') onOpenChats();
+            if (id === 'map') onOpenMap();
+            if (id === 'games') onOpenGames();
+            if (id === 'expenses') onOpenExpenses();
+          }}
+          onAdd={onOpenThrow}
+          fabIconPath={BACK_ICON}
+          fabAccessibilityLabel="Back"
+          bottomInset={insets.bottom}
+          reduceMotion={reduceMotion}
+        />
+      </View>
     </View>
   );
 }
@@ -250,4 +293,5 @@ const styles = StyleSheet.create({
   emptyScreen: { flex: 1, backgroundColor: v3Color.mapBg, alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 32 },
   emptyTitle: { fontFamily: v3Font.ui800, fontSize: 18, color: v3Color.ink },
   emptySub: { fontFamily: v3Font.ui400, fontSize: 13.5, color: v3Color.mutedDark, textAlign: 'center' },
+  bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 });

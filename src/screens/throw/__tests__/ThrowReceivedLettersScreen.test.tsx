@@ -76,8 +76,19 @@ function setupMocks(inbox: ReturnType<typeof letter>[], friends = [FRIEND_A, FRI
 
 async function renderScreen(props: Partial<React.ComponentProps<typeof ThrowReceivedLettersScreen>> = {}) {
   const onReply = jest.fn();
+  const noopFn = jest.fn();
   await act(async () => {
-    renderWithSafeArea(<ThrowReceivedLettersScreen onReply={onReply} {...props} />);
+    renderWithSafeArea(
+      <ThrowReceivedLettersScreen
+        onReply={onReply}
+        onOpenThrow={noopFn}
+        onOpenChats={noopFn}
+        onOpenMap={noopFn}
+        onOpenGames={noopFn}
+        onOpenExpenses={noopFn}
+        {...props}
+      />,
+    );
   });
   return { onReply };
 }
