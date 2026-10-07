@@ -79,7 +79,7 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
   const insets = useSafeAreaInsets();
   const { myLocation } = useThrow();
   const { friends, receivedRequests, sentRequests, acceptRequest, declineRequest, cancelRequest, removeFriend, blockFriend } = useFriends();
-  const { mode: colorMode, setMode: setColorMode, mapMode, setMapMode } = useThrowColorMode();
+  const { mode: colorMode, setMode: setColorMode, mapMode, setMapMode, showMapBackground, setShowMapBackground } = useThrowColorMode();
   const {
     mode: weatherMode,
     setMode: setWeatherMode,
@@ -149,6 +149,17 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
               <Text style={styles.rowMeta}>For the map's basemap and recipient carousel only — the letter's own paper/plane color is separate</Text>
             </View>
             <Text style={styles.editLabel}>{mapModeLabel}</Text>
+          </GlassSurface>
+        </Pressable>
+        <Pressable onPress={() => setShowMapBackground(!showMapBackground)}>
+          <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowName}>Show Map Background</Text>
+              <Text style={styles.rowMeta}>Uses your live location — costs more battery and data. Off shows a soft day/night background instead</Text>
+            </View>
+            <View style={[styles.toggleTrack, showMapBackground && styles.toggleTrackOn]}>
+              <View style={[styles.toggleThumb, showMapBackground && styles.toggleThumbOn]} />
+            </View>
           </GlassSurface>
         </Pressable>
 

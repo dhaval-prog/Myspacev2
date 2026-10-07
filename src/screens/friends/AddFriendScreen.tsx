@@ -31,16 +31,15 @@ function formatDisplayCode(code: string): string {
 }
 
 interface AddFriendScreenProps {
-  onHome: () => void;
   onOpenExpenses: () => void;
   onOpenThrow: () => void;
 }
 
 /** Add a friend (6p-2): show your own code/QR, or enter theirs cell by cell. */
-export function AddFriendScreen({ onHome, onOpenExpenses, onOpenThrow }: AddFriendScreenProps) {
+export function AddFriendScreen({ onOpenExpenses, onOpenThrow }: AddFriendScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { friendCode, goHome, goScan, lookupCode } = useFriends();
+  const { friendCode, goHome, goMap, goScan, lookupCode } = useFriends();
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -199,7 +198,8 @@ export function AddFriendScreen({ onHome, onOpenExpenses, onOpenThrow }: AddFrie
       <BottomNav
         activeId="chat"
         onSelect={(id) => {
-          if (id === 'chat') onHome();
+          if (id === 'chat') goHome();
+          if (id === 'map') goMap();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}

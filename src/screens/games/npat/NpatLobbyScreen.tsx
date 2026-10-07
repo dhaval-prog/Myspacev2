@@ -35,12 +35,14 @@ interface NpatLobbyScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
   /** Which tab the create/join hub opens on — e.g. the Games hub's "Join with code" row button jumps straight to Join. */
   initialTab?: 'create' | 'join';
 }
 
 /** Create-or-join hub when there's no game yet; ready-up room once one exists — restyled to the "MySpace Games · 1A · 1B" handoff. */
-export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenThrow, initialTab }: NpatLobbyScreenProps) {
+export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenChats, onOpenMap, initialTab }: NpatLobbyScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
@@ -52,6 +54,8 @@ export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenThrow, initialTa
         onHome={onHome}
         onOpenExpenses={onOpenExpenses}
         onOpenThrow={onOpenThrow}
+        onOpenChats={onOpenChats}
+        onOpenMap={onOpenMap}
         game={game}
         players={players}
         myPlayerId={myPlayerId}
@@ -69,6 +73,8 @@ export function NpatLobbyScreen({ onHome, onOpenExpenses, onOpenThrow, initialTa
       onHome={onHome}
       onOpenExpenses={onOpenExpenses}
       onOpenThrow={onOpenThrow}
+      onOpenChats={onOpenChats}
+      onOpenMap={onOpenMap}
       loading={loading}
       createGame={createGame}
       joinGame={joinGame}
@@ -84,6 +90,8 @@ function NpatHub({
   onHome,
   onOpenExpenses,
   onOpenThrow,
+  onOpenChats,
+  onOpenMap,
   loading,
   createGame,
   joinGame,
@@ -95,6 +103,8 @@ function NpatHub({
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
   loading: boolean;
   createGame: (rounds: number, timerSeconds: number, name: string) => Promise<{ error: string | null; roomCode?: string }>;
   joinGame: (roomCode: string, name: string) => Promise<{ error: string | null }>;
@@ -219,7 +229,8 @@ function NpatHub({
       <BottomNav
         activeId="games"
         onSelect={(id) => {
-          if (id === 'chat') onHome();
+          if (id === 'chat') onOpenChats();
+          if (id === 'map') onOpenMap();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}
@@ -234,6 +245,8 @@ function NpatReadyRoom({
   onHome,
   onOpenExpenses,
   onOpenThrow,
+  onOpenChats,
+  onOpenMap,
   game,
   players,
   myPlayerId,
@@ -246,6 +259,8 @@ function NpatReadyRoom({
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
   game: NonNullable<ReturnType<typeof useGame>['game']>;
   players: ReturnType<typeof useGame>['players'];
   myPlayerId: string | null;
@@ -346,8 +361,9 @@ function NpatReadyRoom({
         onSelect={(id) => {
           if (id === 'chat') {
             leaveGame();
-            onHome();
+            onOpenChats();
           }
+          if (id === 'map') onOpenMap();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}

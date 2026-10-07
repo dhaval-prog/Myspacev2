@@ -83,12 +83,14 @@ interface TriviaLobbyScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
   /** Which tab the create/join hub opens on — the Games hub's "Join with code" row jumps straight to Join. */
   initialTab?: 'create' | 'join';
 }
 
 /** Create-or-join hub when there's no game yet; the lobby once one exists. */
-export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenThrow, initialTab }: TriviaLobbyScreenProps) {
+export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenChats, onOpenMap, initialTab }: TriviaLobbyScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
@@ -100,6 +102,8 @@ export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenThrow, initial
         onHome={onHome}
         onOpenExpenses={onOpenExpenses}
         onOpenThrow={onOpenThrow}
+        onOpenChats={onOpenChats}
+        onOpenMap={onOpenMap}
         game={game}
         players={players}
         myPlayerId={myPlayerId}
@@ -118,6 +122,8 @@ export function TriviaLobbyScreen({ onHome, onOpenExpenses, onOpenThrow, initial
       onHome={onHome}
       onOpenExpenses={onOpenExpenses}
       onOpenThrow={onOpenThrow}
+      onOpenChats={onOpenChats}
+      onOpenMap={onOpenMap}
       loading={loading}
       createGame={createGame}
       joinGame={joinGame}
@@ -133,6 +139,8 @@ function TriviaHub({
   onHome,
   onOpenExpenses,
   onOpenThrow,
+  onOpenChats,
+  onOpenMap,
   loading,
   createGame,
   joinGame,
@@ -144,6 +152,8 @@ function TriviaHub({
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
   loading: boolean;
   createGame: ReturnType<typeof useTriviaGame>['createGame'];
   joinGame: ReturnType<typeof useTriviaGame>['joinGame'];
@@ -295,7 +305,8 @@ function TriviaHub({
       <BottomNav
         activeId="games"
         onSelect={(id) => {
-          if (id === 'chat') onHome();
+          if (id === 'chat') onOpenChats();
+          if (id === 'map') onOpenMap();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}
@@ -313,6 +324,8 @@ function TriviaReadyRoom({
   onHome,
   onOpenExpenses,
   onOpenThrow,
+  onOpenChats,
+  onOpenMap,
   game,
   players,
   myPlayerId,
@@ -326,6 +339,8 @@ function TriviaReadyRoom({
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
   game: NonNullable<ReturnType<typeof useTriviaGame>['game']>;
   players: ReturnType<typeof useTriviaGame>['players'];
   myPlayerId: string | null;
@@ -442,8 +457,9 @@ function TriviaReadyRoom({
         onSelect={(id) => {
           if (id === 'chat') {
             leaveGame();
-            onHome();
+            onOpenChats();
           }
+          if (id === 'map') onOpenMap();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}

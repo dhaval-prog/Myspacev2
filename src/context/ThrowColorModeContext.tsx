@@ -28,6 +28,11 @@ interface ThrowColorModeContextValue {
    * is actually showing. */
   mapIsDay: boolean;
   setMapMode: (mode: ThrowColorMode) => void;
+  /** Whether Throw's home screen shows the real live map (`user_settings.throw_map_show_background`)
+   * instead of the lighter day/night glassmorphism backdrop — off by default since the live map
+   * costs battery and data; an explicit opt-in via Throw Settings. */
+  showMapBackground: boolean;
+  setShowMapBackground: (show: boolean) => void;
 }
 
 const ThrowColorModeContext = createContext<ThrowColorModeContextValue | null>(null);
@@ -46,6 +51,7 @@ export function ThrowColorModeProvider({ children }: { children: React.ReactNode
   const userId = user?.id;
   const [mode, setModeState] = useState<ThrowColorMode>('auto');
   const [mapMode, setMapModeState] = useState<ThrowColorMode>('auto');
+  const [showMapBackground, setShowMapBackgroundState] = useState(false);
   const [autoIsDay, setAutoIsDay] = useState(() => isDaytimeNow());
 
   useEffect(() => {
@@ -59,14 +65,20 @@ export function ThrowColorModeProvider({ children }: { children: React.ReactNode
     if (!userId) {
       setModeState('auto');
       setMapModeState('auto');
+      setShowMapBackgroundState(false);
       return;
     }
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.from('user_settings').select('throw_color_mode, throw_map_color_mode').eq('user_id', userId).maybeSingle();
+      const { data } = await supabase
+        .from('user_settings')
+        .select('throw_color_mode, throw_map_color_mode, throw_map_show_background')
+        .eq('user_id', userId)
+        .maybeSingle();
       if (cancelled) return;
       setModeState((data?.throw_color_mode as ThrowColorMode | undefined) ?? 'auto');
       setMapModeState((data?.throw_map_color_mode as ThrowColorMode | undefined) ?? 'auto');
+      setShowMapBackgroundState((data?.throw_map_show_background as boolean | undefined) ?? false);
     })();
     return () => {
       cancelled = true;
@@ -95,12 +107,23 @@ export function ThrowColorModeProvider({ children }: { children: React.ReactNode
       });
   };
 
+  const setShowMapBackground = (next: boolean) => {
+    setShowMapBackgroundState(next);
+    if (!userId) return;
+    supabase
+      .from('user_settings')
+      .upsert({ user_id: userId, throw_map_show_background: next }, { onConflict: 'user_id' })
+      .then(({ error }) => {
+        if (error) console.warn('[ThrowColorMode] failed to save show-map-background:', error.message);
+      });
+  };
+
   const isDay = mode === 'day' ? true : mode === 'night' ? false : autoIsDay;
   const mapIsDay = mapMode === 'day' ? true : mapMode === 'night' ? false : autoIsDay;
 
   const value = useMemo(
-    () => ({ mode, isDay, autoIsDay, setMode, mapMode, mapIsDay, setMapMode }),
-    [mode, isDay, autoIsDay, mapMode, mapIsDay],
+    () => ({ mode, isDay, autoIsDay, setMode, mapMode, mapIsDay, setMapMode, showMapBackground, setShowMapBackground }),
+    [mode, isDay, autoIsDay, mapMode, mapIsDay, showMapBackground],
   );
   return <ThrowColorModeContext.Provider value={value}>{children}</ThrowColorModeContext.Provider>;
 }

@@ -183,6 +183,7 @@ const DEFAULT_ALERT_SCHEDULE: AlertSchedule = { recurrence: 'once', hour: 9, min
 interface ThrowHomeScreenProps {
   onOpenExpenses: () => void;
   onOpenChats: () => void;
+  onOpenMap: () => void;
   /** Opens a specific past letter — this screen has no notion of that subscreen itself (see
    * ThrowScreen's own ThrowNavigator), so a notification row deep-linking to one is handed
    * straight up to it. */
@@ -220,6 +221,7 @@ interface ThrowHomeScreenProps {
 export function ThrowHomeScreen({
   onOpenExpenses,
   onOpenChats,
+  onOpenMap,
   onOpenThrowLetter,
   onOpenAddFriendScreen,
   onNotificationTarget,
@@ -649,7 +651,7 @@ export function ThrowHomeScreen({
   // Settings color-mode pin (`isDay`); the map and the recipient carousel overlaid on it follow
   // the map's own separate pin instead (`mapIsDay`) — two independent user preferences, per
   // explicit request.
-  const { isDay, mapIsDay } = useThrowColorMode();
+  const { isDay, mapIsDay, showMapBackground } = useThrowColorMode();
 
   // Dragging the folded, ready-to-throw plane sideways (see FoldingLetter's onContactDragStart /
   // onContactDragOffset) cycles through recipients live, the same direction as swiping the
@@ -887,14 +889,16 @@ export function ThrowHomeScreen({
 
   return (
     <View style={styles.screen}>
-      <ThrowGlassBackdrop heightMultiplier={0.6} />
+      {showMapBackground && <ThrowGlassBackdrop heightMultiplier={0.6} />}
 
       <View style={styles.mapArea}>
-        <ThrowMap pins={pins} focus={focusTarget} />
+        {showMapBackground ? <ThrowMap pins={pins} focus={focusTarget} /> : <ThrowGlassBackdrop fill isDay={mapIsDay} />}
         {/* Screen-space atmospheric layer, not part of the map itself (see WeatherOverlay's own
             doc comment) — always mounted regardless of `inFlight` so it keeps falling, unchanged,
-            all the way through the letter/fold/plane-flight lifecycle instead of restarting. */}
-        <WeatherOverlay />
+            all the way through the letter/fold/plane-flight lifecycle instead of restarting. Only
+            meaningful over the real map's sky; the glassmorphism backdrop has no weather of its
+            own to layer atop. */}
+        {showMapBackground && <WeatherOverlay />}
 
         {!inFlight &&
           (lockedRecipient ? (
@@ -1195,6 +1199,7 @@ export function ThrowHomeScreen({
           activeId="throw"
           onSelect={(id) => {
             if (id === 'chat') onOpenChats();
+            if (id === 'map') onOpenMap();
             if (id === 'expenses') onOpenExpenses();
             // 'throw' is a no-op here — this screen already is Throw.
           }}

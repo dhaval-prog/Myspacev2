@@ -9,6 +9,8 @@ interface GamesScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
   /** Which tab the create/join hub opens on — set by the Games hub's Create/Join row buttons. */
   initialTab?: 'create' | 'join';
 }
@@ -19,11 +21,13 @@ interface GamesScreenProps {
  * status), not a locally-tracked page — so every connected player lands
  * on the same screen the server thinks they should be on.
  */
-export function GamesScreen({ onHome, onOpenExpenses, onOpenThrow, initialTab }: GamesScreenProps) {
+export function GamesScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenChats, onOpenMap, initialTab }: GamesScreenProps) {
   const { game, round } = useGame();
 
   if (!game || game.status === 'waiting') {
-    return <NpatLobbyScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} initialTab={initialTab} />;
+    return (
+      <NpatLobbyScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} onOpenChats={onOpenChats} onOpenMap={onOpenMap} initialTab={initialTab} />
+    );
   }
   if (game.status === 'game_complete') {
     return <NpatGameOverScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} />;
@@ -32,7 +36,7 @@ export function GamesScreen({ onHome, onOpenExpenses, onOpenThrow, initialTab }:
     return <NpatRoundScreen />;
   }
   if (round && round.status === 'results') {
-    return <NpatResultsScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} />;
+    return <NpatResultsScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} onOpenChats={onOpenChats} onOpenMap={onOpenMap} />;
   }
-  return <NpatLobbyScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} />;
+  return <NpatLobbyScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} onOpenChats={onOpenChats} onOpenMap={onOpenMap} />;
 }

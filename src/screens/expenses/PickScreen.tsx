@@ -14,14 +14,15 @@ import { useExpenses } from '../../context/ExpensesContext';
 import type { NotificationTarget } from '../../utils/notify';
 
 interface PickScreenProps {
-  onHome: () => void;
   onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
   onOpenAccount: () => void;
   onOpenNotificationTarget?: (target: NotificationTarget) => void;
 }
 
 /** Scroll through your cards, pull one up (or tap it) to open its wallet. */
-export function PickScreen({ onHome, onOpenThrow, onOpenAccount, onOpenNotificationTarget }: PickScreenProps) {
+export function PickScreen({ onOpenThrow, onOpenChats, onOpenMap, onOpenAccount, onOpenNotificationTarget }: PickScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { loading, refreshing, refresh, openNewCard, openJoin } = useExpenses();
@@ -65,7 +66,8 @@ export function PickScreen({ onHome, onOpenThrow, onOpenAccount, onOpenNotificat
       <BottomNav
         activeId="expenses"
         onSelect={(id) => {
-          if (id === 'chat') onHome();
+          if (id === 'chat') onOpenChats();
+          if (id === 'map') onOpenMap();
           if (id === 'throw') onOpenThrow();
         }}
         onAdd={openNewCard}

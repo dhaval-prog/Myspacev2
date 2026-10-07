@@ -161,7 +161,7 @@ function setupMocks(createAlert = jest.fn().mockResolvedValue({ error: null })) 
   });
   mockUseThrowAlerts.mockReturnValue({ createAlert, alerts: [], deleteAlert: jest.fn().mockResolvedValue({ error: null }) });
   mockUseGameStats.mockReturnValue({ statsFor: () => ({ totalPoints: 0 }) });
-  mockUseThrowColorMode.mockReturnValue({ mode: 'auto', isDay: true, autoIsDay: true, setMode: jest.fn(), mapMode: 'auto', mapIsDay: true, setMapMode: jest.fn() });
+  mockUseThrowColorMode.mockReturnValue({ mode: 'auto', isDay: true, autoIsDay: true, setMode: jest.fn(), mapMode: 'auto', mapIsDay: true, setMapMode: jest.fn(), showMapBackground: true, setShowMapBackground: jest.fn() });
   mockUseThrowStories.mockReturnValue({
     loading: false,
     storiesByUser: {},
@@ -181,6 +181,7 @@ async function renderScreen(initialFocusContactId?: string) {
     <ThrowHomeScreen
       onOpenExpenses={noop}
       onOpenChats={noop}
+      onOpenMap={noop}
       onOpenThrowLetter={noop}
       onOpenAddFriendScreen={noop}
       onNotificationTarget={noop}
@@ -782,7 +783,7 @@ describe('ThrowHomeScreen contact-flick drag (single-step cap)', () => {
     });
     mockUseThrowAlerts.mockReturnValue({ createAlert: jest.fn().mockResolvedValue({ error: null }), alerts: [], deleteAlert: jest.fn().mockResolvedValue({ error: null }) });
     mockUseGameStats.mockReturnValue({ statsFor: () => ({ totalPoints: 0 }) });
-    mockUseThrowColorMode.mockReturnValue({ mode: 'auto', isDay: true, autoIsDay: true, setMode: jest.fn(), mapMode: 'auto', mapIsDay: true, setMapMode: jest.fn() });
+    mockUseThrowColorMode.mockReturnValue({ mode: 'auto', isDay: true, autoIsDay: true, setMode: jest.fn(), mapMode: 'auto', mapIsDay: true, setMapMode: jest.fn(), showMapBackground: true, setShowMapBackground: jest.fn() });
     mockUseThrowStories.mockReturnValue({
       loading: false,
       storiesByUser: {},

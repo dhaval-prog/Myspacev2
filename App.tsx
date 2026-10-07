@@ -50,10 +50,23 @@ function AuthNavigator() {
 }
 
 function AppNavigator() {
-  // Throw is the app's landing point now — no standalone Home screen any more, and Chat no longer
-  // doubles as the default either (see navItems.ts's own reordering to Throw/Chat/Pocket).
-  const [screen, setScreen] = useState<Screen>({ name: 'throw' });
-  const { openChat, receivedRequests, goRequests, goChats, goAdd } = useFriends();
+  // Chat is the app's landing point now — every signup/login lands here (see navItems.ts's own
+  // reordering to Chat/Map/Pocket/Throw).
+  const [screen, setScreen] = useState<Screen>({ name: 'friends' });
+  const { openChat, receivedRequests, goRequests, goChats, goMap, goAdd } = useFriends();
+
+  // Shared "open Chats"/"open Map" actions for every screen's own bottom nav dock — each forces
+  // FriendsContext's own page state to the right place first (`goChats`/`goMap`), not just
+  // `setScreen({name:'friends'})` alone, since that context's `page` can be left on whatever it
+  // was last (e.g. still on 'map' from a previous visit) otherwise.
+  const onOpenChats = () => {
+    goChats();
+    setScreen({ name: 'friends' });
+  };
+  const onOpenMap = () => {
+    goMap();
+    setScreen({ name: 'friends' });
+  };
 
   const openNotificationTarget = (target: NotificationTarget) => {
     if (target.screen === 'expenses') setScreen({ name: 'expenses', focusCardId: target.cardId });
@@ -80,6 +93,8 @@ function AppNavigator() {
       <ExpensesScreen
         onHome={() => setScreen({ name: 'throw' })}
         onOpenThrow={() => setScreen({ name: 'throw' })}
+        onOpenChats={onOpenChats}
+        onOpenMap={onOpenMap}
         onOpenAccount={() => setScreen({ name: 'account' })}
         focusCardId={screen.focusCardId}
         onOpenNotificationTarget={openNotificationTarget}
@@ -89,10 +104,10 @@ function AppNavigator() {
   if (screen.name === 'gamesHub') {
     return (
       <GamesDashboardScreen
-        onHome={() => setScreen({ name: 'throw' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenThrow={() => setScreen({ name: 'throw' })}
-        onOpenFriends={() => setScreen({ name: 'friends' })}
+        onOpenFriends={onOpenChats}
+        onOpenMap={onOpenMap}
         onOpenNpat={(initialTab) => setScreen({ name: 'games', initialTab })}
         onOpenTrivia={(initialTab) => setScreen({ name: 'trivia', initialTab })}
       />
@@ -104,6 +119,8 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'gamesHub' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenThrow={() => setScreen({ name: 'throw' })}
+        onOpenChats={onOpenChats}
+        onOpenMap={onOpenMap}
         initialTab={screen.initialTab}
       />
     );
@@ -114,6 +131,8 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'gamesHub' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenThrow={() => setScreen({ name: 'throw' })}
+        onOpenChats={onOpenChats}
+        onOpenMap={onOpenMap}
         initialTab={screen.initialTab}
       />
     );
@@ -148,10 +167,8 @@ function AppNavigator() {
     <ThrowScreen
       onHome={() => setScreen({ name: 'throw' })}
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
-      onOpenChats={() => {
-        goChats();
-        setScreen({ name: 'friends' });
-      }}
+      onOpenChats={onOpenChats}
+      onOpenMap={onOpenMap}
       onOpenAddFriendScreen={() => {
         goAdd();
         setScreen({ name: 'friends' });
