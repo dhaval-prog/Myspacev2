@@ -9,7 +9,7 @@ import { LockIcon } from '../../components/icons/LockIcon';
 import { FriendAvatar } from '../../components/friends/FriendAvatar';
 import { GlassSurface } from '../../components/friends/GlassSurface';
 import { FriendsGlow } from '../../components/friends/FriendsGlow';
-import { ChatsBottomBar } from '../../components/friends/ChatsBottomBar';
+import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFriends } from '../../context/FriendsContext';
 import { useAuth } from '../../context/AuthContext';
@@ -68,16 +68,14 @@ function GroupAvatarPair({ members, size, borderColor }: { members: { id: string
 
 interface ChatsListScreenProps {
   onOpenExpenses: () => void;
-  /** Opens Throw — both the Chats menu bar's Throw/Map tabs and the quick-action row's center button. */
+  /** Opens Throw — the bottom nav dock's Throw tab. */
   onOpenThrow: () => void;
-  /** Opens the Games hub — also in the quick-action row. */
+  /** Opens the Games hub — the bottom nav dock's Games tab. */
   onOpenGames: () => void;
-  /** Opens account settings — the Chats menu bar's "Me" tab. */
-  onOpenAccount: () => void;
 }
 
 /** Chats (MySpace Chats Throw handoff) — day/night themed, only accepted friends get a thread here. */
-export function ChatsListScreen({ onOpenExpenses, onOpenThrow, onOpenGames, onOpenAccount }: ChatsListScreenProps) {
+export function ChatsListScreen({ onOpenExpenses, onOpenThrow, onOpenGames }: ChatsListScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { isDay } = useThrowColorMode();
@@ -343,7 +341,19 @@ export function ChatsListScreen({ onOpenExpenses, onOpenThrow, onOpenGames, onOp
         )}
       </ScrollView>
 
-      <ChatsBottomBar isDay={isDay} onOpenThrow={onOpenThrow} onOpenMap={goMap} onOpenExpenses={onOpenExpenses} onOpenGames={onOpenGames} onOpenAccount={onOpenAccount} />
+      <BottomNav
+        activeId="chat"
+        onSelect={(id) => {
+          if (id === 'throw') onOpenThrow();
+          if (id === 'map') goMap();
+          if (id === 'games') onOpenGames();
+          if (id === 'expenses') onOpenExpenses();
+        }}
+        onAdd={goAdd}
+        fabAccessibilityLabel="Start a new chat"
+        bottomInset={insets.bottom}
+        reduceMotion={reduceMotion}
+      />
     </LinearGradient>
   );
 }

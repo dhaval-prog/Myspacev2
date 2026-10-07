@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowProvider, useThrow } from '../../context/ThrowContext';
 import { useFriends } from '../../context/FriendsContext';
-import { useThrowColorMode } from '../../context/ThrowColorModeContext';
+import { supabase } from '../../lib/supabase';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { timeAgo } from '../../utils/relativeTime';
 import type { LatLng } from '../../utils/geo';
@@ -20,7 +20,7 @@ import {
   type MapFilter,
 } from '../../utils/friendsMapMath';
 import { fmColor, fmLayout } from '../../theme/friendsMapTokens';
-import { ChatsBottomBar } from '../../components/friends/ChatsBottomBar';
+import { BottomNav } from '../../components/BottomNav';
 import { ThrowMap } from '../../components/throw/ThrowMap';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 import { FriendsMapCanvas } from '../../components/friends/map/FriendsMapCanvas';
@@ -45,13 +45,34 @@ interface MapContact {
   live: boolean;
   agoLabel: string;
   distanceKm: number;
+  /** False for a stranger visible here only because they've set their location to "All" — their
+   * detail card gets an "Add Friend" action instead of Throw/Chat (see MapContact's own doc on
+   * FriendsMapSheet). */
+  isFriend: boolean;
+}
+
+/** A row from the `get_map_locations` RPC — every other user visible to me per their own location
+ * visibility setting (friends-only, or "all"), joined with their basic profile for the pin label.
+ * Friends already come from ThrowContext's own `friends` (unaffected); this only ever contributes
+ * the non-friend "all"-visibility rows, filtered client-side below. */
+interface MapLocationRow {
+  user_id: string;
+  city: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  updated_at: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  is_friend: boolean;
 }
 
 interface FriendsMapScreenProps {
-  onOpenAccount: () => void;
   /** Opens Throw, pre-addressed to a contact when given — the Map screen's own "Throw" action on a
-   * friend's detail sheet. */
+   * friend's detail sheet, and the shared bottom nav dock's own Throw tab. */
   onOpenThrow: (focusContactId?: string) => void;
+  onOpenExpenses: () => void;
+  onOpenGames: () => void;
 }
 
 const DEFAULT_CAMERA: { zoom: number; center: LatLng } = { zoom: 4, center: { latitude: 21.5, longitude: 79.5 } };
@@ -72,14 +93,34 @@ export function FriendsMapScreen(props: FriendsMapScreenProps) {
 /** Mounts its own `ThrowProvider` (same "each screen that needs Throw data wraps its own" pattern
  * `ThrowReceivedLettersScreen` already uses) since the Chats list's own screens sit outside
  * Throw's own navigator/provider tree. */
-function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenProps) {
+function FriendsMapScreenInner({ onOpenThrow, onOpenExpenses, onOpenGames }: FriendsMapScreenProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const scale = width / fmLayout.phone.width;
   const reduceMotion = useReducedMotion();
-  const { isDay } = useThrowColorMode();
   const { myLocation, friends: throwFriends } = useThrow();
-  const { friends: fsFriends, openChat, goChats } = useFriends();
+  const { friends: fsFriends, openChat, goChats, goAdd, sendRequestToUser } = useFriends();
+
+  // Every other user visible to me per their own location-visibility setting, beyond my own
+  // friends (who already come from ThrowContext's own `friends` above) — strangers who've opted
+  // into "All". Fetched once on mount; this screen has no realtime need to keep it live-updating
+  // the instant someone elsewhere changes their setting.
+  const [extraLocations, setExtraLocations] = useState<MapLocationRow[]>([]);
+  const [addFriendStatusByUserId, setAddFriendStatusByUserId] = useState<Record<string, 'idle' | 'sending' | 'sent'>>({});
+  useEffect(() => {
+    let cancelled = false;
+    supabase.rpc('get_map_locations').then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) {
+        console.warn('[FriendsMap] failed to load map locations:', error.message);
+        return;
+      }
+      setExtraLocations(((data as MapLocationRow[] | null) ?? []).filter((r) => !r.is_friend));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [filter, setFilter] = useState<MapFilter>('all');
   const [query, setQuery] = useState('');
@@ -138,7 +179,7 @@ function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenP
 
   const contacts: MapContact[] = useMemo(() => {
     if (!me) return [];
-    return throwFriends
+    const friendContacts: MapContact[] = throwFriends
       .filter((f) => f.location != null)
       .map((f) => {
         const loc = f.location!;
@@ -154,10 +195,28 @@ function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenP
           live,
           agoLabel: live ? 'LIVE' : loc.updatedAt ? `${timeAgo(loc.updatedAt)} ago` : 'offline',
           distanceKm: distanceKm(me, { latitude: loc.latitude, longitude: loc.longitude }),
+          isFriend: true,
         };
       });
+    const strangerContacts: MapContact[] = extraLocations.map((r) => {
+      const live = isLive(r.updated_at ?? undefined);
+      return {
+        userId: r.user_id,
+        connectionId: null,
+        name: r.full_name?.trim() || 'Someone',
+        avatarUrl: r.avatar_url,
+        lat: r.latitude,
+        lon: r.longitude,
+        locationLabel: `${r.city}, ${r.country}`,
+        live,
+        agoLabel: live ? 'LIVE' : r.updated_at ? `${timeAgo(r.updated_at)} ago` : 'offline',
+        distanceKm: distanceKm(me, { latitude: r.latitude, longitude: r.longitude }),
+        isFriend: false,
+      };
+    });
+    return [...friendContacts, ...strangerContacts];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [throwFriends, fsFriends, me?.latitude, me?.longitude]);
+  }, [throwFriends, fsFriends, extraLocations, me?.latitude, me?.longitude]);
 
   const visibleContacts = useMemo(
     () => filterContacts(contacts.map((c) => ({ ...c, area: '', city: c.locationLabel })), { filter, query }),
@@ -277,7 +336,13 @@ function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenP
   const sortedCards = useMemo(() => [...visibleContacts].sort((a, b) => a.distanceKm - b.distanceKm), [visibleContacts]);
   const liveCount = contacts.filter((c) => c.live).length;
   const nearbyCount = contacts.filter((c) => c.distanceKm < 60).length;
-  const listTitle = visibleContacts.length === contacts.length ? `${contacts.length} friends · ${liveCount} live` : `${visibleContacts.length} of ${contacts.length} friends`;
+  // "People" once a non-friend "All"-visibility pin is in the mix — "friends" alone would
+  // misdescribe the list once it's not just friends any more.
+  const peopleWord = extraLocations.length > 0 ? 'people' : 'friends';
+  const listTitle =
+    visibleContacts.length === contacts.length
+      ? `${contacts.length} ${peopleWord} · ${liveCount} live`
+      : `${visibleContacts.length} of ${contacts.length} ${peopleWord}`;
 
   const listCards: FriendsMapListCard[] = sortedCards.map((c) => ({
     userId: c.userId,
@@ -301,9 +366,18 @@ function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenP
         statusLabel: selectedContact.live ? `SHARING LIVE · UPDATED ${selectedContact.agoLabel === 'LIVE' ? 'JUST NOW' : selectedContact.agoLabel.toUpperCase()}` : `LAST SEEN ${selectedContact.agoLabel.toUpperCase()}`,
         distanceLabel: formatDistanceKm(selectedContact.distanceKm),
         etaLabel: etaLabel(selectedContact.distanceKm),
+        isFriend: selectedContact.isFriend,
         onThrow: () => onOpenThrow(selectedContact.userId),
         onChat: () => {
           if (selectedContact.connectionId) openChat(selectedContact.connectionId);
+        },
+        addFriendStatus: addFriendStatusByUserId[selectedContact.userId] ?? 'idle',
+        onAddFriend: async () => {
+          if (addFriendStatusByUserId[selectedContact.userId]) return;
+          setAddFriendStatusByUserId((prev) => ({ ...prev, [selectedContact.userId]: 'sending' }));
+          const { error } = await sendRequestToUser(selectedContact.userId);
+          setAddFriendStatusByUserId((prev) => ({ ...prev, [selectedContact.userId]: error ? 'idle' : 'sent' }));
+          if (error) console.warn('[FriendsMap] failed to send friend request:', error);
         },
         onDirections: () => {
           Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${selectedContact.lat},${selectedContact.lon}`).catch(() => {});
@@ -383,16 +457,18 @@ function FriendsMapScreenInner({ onOpenAccount, onOpenThrow }: FriendsMapScreenP
         {...sheetPanResponder.panHandlers}
         style={[styles.navBarWrap, { transform: [{ translateY: sheetProgress.interpolate({ inputRange: [0, 1], outputRange: [navBarHeight, 0] }) }] }]}
       >
-        <ChatsBottomBar
-          isDay={isDay}
-          activeTab="map"
-          showQuickActions={false}
-          onOpenChats={goChats}
-          onOpenThrow={() => onOpenThrow()}
-          onOpenMap={() => {}}
-          onOpenAccount={onOpenAccount}
-          onOpenExpenses={() => {}}
-          onOpenGames={() => {}}
+        <BottomNav
+          activeId="map"
+          onSelect={(id) => {
+            if (id === 'chat') goChats();
+            if (id === 'throw') onOpenThrow();
+            if (id === 'games') onOpenGames();
+            if (id === 'expenses') onOpenExpenses();
+          }}
+          onAdd={goAdd}
+          fabAccessibilityLabel="Add a friend"
+          bottomInset={insets.bottom}
+          reduceMotion={reduceMotion}
         />
       </Animated.View>
     </View>

@@ -5,7 +5,7 @@ import { useFriends } from './FriendsContext';
 import { computeNextTrigger } from '../utils/throwAlerts';
 import { useCachedBootstrap } from '../hooks/useCachedBootstrap';
 import { writeCache } from '../utils/persistedCache';
-import type { AlertSchedule, ComposeDraft, MediaTrim, ThrowFriend, ThrowLetter, ThrowLocation, ThrowRow } from '../types/throw';
+import type { AlertSchedule, ComposeDraft, LocationVisibility, MediaTrim, ThrowFriend, ThrowLetter, ThrowLocation, ThrowRow } from '../types/throw';
 
 /** Everything `refresh` loads in one round-trip, cached together so a repeat app open can hydrate
  * the whole screen — map pins, streaks, my own profile — in one shot instead of a blank screen
@@ -16,6 +16,7 @@ interface ThrowCacheSnapshot {
   friendLocations: Record<string, ThrowLocation>;
   rows: ThrowRow[];
   streaksByCounterpart: Record<string, number>;
+  locationVisibility: LocationVisibility;
 }
 
 function warn(action: string, error: { message: string } | null) {
@@ -119,6 +120,10 @@ interface ThrowContextValue {
   myName: string;
   myAvatarUrl: string | null;
   setMyLocation: (loc: ThrowLocation) => Promise<{ error: string | null }>;
+  /** Who can see my Throw location on the Friends Map — defaults to 'friends' (today's behavior).
+   * See the LocationVisibility type for what each value means. */
+  locationVisibility: LocationVisibility;
+  setLocationVisibility: (visibility: LocationVisibility) => void;
   /** Accepted friends merged with their Throw location, if they've set one. */
   friends: ThrowFriend[];
   /** Every letter involving me, newest first. */
@@ -167,6 +172,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
 
   const [loading, setLoading] = useState(true);
   const [myLocation, setMyLocationState] = useState<ThrowLocation | null>(null);
+  const [locationVisibility, setLocationVisibilityState] = useState<LocationVisibility>('friends');
   const [myProfile, setMyProfile] = useState<{ name: string; avatarUrl: string | null }>({ name: 'Myself', avatarUrl: null });
   const [friendLocations, setFriendLocations] = useState<Record<string, ThrowLocation>>({});
   const [rows, setRows] = useState<ThrowRow[]>([]);
@@ -180,6 +186,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
   // give the effect that calls `refresh` a new identity every time it runs, looping forever.
   const latestMyLocationRef = useRef<ThrowLocation | null>(null);
   const latestMyProfileRef = useRef<{ name: string; avatarUrl: string | null }>({ name: 'Myself', avatarUrl: null });
+  const latestLocationVisibilityRef = useRef<LocationVisibility>('friends');
 
   const nameFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.name ?? 'Someone', [fsFriends]);
   const avatarFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.avatarUrl ?? null, [fsFriends]);
@@ -190,6 +197,8 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
   const cacheReady = useCachedBootstrap<ThrowCacheSnapshot>(myId, 'throw', (cached) => {
     setMyLocationState(cached.myLocation);
     latestMyLocationRef.current = cached.myLocation;
+    setLocationVisibilityState(cached.locationVisibility ?? 'friends');
+    latestLocationVisibilityRef.current = cached.locationVisibility ?? 'friends';
     setMyProfile(cached.myProfile);
     latestMyProfileRef.current = cached.myProfile;
     setFriendLocations(cached.friendLocations);
@@ -207,7 +216,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     // counts as a first load for this purpose too, since the screen's already showing something.
     if (!hasLoadedRef.current) setLoading(true);
     const [meRes, throwsRes, streakRes, profileRes] = await Promise.all([
-      supabase.from('throw_profiles').select('city,country,latitude,longitude,updated_at').eq('user_id', myId).maybeSingle(),
+      supabase.from('throw_profiles').select('city,country,latitude,longitude,updated_at,location_visibility').eq('user_id', myId).maybeSingle(),
       supabase.from('throws').select('*').or(`sender_id.eq.${myId},recipient_id.eq.${myId}`).order('created_at', { ascending: false }),
       supabase.from('throw_streaks').select('counterpart_id,current_streak,last_throw_date').eq('user_id', myId),
       supabase.from('profiles').select('full_name,avatar_url').eq('id', myId).maybeSingle(),
@@ -218,10 +227,13 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     warn('load my profile', profileRes.error);
 
     if (meRes.data) {
-      const d = meRes.data as { city: string; country: string; latitude: number; longitude: number; updated_at: string | null };
+      const d = meRes.data as { city: string; country: string; latitude: number; longitude: number; updated_at: string | null; location_visibility: LocationVisibility };
       const loc = { city: d.city, country: d.country, latitude: d.latitude, longitude: d.longitude, updatedAt: d.updated_at ?? undefined };
       setMyLocationState(loc);
       latestMyLocationRef.current = loc;
+      const visibility = d.location_visibility ?? 'friends';
+      setLocationVisibilityState(visibility);
+      latestLocationVisibilityRef.current = visibility;
     }
     if (profileRes.data) {
       const p = profileRes.data as { full_name: string | null; avatar_url: string | null };
@@ -275,6 +287,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
       friendLocations: friendLocationsSnapshot,
       rows: visibleRows,
       streaksByCounterpart: streakMap,
+      locationVisibility: latestLocationVisibilityRef.current,
     });
   }, [myId, fsFriends]);
 
@@ -330,6 +343,21 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
       if (error) return { error: friendlyErrorMessage(error.message) };
       setMyLocationState(loc);
       return { error: null };
+    },
+    [myId],
+  );
+
+  const setLocationVisibility = useCallback(
+    (visibility: LocationVisibility) => {
+      setLocationVisibilityState(visibility);
+      latestLocationVisibilityRef.current = visibility;
+      if (!myId) return;
+      supabase
+        .from('throw_profiles')
+        .upsert({ user_id: myId, location_visibility: visibility }, { onConflict: 'user_id' })
+        .then(({ error }) => {
+          if (error) console.warn('[Throw] failed to save location visibility:', error.message);
+        });
     },
     [myId],
   );
@@ -454,6 +482,8 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     myName: myProfile.name,
     myAvatarUrl: myProfile.avatarUrl,
     setMyLocation,
+    locationVisibility,
+    setLocationVisibility,
     friends,
     letters,
     inbox,

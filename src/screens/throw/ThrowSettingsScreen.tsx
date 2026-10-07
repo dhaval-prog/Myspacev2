@@ -14,6 +14,7 @@ import { useThrow } from '../../context/ThrowContext';
 import { useFriends } from '../../context/FriendsContext';
 import { useThrowColorMode, type ThrowColorMode } from '../../context/ThrowColorModeContext';
 import { useThrowWeather } from '../../context/ThrowWeatherContext';
+import type { LocationVisibility } from '../../types/throw';
 import type { WeatherCondition, WeatherIntensity } from '../../types/weather';
 
 const BACK_ICON = 'M15 18l-6-6 6-6';
@@ -23,6 +24,12 @@ const COLOR_MODES: { key: ThrowColorMode; label: string; description: string }[]
   { key: 'auto', label: 'Auto', description: "Follows your device's clock (day/night)" },
   { key: 'day', label: 'Day', description: 'Always the day look' },
   { key: 'night', label: 'Night', description: 'Always the night look' },
+];
+
+const VISIBILITY_OPTIONS: { key: LocationVisibility; label: string; description: string }[] = [
+  { key: 'friends', label: 'Friends', description: 'Only your friends can see your pin on the map' },
+  { key: 'all', label: 'All', description: 'Every MySpace user can see your pin on the map' },
+  { key: 'ghost', label: 'Ghost mode', description: "You're hidden from the map entirely — even friends can't see your pin" },
 ];
 
 // Feather-style icon paths, one per WeatherCondition — small enough to read clearly at card size,
@@ -81,7 +88,7 @@ type ConfirmTarget = { connectionId: string; name: string; kind: 'remove' | 'blo
  * of the gear only reopening location setup and account stuff living on a separate screen. */
 export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
   const insets = useSafeAreaInsets();
-  const { myLocation } = useThrow();
+  const { myLocation, locationVisibility, setLocationVisibility } = useThrow();
   const { friends, receivedRequests, sentRequests, acceptRequest, declineRequest, cancelRequest, removeFriend, blockFriend } = useFriends();
   const { mode: colorMode, setMode: setColorMode, mapMode, setMapMode, showMapBackground, setShowMapBackground } = useThrowColorMode();
   const {
@@ -98,9 +105,11 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
   const [colorModeSheetOpen, setColorModeSheetOpen] = useState(false);
   const [mapModeSheetOpen, setMapModeSheetOpen] = useState(false);
+  const [visibilitySheetOpen, setVisibilitySheetOpen] = useState(false);
   const [intensitySheetOpen, setIntensitySheetOpen] = useState(false);
   const colorModeLabel = COLOR_MODES.find((m) => m.key === colorMode)?.label ?? 'Auto';
   const mapModeLabel = COLOR_MODES.find((m) => m.key === mapMode)?.label ?? 'Auto';
+  const visibilityLabel = VISIBILITY_OPTIONS.find((v) => v.key === locationVisibility)?.label ?? 'Friends';
   const intensityLabel = INTENSITY_LEVELS.find((l) => l.key === manualIntensity)?.label ?? 'Medium';
 
   if (pane === 'editLocation') {
@@ -148,6 +157,15 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
               <Text style={styles.rowMeta}>Where your letters are thrown from</Text>
             </View>
             <Text style={styles.editLabel}>Edit</Text>
+          </GlassSurface>
+        </Pressable>
+        <Pressable onPress={() => setVisibilitySheetOpen(true)}>
+          <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowName}>Who can see my location</Text>
+              <Text style={styles.rowMeta}>Controls your pin on the Friends Map</Text>
+            </View>
+            <Text style={styles.editLabel}>{visibilityLabel}</Text>
           </GlassSurface>
         </Pressable>
 
@@ -352,6 +370,31 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
               accessibilityRole="button"
               accessibilityLabel={`Map color — ${opt.label}`}
               style={[styles.sheetOption, i !== COLOR_MODES.length - 1 && styles.sheetOptionDivider]}
+            >
+              <View style={styles.rowText}>
+                <Text style={styles.rowName}>{opt.label}</Text>
+                <Text style={styles.rowMeta}>{opt.description}</Text>
+              </View>
+              {active && <Icon path={CHECK_ICON} size={20} color={throwColor.clayDeep} strokeWidth={2.2} />}
+            </Pressable>
+          );
+        })}
+      </BottomSheet>
+
+      <BottomSheet visible={visibilitySheetOpen} onClose={() => setVisibilitySheetOpen(false)}>
+        <Text style={styles.sheetTitle}>Who can see my location</Text>
+        {VISIBILITY_OPTIONS.map((opt, i) => {
+          const active = locationVisibility === opt.key;
+          return (
+            <Pressable
+              key={opt.key}
+              onPress={() => {
+                setLocationVisibility(opt.key);
+                setVisibilitySheetOpen(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Who can see my location — ${opt.label}`}
+              style={[styles.sheetOption, i !== VISIBILITY_OPTIONS.length - 1 && styles.sheetOptionDivider]}
             >
               <View style={styles.rowText}>
                 <Text style={styles.rowName}>{opt.label}</Text>

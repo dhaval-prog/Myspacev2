@@ -15,6 +15,12 @@ export interface ThrowLocation {
   updatedAt?: string;
 }
 
+/** Who can see this user's Throw location on the Friends Map — 'friends' (default) keeps the
+ * existing friends-only visibility, 'all' opens it to every MySpace user, 'ghost' hides it from
+ * everyone (including friends). Enforced server-side by `throw_profiles`' own RLS, not just this
+ * client filtering. */
+export type LocationVisibility = 'friends' | 'all' | 'ghost';
+
 export type ThrowStatus = 'thrown' | 'read' | 'replied';
 
 /** A watch-time trim window into a video attachment — nothing is physically re-encoded (no
