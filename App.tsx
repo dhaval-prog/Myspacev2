@@ -155,10 +155,6 @@ function AppNavigator() {
   if (screen.name === 'throwLetters') {
     return (
       <ThrowReceivedLettersScreen
-        // Reply lands on Throw's own existing compose flow for that contact — there's no separate
-        // "ThrowCompose" route in this app (Throw already composes in place once a contact is
-        // focused), so this reuses the same `focusContactId` navigation a notification tap uses.
-        onReply={(contactId) => setScreen({ name: 'throw', focusContactId: contactId })}
         initialContactId={screen.contactId}
         viaToast={screen.viaToast}
         onOpenThrow={() => setScreen({ name: 'throw' })}

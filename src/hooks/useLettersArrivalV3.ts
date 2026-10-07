@@ -77,8 +77,8 @@ interface UseLettersArrivalV3Options {
   deleteThrow: (throwId: string) => Promise<{ error: string | null }>;
   markRead: (throwId: string) => Promise<void>;
   confirmThrowAlert: (throwId: string, schedule: AlertSchedule) => Promise<{ error: string | null }>;
-  /** Fires once the fold-away + fly-to-corner reply exit finishes (1150ms in) — the caller
-   * navigates to compose from here, same timing as the handoff's own `window.location.href` call. */
+  /** Fires once the fold-away + fly-to-corner reply exit finishes (1150ms in) — the caller takes
+   * it from here (e.g. swapping in a compose surface for this contact/letter). */
   onReply: (contactId: string, letterId: string) => void;
   /** Skips the initial auto-play's usual 600ms lead-in beat — set when this screen was reached by
    * tapping a toast that already played its own short "launch" animation, so the plane flying in
@@ -301,6 +301,14 @@ export function useLettersArrivalV3({
     later(() => onReply(curContact.id, curLetter.id), 1150);
   };
 
+  /** Brings the (now-flown-away) letter back to its ordinary 'open' display — the caller's cue
+   * once an in-place reply-compose surface it swapped in for `reply()`'s own exit is done (sent
+   * or cancelled), so the original letter reappears instead of staying in its 'replyFly' pose. */
+  const closeReply = () => {
+    if (!curLetter) return;
+    setStageBoth('open');
+  };
+
   const confirmAlert = async () => {
     if (!curLetter || !curLetter.alertSchedule || stageRef.current !== 'open') return;
     if (confirmedIds.has(curLetter.id) || curLetter.alertConfirmed) return;
@@ -379,6 +387,7 @@ export function useLettersArrivalV3({
     selectChip,
     deleteActive,
     reply,
+    closeReply,
     confirmAlert,
   };
 }

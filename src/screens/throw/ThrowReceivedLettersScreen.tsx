@@ -12,10 +12,12 @@ import { LetterCardV3 } from '../../components/throw/lettersV3/LetterCardV3';
 import { ActionRowV3 } from '../../components/throw/lettersV3/ActionRowV3';
 import { ChipsRowV3 } from '../../components/throw/lettersV3/ChipsRowV3';
 import { MediaViewerV3 } from '../../components/throw/lettersV3/MediaViewerV3';
+import { FoldingLetter } from '../../components/throw/FoldingLetter';
 import { useLettersArrivalV3, type V3Contact } from '../../hooks/useLettersArrivalV3';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { v3Color, v3Font, v3Layout } from '../../theme/throwLettersV3Tokens';
 import { noSelect } from '../../theme/webStyles';
+import type { AlertSchedule, MediaTrim, StrokePath } from '../../types/throw';
 
 const s = (n: number, scale: number) => n * scale;
 // Same commit-distance convention MediaViewerV3's own horizontal swipe uses.
@@ -27,10 +29,6 @@ const BOTTOM_NAV_CLEARANCE = 92;
 const BACK_ICON = 'M15 18l-6-6 6-6';
 
 interface ThrowReceivedLettersScreenProps {
-  /** Reply, after its own fold-away + fly-to-corner exit — the caller lands on the existing Throw
-   * compose flow for this contact (no separate "ThrowCompose" route exists in this app; Throw's
-   * own screen already composes in place once a contact is focused). */
-  onReply: (contactId: string, throwId: string) => void;
   /** Preselects this contact — set when reached from a specific chat thread's own Throw icon. */
   initialContactId?: string;
   /** Set when reached by tapping ThrowHomeScreen's own "X sent you a letter" toast (see its
@@ -48,14 +46,19 @@ interface ThrowReceivedLettersScreenProps {
   onOpenExpenses: () => void;
 }
 
-function ReceivedLettersInner({ onReply, initialContactId, viaToast, onOpenThrow, onOpenChats, onOpenMap, onOpenGames, onOpenExpenses }: ThrowReceivedLettersScreenProps) {
+function ReceivedLettersInner({ initialContactId, viaToast, onOpenThrow, onOpenChats, onOpenMap, onOpenGames, onOpenExpenses }: ThrowReceivedLettersScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { friends, inbox, deleteThrow, markRead, confirmThrowAlert } = useThrow();
+  const { friends, inbox, deleteThrow, markRead, confirmThrowAlert, sendThrow, uploadPhoto } = useThrow();
   const [frameWidth, setFrameWidth] = useState(0);
   const [frameHeight, setFrameHeight] = useState(0);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [armed, setArmed] = useState(false);
+  // Set once Reply's own fold-away exit finishes (see useLettersArrivalV3's onReply) — swaps the
+  // read-only LetterCardV3 for a real FoldingLetter compose surface addressed to this same
+  // contact, reusing Throw's own write/fold/throw gesture wholesale rather than a separate
+  // "ThrowCompose" route (there isn't one — see FoldingLetter's own doc comment).
+  const [replyTarget, setReplyTarget] = useState<{ contactId: string; letterId: string; recipientName: string } | null>(null);
 
   const contacts: V3Contact[] = useMemo(
     () =>
@@ -87,7 +90,10 @@ function ReceivedLettersInner({ onReply, initialContactId, viaToast, onOpenThrow
     deleteThrow,
     markRead,
     confirmThrowAlert,
-    onReply,
+    onReply: (contactId, letterId) => {
+      const contact = contacts.find((c) => c.id === contactId);
+      if (contact) setReplyTarget({ contactId, letterId, recipientName: contact.name });
+    },
     skipLeadIn: viaToast,
   });
 
@@ -147,6 +153,51 @@ function ReceivedLettersInner({ onReply, initialContactId, viaToast, onOpenThrow
     [contactIdx, arrival.busy, arrival.contactRows.length],
   );
 
+  // The actual send, once the user flicks the folded reply plane up — same upload-then-submit
+  // sequence as ThrowHomeScreen's own handleThrow (non-self branch), just always addressed to
+  // this contact and always carrying repliedToThrowId, matching "Throw Back"'s existing
+  // server-side linkage instead of a plain unlinked letter.
+  const handleReplyThrow = async (content: {
+    messageText: string | null;
+    strokes: StrokePath[] | null;
+    penColor: string;
+    photoUris: string[];
+    photoTrims: (MediaTrim | null)[];
+    alertSchedule: AlertSchedule | null;
+  }) => {
+    if (!replyTarget) return { error: 'Something went wrong.' };
+    const photoUrls: string[] = [];
+    const photoTrims: (MediaTrim | null)[] = [];
+    for (let i = 0; i < content.photoUris.length; i++) {
+      const uploaded = await uploadPhoto(content.photoUris[i]);
+      if (uploaded.error) return { error: uploaded.error };
+      if (uploaded.url) {
+        photoUrls.push(uploaded.url);
+        photoTrims.push(content.photoTrims[i] ?? null);
+      }
+    }
+    const { error } = await sendThrow({
+      recipientId: replyTarget.contactId,
+      messageText: content.messageText,
+      strokes: content.strokes,
+      penColor: content.penColor,
+      photoUrls,
+      photoTrims,
+      repliedToThrowId: replyTarget.letterId,
+      alertSchedule: content.alertSchedule,
+    });
+    if (error) return { error };
+    return { error: null };
+  };
+
+  // Once the liftoff flourish finishes, the reply's done — back to the letter's ordinary read
+  // view (closeReply resets the stage 'reply()' left it on) rather than leaving the compose
+  // surface up or navigating anywhere else.
+  const closeReplyCompose = () => {
+    setReplyTarget(null);
+    arrival.closeReply();
+  };
+
   if (contacts.length === 0) {
     return (
       <View style={styles.emptyScreen}>
@@ -183,7 +234,7 @@ function ReceivedLettersInner({ onReply, initialContactId, viaToast, onOpenThrow
       <ThrowMap pins={mapPins} focus={activeLocation} />
 
       <View style={{ position: 'absolute', left: 0, right: 0, top: topOffset + s(v3Layout.contactsY, scale) }}>
-        <ContactsRowV3 contacts={arrival.contactRows} onSelect={arrival.selectContact} scale={scale} />
+        <ContactsRowV3 contacts={arrival.contactRows} onSelect={replyTarget ? () => {} : arrival.selectContact} scale={scale} />
       </View>
 
       <ToastV3 text={arrival.toast} scale={scale} top={topOffset + s(v3Layout.toastY, scale)} />
@@ -216,33 +267,56 @@ function ReceivedLettersInner({ onReply, initialContactId, viaToast, onOpenThrow
         </>
       )}
 
-      <View style={[{ position: 'absolute', left: s(v3Layout.letter.x, scale), top: topOffset + s(v3Layout.letter.y, scale) }, noSelect]} {...letterSwipe.panHandlers}>
-        <LetterCardV3 stage={arrival.stage} letter={arrival.cardData} isEmpty={arrival.isEmpty} emptyName={arrival.curContactName} scale={scale} heightPx={letterHeightPx} />
-      </View>
+      {replyTarget ? (
+        <View style={{ position: 'absolute', left: 18, right: 18, top: topOffset + s(v3Layout.letter.y, scale), height: letterHeightPx }}>
+          <View style={styles.replyCardContent}>
+            <FoldingLetter
+              recipientName={replyTarget.recipientName}
+              streak={0}
+              points={0}
+              hideBadges
+              throwLabel="Swipe up to send reply"
+              unreadCount={0}
+              // Repurposes the bottom-controls row's inbox slot as "cancel this reply" — the only
+              // exit this card itself offers besides actually sending (the BottomNav dock below
+              // can always back all the way out of the screen too).
+              onOpenInbox={closeReplyCompose}
+              onThrow={handleReplyThrow}
+              onLaunched={closeReplyCompose}
+            />
+          </View>
+        </View>
+      ) : (
+        <>
+          <View style={[{ position: 'absolute', left: s(v3Layout.letter.x, scale), top: topOffset + s(v3Layout.letter.y, scale) }, noSelect]} {...letterSwipe.panHandlers}>
+            <LetterCardV3 stage={arrival.stage} letter={arrival.cardData} isEmpty={arrival.isEmpty} emptyName={arrival.curContactName} scale={scale} heightPx={letterHeightPx} />
+          </View>
 
-      <View style={{ position: 'absolute', left: s(v3Layout.actionRow.x, scale), right: s(v3Layout.actionRow.x, scale), top: topOffset + s(v3Layout.actionRow.y, scale) }}>
-        <ActionRowV3
-          visible={arrival.stage === 'open' && !armed && !mediaOpen}
-          letter={arrival.cardData}
-          onReply={arrival.reply}
-          onConfirm={arrival.confirmAlert}
-          onOpenMedia={() => setMediaOpen(true)}
-          scale={scale}
-        />
-      </View>
+          <View style={{ position: 'absolute', left: s(v3Layout.actionRow.x, scale), right: s(v3Layout.actionRow.x, scale), top: topOffset + s(v3Layout.actionRow.y, scale) }}>
+            <ActionRowV3
+              visible={arrival.stage === 'open' && !armed && !mediaOpen}
+              letter={arrival.cardData}
+              onReply={arrival.reply}
+              onConfirm={arrival.confirmAlert}
+              onOpenMedia={() => setMediaOpen(true)}
+              scale={scale}
+            />
+          </View>
 
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: s(v3Layout.chipRow.bottom, scale) + insets.bottom + BOTTOM_NAV_CLEARANCE }}>
-        <ChipsRowV3
-          rowTitle={arrival.rowTitle}
-          chips={arrival.chips}
-          activeIndex={arrival.activeLetterIdx}
-          busy={arrival.busy}
-          onSelectChip={arrival.selectChip}
-          onDeleteCommit={arrival.deleteActive}
-          onArmedChange={setArmed}
-          scale={scale}
-        />
-      </View>
+          <View style={{ position: 'absolute', left: 0, right: 0, bottom: s(v3Layout.chipRow.bottom, scale) + insets.bottom + BOTTOM_NAV_CLEARANCE }}>
+            <ChipsRowV3
+              rowTitle={arrival.rowTitle}
+              chips={arrival.chips}
+              activeIndex={arrival.activeLetterIdx}
+              busy={arrival.busy}
+              onSelectChip={arrival.selectChip}
+              onDeleteCommit={arrival.deleteActive}
+              onArmedChange={setArmed}
+              scale={scale}
+            />
+          </View>
+        </>
+      )}
 
       <MediaViewerV3
         visible={mediaOpen}
@@ -294,4 +368,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontFamily: v3Font.ui800, fontSize: 18, color: v3Color.ink },
   emptySub: { fontFamily: v3Font.ui400, fontSize: 13.5, color: v3Color.mutedDark, textAlign: 'center' },
   bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  // Mirrors ThrowHomeScreen's own `letterCardContent` (flex:1 inside the absolute-positioned,
+  // explicitly-heighted card) — FoldingLetter measures its own paper size off this box via layout.
+  replyCardContent: { flex: 1 },
 });
