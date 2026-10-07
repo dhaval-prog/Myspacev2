@@ -161,6 +161,11 @@ function AppNavigator() {
         onReply={(contactId) => setScreen({ name: 'throw', focusContactId: contactId })}
         initialContactId={screen.contactId}
         viaToast={screen.viaToast}
+        onOpenThrow={() => setScreen({ name: 'throw' })}
+        onOpenChats={onOpenChats}
+        onOpenMap={onOpenMap}
+        onOpenGames={onOpenGames}
+        onOpenExpenses={() => setScreen({ name: 'expenses' })}
       />
     );
   }
