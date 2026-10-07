@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { PanResponder, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThrowProvider, useThrow } from '../../context/ThrowContext';
 import { LetterPlaneGlyph } from '../../components/throw/inbox/LetterPlaneGlyph';
@@ -135,23 +135,75 @@ function ReceivedLettersInner({ initialContactId, viaToast, onOpenThrow, onOpenC
   // same left/right semantics (and commit distance) as MediaViewerV3's own horizontal swipe.
   // Clamped at the ends of the contact list rather than wrapping — `selectContact` doesn't itself
   // guard an out-of-range index, so this checks bounds before ever calling it.
+  const commitLetterSwipe = (dx: number, dy: number) => {
+    if (arrival.busy) return;
+    if (Math.abs(dx) < SWIPE_COMMIT_DISTANCE || Math.abs(dx) <= Math.abs(dy)) return;
+    if (dx > 0) {
+      if (contactIdx > 0) arrival.selectContact(contactIdx - 1);
+    } else if (contactIdx >= 0 && contactIdx < arrival.contactRows.length - 1) {
+      arrival.selectContact(contactIdx + 1);
+    }
+  };
+  // Always-fresh snapshot for the raw-listener effect below, which binds its window listeners once
+  // (see that effect's own comment) rather than re-subscribing on every render.
+  const swipeStateRef = useRef({ commitLetterSwipe });
+  swipeStateRef.current = { commitLetterSwipe };
+
   const letterSwipe = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy),
-        onPanResponderRelease: (_e, g) => {
-          if (arrival.busy) return;
-          if (g.dx >= SWIPE_COMMIT_DISTANCE) {
-            if (contactIdx > 0) arrival.selectContact(contactIdx - 1);
-          } else if (g.dx <= -SWIPE_COMMIT_DISTANCE) {
-            if (contactIdx >= 0 && contactIdx < arrival.contactRows.length - 1) arrival.selectContact(contactIdx + 1);
-          }
-        },
+        onPanResponderRelease: (_e, g) => commitLetterSwipe(g.dx, g.dy),
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [contactIdx, arrival.busy, arrival.contactRows.length],
   );
+  const letterSwipeRef = useRef<View>(null);
+
+  // react-native-web's PanResponder polyfill is the documented-flaky one in this codebase (see
+  // FoldingLetter's own raw-listener fold/flick gesture for the full writeup) — rather than trust
+  // it here too, this reimplements the same down/up swipe purely from real pointer positions.
+  // Native keeps using PanResponder as-is above; its real touch system doesn't have the bug.
+  // Re-binds whenever the reply flow toggles — the letter's own View (and its ref'd DOM node)
+  // unmounts in favor of FoldingLetter during a reply and remounts fresh once it closes, so a
+  // mount-once effect would be left holding a stale, detached node after the first round-trip.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const node = letterSwipeRef.current as any as HTMLElement | null;
+    if (!node) return;
+    const getPoint = (e: MouseEvent | TouchEvent): { x: number; y: number } | null => {
+      if ('touches' in e) {
+        const t = e.touches[0] ?? e.changedTouches[0];
+        return t ? { x: t.clientX, y: t.clientY } : null;
+      }
+      return { x: e.clientX, y: e.clientY };
+    };
+    let start: { x: number; y: number } | null = null;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      start = getPoint(e);
+    };
+    const onUp = (e: MouseEvent | TouchEvent) => {
+      const from = start;
+      start = null;
+      if (!from) return;
+      const to = getPoint(e);
+      if (!to) return;
+      swipeStateRef.current.commitLetterSwipe(to.x - from.x, to.y - from.y);
+    };
+    node.addEventListener('mousedown', onDown);
+    node.addEventListener('touchstart', onDown, { passive: true });
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchend', onUp);
+    return () => {
+      node.removeEventListener('mousedown', onDown);
+      node.removeEventListener('touchstart', onDown);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
+    };
+  }, [replyTarget]);
+  const letterSwipeHandlers = Platform.OS === 'web' ? {} : letterSwipe.panHandlers;
 
   // The actual send, once the user flicks the folded reply plane up — same upload-then-submit
   // sequence as ThrowHomeScreen's own handleThrow (non-self branch), just always addressed to
@@ -288,7 +340,11 @@ function ReceivedLettersInner({ initialContactId, viaToast, onOpenThrow, onOpenC
         </View>
       ) : (
         <>
-          <View style={[{ position: 'absolute', left: s(v3Layout.letter.x, scale), top: topOffset + s(v3Layout.letter.y, scale) }, noSelect]} {...letterSwipe.panHandlers}>
+          <View
+            ref={letterSwipeRef}
+            style={[{ position: 'absolute', left: s(v3Layout.letter.x, scale), top: topOffset + s(v3Layout.letter.y, scale) }, noSelect]}
+            {...letterSwipeHandlers}
+          >
             <LetterCardV3 stage={arrival.stage} letter={arrival.cardData} isEmpty={arrival.isEmpty} emptyName={arrival.curContactName} scale={scale} heightPx={letterHeightPx} />
           </View>
 
@@ -367,7 +423,10 @@ const styles = StyleSheet.create({
   emptyScreen: { flex: 1, backgroundColor: v3Color.mapBg, alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 32 },
   emptyTitle: { fontFamily: v3Font.ui800, fontSize: 18, color: v3Color.ink },
   emptySub: { fontFamily: v3Font.ui400, fontSize: 13.5, color: v3Color.mutedDark, textAlign: 'center' },
-  bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  // zIndex pinned above everything else on this screen — Mapbox GL's own WebGL canvas (ThrowMap on
+  // web) occasionally gets its own GPU compositing layer that doesn't always respect plain DOM
+  // order in every browser, so this guards against the dock ever reading as "not there" underneath it.
+  bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50 },
   // Mirrors ThrowHomeScreen's own `letterCardContent` (flex:1 inside the absolute-positioned,
   // explicitly-heighted card) — FoldingLetter measures its own paper size off this box via layout.
   replyCardContent: { flex: 1 },
