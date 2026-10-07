@@ -16,10 +16,13 @@ export const navItems: NavItem[] = [
   // so this reads as the same destination. Deliberately the plain bubble, not ChatsListScreen's
   // own bubble-plus FAB glyph (that one means "start a new chat", a different action).
   { id: 'chat', icon: 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z', label: 'Chat' },
+  // Throw sits right beside Chat per explicit request (was the trailing slot before).
+  { id: 'throw', icon: 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z', label: 'Throw' },
   // Same pin glyph as Chats' own ChatsBottomBar "Map" tab (MAP_TAB_ICON) — opens the same Friends
   // Map screen, just reachable from every other screen's own nav dock too.
   { id: 'map', icon: 'M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z', label: 'Map' },
+  // Same controller glyph as Chats' own ChatsBottomBar "Games" quick action (GAMES_ICON) — sits
+  // right beside Pocket per explicit request.
+  { id: 'games', icon: 'M7 8h10a4 4 0 0 1 4 4v1a3 3 0 0 1-5.4 1.8L14.5 13h-5l-1.1 1.8A3 3 0 0 1 3 13v-1a4 4 0 0 1 4-4z', label: 'Games' },
   { id: 'expenses', icon: 'M5 4.5h14v15H5zM8 8.5h8M8 12h8M8 15.5h5', label: 'Pocket' },
-  // Throw moved to the trailing slot per explicit request (previously led the pill).
-  { id: 'throw', icon: 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z', label: 'Throw' },
 ];

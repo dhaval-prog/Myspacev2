@@ -67,6 +67,7 @@ function AppNavigator() {
     goMap();
     setScreen({ name: 'friends' });
   };
+  const onOpenGames = () => setScreen({ name: 'gamesHub' });
 
   const openNotificationTarget = (target: NotificationTarget) => {
     if (target.screen === 'expenses') setScreen({ name: 'expenses', focusCardId: target.cardId });
@@ -95,6 +96,7 @@ function AppNavigator() {
         onOpenThrow={() => setScreen({ name: 'throw' })}
         onOpenChats={onOpenChats}
         onOpenMap={onOpenMap}
+        onOpenGames={onOpenGames}
         onOpenAccount={() => setScreen({ name: 'account' })}
         focusCardId={screen.focusCardId}
         onOpenNotificationTarget={openNotificationTarget}
@@ -146,7 +148,7 @@ function AppNavigator() {
         onHome={() => setScreen({ name: 'throw' })}
         onOpenExpenses={() => setScreen({ name: 'expenses' })}
         onOpenThrow={(focusContactId) => setScreen({ name: 'throw', focusContactId })}
-        onOpenGames={() => setScreen({ name: 'gamesHub' })}
+        onOpenGames={onOpenGames}
         onOpenAccount={() => setScreen({ name: 'account', from: 'friends' })}
       />
     );
@@ -169,6 +171,7 @@ function AppNavigator() {
       onOpenExpenses={() => setScreen({ name: 'expenses' })}
       onOpenChats={onOpenChats}
       onOpenMap={onOpenMap}
+      onOpenGames={onOpenGames}
       onOpenAddFriendScreen={() => {
         goAdd();
         setScreen({ name: 'friends' });

@@ -184,6 +184,7 @@ interface ThrowHomeScreenProps {
   onOpenExpenses: () => void;
   onOpenChats: () => void;
   onOpenMap: () => void;
+  onOpenGames: () => void;
   /** Opens a specific past letter — this screen has no notion of that subscreen itself (see
    * ThrowScreen's own ThrowNavigator), so a notification row deep-linking to one is handed
    * straight up to it. */
@@ -222,6 +223,7 @@ export function ThrowHomeScreen({
   onOpenExpenses,
   onOpenChats,
   onOpenMap,
+  onOpenGames,
   onOpenThrowLetter,
   onOpenAddFriendScreen,
   onNotificationTarget,
@@ -1200,6 +1202,7 @@ export function ThrowHomeScreen({
           onSelect={(id) => {
             if (id === 'chat') onOpenChats();
             if (id === 'map') onOpenMap();
+            if (id === 'games') onOpenGames();
             if (id === 'expenses') onOpenExpenses();
             // 'throw' is a no-op here — this screen already is Throw.
           }}

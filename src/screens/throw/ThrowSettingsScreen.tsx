@@ -7,6 +7,7 @@ import { Icon } from '../../components/Icon';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ThrowGlassBackdrop } from '../../components/throw/ThrowGlassBackdrop';
 import { ThrowLocationSetupScreen } from './ThrowLocationSetupScreen';
+import { AccountSettingsScreen } from '../account/AccountSettingsScreen';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { throwColor, throwFont, throwGlass, throwRadius, throwSpace } from '../../theme/throwTokens';
 import { useThrow } from '../../context/ThrowContext';
@@ -69,12 +70,15 @@ interface ThrowSettingsScreenProps {
   onBack: () => void;
 }
 
-type Pane = 'settings' | 'editLocation';
+// 'account' folds the previously-separate Account Settings screen in here too, reached from the
+// same gear icon as everything else — one settings surface instead of two, per explicit request
+// not to leave users guessing which "Settings" has their profile/password vs. their paper color.
+type Pane = 'settings' | 'editLocation' | 'account';
 type ConfirmTarget = { connectionId: string; name: string; kind: 'remove' | 'block' };
 
 /** Gear-icon destination from ThrowHomeScreen's header: location editing, pending friend
- * requests, and per-friend remove/block, all in one place instead of the gear just reopening
- * location setup. */
+ * requests, per-friend remove/block, and the full Account Settings pane, all in one place instead
+ * of the gear only reopening location setup and account stuff living on a separate screen. */
 export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
   const insets = useSafeAreaInsets();
   const { myLocation } = useThrow();
@@ -103,6 +107,10 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
     return <ThrowLocationSetupScreen mode="edit" onDone={() => setPane('settings')} onBack={() => setPane('settings')} />;
   }
 
+  if (pane === 'account') {
+    return <AccountSettingsScreen onBack={() => setPane('settings')} />;
+  }
+
   const confirm = () => {
     if (!confirmTarget) return;
     if (confirmTarget.kind === 'remove') removeFriend(confirmTarget.connectionId);
@@ -121,6 +129,17 @@ export function ThrowSettingsScreen({ onBack }: ThrowSettingsScreenProps) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 14, paddingBottom: 24 }}>
+        <Text style={styles.eyebrow}>ACCOUNT</Text>
+        <Pressable onPress={() => setPane('account')}>
+          <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowName}>Account settings</Text>
+              <Text style={styles.rowMeta}>Profile, password, shared spaces & data — not Throw-specific</Text>
+            </View>
+            <Text style={styles.editLabel}>Edit</Text>
+          </GlassSurface>
+        </Pressable>
+
         <Text style={styles.eyebrow}>LOCATION</Text>
         <Pressable onPress={() => setPane('editLocation')}>
           <GlassSurface tint="light" tintColor={throwGlass.tint} style={styles.row}>

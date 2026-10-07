@@ -182,6 +182,7 @@ async function renderScreen(initialFocusContactId?: string) {
       onOpenExpenses={noop}
       onOpenChats={noop}
       onOpenMap={noop}
+      onOpenGames={noop}
       onOpenThrowLetter={noop}
       onOpenAddFriendScreen={noop}
       onNotificationTarget={noop}

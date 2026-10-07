@@ -17,12 +17,13 @@ interface PickScreenProps {
   onOpenThrow: () => void;
   onOpenChats: () => void;
   onOpenMap: () => void;
+  onOpenGames: () => void;
   onOpenAccount: () => void;
   onOpenNotificationTarget?: (target: NotificationTarget) => void;
 }
 
 /** Scroll through your cards, pull one up (or tap it) to open its wallet. */
-export function PickScreen({ onOpenThrow, onOpenChats, onOpenMap, onOpenAccount, onOpenNotificationTarget }: PickScreenProps) {
+export function PickScreen({ onOpenThrow, onOpenChats, onOpenMap, onOpenGames, onOpenAccount, onOpenNotificationTarget }: PickScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { loading, refreshing, refresh, openNewCard, openJoin } = useExpenses();
@@ -68,6 +69,7 @@ export function PickScreen({ onOpenThrow, onOpenChats, onOpenMap, onOpenAccount,
         onSelect={(id) => {
           if (id === 'chat') onOpenChats();
           if (id === 'map') onOpenMap();
+          if (id === 'games') onOpenGames();
           if (id === 'throw') onOpenThrow();
         }}
         onAdd={openNewCard}
