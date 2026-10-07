@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { fmColor, fmFont, fmLayout, fmRadius } from '../../../theme/friendsMapTokens';
 import { FriendAvatar } from '../FriendAvatar';
 
@@ -9,6 +9,9 @@ const PLANE_WING = 'M30 36 L60 8 L22 40 Z';
 const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
 const DIRECTIONS_ICON = 'M12 3l8 18-8-4-8 4z';
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
+// Same person-plus glyph as this screen's own search-row "Add a friend" button (FriendsMapSearchRow).
+const ADD_FRIEND_SHOULDERS = 'M3.5 19a5.5 5.5 0 0 1 11 0';
+const ADD_FRIEND_PLUS = 'M18 8v6M15 11h6';
 
 export interface FriendsMapListCard {
   userId: string;
@@ -30,9 +33,15 @@ export interface FriendsMapDetail {
   statusLabel: string;
   distanceLabel: string;
   etaLabel: string;
+  /** Whether this pin is an accepted friend — a non-friend (visible here only because they've set
+   * their location visibility to "All") gets an "Add Friend" action instead of Throw/Chat, which
+   * both require an existing friend connection. */
+  isFriend: boolean;
   onThrow: () => void;
   onChat: () => void;
   onDirections: () => void;
+  onAddFriend: () => void;
+  addFriendStatus: 'idle' | 'sending' | 'sent';
 }
 
 interface FriendsMapSheetProps {
@@ -86,19 +95,40 @@ export function FriendsMapSheet({ listTitle, cards, detail, onCloseDetail }: Fri
           </View>
 
           <View style={styles.actionRow}>
-            <Pressable onPress={detail.onThrow} style={styles.throwBtn} accessibilityRole="button" accessibilityLabel="Throw">
-              <Svg width={18} height={18} viewBox="0 0 64 64">
-                <Path d={PLANE_BODY} fill={fmColor.lime} />
-                <Path d={PLANE_WING} fill={fmColor.limeDark} />
-              </Svg>
-              <Text style={styles.throwLabel}>Throw</Text>
-            </Pressable>
-            <Pressable onPress={detail.onChat} style={styles.chatBtn} accessibilityRole="button" accessibilityLabel="Chat">
-              <Svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke={fmColor.ink} strokeWidth={1.9} strokeLinejoin="round">
-                <Path d={CHAT_ICON} />
-              </Svg>
-              <Text style={styles.chatLabel}>Chat</Text>
-            </Pressable>
+            {detail.isFriend ? (
+              <>
+                <Pressable onPress={detail.onThrow} style={styles.throwBtn} accessibilityRole="button" accessibilityLabel="Throw">
+                  <Svg width={18} height={18} viewBox="0 0 64 64">
+                    <Path d={PLANE_BODY} fill={fmColor.lime} />
+                    <Path d={PLANE_WING} fill={fmColor.limeDark} />
+                  </Svg>
+                  <Text style={styles.throwLabel}>Throw</Text>
+                </Pressable>
+                <Pressable onPress={detail.onChat} style={styles.chatBtn} accessibilityRole="button" accessibilityLabel="Chat">
+                  <Svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke={fmColor.ink} strokeWidth={1.9} strokeLinejoin="round">
+                    <Path d={CHAT_ICON} />
+                  </Svg>
+                  <Text style={styles.chatLabel}>Chat</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Pressable
+                onPress={detail.onAddFriend}
+                disabled={detail.addFriendStatus !== 'idle'}
+                style={styles.throwBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Add friend"
+              >
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={fmColor.lime} strokeWidth={1.9} strokeLinecap="round">
+                  <Circle cx={9} cy={8} r={3.2} />
+                  <Path d={ADD_FRIEND_SHOULDERS} />
+                  <Path d={ADD_FRIEND_PLUS} />
+                </Svg>
+                <Text style={styles.throwLabel} numberOfLines={1}>
+                  {detail.addFriendStatus === 'sent' ? 'Request sent' : detail.addFriendStatus === 'sending' ? 'Sending…' : 'Add Friend'}
+                </Text>
+              </Pressable>
+            )}
             <Pressable onPress={detail.onDirections} style={styles.directionsBtn} accessibilityRole="button" accessibilityLabel="Directions">
               <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={fmColor.ink} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
                 <Path d={DIRECTIONS_ICON} />
