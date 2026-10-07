@@ -71,10 +71,10 @@ function ProgressRing({ pct, reduceMotion, children }: { pct: number; reduceMoti
 }
 
 interface GamesDashboardScreenProps {
-  onHome: () => void;
   onOpenExpenses: () => void;
   onOpenThrow: () => void;
   onOpenFriends: () => void;
+  onOpenMap: () => void;
   onOpenNpat: (initialTab?: 'create' | 'join') => void;
   onOpenTrivia: (initialTab?: 'create' | 'join') => void;
 }
@@ -84,7 +84,7 @@ interface GamesDashboardScreenProps {
  * Real leaderboard/points data from GameStatsContext throughout; a game row
  * expands in place into Create/Join instead of pushing a new screen.
  */
-export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenFriends, onOpenNpat, onOpenTrivia }: GamesDashboardScreenProps) {
+export function GamesDashboardScreen({ onOpenExpenses, onOpenThrow, onOpenFriends, onOpenMap, onOpenNpat, onOpenTrivia }: GamesDashboardScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { circle, leaderboard, myEntry, myRankDelta, breakdown, recentActivity, breakdownFor } = useGameStats();
@@ -205,7 +205,8 @@ export function GamesDashboardScreen({ onHome, onOpenExpenses, onOpenThrow, onOp
       <BottomNav
         activeId="games"
         onSelect={(id) => {
-          if (id === 'chat') onHome();
+          if (id === 'chat') onOpenFriends();
+          if (id === 'map') onOpenMap();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}

@@ -17,20 +17,28 @@ import type { NotificationTarget } from '../../utils/notify';
 interface ExpensesScreenProps {
   onHome: () => void;
   onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
   onOpenAccount: () => void;
   /** Opens straight into this card's wallet — set when arriving from a notification about it. */
   focusCardId?: string;
   onOpenNotificationTarget?: (target: NotificationTarget) => void;
 }
 
-function ExpensesRoot({ onHome, onOpenThrow, onOpenAccount, onOpenNotificationTarget }: ExpensesScreenProps) {
+function ExpensesRoot({ onHome, onOpenThrow, onOpenChats, onOpenMap, onOpenAccount, onOpenNotificationTarget }: ExpensesScreenProps) {
   const { page } = useExpenses();
   return (
     <>
       {page === 'wallet' ? (
         <WalletScreen onHome={onHome} />
       ) : (
-        <PickScreen onHome={onHome} onOpenThrow={onOpenThrow} onOpenAccount={onOpenAccount} onOpenNotificationTarget={onOpenNotificationTarget} />
+        <PickScreen
+          onOpenThrow={onOpenThrow}
+          onOpenChats={onOpenChats}
+          onOpenMap={onOpenMap}
+          onOpenAccount={onOpenAccount}
+          onOpenNotificationTarget={onOpenNotificationTarget}
+        />
       )}
       <AddSpendSheet />
       <AddMoneySheet />
@@ -47,10 +55,17 @@ function ExpensesRoot({ onHome, onOpenThrow, onOpenAccount, onOpenNotificationTa
 }
 
 /** Card-stack picker + per-card wallet, plus every modal it can open. */
-export function ExpensesScreen({ onHome, onOpenThrow, onOpenAccount, focusCardId, onOpenNotificationTarget }: ExpensesScreenProps) {
+export function ExpensesScreen({ onHome, onOpenThrow, onOpenChats, onOpenMap, onOpenAccount, focusCardId, onOpenNotificationTarget }: ExpensesScreenProps) {
   return (
     <ExpensesProvider initialCardId={focusCardId}>
-      <ExpensesRoot onHome={onHome} onOpenThrow={onOpenThrow} onOpenAccount={onOpenAccount} onOpenNotificationTarget={onOpenNotificationTarget} />
+      <ExpensesRoot
+        onHome={onHome}
+        onOpenThrow={onOpenThrow}
+        onOpenChats={onOpenChats}
+        onOpenMap={onOpenMap}
+        onOpenAccount={onOpenAccount}
+        onOpenNotificationTarget={onOpenNotificationTarget}
+      />
     </ExpensesProvider>
   );
 }

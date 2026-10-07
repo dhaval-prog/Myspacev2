@@ -93,6 +93,15 @@ export const throwGlass = {
   // rows, settings, search) stays lime-tinted regardless.
   tintWaterBlue: 'rgba(61,123,255,.16)',
   tintWaterBlueStrong: 'rgba(61,123,255,.26)',
+
+  // Full-screen backdrop variant (ThrowGlassBackdrop's `fill` mode, replacing the real map when
+  // the battery/data-saving "Show Map Background" setting is off) — day reuses the warm paper
+  // background and lime/pale blobs above; night gets its own dark-sky base and cool blue/violet
+  // blobs instead, since the warm lime pair would read as daytime regardless of the hour.
+  fillBaseDay: throwColor.screenBg,
+  fillBaseNight: '#14141C',
+  blobNightBlue: 'rgba(80,110,255,.4)',
+  blobNightViolet: 'rgba(160,120,255,.28)',
 } as const;
 
 export const throwGradient = {

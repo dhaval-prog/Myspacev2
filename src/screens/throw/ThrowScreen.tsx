@@ -14,6 +14,7 @@ interface ThrowScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenChats: () => void;
+  onOpenMap: () => void;
   onOpenAddFriendScreen: () => void;
   onNotificationTarget: (target: NotificationTarget) => void;
   onOpenReceivedLetters: (contactId?: string, opts?: { viaToast?: boolean }) => void;
@@ -30,6 +31,7 @@ function ThrowNavigator({
   onHome,
   onOpenExpenses,
   onOpenChats,
+  onOpenMap,
   onOpenAddFriendScreen,
   onNotificationTarget,
   onOpenReceivedLetters,
@@ -39,6 +41,7 @@ function ThrowNavigator({
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenChats: () => void;
+  onOpenMap: () => void;
   onOpenAddFriendScreen: () => void;
   onNotificationTarget: (target: NotificationTarget) => void;
   onOpenReceivedLetters: (contactId?: string, opts?: { viaToast?: boolean }) => void;
@@ -61,6 +64,7 @@ function ThrowNavigator({
       <ThrowHomeScreen
         onOpenExpenses={onOpenExpenses}
         onOpenChats={onOpenChats}
+        onOpenMap={onOpenMap}
         onOpenSettings={() => setScreen({ name: 'settings' })}
         // "Open this exact letter" is this navigator's own subscreen switch (ThrowHomeScreen has
         // no notion of it), so it's intercepted right here — anything else (focusing a contact,
@@ -93,7 +97,7 @@ function ThrowNavigator({
   return null;
 }
 
-export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFriendScreen, onNotificationTarget, onOpenReceivedLetters, initialThrowId, initialFocusContactId }: ThrowScreenProps) {
+export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenMap, onOpenAddFriendScreen, onNotificationTarget, onOpenReceivedLetters, initialThrowId, initialFocusContactId }: ThrowScreenProps) {
   return (
     <ThrowProvider>
       <ThrowStoriesProvider>
@@ -102,6 +106,7 @@ export function ThrowScreen({ onHome, onOpenExpenses, onOpenChats, onOpenAddFrie
             onHome={onHome}
             onOpenExpenses={onOpenExpenses}
             onOpenChats={onOpenChats}
+            onOpenMap={onOpenMap}
             onOpenAddFriendScreen={onOpenAddFriendScreen}
             onNotificationTarget={onNotificationTarget}
             onOpenReceivedLetters={onOpenReceivedLetters}

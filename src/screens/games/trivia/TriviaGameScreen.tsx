@@ -9,12 +9,14 @@ interface TriviaGameScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
   /** Which tab the create/join hub opens on — set by the Games hub's Create/Join row buttons. */
   initialTab?: 'create' | 'join';
 }
 
 /** Trivia Night entry point — routes on server state, same philosophy as GamesScreen. */
-export function TriviaGameScreen({ onHome, onOpenExpenses, onOpenThrow, initialTab }: TriviaGameScreenProps) {
+export function TriviaGameScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenChats, onOpenMap, initialTab }: TriviaGameScreenProps) {
   const { game, currentQuestion } = useTriviaGame();
 
   if (game?.status === 'completed') {
@@ -26,5 +28,7 @@ export function TriviaGameScreen({ onHome, onOpenExpenses, onOpenThrow, initialT
   if (game?.status === 'active' && currentQuestion?.status === 'active') {
     return <TriviaQuestionScreen />;
   }
-  return <TriviaLobbyScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} initialTab={initialTab} />;
+  return (
+    <TriviaLobbyScreen onHome={onHome} onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} onOpenChats={onOpenChats} onOpenMap={onOpenMap} initialTab={initialTab} />
+  );
 }

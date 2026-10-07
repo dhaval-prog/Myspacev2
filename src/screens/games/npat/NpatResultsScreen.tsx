@@ -33,9 +33,11 @@ interface NpatResultsScreenProps {
   onHome: () => void;
   onOpenExpenses: () => void;
   onOpenThrow: () => void;
+  onOpenChats: () => void;
+  onOpenMap: () => void;
 }
 
-export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenThrow }: NpatResultsScreenProps) {
+export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenChats, onOpenMap }: NpatResultsScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
@@ -162,7 +164,8 @@ export function NpatResultsScreen({ onHome, onOpenExpenses, onOpenThrow }: NpatR
       <BottomNav
         activeId="games"
         onSelect={(id) => {
-          if (id === 'chat') onHome();
+          if (id === 'chat') onOpenChats();
+          if (id === 'map') onOpenMap();
           if (id === 'expenses') onOpenExpenses();
           if (id === 'throw') onOpenThrow();
         }}
