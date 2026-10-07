@@ -19,13 +19,14 @@ interface ExpensesScreenProps {
   onOpenThrow: () => void;
   onOpenChats: () => void;
   onOpenMap: () => void;
+  onOpenGames: () => void;
   onOpenAccount: () => void;
   /** Opens straight into this card's wallet — set when arriving from a notification about it. */
   focusCardId?: string;
   onOpenNotificationTarget?: (target: NotificationTarget) => void;
 }
 
-function ExpensesRoot({ onHome, onOpenThrow, onOpenChats, onOpenMap, onOpenAccount, onOpenNotificationTarget }: ExpensesScreenProps) {
+function ExpensesRoot({ onHome, onOpenThrow, onOpenChats, onOpenMap, onOpenGames, onOpenAccount, onOpenNotificationTarget }: ExpensesScreenProps) {
   const { page } = useExpenses();
   return (
     <>
@@ -36,6 +37,7 @@ function ExpensesRoot({ onHome, onOpenThrow, onOpenChats, onOpenMap, onOpenAccou
           onOpenThrow={onOpenThrow}
           onOpenChats={onOpenChats}
           onOpenMap={onOpenMap}
+          onOpenGames={onOpenGames}
           onOpenAccount={onOpenAccount}
           onOpenNotificationTarget={onOpenNotificationTarget}
         />
@@ -55,7 +57,7 @@ function ExpensesRoot({ onHome, onOpenThrow, onOpenChats, onOpenMap, onOpenAccou
 }
 
 /** Card-stack picker + per-card wallet, plus every modal it can open. */
-export function ExpensesScreen({ onHome, onOpenThrow, onOpenChats, onOpenMap, onOpenAccount, focusCardId, onOpenNotificationTarget }: ExpensesScreenProps) {
+export function ExpensesScreen({ onHome, onOpenThrow, onOpenChats, onOpenMap, onOpenGames, onOpenAccount, focusCardId, onOpenNotificationTarget }: ExpensesScreenProps) {
   return (
     <ExpensesProvider initialCardId={focusCardId}>
       <ExpensesRoot
@@ -63,6 +65,7 @@ export function ExpensesScreen({ onHome, onOpenThrow, onOpenChats, onOpenMap, on
         onOpenThrow={onOpenThrow}
         onOpenChats={onOpenChats}
         onOpenMap={onOpenMap}
+        onOpenGames={onOpenGames}
         onOpenAccount={onOpenAccount}
         onOpenNotificationTarget={onOpenNotificationTarget}
       />

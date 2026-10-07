@@ -31,7 +31,7 @@ export function FriendsScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenGames
   const { page } = useFriends();
   switch (page) {
     case 'add':
-      return <AddFriendScreen onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} />;
+      return <AddFriendScreen onOpenExpenses={onOpenExpenses} onOpenThrow={onOpenThrow} onOpenGames={onOpenGames} />;
     case 'scan':
       return <FriendsScannerScreen />;
     case 'match':
