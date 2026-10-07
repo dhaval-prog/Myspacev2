@@ -26,6 +26,17 @@ jest.mock('expo-video', () => ({ useVideoPlayer: () => ({}), VideoView: () => nu
 jest.mock('../../../components/throw/ThrowMap', () => ({
   ThrowMap: () => null,
 }));
+// Same dumb-stand-in convention ThrowHomeScreen's own tests already use for this heavy component
+// (3D fold engine, voice-to-text, camera/gallery sheets) — these tests only care about which props
+// the reply-compose surface is mounted with, not any of FoldingLetter's own internal gesture math.
+let mockFoldingLetterProps: any;
+jest.mock('../../../components/throw/FoldingLetter', () => ({
+  FoldingLetter: (props: any) => {
+    mockFoldingLetterProps = props;
+    const { Text } = require('react-native');
+    return require('react').createElement(Text, { testID: 'folding-letter' }, props.recipientName);
+  },
+}));
 
 const mockUseThrow = useThrow as jest.Mock;
 
@@ -65,32 +76,27 @@ function letter(overrides: { id: string; counterpartId: string; createdAt: strin
 }
 
 function setupMocks(inbox: ReturnType<typeof letter>[], friends = [FRIEND_A, FRIEND_B]) {
+  const sendThrow = jest.fn().mockResolvedValue({ error: null, letter: letter({ id: 'reply-1', counterpartId: FRIEND_A.userId, createdAt: new Date().toISOString() }) });
+  const uploadPhoto = jest.fn().mockResolvedValue({ url: 'https://example.com/photo.jpg', error: null });
   mockUseThrow.mockReturnValue({
     friends,
     inbox,
     deleteThrow: jest.fn().mockResolvedValue({ error: null }),
     markRead: jest.fn().mockResolvedValue(undefined),
     confirmThrowAlert: jest.fn().mockResolvedValue({ error: null }),
+    sendThrow,
+    uploadPhoto,
   });
+  return { sendThrow, uploadPhoto };
 }
 
 async function renderScreen(props: Partial<React.ComponentProps<typeof ThrowReceivedLettersScreen>> = {}) {
-  const onReply = jest.fn();
   const noopFn = jest.fn();
   await act(async () => {
     renderWithSafeArea(
-      <ThrowReceivedLettersScreen
-        onReply={onReply}
-        onOpenThrow={noopFn}
-        onOpenChats={noopFn}
-        onOpenMap={noopFn}
-        onOpenGames={noopFn}
-        onOpenExpenses={noopFn}
-        {...props}
-      />,
+      <ThrowReceivedLettersScreen onOpenThrow={noopFn} onOpenChats={noopFn} onOpenMap={noopFn} onOpenGames={noopFn} onOpenExpenses={noopFn} {...props} />,
     );
   });
-  return { onReply };
 }
 
 describe('ThrowReceivedLettersScreen', () => {
@@ -138,9 +144,9 @@ describe('ThrowReceivedLettersScreen', () => {
     expect(screen.getAllByText('Priya').length).toBeGreaterThan(0);
   });
 
-  it('Reply calls onReply with the contact and letter id once the fold-away/fly-out finishes', async () => {
+  it('Reply swaps the letter for an in-place FoldingLetter addressed to the same contact once the fold-away/fly-out finishes', async () => {
     setupMocks([letter({ id: 'l1', counterpartId: FRIEND_A.userId, createdAt: new Date().toISOString(), status: 'thrown' })]);
-    const { onReply } = await renderScreen({ initialContactId: FRIEND_A.userId });
+    await renderScreen({ initialContactId: FRIEND_A.userId });
 
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 650));
@@ -148,11 +154,32 @@ describe('ThrowReceivedLettersScreen', () => {
 
     await act(async () => {
       fireEvent.press(screen.getByLabelText('Reply'));
-      // reply() drives its own 620ms/1150ms timers (fold-away then fly-to-corner) before calling
-      // onReply — reduceMotion only short-circuits the arrival flight, not this exit sequence.
+      // reply() drives its own 620ms/1150ms timers (fold-away then fly-to-corner) before the
+      // screen swaps in the compose surface — reduceMotion only short-circuits the arrival
+      // flight, not this exit sequence.
       await new Promise((resolve) => setTimeout(resolve, 1200));
     });
 
-    expect(onReply).toHaveBeenCalledWith(FRIEND_A.userId, 'l1');
+    expect(screen.getByTestId('folding-letter')).toBeTruthy();
+    expect(mockFoldingLetterProps.recipientName).toBe(FRIEND_A.name);
+  });
+
+  it('sending a reply calls sendThrow with repliedToThrowId pointing at the original letter', async () => {
+    const { sendThrow } = setupMocks([letter({ id: 'l1', counterpartId: FRIEND_A.userId, createdAt: new Date().toISOString(), status: 'thrown' })]);
+    await renderScreen({ initialContactId: FRIEND_A.userId });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 650));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Reply'));
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    });
+
+    await act(async () => {
+      await mockFoldingLetterProps.onThrow({ messageText: 'Hey back!', strokes: null, penColor: '#000', photoUris: [], photoTrims: [] });
+    });
+
+    expect(sendThrow).toHaveBeenCalledWith(expect.objectContaining({ recipientId: FRIEND_A.userId, repliedToThrowId: 'l1', messageText: 'Hey back!' }));
   });
 });
