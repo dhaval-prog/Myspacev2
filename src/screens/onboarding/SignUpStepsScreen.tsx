@@ -7,17 +7,26 @@ import { obColor, obFont } from '../../theme/onboardingTokens';
 
 type StepKey = 'name' | 'email' | 'password';
 
-const STEPS: { key: StepKey; kicker: string; question: string; placeholder: string; helper: string; keyboard?: 'email-address'; secure?: boolean }[] = [
-  { key: 'name', kicker: 'STEP 1 · NAME', question: 'What should friends call you?', placeholder: 'Your name', helper: "This is how you'll show up in chats." },
+const STEPS: { key: StepKey; chipLabel: string; kicker: string; question: string; placeholder: string; helper: string; keyboard?: 'email-address'; secure?: boolean }[] = [
+  { key: 'name', chipLabel: 'NAME', kicker: 'STEP 1 · NAME', question: 'What should friends call you?', placeholder: 'Your name', helper: "This is how you'll show up in chats." },
   {
     key: 'email',
+    chipLabel: 'EMAIL',
     kicker: 'STEP 2 · EMAIL',
     question: "What's your email?",
     placeholder: 'you@example.com',
-    helper: "We'll send a confirmation link here.",
+    helper: "We'll send a magic link to check it's you.",
     keyboard: 'email-address',
   },
-  { key: 'password', kicker: 'STEP 3 · PASSWORD', question: 'Pick a password', placeholder: '••••••••', helper: '6+ characters. Make it count.', secure: true },
+  {
+    key: 'password',
+    chipLabel: 'PASSWORD',
+    kicker: 'STEP 3 · PASSWORD',
+    question: 'Pick a password',
+    placeholder: '8+ characters',
+    helper: 'Make it sneaky. You can change it later.',
+    secure: true,
+  },
 ];
 
 export interface SignUpAnswers {
@@ -38,20 +47,28 @@ function isValidEmail(v: string) {
 
 function passwordStrength(pw: string): number {
   let score = 0;
-  if (pw.length >= 6) score++;
-  if (pw.length >= 10) score++;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
   if (/[0-9]/.test(pw) && /[a-zA-Z]/.test(pw)) score++;
   if (/[^a-zA-Z0-9]/.test(pw)) score++;
   return score;
 }
 
-const STRENGTH_LABEL = ['Too short', 'Weak', 'Okay', 'Good', 'Strong'];
+const STRENGTH_LABEL = ['TOO SHORT', 'WEAK', 'DECENT', 'SNEAKY', 'SNEAKY'];
 const STRENGTH_COLOR = ['rgba(22,33,12,.12)', obColor.tomato, obColor.sunflower, '#8FBF5A', '#3FAE63'];
+
+const PASSWORD_MIN_LENGTH = 8;
 
 function isStepValid(key: StepKey, value: string): boolean {
   if (key === 'name') return value.trim().length > 0;
   if (key === 'email') return isValidEmail(value);
-  return value.length >= 6;
+  return value.length >= PASSWORD_MIN_LENGTH;
+}
+
+function errorMessage(key: StepKey): string {
+  if (key === 'name') return 'Tell us your name first.';
+  if (key === 'email') return "That doesn't look like a valid email.";
+  return `Needs at least ${PASSWORD_MIN_LENGTH} characters.`;
 }
 
 /** 03 Sign up — one question per screen (name → email → password), a 3-segment progress bar, a
@@ -64,15 +81,14 @@ export function SignUpStepsScreen({ onBack, onGoLogin, onDone }: SignUpStepsScre
   const [stepIdx, setStepIdx] = useState(0);
   const [values, setValues] = useState<Record<StepKey, string>>({ name: '', email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [oauthError, setOauthError] = useState<string | null>(null);
 
   const step = STEPS[stepIdx];
   const value = values[step.key];
   const valid = isStepValid(step.key, value);
+  const liveError = value.length > 0 && !valid ? errorMessage(step.key) : null;
 
   const setValue = (v: string) => {
-    setError(null);
     setValues((prev) => ({ ...prev, [step.key]: v }));
   };
 
@@ -81,17 +97,11 @@ export function SignUpStepsScreen({ onBack, onGoLogin, onDone }: SignUpStepsScre
       onBack();
       return;
     }
-    setError(null);
     setStepIdx((i) => i - 1);
   };
 
   const next = () => {
-    if (!valid) {
-      if (step.key === 'name') setError('Tell us your name first.');
-      else if (step.key === 'email') setError("That doesn't look like a valid email.");
-      else setError('6 characters minimum.');
-      return;
-    }
+    if (!valid) return;
     if (stepIdx < STEPS.length - 1) {
       setStepIdx((i) => i + 1);
       return;
@@ -118,6 +128,20 @@ export function SignUpStepsScreen({ onBack, onGoLogin, onDone }: SignUpStepsScre
         </View>
         <Text style={styles.counter}>{stepIdx + 1} / {STEPS.length}</Text>
       </View>
+
+      {stepIdx > 0 && (
+        <View style={styles.answerChips}>
+          {STEPS.slice(0, stepIdx).map((s, i) => (
+            <Pressable key={s.key} onPress={() => setStepIdx(i)} accessibilityRole="button" accessibilityLabel={`Edit ${s.chipLabel.toLowerCase()}`} style={styles.answerChip}>
+              <Text style={styles.answerChipLabel}>{s.chipLabel}</Text>
+              <Text style={styles.answerChipValue} numberOfLines={1}>{values[s.key]}</Text>
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                <Path d="M12 20h9 M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke={obColor.deepInk} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       <Text style={styles.kicker}>{step.kicker}</Text>
       <Text style={styles.question}>{step.question}</Text>
@@ -168,16 +192,27 @@ export function SignUpStepsScreen({ onBack, onGoLogin, onDone }: SignUpStepsScre
         </View>
       )}
 
-      {error ? <Text style={styles.helperError}>{error}</Text> : <Text style={styles.helper}>{step.helper}</Text>}
+      {liveError ? <Text style={styles.helperError}>{liveError}</Text> : <Text style={styles.helper}>{step.helper}</Text>}
 
       <View style={{ flex: 1 }} />
 
-      <Pressable onPress={next} accessibilityRole="button" accessibilityLabel="Continue" style={({ pressed }) => [styles.continueButton, pressed && styles.continueButtonPressed]}>
-        <Text style={styles.continueLabel}>Continue</Text>
-        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-          <Path d="M5 12h14M13 6l6 6-6 6" stroke={obColor.deepInk} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      </Pressable>
+      {(() => {
+        const label = stepIdx === STEPS.length - 1 ? 'Create my space' : 'Continue';
+        return (
+          <Pressable
+            onPress={next}
+            disabled={!valid}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            style={({ pressed }) => [styles.continueButton, pressed && valid && styles.continueButtonPressed, !valid && styles.continueButtonDisabled]}
+          >
+            <Text style={[styles.continueLabel, !valid && styles.continueLabelDisabled]}>{label}</Text>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+              <Path d="M5 12h14M13 6l6 6-6 6" stroke={valid ? obColor.deepInk : 'rgba(22,33,12,.35)'} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </Pressable>
+        );
+      })()}
 
       <View style={styles.dividerRow}>
         <View style={styles.dividerLine} />
@@ -221,6 +256,21 @@ const styles = StyleSheet.create({
   segmentTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: 'rgba(22,33,12,.1)', overflow: 'hidden' },
   segmentFill: { height: '100%', backgroundColor: obColor.deepInk, borderRadius: 4 },
   counter: { fontFamily: obFont.dm500, fontSize: 12, color: 'rgba(22,33,12,.6)' },
+  answerChips: { marginTop: 18, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  answerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: 160,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(22,33,12,.1)',
+  },
+  answerChipLabel: { fontFamily: obFont.dm500, fontSize: 10, letterSpacing: 1, color: 'rgba(22,33,12,.45)' },
+  answerChipValue: { flexShrink: 1, fontFamily: obFont.ui600, fontSize: 12.5, color: obColor.deepInk },
   kicker: { marginTop: 24, fontFamily: obFont.dm500, fontSize: 11, letterSpacing: 1.5, color: 'rgba(22,33,12,.5)' },
   question: { marginTop: 8, fontFamily: obFont.ui700, fontSize: 31, lineHeight: 34, letterSpacing: -0.9, color: obColor.deepInk },
   inputRow: { marginTop: 22, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderRadius: 24, paddingVertical: 6, paddingHorizontal: 8, paddingLeft: 20 },
@@ -243,7 +293,9 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
   },
   continueButtonPressed: { transform: [{ translateX: 3 }, { translateY: 3 }] },
+  continueButtonDisabled: { backgroundColor: 'rgba(22,33,12,.08)' },
   continueLabel: { fontFamily: obFont.ui700, fontSize: 16.5, color: obColor.deepInk },
+  continueLabelDisabled: { color: 'rgba(22,33,12,.35)' },
   dividerRow: { marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(22,33,12,.12)' },
   dividerText: { fontSize: 12.5, color: 'rgba(22,33,12,.5)' },
