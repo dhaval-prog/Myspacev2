@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, PanResponder, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { obColor, obFont } from '../../theme/onboardingTokens';
@@ -105,26 +105,87 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
   }, [marquee, reduceMotion]);
 
   const maxX = Math.max(KNOB_PAD, trackWidth - KNOB_SIZE - KNOB_PAD);
+  const maxXRef = useRef(maxX);
+  maxXRef.current = maxX;
+
+  const commitOrReset = () => {
+    if (knobXRef.current >= maxXRef.current - 2) {
+      setCommitted(true);
+      Animated.timing(knobX, { toValue: maxXRef.current, duration: 120, useNativeDriver: false }).start(() => onContinue());
+    } else {
+      Animated.spring(knobX, { toValue: KNOB_PAD, friction: 6, useNativeDriver: false }).start();
+    }
+  };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 4,
       onPanResponderMove: (_e, g) => {
-        const next = Math.max(KNOB_PAD, Math.min(maxX, KNOB_PAD + g.dx));
+        const next = Math.max(KNOB_PAD, Math.min(maxXRef.current, KNOB_PAD + g.dx));
         knobX.setValue(next);
       },
-      onPanResponderRelease: () => {
-        if (knobXRef.current >= maxX - 2) {
-          setCommitted(true);
-          Animated.timing(knobX, { toValue: maxX, duration: 120, useNativeDriver: false }).start(() => onContinue());
-        } else {
-          Animated.spring(knobX, { toValue: KNOB_PAD, friction: 6, useNativeDriver: false }).start();
-        }
-      },
+      onPanResponderRelease: commitOrReset,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ).current;
+  const knobRef = useRef<View>(null);
+
+  // react-native-web's PanResponder polyfill is the documented-flaky one in this codebase (see
+  // ThrowReceivedLettersScreen's own letter-swipe gesture, and FoldingLetter's fold/flick gesture,
+  // for the full writeup) — this drag is exactly the kind of case it fails on: real mobile Safari
+  // touch-drag on the deployed web build, confirmed stuck mid-track rather than completing or
+  // springing back. Reimplements the same drag purely from real pointer positions on web; native
+  // keeps using PanResponder as-is above, since its real touch system doesn't have the bug.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const node = knobRef.current as any as HTMLElement | null;
+    if (!node) return;
+    const getX = (e: MouseEvent | TouchEvent): number | null => {
+      if ('touches' in e) {
+        const t = e.touches[0] ?? e.changedTouches[0];
+        return t ? t.clientX : null;
+      }
+      return e.clientX;
+    };
+    let startX: number | null = null;
+    let startKnobX = KNOB_PAD;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const x = getX(e);
+      if (x === null) return;
+      startX = x;
+      startKnobX = knobXRef.current;
+    };
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (startX === null) return;
+      const x = getX(e);
+      if (x === null) return;
+      const next = Math.max(KNOB_PAD, Math.min(maxXRef.current, startKnobX + (x - startX)));
+      knobX.setValue(next);
+    };
+    const onUp = () => {
+      if (startX === null) return;
+      startX = null;
+      commitOrReset();
+    };
+    node.addEventListener('mousedown', onDown);
+    node.addEventListener('touchstart', onDown, { passive: true });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchend', onUp);
+    return () => {
+      node.removeEventListener('mousedown', onDown);
+      node.removeEventListener('touchstart', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const knobHandlers = Platform.OS === 'web' ? {} : panResponder.panHandlers;
 
   const marqueeX = marquee.interpolate({ inputRange: [0, 1], outputRange: [0, -(TICKER_TEXT.length * 7.6)] });
 
@@ -159,9 +220,9 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
       </View>
 
       <View style={styles.marqueeWrap}>
-        <Animated.Text style={[styles.marqueeText, { transform: [{ translateX: marqueeX }] }]} numberOfLines={1}>
-          {TICKER_TEXT.repeat(3)}
-        </Animated.Text>
+        <Animated.View style={[styles.marqueeRow, { transform: [{ translateX: marqueeX }] }]}>
+          <Text style={styles.marqueeText}>{TICKER_TEXT.repeat(3)}</Text>
+        </Animated.View>
       </View>
 
       <Text style={styles.headline}>
@@ -177,7 +238,7 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
       >
         <Animated.View style={[styles.trackFill, { width: fillWidth }]} />
         <Text style={styles.trackLabel}>Slide to make your space →</Text>
-        <Animated.View style={[styles.knob, { transform: [{ translateX: knobX }] }]} {...(committed ? {} : panResponder.panHandlers)}>
+        <Animated.View ref={knobRef} style={[styles.knob, { transform: [{ translateX: knobX }] }]} {...(committed ? {} : knobHandlers)}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
             <Path d="M5 12h14M13 6l6 6-6 6" stroke="#111" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
@@ -262,7 +323,13 @@ const styles = StyleSheet.create({
   filmLabel: { fontFamily: obFont.mono700, fontSize: 11, color: '#E9E4D6' },
   filmCounter: { fontFamily: obFont.mono400, fontSize: 11, color: 'rgba(233,228,214,.6)' },
   marqueeWrap: { marginTop: 22, marginHorizontal: -22, borderTopWidth: 2, borderBottomWidth: 2, borderColor: obColor.ink, backgroundColor: obColor.ink, overflow: 'hidden', paddingVertical: 9 },
-  marqueeText: { fontFamily: obFont.mono700, fontSize: 13, color: obColor.sunflower },
+  // flexDirection: 'row' lets this row grow past the screen's own width instead of being
+  // measured against it — a plain Text here (even with numberOfLines={1}) gets its layout box
+  // clamped to the parent's width on native and silently truncates everything past that, which
+  // on web's nowrap-by-default text layout never happens — exactly why this rendered fine in an
+  // earlier browser check but came back blank on a real phone.
+  marqueeRow: { flexDirection: 'row' },
+  marqueeText: { flexShrink: 0, fontFamily: obFont.mono700, fontSize: 13, color: obColor.sunflower },
   headline: { marginTop: 20, fontFamily: obFont.display800, fontSize: 38, lineHeight: 40, letterSpacing: -1.4, color: obColor.ink },
   headlineHighlight: { backgroundColor: obColor.tomato, color: '#fff', borderRadius: 10, overflow: 'hidden' },
   track: {

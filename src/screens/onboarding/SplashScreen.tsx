@@ -7,14 +7,17 @@ import { navItems } from '../../data/navItems';
 import { obFont } from '../../theme/onboardingTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
+// None of these may be '#2B4BFF' (cobalt) — that's this screen's own background color, and a
+// letter painted in it would vanish into the backdrop, showing only its stroke outline (exactly
+// what happened here before this fix).
 const LETTERS: { ch: string; color: string; rot: number }[] = [
   { ch: 'm', color: '#FFD23F', rot: -6 },
   { ch: 'y', color: '#FF4F2E', rot: 4 },
-  { ch: 's', color: '#2B4BFF', rot: -5 },
+  { ch: 's', color: '#FFFFFF', rot: -5 },
   { ch: 'p', color: '#C3EA4F', rot: 6 },
   { ch: 'a', color: '#FFD23F', rot: -4 },
   { ch: 'c', color: '#FF4F2E', rot: 5 },
-  { ch: 'e', color: '#2B4BFF', rot: -6 },
+  { ch: 'e', color: '#C3EA4F', rot: -6 },
 ];
 
 // Four of the app's own nav glyphs, as tappable sticker circles — same icons a new user will
