@@ -14,6 +14,8 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { Caveat_400Regular, Caveat_500Medium, Caveat_600SemiBold, Caveat_700Bold } from '@expo-google-fonts/caveat';
+import { BricolageGrotesque_500Medium, BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
+import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
 export const fontsToLoad = {
   Figtree_400Regular,
   Figtree_500Medium,
@@ -37,4 +39,12 @@ export const fontsToLoad = {
   Caveat_500Medium,
   Caveat_600SemiBold,
   Caveat_700Bold,
+  // Onboarding's "Sticker Pop" screens only — display headings + mono stamp/
+  // tag labels, kept out of the shared fontFamily tokens for the same reason
+  // as the Games hub and Throw faces above.
+  BricolageGrotesque_500Medium,
+  BricolageGrotesque_700Bold,
+  BricolageGrotesque_800ExtraBold,
+  SpaceMono_400Regular,
+  SpaceMono_700Bold,
 };
