@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, PanResponder, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { obColor, obFont } from '../../theme/onboardingTokens';
@@ -76,6 +76,74 @@ function ChatReel() {
   );
 }
 
+function CityReel() {
+  const plane = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(plane, { toValue: 1, duration: 4600, easing: Easing.linear, useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, [plane]);
+
+  const buildings = [
+    { h: 66, bg: '#C9503A' },
+    { h: 108, bg: obColor.sunflower },
+    { h: 58, bg: '#fff' },
+    { h: 140, bg: obColor.cobalt },
+    { h: 78, bg: '#FFB4C8' },
+    { h: 100, bg: '#1a1a1a' },
+    { h: 88, bg: '#7FE0A6' },
+  ];
+
+  return (
+    <View style={[reelStyles.fill, reelStyles.citySky]}>
+      <View style={reelStyles.sun} />
+      <View style={[reelStyles.cloud, { top: 14, left: 6, width: 56, height: 20 }]} />
+      <View style={[reelStyles.cloud, { top: 48, right: 24, width: 40, height: 16 }]} />
+      <Animated.View
+        style={[
+          reelStyles.plane,
+          {
+            transform: [
+              { translateX: plane.interpolate({ inputRange: [0, 1], outputRange: [-30, 250] }) },
+              { translateY: plane.interpolate({ inputRange: [0, 1], outputRange: [86, -10] }) },
+              { rotate: '-14deg' },
+            ],
+          },
+        ]}
+      >
+        <Svg width={30} height={30} viewBox="0 0 24 24" fill="none">
+          <Path d="M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z" stroke="#fff" strokeWidth={2} strokeLinejoin="round" />
+        </Svg>
+      </Animated.View>
+      <Text style={reelStyles.reelCaption}>throw letters</Text>
+      <View style={reelStyles.buildingsRow}>
+        {buildings.map((b, i) => (
+          <View key={i} style={[reelStyles.building, { height: b.h, backgroundColor: b.bg }]}>
+            {Array.from({ length: Math.max(1, Math.floor(b.h / 20)) }).map((_, w) => (
+              <View key={w} style={reelStyles.buildingWindow} />
+            ))}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function MapReel() {
+  return (
+    <View style={[reelStyles.fill, reelStyles.mapBg]}>
+      <View style={reelStyles.mapLineH} />
+      <View style={reelStyles.mapLineV} />
+      <View style={[reelStyles.pin, { left: 50, top: 46, backgroundColor: obColor.lime }]} />
+      <View style={[reelStyles.pin, { left: 190, top: 110, backgroundColor: obColor.tomato }]} />
+      <View style={[reelStyles.pin, { left: 110, top: 168, backgroundColor: obColor.cobalt }]} />
+    </View>
+  );
+}
+
+const REELS = [ChatReel, CityReel, MapReel];
+
 /** 02 Welcome — the dark camcorder "FRIENDS.MOV" reel, a scrolling feature ticker, headline, and a
  * slide-to-start gesture track (dragging the knob to the end continues; tapping "Log in" switches
  * to the existing-account flow instead). */
@@ -89,6 +157,8 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
   const marquee = useRef(new Animated.Value(0)).current;
   const fillWidth = Animated.add(knobX, KNOB_SIZE / 2);
   const [committed, setCommitted] = useState(false);
+  const [reelIdx, setReelIdx] = useState(0);
+  const [recSeconds, setRecSeconds] = useState(21);
 
   useEffect(() => {
     const id = knobX.addListener(({ value }) => {
@@ -98,6 +168,17 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
   }, [knobX]);
 
   useEffect(() => {
+    const id = setInterval(() => setRecSeconds((s) => (s + 1) % 60), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const id = setInterval(() => setReelIdx((i) => (i + 1) % REELS.length), 5000);
+    return () => clearInterval(id);
+  }, [reduceMotion]);
+
+  useEffect(() => {
     if (reduceMotion) return;
     const loop = Animated.loop(Animated.timing(marquee, { toValue: 1, duration: 14000, easing: Easing.linear, useNativeDriver: true }));
     loop.start();
@@ -105,26 +186,87 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
   }, [marquee, reduceMotion]);
 
   const maxX = Math.max(KNOB_PAD, trackWidth - KNOB_SIZE - KNOB_PAD);
+  const maxXRef = useRef(maxX);
+  maxXRef.current = maxX;
+
+  const commitOrReset = () => {
+    if (knobXRef.current >= maxXRef.current - 2) {
+      setCommitted(true);
+      Animated.timing(knobX, { toValue: maxXRef.current, duration: 120, useNativeDriver: false }).start(() => onContinue());
+    } else {
+      Animated.spring(knobX, { toValue: KNOB_PAD, friction: 6, useNativeDriver: false }).start();
+    }
+  };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 4,
       onPanResponderMove: (_e, g) => {
-        const next = Math.max(KNOB_PAD, Math.min(maxX, KNOB_PAD + g.dx));
+        const next = Math.max(KNOB_PAD, Math.min(maxXRef.current, KNOB_PAD + g.dx));
         knobX.setValue(next);
       },
-      onPanResponderRelease: () => {
-        if (knobXRef.current >= maxX - 2) {
-          setCommitted(true);
-          Animated.timing(knobX, { toValue: maxX, duration: 120, useNativeDriver: false }).start(() => onContinue());
-        } else {
-          Animated.spring(knobX, { toValue: KNOB_PAD, friction: 6, useNativeDriver: false }).start();
-        }
-      },
+      onPanResponderRelease: commitOrReset,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ).current;
+  const knobRef = useRef<View>(null);
+
+  // react-native-web's PanResponder polyfill is the documented-flaky one in this codebase (see
+  // ThrowReceivedLettersScreen's own letter-swipe gesture, and FoldingLetter's fold/flick gesture,
+  // for the full writeup) — this drag is exactly the kind of case it fails on: real mobile Safari
+  // touch-drag on the deployed web build, confirmed stuck mid-track rather than completing or
+  // springing back. Reimplements the same drag purely from real pointer positions on web; native
+  // keeps using PanResponder as-is above, since its real touch system doesn't have the bug.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const node = knobRef.current as any as HTMLElement | null;
+    if (!node) return;
+    const getX = (e: MouseEvent | TouchEvent): number | null => {
+      if ('touches' in e) {
+        const t = e.touches[0] ?? e.changedTouches[0];
+        return t ? t.clientX : null;
+      }
+      return e.clientX;
+    };
+    let startX: number | null = null;
+    let startKnobX = KNOB_PAD;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const x = getX(e);
+      if (x === null) return;
+      startX = x;
+      startKnobX = knobXRef.current;
+    };
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (startX === null) return;
+      const x = getX(e);
+      if (x === null) return;
+      const next = Math.max(KNOB_PAD, Math.min(maxXRef.current, startKnobX + (x - startX)));
+      knobX.setValue(next);
+    };
+    const onUp = () => {
+      if (startX === null) return;
+      startX = null;
+      commitOrReset();
+    };
+    node.addEventListener('mousedown', onDown);
+    node.addEventListener('touchstart', onDown, { passive: true });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchend', onUp);
+    return () => {
+      node.removeEventListener('mousedown', onDown);
+      node.removeEventListener('touchstart', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const knobHandlers = Platform.OS === 'web' ? {} : panResponder.panHandlers;
 
   const marqueeX = marquee.interpolate({ inputRange: [0, 1], outputRange: [0, -(TICKER_TEXT.length * 7.6)] });
 
@@ -142,11 +284,14 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
       <View style={styles.phoneFrame}>
         <View style={styles.phoneDot} />
         <View style={styles.reelBox}>
-          <ChatReel />
+          {(() => {
+            const CurrentReel = REELS[reelIdx];
+            return <CurrentReel />;
+          })()}
           <View pointerEvents="none" style={styles.reelVignette} />
           <View style={styles.recBadge}>
             <View style={styles.recDot} />
-            <Text style={styles.recText}>REC</Text>
+            <Text style={styles.recText}>REC 00:{String(recSeconds).padStart(2, '0')}</Text>
           </View>
         </View>
         <View style={styles.phoneFooter}>
@@ -154,14 +299,14 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
             <View style={styles.recDotSmall} />
             <Text style={styles.filmLabel}>FRIENDS.MOV</Text>
           </View>
-          <Text style={styles.filmCounter}>01 / 03</Text>
+          <Text style={styles.filmCounter}>0{reelIdx + 1} / 0{REELS.length}</Text>
         </View>
       </View>
 
       <View style={styles.marqueeWrap}>
-        <Animated.Text style={[styles.marqueeText, { transform: [{ translateX: marqueeX }] }]} numberOfLines={1}>
-          {TICKER_TEXT.repeat(3)}
-        </Animated.Text>
+        <Animated.View style={[styles.marqueeRow, { transform: [{ translateX: marqueeX }] }]}>
+          <Text style={styles.marqueeText}>{TICKER_TEXT.repeat(3)}</Text>
+        </Animated.View>
       </View>
 
       <Text style={styles.headline}>
@@ -177,7 +322,7 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
       >
         <Animated.View style={[styles.trackFill, { width: fillWidth }]} />
         <Text style={styles.trackLabel}>Slide to make your space →</Text>
-        <Animated.View style={[styles.knob, { transform: [{ translateX: knobX }] }]} {...(committed ? {} : panResponder.panHandlers)}>
+        <Animated.View ref={knobRef} style={[styles.knob, { transform: [{ translateX: knobX }] }]} {...(committed ? {} : knobHandlers)}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
             <Path d="M5 12h14M13 6l6 6-6 6" stroke="#111" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
@@ -262,7 +407,13 @@ const styles = StyleSheet.create({
   filmLabel: { fontFamily: obFont.mono700, fontSize: 11, color: '#E9E4D6' },
   filmCounter: { fontFamily: obFont.mono400, fontSize: 11, color: 'rgba(233,228,214,.6)' },
   marqueeWrap: { marginTop: 22, marginHorizontal: -22, borderTopWidth: 2, borderBottomWidth: 2, borderColor: obColor.ink, backgroundColor: obColor.ink, overflow: 'hidden', paddingVertical: 9 },
-  marqueeText: { fontFamily: obFont.mono700, fontSize: 13, color: obColor.sunflower },
+  // flexDirection: 'row' lets this row grow past the screen's own width instead of being
+  // measured against it — a plain Text here (even with numberOfLines={1}) gets its layout box
+  // clamped to the parent's width on native and silently truncates everything past that, which
+  // on web's nowrap-by-default text layout never happens — exactly why this rendered fine in an
+  // earlier browser check but came back blank on a real phone.
+  marqueeRow: { flexDirection: 'row' },
+  marqueeText: { flexShrink: 0, fontFamily: obFont.mono700, fontSize: 13, color: obColor.sunflower },
   headline: { marginTop: 20, fontFamily: obFont.display800, fontSize: 38, lineHeight: 40, letterSpacing: -1.4, color: obColor.ink },
   headlineHighlight: { backgroundColor: obColor.tomato, color: '#fff', borderRadius: 10, overflow: 'hidden' },
   track: {
@@ -300,4 +451,16 @@ const reelStyles = StyleSheet.create({
   bubbleLeft: { backgroundColor: '#fff', borderWidth: 2, borderColor: '#111', borderRadius: 14, borderBottomLeftRadius: 4, paddingVertical: 6, paddingHorizontal: 11 },
   bubbleRight: { backgroundColor: obColor.cobalt, borderWidth: 2, borderColor: '#111', borderRadius: 14, borderBottomRightRadius: 4, paddingVertical: 6, paddingHorizontal: 11 },
   bubbleText: { fontFamily: obFont.ui700, fontSize: 13, color: '#111' },
+  citySky: { backgroundColor: '#8FA6E8', overflow: 'hidden' },
+  sun: { position: 'absolute', right: 30, top: 24, width: 44, height: 44, borderRadius: 22, backgroundColor: obColor.sunflower, borderWidth: 2, borderColor: '#111' },
+  cloud: { position: 'absolute', borderRadius: 999, backgroundColor: '#fff', borderWidth: 2, borderColor: '#111' },
+  plane: { position: 'absolute', left: 0, top: 0 },
+  reelCaption: { position: 'absolute', left: 20, bottom: 86, fontFamily: obFont.hand700, fontSize: 20, color: '#fff', transform: [{ rotate: '-4deg' }] },
+  buildingsRow: { position: 'absolute', left: -4, right: -4, bottom: -2, flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
+  building: { flex: 1, borderWidth: 2, borderColor: '#111', borderRadius: 4, borderBottomWidth: 0, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 6, gap: 4 },
+  buildingWindow: { width: 6, height: 6, borderRadius: 1, backgroundColor: 'rgba(255,255,255,.6)' },
+  mapBg: { backgroundColor: '#EDE6D3' },
+  mapLineH: { position: 'absolute', left: 0, right: 0, top: '42%', height: 10, backgroundColor: '#fff', borderTopWidth: 2, borderBottomWidth: 2, borderColor: '#111' },
+  mapLineV: { position: 'absolute', top: 0, bottom: 0, left: '36%', width: 10, backgroundColor: '#fff', borderLeftWidth: 2, borderRightWidth: 2, borderColor: '#111' },
+  pin: { position: 'absolute', width: 22, height: 22, borderRadius: 11, borderBottomLeftRadius: 0, borderWidth: 2, borderColor: '#111', transform: [{ rotate: '45deg' }] },
 });

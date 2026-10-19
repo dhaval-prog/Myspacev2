@@ -37,6 +37,9 @@ export const obColor = {
   white: '#FFFFFF',
 
   cardBg: '#FFFDF7',
+  // Sign-up's own light sage background + deep-ink text (its own palette pairing per the
+  // handoff's "isSignupA" screen — distinct from the cream/ink pairing every other screen uses).
+  sage: '#EDF2EA',
 } as const;
 
 /** Hard offset shadows, no blur — small/medium/lifted per the handoff spec. */
