@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { initialsOf } from '../../utils/friendAvatar';
 import { colors } from '../../theme';
 import { obColor, obFont } from '../../theme/onboardingTokens';
-import type { SignUpAnswers } from './SignUpChatScreen';
+import type { SignUpAnswers } from './SignUpStepsScreen';
 
 // The same lime/ice/coral rotation every avatar in the app actually uses (see
 // src/utils/friendAvatar.ts) — the swatch picked here is purely a cosmetic choice for this

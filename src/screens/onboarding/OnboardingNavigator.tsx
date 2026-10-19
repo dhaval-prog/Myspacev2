@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SplashScreen } from './SplashScreen';
 import { WelcomeScreen } from './WelcomeScreen';
-import { SignUpChatScreen, type SignUpAnswers } from './SignUpChatScreen';
+import { SignUpStepsScreen, type SignUpAnswers } from './SignUpStepsScreen';
 import { PickAvatarScreen } from './PickAvatarScreen';
 import { CheckMailScreen } from './CheckMailScreen';
 import { LoginIntercomScreen } from './LoginIntercomScreen';
@@ -43,7 +43,7 @@ export function OnboardingNavigator({ onSignedUp }: OnboardingNavigatorProps) {
   if (step.name === 'login') return <LoginIntercomScreen onBack={() => setStep({ name: 'welcome' })} onGoSignup={() => setStep({ name: 'signup' })} />;
   if (step.name === 'signup') {
     return (
-      <SignUpChatScreen
+      <SignUpStepsScreen
         onBack={() => setStep({ name: 'welcome' })}
         onGoLogin={() => setStep({ name: 'login' })}
         onDone={(answers) => setStep({ name: 'avatar', answers })}

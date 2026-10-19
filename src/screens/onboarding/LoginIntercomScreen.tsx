@@ -24,7 +24,6 @@ export function LoginIntercomScreen({ onBack, onGoSignup }: LoginIntercomScreenP
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [emailFocused, setEmailFocused] = useState(false);
 
   const buzz = async () => {
     setError(null);
@@ -51,7 +50,7 @@ export function LoginIntercomScreen({ onBack, onGoSignup }: LoginIntercomScreenP
     else setNotice(`Password reset link sent to ${email.trim()}.`);
   };
 
-  const lcdText = emailFocused || email ? email || 'type your email…' : 'ready when you are';
+  const lcdText = email || 'WHO IS IT?';
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 22 }]}>
@@ -72,9 +71,13 @@ export function LoginIntercomScreen({ onBack, onGoSignup }: LoginIntercomScreenP
         <View style={[styles.screw, { right: 9, bottom: 9 }]} />
 
         <View style={styles.panelTopRow}>
-          <View style={styles.speakerGrille} />
+          <View style={styles.speakerGrille}>
+            {Array.from({ length: 18 }, (_, i) => (
+              <View key={i} style={styles.grilleDot} />
+            ))}
+          </View>
           <Text style={styles.unitLabel}>UNIT 214</Text>
-          <View style={[styles.led, { backgroundColor: loading ? obColor.sunflower : '#5BC46A' }]} />
+          <View style={[styles.led, { backgroundColor: loading ? '#5BC46A' : obColor.sunflower }]} />
         </View>
 
         <View style={styles.lcd}>
@@ -87,8 +90,6 @@ export function LoginIntercomScreen({ onBack, onGoSignup }: LoginIntercomScreenP
             <TextInput
               value={email}
               onChangeText={setEmail}
-              onFocus={() => setEmailFocused(true)}
-              onBlur={() => setEmailFocused(false)}
               placeholder="you@example.com"
               placeholderTextColor="rgba(17,17,17,.35)"
               keyboardType="email-address"
@@ -176,7 +177,8 @@ const styles = StyleSheet.create({
   },
   screw: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: '#a9adb6', borderWidth: 1.5, borderColor: '#111' },
   panelTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10 },
-  speakerGrille: { width: 86, height: 26, borderRadius: 8, backgroundColor: '#2a2c31' },
+  speakerGrille: { width: 86, height: 26, borderRadius: 8, backgroundColor: '#8a8e97', flexDirection: 'row', flexWrap: 'wrap', alignContent: 'center', justifyContent: 'center', gap: 3, padding: 4 },
+  grilleDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#2a2c31' },
   unitLabel: { fontFamily: obFont.mono700, fontSize: 11, letterSpacing: 2, color: '#6a6e77' },
   led: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: obColor.ink },
   lcd: { marginTop: 12, height: 52, borderRadius: 12, borderWidth: 2, borderColor: obColor.ink, backgroundColor: '#0f1d11', alignItems: 'flex-start', justifyContent: 'center', paddingHorizontal: 14, overflow: 'hidden' },

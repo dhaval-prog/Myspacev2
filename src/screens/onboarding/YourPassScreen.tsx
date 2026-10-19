@@ -15,6 +15,9 @@ const SWATCHES = [
   { bg: colors.coral, fg: '#fff' },
 ];
 
+// Deterministic bar widths for the barcode strip — a real striped pattern rather than a flat bar.
+const BARCODE_BARS = [3, 1, 2, 1, 4, 1, 1, 2, 3, 1, 2, 4, 1, 1, 3, 2, 1, 4, 1, 2, 1, 3];
+
 const CONFETTI = Array.from({ length: 14 }, (_, i) => ({
   x: 10 + ((i * 37) % 340),
   delay: (i % 7) * 180,
@@ -99,28 +102,40 @@ export function YourPassScreen({ fullName, email, photoUri, swatchIdx, onContinu
         />
       ))}
 
-      <Animated.View style={[styles.card, { transform: [{ translateY: dropAnim.interpolate({ inputRange: [-1, 0], outputRange: [-500, 0] }) }] }]}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardHeaderText}>myspace pass</Text>
+      <Animated.View style={[styles.lanyardAndCard, { transform: [{ translateY: dropAnim.interpolate({ inputRange: [-1, 0], outputRange: [-560, 0] }) }] }]}>
+        <View style={styles.lanyardRibbon}>
+          <Text style={styles.lanyardText}>MYSPACE ✦ MYSPACE ✦ MYSPACE</Text>
         </View>
-        <View style={styles.cardBody}>
-          <View style={[styles.cardAvatar, { backgroundColor: skin.bg, borderColor: skin.bg }]}>
-            {photoSrc ? <Image source={{ uri: photoSrc }} style={styles.cardAvatarPhoto} /> : <Text style={[styles.cardAvatarInitials, { color: skin.fg }]}>{initials}</Text>}
+        <View style={styles.lanyardClip} />
+        <View style={styles.card}>
+          <View style={styles.cardInner}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardHeaderText}>myspace pass</Text>
+            </View>
+            <View style={styles.cardBody}>
+              <View style={[styles.cardAvatar, { backgroundColor: skin.bg, borderColor: skin.bg }]}>
+                {photoSrc ? <Image source={{ uri: photoSrc }} style={styles.cardAvatarPhoto} /> : <Text style={[styles.cardAvatarInitials, { color: skin.fg }]}>{initials}</Text>}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.cardName} numberOfLines={1}>{fullName}</Text>
+                <Text style={styles.cardHandle}>@{handle}</Text>
+                <Text style={styles.cardMeta}>MEMBER SINCE {new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).toUpperCase()}</Text>
+              </View>
+            </View>
+            <View style={styles.cardStats}>
+              <Text style={styles.cardStat}>FRIENDS 0</Text>
+              <Text style={styles.cardStat}>LETTERS 0</Text>
+              <Text style={styles.cardStat}>GAMES 0</Text>
+            </View>
+            <View style={styles.barcode}>
+              {BARCODE_BARS.map((w, i) => (
+                <View key={i} style={[styles.barcodeBar, { width: w }]} />
+              ))}
+            </View>
           </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.cardName} numberOfLines={1}>{fullName}</Text>
-            <Text style={styles.cardHandle}>@{handle}</Text>
-            <Text style={styles.cardMeta}>MEMBER SINCE {new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).toUpperCase()}</Text>
+          <View style={styles.newBadge}>
+            <Text style={styles.newBadgeText}>NEW!</Text>
           </View>
-        </View>
-        <View style={styles.cardStats}>
-          <Text style={styles.cardStat}>FRIENDS 0</Text>
-          <Text style={styles.cardStat}>LETTERS 0</Text>
-          <Text style={styles.cardStat}>GAMES 0</Text>
-        </View>
-        <View style={styles.barcode} />
-        <View style={styles.newBadge}>
-          <Text style={styles.newBadgeText}>NEW!</Text>
         </View>
       </Animated.View>
 
@@ -136,15 +151,49 @@ export function YourPassScreen({ fullName, email, photoUri, swatchIdx, onContinu
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: obColor.cobalt, paddingHorizontal: 22, alignItems: 'center', overflow: 'hidden' },
   confetti: { position: 'absolute', top: 0, borderRadius: 3, borderWidth: 2, borderColor: obColor.ink },
+  lanyardAndCard: { width: '100%', maxWidth: 290, alignItems: 'center' },
+  lanyardRibbon: {
+    width: 34,
+    height: 170,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderColor: obColor.ink,
+    backgroundColor: obColor.tomato,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 10,
+    overflow: 'hidden',
+  },
+  lanyardText: {
+    fontFamily: obFont.mono700,
+    fontSize: 10,
+    letterSpacing: 2,
+    color: '#fff',
+    transform: [{ rotate: '90deg' }],
+    width: 160,
+    textAlign: 'center',
+  },
+  lanyardClip: {
+    width: 44,
+    height: 28,
+    marginTop: -2,
+    borderWidth: 2,
+    borderColor: obColor.ink,
+    borderRadius: 8,
+    backgroundColor: '#dde0e6',
+  },
+  // No overflow: 'hidden' here — the NEW! badge below is a sibling of cardInner (which does the
+  // actual content clipping) specifically so it can spill outside the card's rounded corner
+  // instead of being cut off by it.
   card: {
+    marginTop: -2,
     width: '100%',
-    maxWidth: 290,
     backgroundColor: '#FBF8F1',
     borderWidth: 3,
     borderColor: obColor.ink,
     borderRadius: 24,
-    overflow: 'hidden',
   },
+  cardInner: { borderRadius: 21, overflow: 'hidden' },
   cardHeader: { height: 50, backgroundColor: obColor.sunflower, borderBottomWidth: 3, borderColor: obColor.ink, justifyContent: 'center', paddingHorizontal: 16 },
   cardHeaderText: { fontFamily: obFont.display800, fontSize: 19, letterSpacing: -0.4, color: obColor.ink },
   cardBody: { flexDirection: 'row', gap: 14, alignItems: 'center', padding: 16 },
@@ -156,7 +205,8 @@ const styles = StyleSheet.create({
   cardMeta: { marginTop: 3, fontFamily: obFont.mono400, fontSize: 9.5, color: obColor.inkMute },
   cardStats: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 2, borderStyle: 'dashed', borderColor: obColor.ink, paddingVertical: 9, paddingHorizontal: 16 },
   cardStat: { fontFamily: obFont.mono700, fontSize: 10.5, color: obColor.ink },
-  barcode: { marginHorizontal: 16, marginBottom: 14, height: 26, backgroundColor: 'rgba(17,17,17,.85)', borderRadius: 2 },
+  barcode: { marginHorizontal: 16, marginBottom: 14, height: 26, flexDirection: 'row', alignItems: 'stretch', gap: 2, opacity: 0.85 },
+  barcodeBar: { backgroundColor: obColor.ink },
   newBadge: { position: 'absolute', right: -14, top: 46, width: 58, height: 58, borderRadius: 29, backgroundColor: obColor.tomato, borderWidth: 2, borderColor: obColor.ink, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '12deg' }] },
   newBadgeText: { fontFamily: obFont.display800, fontSize: 15, color: '#fff' },
   title: { marginTop: 28, fontFamily: obFont.display800, fontSize: 36, lineHeight: 36, letterSpacing: -1.5, color: '#fff', textAlign: 'center' },

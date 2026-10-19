@@ -3,49 +3,60 @@ import { Animated, Image, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { StickerButton } from '../../components/onboarding/StickerKit';
-import { navItems } from '../../data/navItems';
 import { obFont } from '../../theme/onboardingTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
-// None of these may be '#2B4BFF' (cobalt) — that's this screen's own background color, and a
-// letter painted in it would vanish into the backdrop, showing only its stroke outline (exactly
-// what happened here before this fix).
-const LETTERS: { ch: string; color: string; rot: number }[] = [
-  { ch: 'm', color: '#FFD23F', rot: -6 },
-  { ch: 'y', color: '#FF4F2E', rot: 4 },
-  { ch: 's', color: '#FFFFFF', rot: -5 },
-  { ch: 'p', color: '#C3EA4F', rot: 6 },
-  { ch: 'a', color: '#FFD23F', rot: -4 },
-  { ch: 'c', color: '#FF4F2E', rot: 5 },
-  { ch: 'e', color: '#C3EA4F', rot: -6 },
+// Two-tone wordmark — "my" and "space" each their own flat color, not a rainbow per-letter
+// rotation. Neither may be '#2B4BFF' (cobalt), this screen's own background color — a word
+// painted in it would vanish into the backdrop, showing only its stroke outline.
+const WORDMARK: { word: string; color: string }[] = [
+  { word: 'my', color: '#FFD23F' },
+  { word: 'space', color: '#FFFFFF' },
 ];
 
-// Four of the app's own nav glyphs, as tappable sticker circles — same icons a new user will
-// actually land on after onboarding, not invented decoration.
-const STICKERS = [
-  { id: 'chat', bg: '#FF4F2E', left: 36, top: 90 },
-  { id: 'map', bg: '#C3EA4F', left: 300, top: 120 },
-  { id: 'games', bg: '#FFD23F', left: 300, top: 420 },
-  { id: 'expenses', bg: '#2B4BFF', left: 30, top: 460 },
+// Real icon content (not blank circles) — a mix of the app's own glyphs (plane/chat/pin) and a
+// few purely decorative ones (people/heart/speaker/music), matching the handoff's sticker set.
+const PLANE_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
+const CHAT_ICON = 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z';
+const PEOPLE_ICON = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
+const PIN_ICON = 'M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z';
+const HEART_ICON = 'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z';
+const SPEAKER_ICON = 'M11 5 6 9H2v6h4l5 4V5z M15.5 8.5a5 5 0 010 7M19 5a9 9 0 010 14';
+const MUSIC_ICON = 'M9 18V5l12-2v13 M9 18a3 3 0 11-6 0 3 3 0 016 0zM21 16a3 3 0 11-6 0 3 3 0 016 0z';
+
+// The 4 larger stickers orbiting the logo.
+const CORNER_STICKERS = [
+  { id: 'plane', icon: PLANE_ICON, bg: '#FFD23F', left: 36, top: 90 },
+  { id: 'chat', icon: CHAT_ICON, bg: '#FFFFFF', left: 300, top: 120 },
+  { id: 'people', icon: PEOPLE_ICON, bg: '#C3EA4F', left: 30, top: 460 },
+  { id: 'pin', icon: PIN_ICON, bg: '#FF4F2E', left: 300, top: 430 },
+];
+
+// The row of 3 smaller stickers under the tagline.
+const ROW_STICKERS = [
+  { id: 'heart', icon: HEART_ICON, bg: '#FFB4C8' },
+  { id: 'speaker', icon: SPEAKER_ICON, bg: '#B9C8FF' },
+  { id: 'music', icon: MUSIC_ICON, bg: '#FFFFFF' },
 ];
 
 interface SplashScreenProps {
   onContinue: () => void;
 }
 
-/** 01 Splash — cobalt backdrop, logo stamps in, "myspace" wordmark pops letter by letter, then
- * the CTA rises in. A few of the app's own nav glyphs float as tappable stickers around the logo
- * purely for charm (tapping just gives a small bounce — they don't navigate anywhere). */
+/** 01 Splash — cobalt backdrop, logo stamps in, "myspace" wordmark pops in two-tone, then a ring
+ * of sticker glyphs and the CTA rise in. Tapping a sticker just gives a small bounce — they don't
+ * navigate anywhere, purely charm. */
 export function SplashScreen({ onContinue }: SplashScreenProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const logoScale = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
-  const letterAnims = useRef(LETTERS.map(() => new Animated.Value(reduceMotion ? 1 : 0))).current;
+  const wordAnims = useRef(WORDMARK.map(() => new Animated.Value(reduceMotion ? 1 : 0))).current;
   const taglineOpacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   const ctaY = useRef(new Animated.Value(reduceMotion ? 0 : 40)).current;
   const ctaOpacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   const spin = useRef(new Animated.Value(0)).current;
-  const stickerScales = useRef(STICKERS.map(() => new Animated.Value(reduceMotion ? 1 : 0))).current;
+  const cornerScales = useRef(CORNER_STICKERS.map(() => new Animated.Value(reduceMotion ? 1 : 0))).current;
+  const rowScales = useRef(ROW_STICKERS.map(() => new Animated.Value(reduceMotion ? 1 : 0))).current;
 
   useEffect(() => {
     Animated.loop(Animated.timing(spin, { toValue: 1, duration: 40000, useNativeDriver: true })).start();
@@ -53,14 +64,14 @@ export function SplashScreen({ onContinue }: SplashScreenProps) {
     Animated.sequence([
       Animated.spring(logoScale, { toValue: 1, friction: 6, tension: 60, useNativeDriver: true }),
       Animated.stagger(
-        60,
-        letterAnims.map((v) => Animated.spring(v, { toValue: 1, friction: 7, tension: 90, useNativeDriver: true })),
+        100,
+        wordAnims.map((v) => Animated.spring(v, { toValue: 1, friction: 7, tension: 90, useNativeDriver: true })),
       ),
       Animated.parallel([
         Animated.timing(taglineOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
         Animated.stagger(
           70,
-          stickerScales.map((v) => Animated.spring(v, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true })),
+          [...cornerScales, ...rowScales].map((v) => Animated.spring(v, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true })),
         ),
       ]),
       Animated.parallel([
@@ -71,10 +82,10 @@ export function SplashScreen({ onContinue }: SplashScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const bounceSticker = (i: number) => {
+  const bounce = (v: Animated.Value) => {
     Animated.sequence([
-      Animated.spring(stickerScales[i], { toValue: 1.15, friction: 4, tension: 200, useNativeDriver: true }),
-      Animated.spring(stickerScales[i], { toValue: 1, friction: 4, tension: 200, useNativeDriver: true }),
+      Animated.spring(v, { toValue: 1.15, friction: 4, tension: 200, useNativeDriver: true }),
+      Animated.spring(v, { toValue: 1, friction: 4, tension: 200, useNativeDriver: true }),
     ]).start();
   };
 
@@ -87,20 +98,13 @@ export function SplashScreen({ onContinue }: SplashScreenProps) {
         style={[styles.ring, styles.ringInner, { transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] }) }] }]}
       />
 
-      {STICKERS.map((st, i) => {
-        const item = navItems.find((n) => n.id === st.id);
-        if (!item) return null;
-        return (
-          <Animated.View
-            key={st.id}
-            style={[styles.stickerWrap, { left: st.left, top: st.top, transform: [{ scale: stickerScales[i] }] }]}
-          >
-            <Animated.View onTouchEnd={() => bounceSticker(i)} style={[styles.sticker, { backgroundColor: st.bg }]}>
-              <Icon path={item.icon} size={26} color="#111" strokeWidth={2.2} />
-            </Animated.View>
+      {CORNER_STICKERS.map((st, i) => (
+        <Animated.View key={st.id} style={[styles.stickerWrap, { left: st.left, top: st.top, transform: [{ scale: cornerScales[i] }] }]}>
+          <Animated.View onTouchEnd={() => bounce(cornerScales[i])} style={[styles.sticker, { backgroundColor: st.bg }]}>
+            <Icon path={st.icon} size={26} color="#111" strokeWidth={2.2} />
           </Animated.View>
-        );
-      })}
+        </Animated.View>
+      ))}
 
       <View style={styles.center}>
         <Animated.View style={[styles.logoWrap, { transform: [{ scale: logoScale }, { rotate: '-6deg' }] }]}>
@@ -108,30 +112,39 @@ export function SplashScreen({ onContinue }: SplashScreenProps) {
         </Animated.View>
 
         <View style={styles.wordmarkRow}>
-          {LETTERS.map((l, i) => (
+          {WORDMARK.map((w, i) => (
             <Animated.Text
-              key={`${l.ch}-${i}`}
+              key={w.word}
               style={[
-                styles.wordmarkLetter,
+                styles.wordmarkWord,
                 {
-                  color: l.color,
-                  transform: [
-                    { rotate: `${l.rot}deg` },
-                    { scale: letterAnims[i] },
-                    { translateY: letterAnims[i].interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
-                  ],
-                  opacity: letterAnims[i],
+                  color: w.color,
+                  transform: [{ scale: wordAnims[i] }, { translateY: wordAnims[i].interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+                  opacity: wordAnims[i],
                 },
               ]}
             >
-              {l.ch}
+              {w.word}
             </Animated.Text>
           ))}
         </View>
         <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>your space. your people.</Animated.Text>
+
+        <View style={styles.rowStickers}>
+          {ROW_STICKERS.map((st, i) => (
+            <Animated.View key={st.id} style={{ transform: [{ scale: rowScales[i] }] }}>
+              <Animated.View onTouchEnd={() => bounce(rowScales[i])} style={[styles.rowSticker, { backgroundColor: st.bg }]}>
+                <Icon path={st.icon} size={20} color="#111" strokeWidth={2.2} />
+              </Animated.View>
+            </Animated.View>
+          ))}
+        </View>
+        <Animated.View style={[styles.hint, { opacity: taglineOpacity }]}>
+          <Text style={styles.hintText}>tap a sticker ✦</Text>
+        </Animated.View>
       </View>
 
-      <Animated.View style={{ paddingHorizontal: 40, paddingBottom: insets.bottom + 44, opacity: ctaOpacity, transform: [{ translateY: ctaY }] }}>
+      <Animated.View style={{ paddingHorizontal: 40, paddingBottom: insets.bottom + 24, opacity: ctaOpacity, transform: [{ translateY: ctaY }] }}>
         <StickerButton label="Step inside" onPress={onContinue} bg="#FFD23F" />
       </Animated.View>
     </View>
@@ -158,7 +171,7 @@ const styles = StyleSheet.create({
     shadowRadius: 0,
     elevation: 5,
   },
-  center: { alignItems: 'center', marginTop: -60 },
+  center: { alignItems: 'center', marginTop: -40 },
   logoWrap: {
     width: 148,
     height: 148,
@@ -174,7 +187,7 @@ const styles = StyleSheet.create({
   },
   logo: { width: '100%', height: '100%' },
   wordmarkRow: { flexDirection: 'row', marginTop: 24 },
-  wordmarkLetter: {
+  wordmarkWord: {
     fontFamily: obFont.display800,
     fontSize: 54,
     lineHeight: 58,
@@ -184,4 +197,21 @@ const styles = StyleSheet.create({
     textShadowRadius: 0,
   },
   tagline: { marginTop: 10, fontFamily: obFont.hand700, fontSize: 24, color: '#fff' },
+  rowStickers: { flexDirection: 'row', gap: 14, marginTop: 22 },
+  rowSticker: {
+    width: 56,
+    height: 56,
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: '#111',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#111',
+    shadowOffset: { width: 3, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
+  },
+  hint: { marginTop: 12, backgroundColor: '#fff', borderWidth: 2, borderColor: '#111', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14 },
+  hintText: { fontFamily: obFont.ui700, fontSize: 13, color: '#111' },
 });

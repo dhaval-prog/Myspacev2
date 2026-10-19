@@ -76,6 +76,74 @@ function ChatReel() {
   );
 }
 
+function CityReel() {
+  const plane = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(plane, { toValue: 1, duration: 4600, easing: Easing.linear, useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, [plane]);
+
+  const buildings = [
+    { h: 66, bg: '#C9503A' },
+    { h: 108, bg: obColor.sunflower },
+    { h: 58, bg: '#fff' },
+    { h: 140, bg: obColor.cobalt },
+    { h: 78, bg: '#FFB4C8' },
+    { h: 100, bg: '#1a1a1a' },
+    { h: 88, bg: '#7FE0A6' },
+  ];
+
+  return (
+    <View style={[reelStyles.fill, reelStyles.citySky]}>
+      <View style={reelStyles.sun} />
+      <View style={[reelStyles.cloud, { top: 14, left: 6, width: 56, height: 20 }]} />
+      <View style={[reelStyles.cloud, { top: 48, right: 24, width: 40, height: 16 }]} />
+      <Animated.View
+        style={[
+          reelStyles.plane,
+          {
+            transform: [
+              { translateX: plane.interpolate({ inputRange: [0, 1], outputRange: [-30, 250] }) },
+              { translateY: plane.interpolate({ inputRange: [0, 1], outputRange: [86, -10] }) },
+              { rotate: '-14deg' },
+            ],
+          },
+        ]}
+      >
+        <Svg width={30} height={30} viewBox="0 0 24 24" fill="none">
+          <Path d="M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z" stroke="#fff" strokeWidth={2} strokeLinejoin="round" />
+        </Svg>
+      </Animated.View>
+      <Text style={reelStyles.reelCaption}>throw letters</Text>
+      <View style={reelStyles.buildingsRow}>
+        {buildings.map((b, i) => (
+          <View key={i} style={[reelStyles.building, { height: b.h, backgroundColor: b.bg }]}>
+            {Array.from({ length: Math.max(1, Math.floor(b.h / 20)) }).map((_, w) => (
+              <View key={w} style={reelStyles.buildingWindow} />
+            ))}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function MapReel() {
+  return (
+    <View style={[reelStyles.fill, reelStyles.mapBg]}>
+      <View style={reelStyles.mapLineH} />
+      <View style={reelStyles.mapLineV} />
+      <View style={[reelStyles.pin, { left: 50, top: 46, backgroundColor: obColor.lime }]} />
+      <View style={[reelStyles.pin, { left: 190, top: 110, backgroundColor: obColor.tomato }]} />
+      <View style={[reelStyles.pin, { left: 110, top: 168, backgroundColor: obColor.cobalt }]} />
+    </View>
+  );
+}
+
+const REELS = [ChatReel, CityReel, MapReel];
+
 /** 02 Welcome — the dark camcorder "FRIENDS.MOV" reel, a scrolling feature ticker, headline, and a
  * slide-to-start gesture track (dragging the knob to the end continues; tapping "Log in" switches
  * to the existing-account flow instead). */
@@ -89,6 +157,8 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
   const marquee = useRef(new Animated.Value(0)).current;
   const fillWidth = Animated.add(knobX, KNOB_SIZE / 2);
   const [committed, setCommitted] = useState(false);
+  const [reelIdx, setReelIdx] = useState(0);
+  const [recSeconds, setRecSeconds] = useState(21);
 
   useEffect(() => {
     const id = knobX.addListener(({ value }) => {
@@ -96,6 +166,17 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
     });
     return () => knobX.removeListener(id);
   }, [knobX]);
+
+  useEffect(() => {
+    const id = setInterval(() => setRecSeconds((s) => (s + 1) % 60), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const id = setInterval(() => setReelIdx((i) => (i + 1) % REELS.length), 5000);
+    return () => clearInterval(id);
+  }, [reduceMotion]);
 
   useEffect(() => {
     if (reduceMotion) return;
@@ -203,11 +284,14 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
       <View style={styles.phoneFrame}>
         <View style={styles.phoneDot} />
         <View style={styles.reelBox}>
-          <ChatReel />
+          {(() => {
+            const CurrentReel = REELS[reelIdx];
+            return <CurrentReel />;
+          })()}
           <View pointerEvents="none" style={styles.reelVignette} />
           <View style={styles.recBadge}>
             <View style={styles.recDot} />
-            <Text style={styles.recText}>REC</Text>
+            <Text style={styles.recText}>REC 00:{String(recSeconds).padStart(2, '0')}</Text>
           </View>
         </View>
         <View style={styles.phoneFooter}>
@@ -215,7 +299,7 @@ export function WelcomeScreen({ onContinue, onLogin }: WelcomeScreenProps) {
             <View style={styles.recDotSmall} />
             <Text style={styles.filmLabel}>FRIENDS.MOV</Text>
           </View>
-          <Text style={styles.filmCounter}>01 / 03</Text>
+          <Text style={styles.filmCounter}>0{reelIdx + 1} / 0{REELS.length}</Text>
         </View>
       </View>
 
@@ -367,4 +451,16 @@ const reelStyles = StyleSheet.create({
   bubbleLeft: { backgroundColor: '#fff', borderWidth: 2, borderColor: '#111', borderRadius: 14, borderBottomLeftRadius: 4, paddingVertical: 6, paddingHorizontal: 11 },
   bubbleRight: { backgroundColor: obColor.cobalt, borderWidth: 2, borderColor: '#111', borderRadius: 14, borderBottomRightRadius: 4, paddingVertical: 6, paddingHorizontal: 11 },
   bubbleText: { fontFamily: obFont.ui700, fontSize: 13, color: '#111' },
+  citySky: { backgroundColor: '#8FA6E8', overflow: 'hidden' },
+  sun: { position: 'absolute', right: 30, top: 24, width: 44, height: 44, borderRadius: 22, backgroundColor: obColor.sunflower, borderWidth: 2, borderColor: '#111' },
+  cloud: { position: 'absolute', borderRadius: 999, backgroundColor: '#fff', borderWidth: 2, borderColor: '#111' },
+  plane: { position: 'absolute', left: 0, top: 0 },
+  reelCaption: { position: 'absolute', left: 20, bottom: 86, fontFamily: obFont.hand700, fontSize: 20, color: '#fff', transform: [{ rotate: '-4deg' }] },
+  buildingsRow: { position: 'absolute', left: -4, right: -4, bottom: -2, flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
+  building: { flex: 1, borderWidth: 2, borderColor: '#111', borderRadius: 4, borderBottomWidth: 0, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 6, gap: 4 },
+  buildingWindow: { width: 6, height: 6, borderRadius: 1, backgroundColor: 'rgba(255,255,255,.6)' },
+  mapBg: { backgroundColor: '#EDE6D3' },
+  mapLineH: { position: 'absolute', left: 0, right: 0, top: '42%', height: 10, backgroundColor: '#fff', borderTopWidth: 2, borderBottomWidth: 2, borderColor: '#111' },
+  mapLineV: { position: 'absolute', top: 0, bottom: 0, left: '36%', width: 10, backgroundColor: '#fff', borderLeftWidth: 2, borderRightWidth: 2, borderColor: '#111' },
+  pin: { position: 'absolute', width: 22, height: 22, borderRadius: 11, borderBottomLeftRadius: 0, borderWidth: 2, borderColor: '#111', transform: [{ rotate: '45deg' }] },
 });
