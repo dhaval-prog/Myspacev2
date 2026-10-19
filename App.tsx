@@ -16,9 +16,8 @@ import { ThrowColorModeProvider } from './src/context/ThrowColorModeContext';
 import { CallOverlay } from './src/components/calls/CallOverlay';
 import type { NotificationTarget } from './src/utils/notify';
 import { LaunchIntro } from './src/components/LaunchIntro';
-import { OnboardingNavigator, type PostSignupData } from './src/screens/onboarding/OnboardingNavigator';
-import { YourPassScreen } from './src/screens/onboarding/YourPassScreen';
-import { AddFriendsOnboardingScreen } from './src/screens/onboarding/AddFriendsOnboardingScreen';
+import { SignUpScreen } from './src/screens/SignUpScreen';
+import { LoginScreen } from './src/screens/LoginScreen';
 import { ExpensesScreen } from './src/screens/expenses/ExpensesScreen';
 import { FriendsScreen } from './src/screens/friends/FriendsScreen';
 import { GamesScreen } from './src/screens/games/GamesScreen';
@@ -30,6 +29,7 @@ import { AccountSettingsScreen } from './src/screens/account/AccountSettingsScre
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+type AuthScreen = 'login' | 'signup';
 type Screen =
   | { name: 'expenses'; focusCardId?: string }
   | { name: 'friends' }
@@ -39,6 +39,15 @@ type Screen =
   | { name: 'throw'; openThrowId?: string; focusContactId?: string }
   | { name: 'throwLetters'; contactId?: string; viaToast?: boolean }
   | { name: 'account' };
+
+function AuthNavigator() {
+  const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
+  return authScreen === 'signup' ? (
+    <SignUpScreen onSwitchToLogin={() => setAuthScreen('login')} />
+  ) : (
+    <LoginScreen onSwitchToSignUp={() => setAuthScreen('signup')} />
+  );
+}
 
 function AppNavigator() {
   // Chat is the app's landing point now — every signup/login lands here (see navItems.ts's own
@@ -175,14 +184,16 @@ function AppNavigator() {
   );
 }
 
-type PostSignupStage = 'pass' | 'addFriends';
+function RootNavigator() {
+  const { session, initializing } = useAuth();
 
-/** The one-time post-signup celebration (Your Pass + Add Friends), then the normal app —
- * mounted only once a real session exists, same provider stack as before. `postSignup` is only
- * ever non-null for a signup that happened in *this* app run (see OnboardingNavigator's own doc
- * comment) — a returning user's login, or relaunching mid-flow, skips straight to AppNavigator. */
-function SignedInNavigator({ postSignup }: { postSignup: PostSignupData | null }) {
-  const [stage, setStage] = useState<PostSignupStage | null>(postSignup ? 'pass' : null);
+  if (initializing) {
+    return <View style={{ flex: 1, backgroundColor: colors.lime }} />;
+  }
+
+  if (!session) {
+    return <AuthNavigator />;
+  }
 
   return (
     <NotificationsProvider>
@@ -193,19 +204,7 @@ function SignedInNavigator({ postSignup }: { postSignup: PostSignupData | null }
               <GameStatsProvider>
                 <ThrowColorModeProvider>
                   <ThrowAlertsProvider>
-                    {stage === 'pass' && postSignup ? (
-                      <YourPassScreen
-                        fullName={postSignup.fullName}
-                        email={postSignup.email}
-                        photoUri={postSignup.photoUri}
-                        swatchIdx={postSignup.swatchIdx}
-                        onContinue={() => setStage('addFriends')}
-                      />
-                    ) : stage === 'addFriends' ? (
-                      <AddFriendsOnboardingScreen onBack={() => setStage('pass')} onDone={() => setStage(null)} />
-                    ) : (
-                      <AppNavigator />
-                    )}
+                    <AppNavigator />
                     <CallOverlay />
                     <ThrowAlertsOverlay />
                   </ThrowAlertsProvider>
@@ -217,21 +216,6 @@ function SignedInNavigator({ postSignup }: { postSignup: PostSignupData | null }
       </FriendsProvider>
     </NotificationsProvider>
   );
-}
-
-function RootNavigator() {
-  const { session, initializing } = useAuth();
-  const [postSignup, setPostSignup] = useState<PostSignupData | null>(null);
-
-  if (initializing) {
-    return <View style={{ flex: 1, backgroundColor: colors.lime }} />;
-  }
-
-  if (!session) {
-    return <OnboardingNavigator onSignedUp={setPostSignup} />;
-  }
-
-  return <SignedInNavigator postSignup={postSignup} />;
 }
 
 export default function App() {

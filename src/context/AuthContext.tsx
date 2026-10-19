@@ -55,8 +55,6 @@ interface AuthContextValue {
   /** `scope` mirrors Supabase's session scopes: 'local' (this device, default), 'others' (every other device), 'global' (everywhere including this device). */
   signOut: (scope?: 'local' | 'others' | 'global') => Promise<void>;
   resetPassword: (email: string) => Promise<AuthResult>;
-  /** Re-sends the signup confirmation email — the onboarding flow's "Send again" link. */
-  resendConfirmation: (email: string) => Promise<AuthResult>;
   updatePassword: (newPassword: string) => Promise<AuthResult>;
   updateProfileName: (fullName: string) => Promise<AuthResult>;
 }
@@ -143,11 +141,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resetPassword: async (email) => {
         if (!isSupabaseConfigured) return { error: NOT_CONFIGURED_ERROR };
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
-        return { error: error?.message ?? null };
-      },
-      resendConfirmation: async (email) => {
-        if (!isSupabaseConfigured) return { error: NOT_CONFIGURED_ERROR };
-        const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim() });
         return { error: error?.message ?? null };
       },
       updatePassword: async (newPassword) => {
