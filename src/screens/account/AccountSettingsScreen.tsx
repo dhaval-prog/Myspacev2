@@ -157,15 +157,13 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       return;
     }
     (async () => {
-      // phone and date of birth live in profile_private (only you can read it), apart from the shared profile
-      const [profileRes, privateRes, cardsRes] = await Promise.all([
-        supabase.from('profiles').select('full_name,username,avatar_url,profile_visibility').eq('id', userId).maybeSingle(),
-        supabase.from('profile_private').select('phone,date_of_birth').eq('id', userId).maybeSingle(),
+      const [profileRes, cardsRes] = await Promise.all([
+        supabase.from('profiles').select('full_name,username,phone,date_of_birth,avatar_url,profile_visibility').eq('id', userId).maybeSingle(),
         supabase.from('budget_cards').select('id,label,rid,owner_id'),
       ]);
       if (cancelled) return;
 
-      const p = profileRes.data ? ({ ...profileRes.data, phone: privateRes.data?.phone ?? null, date_of_birth: privateRes.data?.date_of_birth ?? null } as ProfileRow) : null;
+      const p = profileRes.data as ProfileRow | null;
       if (p) {
         setProfile(p);
         setFullName(p.full_name ?? '');
@@ -224,17 +222,11 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       .update({
         full_name: fullName.trim() || null,
         username: usernameTrim || null,
+        phone: phone.trim() || null,
+        date_of_birth: dobTrim || null,
       })
       .eq('id', userId);
-    const privateError = error
-      ? null
-      : (await supabase.from('profile_private').upsert({ id: userId, phone: phone.trim() || null, date_of_birth: dobTrim || null })).error;
 
-    if (privateError) {
-      setProfileError(privateError.message);
-      setProfileSaving(false);
-      return;
-    }
     if (error) {
       setProfileError(error.code === '23505' ? 'That username is already taken.' : error.message);
       setProfileSaving(false);
